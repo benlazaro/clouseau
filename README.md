@@ -36,6 +36,7 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 - **Plugin system** — drop in a JAR to add new parsers, formatters, colorizers, or sources at runtime; browse and install plugins from a Nexus repository via the built-in Plugin Manager (`Plugins → Manage Plugins`)
 - **Column management** — hide/show individual columns, drag to reorder, save named layouts and restore them with one click; set a default layout that is applied automatically on every file open
 - **Memory limit per tab** — configurable maximum number of log entries per tab; oldest entries are evicted automatically so the app never runs out of memory during long tailing sessions
+- **Annotations** — attach notes to individual log lines while investigating; notes are saved to a `.annotations` sidecar file next to the log and loaded automatically by anyone who opens the same file
 
 ---
 
@@ -126,6 +127,13 @@ Default Logback console format. Two variants are supported:
 - Click **Copy Message** to copy the formatted message text to the clipboard (the message text flashes to confirm).
 
 **Follow** — enabled by default. Toggleable per-tab in the filter bar. New lines are appended as they arrive; opening a file always starts at the top. Log rotation is handled transparently — existing rows are kept and the new file is tailed from the beginning.
+
+**Annotations** — attach a note to any log line to record your findings during an investigation.
+- Right-click a row and choose **Add Note…** to open the annotation editor. Enter your note and author name, then click **OK**.
+- Annotated rows show a ✎ indicator in the `#` column in amber.
+- The note appears at the top of the detail panel when the row is selected.
+- Open **Annotations** (`Ctrl+Shift+N`) or right-click → **View All Notes…** to see every annotation in a floating window. Click any row to jump straight to that log line.
+- Annotations are saved to a `.annotations` sidecar file next to the log (e.g. `app.log.annotations`). Share it with colleagues — they place it next to the same log file and all notes load automatically.
 
 **Table context menu** — right-click anywhere in the log table to:
 - **Reload File** — re-read the file from scratch (clears the table and re-parses from the beginning).
