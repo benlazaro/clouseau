@@ -84,6 +84,9 @@ public final class LogPanel extends JPanel {
     private boolean follow  = AppPrefs.isFollowByDefault();
     private boolean loading = false;
     private final java.util.Set<String> disabledFormatters = new java.util.HashSet<>();
+    private AnnotationStore  annotationStore   = AnnotationStore.empty();
+    private JDialog          annotationsDialog;
+    private AnnotationsPanel annotationsPanel;
     private JPanel syntaxHighlightPanel;
     private final List<JToggleButton> formatterBtnList       = new ArrayList<>();
     private final List<JToggleButton> syntaxHighlightBtnList = new ArrayList<>();
@@ -168,6 +171,13 @@ public final class LogPanel extends JPanel {
                 findField.selectAll();
                 findField.requestFocusInWindow();
             }
+        });
+
+        // Ctrl+Shift+N: open the annotations panel
+        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK), "showAnnotations");
+        getActionMap().put("showAnnotations", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { showAnnotationsDialog(); }
         });
     }
 
@@ -259,6 +269,8 @@ public final class LogPanel extends JPanel {
                     get();
                     autoResizeColumns();
                     applyDefaultLayoutIfSet();
+                    annotationStore = AnnotationStore.forFile(currentFile);
+                    logTable.repaint();
                     try { tailPosition = Files.size(currentFile); } catch (IOException ignored) {}
                     if (follow) startTailing();
                 } catch (Exception ex) {
@@ -630,6 +642,14 @@ public final class LogPanel extends JPanel {
                 }
                 boolean isLevel = modelCol == 2;
                 setFont(getFont().deriveFont(sel || isLevel ? Font.BOLD : Font.PLAIN));
+
+                // Annotation indicator in the # column
+                if (modelCol == 0 && entry != null && entry.rawLine() != null
+                        && annotationStore.hasAnnotation(AnnotationStore.hashOf(entry.rawLine()))) {
+                    setText("\u270e " + getText());
+                    if (!sel) setForeground(ClouseauColors.annotationIndicatorColor());
+                }
+
                 return this;
             }
         };
@@ -1064,6 +1084,40 @@ public final class LogPanel extends JPanel {
             menu.addSeparator();
         }
 
+        // ── Annotation section ────────────────────────────────────────────────
+        if (entries.size() == 1) {
+            LogEntry annotationTarget = entries.get(0);
+            String hash = annotationTarget.rawLine() != null
+                    ? AnnotationStore.hashOf(annotationTarget.rawLine()) : null;
+            AnnotationStore.Annotation existing = hash != null ? annotationStore.get(hash) : null;
+
+            JMenuItem addEditItem = new JMenuItem(
+                    existing != null ? Messages.get("annotation.edit") : Messages.get("annotation.add"));
+            addEditItem.addActionListener(e -> showAnnotationDialog(annotationTarget, hash, existing));
+            menu.add(addEditItem);
+
+            JMenuItem removeItem = new JMenuItem(Messages.get("annotation.remove"));
+            removeItem.setEnabled(existing != null);
+            if (existing != null) {
+                removeItem.addActionListener(e -> {
+                    annotationStore.remove(hash);
+                    logTable.repaint();
+                    refreshDetail();
+                });
+            }
+            menu.add(removeItem);
+            menu.addSeparator();
+        }
+
+        JMenuItem viewAllItem = new JMenuItem(Messages.get("annotations.view.all"));
+        viewAllItem.setEnabled(annotationStore.size() > 0);
+        viewAllItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,
+                InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
+        viewAllItem.addActionListener(e -> showAnnotationsDialog());
+        menu.add(viewAllItem);
+
+        menu.addSeparator();
+
         JMenuItem reloadFileItem = new JMenuItem(Messages.get("table.context.reload.file"));
         reloadFileItem.setEnabled(currentFile != null);
         reloadFileItem.addActionListener(e -> reload());
@@ -1081,6 +1135,53 @@ public final class LogPanel extends JPanel {
         int modelRow = viewRow >= 0 ? logTable.convertRowIndexToModel(viewRow) : -1;
         showDetail(modelRow >= 0 ? logTableModel.getEntry(modelRow) : null, modelRow);
         refreshHighlightNav();
+    }
+
+    private void showAnnotationDialog(LogEntry entry, String hash, AnnotationStore.Annotation existing) {
+        if (hash == null) return;
+        AnnotationDialog dlg = new AnnotationDialog(SwingUtilities.getWindowAncestor(this), existing);
+        dlg.setVisible(true);
+        if (!dlg.isConfirmed()) return;
+        String note   = dlg.getNote();
+        String author = dlg.getAuthor();
+        if (note.isEmpty()) {
+            annotationStore.remove(hash);
+        } else {
+            String ts      = entry.timestamp() != null ? entry.timestamp().toString() : "";
+            String preview = entry.message()   != null
+                    ? entry.message().substring(0, Math.min(80, entry.message().length()))
+                    : entry.rawLine() != null
+                    ? entry.rawLine().substring(0, Math.min(80, entry.rawLine().length()))
+                    : "";
+            annotationStore.put(new AnnotationStore.Annotation(
+                    hash, ts, preview, note, author,
+                    java.time.Instant.now().toString()));
+        }
+        logTable.repaint();
+        refreshDetail();
+        if (annotationsPanel != null && annotationsDialog != null && annotationsDialog.isVisible())
+            annotationsPanel.refresh();
+    }
+
+    /** Opens (or brings to front) the non-modal annotations panel dialog. */
+    public void showAnnotationsDialog() {
+        Window owner = SwingUtilities.getWindowAncestor(this);
+        if (annotationsDialog == null || !annotationsDialog.isDisplayable()) {
+            annotationsPanel  = new AnnotationsPanel(
+                    () -> annotationStore, logTableModel, logTable,
+                    () -> annotationsDialog.setVisible(false),
+                    this::refreshDetail);
+            annotationsDialog = new JDialog(owner, Messages.get("annotations.dialog.title"),
+                    java.awt.Dialog.ModalityType.MODELESS);
+            annotationsDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+            annotationsDialog.add(annotationsPanel);
+            annotationsDialog.setSize(760, 280);
+            annotationsDialog.setLocationRelativeTo(owner);
+        } else {
+            annotationsPanel.refresh();
+        }
+        annotationsDialog.setVisible(true);
+        annotationsDialog.toFront();
     }
 
     // ── Highlight navigation ──────────────────────────────────────────────────
@@ -1661,6 +1762,23 @@ public final class LogPanel extends JPanel {
             StyleConstants.setFontSize(swatchStyle, fontSize);
             StyleConstants.setForeground(swatchStyle, hl);
             appendField(doc, key, swatchStyle, Messages.get("detail.highlight.label"), "\u2588\u2588\u2588\u2588\u2588\u2588");
+        }
+
+        if (entry.rawLine() != null) {
+            AnnotationStore.Annotation annotation = annotationStore.get(AnnotationStore.hashOf(entry.rawLine()));
+            if (annotation != null) {
+                SimpleAttributeSet noteKey = new SimpleAttributeSet(key);
+                StyleConstants.setForeground(noteKey, ClouseauColors.annotationIndicatorColor());
+                SimpleAttributeSet noteVal = new SimpleAttributeSet(val);
+                StyleConstants.setForeground(noteVal, ClouseauColors.annotationIndicatorColor());
+                SimpleAttributeSet noteMeta = new SimpleAttributeSet(val);
+                StyleConstants.setFontSize(noteMeta, Math.max(10, fontSize - 1));
+                StyleConstants.setForeground(noteMeta, ClouseauColors.dimForeground());
+                appendField(doc, noteKey, noteVal, "\u270e " + Messages.get("annotation.detail.label"), annotation.note());
+                String byLine = "  " + Messages.get("annotation.detail.by") + " " + annotation.author()
+                        + (annotation.createdAt() != null ? "  \u00b7  " + annotation.createdAt().replace("T", " ").replaceFirst("\\.\\d+Z$", " UTC") : "");
+                insertText(doc, byLine + "\n", noteMeta);
+            }
         }
 
         appendField(doc, key, val,      Messages.get("table.col.timestamp"), ts);

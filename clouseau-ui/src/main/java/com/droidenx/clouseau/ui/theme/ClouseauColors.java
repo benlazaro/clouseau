@@ -160,6 +160,11 @@ public final class ClouseauColors {
         return result;
     }
 
+    // ── Annotations ───────────────────────────────────────────────────────────
+
+    /** Accent color for the annotation indicator (✎) in the table and detail panel. */
+    public static Color annotationIndicatorColor() { return get("Clouseau.annotationIndicator", null, new Color(0xF5A623)); }
+
     // ── Plugin status ─────────────────────────────────────────────────────────
 
     public static Color pluginEnabled()  { return get("Clouseau.plugin.enabled",  null, FB_LEVEL_DEBUG); }
