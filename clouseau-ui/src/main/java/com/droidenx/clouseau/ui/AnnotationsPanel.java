@@ -209,6 +209,17 @@ public final class AnnotationsPanel extends JPanel {
     private void deleteSelected() {
         int sel = annotationsTable.getSelectedRow();
         if (sel < 0 || sel >= hashOrder.size()) return;
+        if (AppPrefs.isAnnotationDeleteConfirm()) {
+            JCheckBox dontAsk = new JCheckBox(Messages.get("annotation.delete.dontask"));
+            int result = JOptionPane.showConfirmDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    new Object[]{Messages.get("annotation.delete.confirm.message"), dontAsk},
+                    Messages.get("annotation.delete.confirm.title"),
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE);
+            if (dontAsk.isSelected()) AppPrefs.setAnnotationDeleteConfirm(false);
+            if (result != JOptionPane.YES_OPTION) return;
+        }
         storeSupplier.get().remove(hashOrder.get(sel));
         logTable.repaint();
         refresh();

@@ -25,6 +25,7 @@ final class SettingsDialog extends JDialog {
     // Tab settings
     private final JCheckBox confirmCloseCheckBox;
     private final JCheckBox confirmHighlightClearAllCheckBox;
+    private final JCheckBox confirmAnnotationDeleteCheckBox;
     private final JCheckBox followByDefaultCheckBox;
 
     // Files settings
@@ -47,6 +48,7 @@ final class SettingsDialog extends JDialog {
         wrapLinesCheckBox      = new JCheckBox(Messages.get("settings.detail.wrap"), AppPrefs.isDetailWrapLines());
         confirmCloseCheckBox            = new JCheckBox(Messages.get("settings.tab.confirm.close"),             AppPrefs.isTabCloseConfirm());
         confirmHighlightClearAllCheckBox = new JCheckBox(Messages.get("settings.highlight.confirm.clear.all"), AppPrefs.isHighlightClearAllConfirm());
+        confirmAnnotationDeleteCheckBox  = new JCheckBox(Messages.get("settings.annotation.confirm.delete"),   AppPrefs.isAnnotationDeleteConfirm());
         followByDefaultCheckBox = new JCheckBox(Messages.get("settings.follow.by.default"), AppPrefs.isFollowByDefault());
         recentMaxSpinner       = new JSpinner(new SpinnerNumberModel(AppPrefs.getRecentFilesMax(), 1, 10, 1));
         maxEntriesSpinner      = new JSpinner(new SpinnerNumberModel(AppPrefs.getMaxEntriesPerTab(), 10_000, 2_000_000, 10_000));
@@ -80,6 +82,7 @@ final class SettingsDialog extends JDialog {
         content.add(sectionLabel(Messages.get("settings.section.tabs")), "span 2, gaptop 12, gapbottom 4");
         content.add(confirmCloseCheckBox, "span 2");
         content.add(confirmHighlightClearAllCheckBox, "span 2");
+        content.add(confirmAnnotationDeleteCheckBox, "span 2");
         content.add(followByDefaultCheckBox, "span 2");
         content.add(new JLabel(Messages.get("settings.max.entries.per.tab")));
         content.add(maxEntriesSpinner);
@@ -143,6 +146,7 @@ final class SettingsDialog extends JDialog {
         if (logPanel != null) logPanel.applyDetailFontSize(fontSize);
         AppPrefs.setTabCloseConfirm(confirmCloseCheckBox.isSelected());
         AppPrefs.setHighlightClearAllConfirm(confirmHighlightClearAllCheckBox.isSelected());
+        AppPrefs.setAnnotationDeleteConfirm(confirmAnnotationDeleteCheckBox.isSelected());
         AppPrefs.setFollowByDefault(followByDefaultCheckBox.isSelected());
         AppPrefs.setRecentFilesMax((int) recentMaxSpinner.getValue());
         AppPrefs.setMaxEntriesPerTab((int) maxEntriesSpinner.getValue());

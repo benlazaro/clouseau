@@ -28,6 +28,7 @@ public final class AppPrefs {
 
     private static final String KEY_TAB_CLOSE_CONFIRM            = "tab.close.confirm";
     private static final String KEY_HIGHLIGHT_CLEAR_ALL_CONFIRM  = "highlight.clear.all.confirm";
+    private static final String KEY_ANNOTATION_DELETE_CONFIRM    = "annotation.delete.confirm";
     private static final String KEY_FOLLOW_BY_DEFAULT  = "follow.by.default";
     private static final String KEY_DETAIL_FONT_SIZE   = "detail.font.size";
     private static final String KEY_DETAIL_WRAP_LINES  = "detail.wrap.lines";
@@ -261,6 +262,14 @@ public final class AppPrefs {
 
     public static void setHighlightClearAllConfirm(boolean value) {
         putBool(KEY_HIGHLIGHT_CLEAR_ALL_CONFIRM, value);
+    }
+
+    public static boolean isAnnotationDeleteConfirm() {
+        return getBool(KEY_ANNOTATION_DELETE_CONFIRM, true);
+    }
+
+    public static void setAnnotationDeleteConfirm(boolean value) {
+        putBool(KEY_ANNOTATION_DELETE_CONFIRM, value);
     }
 
     public static int getDetailFontSize() {
