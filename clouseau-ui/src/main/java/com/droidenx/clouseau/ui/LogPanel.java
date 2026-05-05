@@ -437,6 +437,7 @@ public final class LogPanel extends JPanel {
             @Override
             protected void process(List<LogEntry> entries) {
                 if (isCancelled()) return;
+                filterBar.addBatch(entries);
                 for (LogEntry entry : entries) logTableModel.append(entry);
             }
         };

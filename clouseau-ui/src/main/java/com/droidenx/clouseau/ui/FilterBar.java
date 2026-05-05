@@ -60,6 +60,9 @@ final class FilterBar extends JPanel {
     private List<String>     allLoggers      = List.of();
     private final Set<String> excludedLoggers = new LinkedHashSet<>();
 
+    /** Sentinel value representing a null/blank/absent field value in the fields filter popup. */
+    static final String EMPTY_SENTINEL = "(empty)";
+
     // Field value picker state: fieldKey → sorted distinct values / excluded values
     private final Map<String, TreeSet<String>> allFieldValues      = new LinkedHashMap<>();
     private final Map<String, Set<String>>     excludedFieldValues = new LinkedHashMap<>();
@@ -217,11 +220,18 @@ final class FilterBar extends JPanel {
         for (LogEntry entry : entries) {
             if (entry.fields() == null || entry.fields().isEmpty()) continue;
             for (Map.Entry<String, String> fe : entry.fields().entrySet()) {
-                if (fe.getValue() == null || fe.getValue().isBlank()) continue;
-                boolean added = allFieldValues
-                        .computeIfAbsent(fe.getKey(), k -> new TreeSet<>())
-                        .add(fe.getValue());
-                if (added) fieldsChanged = true;
+                boolean isNewKey = !allFieldValues.containsKey(fe.getKey());
+                TreeSet<String> values = allFieldValues.computeIfAbsent(fe.getKey(), k -> new TreeSet<>());
+                if (isNewKey) {
+                    values.add(EMPTY_SENTINEL);
+                    fieldsChanged = true;
+                }
+                String v = fe.getValue();
+                if (v != null && !v.isBlank()) {
+                    if (values.add(v)) fieldsChanged = true;
+                } else {
+                    if (values.add(EMPTY_SENTINEL)) fieldsChanged = true;
+                }
             }
         }
         if (fieldsChanged) {
@@ -315,10 +325,12 @@ final class FilterBar extends JPanel {
         excludedFieldValues.forEach((k, v) -> { if (!v.isEmpty()) snapshot.put(k, Set.copyOf(v)); });
         if (snapshot.isEmpty()) return e -> true;
         return entry -> {
-            if (entry.fields() == null) return true;
             for (Map.Entry<String, Set<String>> excl : snapshot.entrySet()) {
-                String val = entry.fields().get(excl.getKey());
-                if (val != null && excl.getValue().contains(val)) return false;
+                Set<String> excluded = excl.getValue();
+                String val = entry.fields() != null ? entry.fields().get(excl.getKey()) : null;
+                boolean isEmpty = val == null || val.isBlank();
+                if (isEmpty  && excluded.contains(EMPTY_SENTINEL)) return false;
+                if (!isEmpty && excluded.contains(val))             return false;
             }
             return true;
         };
