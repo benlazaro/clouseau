@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -31,13 +32,14 @@ import java.util.stream.Stream;
 @Slf4j
 final class FileChooserDialog extends JDialog {
 
-    record Result(List<Path> files, Optional<LogParser> parser, int parserIndex) {}
+    record Result(List<Path> files, Optional<LogParser> parser, int parserIndex, ZoneId sourceTimezone) {}
     private record PreviewResult(String previewText, String statusText, Color statusColor, boolean canOpen) {}
 
     private final List<LogParser> parsers;
     private final JFileChooser chooser = new JFileChooser();
     private final DefaultListModel<Path> favoritesModel = new DefaultListModel<>();
     private int selectedParserIndex;
+    private ZoneId selectedSourceTimezone = ZoneId.systemDefault();
     private JButton openBtn;
     private Result result;
     private volatile SwingWorker<PreviewResult, Void> pendingWorker;
@@ -116,7 +118,7 @@ final class FileChooserDialog extends JDialog {
         Optional<LogParser> chosen = selectedParserIndex == 0
                 ? Optional.empty()
                 : Optional.of(parsers.get(selectedParserIndex - 1));
-        result = new Result(files, chosen, selectedParserIndex);
+        result = new Result(files, chosen, selectedParserIndex, selectedSourceTimezone);
         AppPrefs.setLastOpenDir(chooser.getCurrentDirectory());
         dispose();
     }
@@ -238,6 +240,29 @@ final class FileChooserDialog extends JDialog {
 
         JComboBox<String> combo = new JComboBox<>(items);
         combo.setSelectedIndex(selectedParserIndex);
+
+        JComboBox<SettingsDialog.TimezoneEntry> tzCombo =
+                SettingsDialog.buildTimezoneCombo(selectedSourceTimezone);
+        tzCombo.addActionListener(e -> {
+            SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) tzCombo.getSelectedItem();
+            if (sel != null) selectedSourceTimezone = sel.zone();
+        });
+
+        // When a single file is selected, pre-populate TZ combo from AppPrefs if a zone was saved.
+        chooser.addPropertyChangeListener(JFileChooser.SELECTED_FILE_CHANGED_PROPERTY, e -> {
+            File f = chooser.getSelectedFile();
+            if (f != null && f.isFile()) {
+                ZoneId saved = AppPrefs.getSourceTimezone(f.toPath());
+                if (saved != null) {
+                    selectedSourceTimezone = saved;
+                    // rebuild the combo selection without creating a new combo instance
+                    for (int i = 0; i < tzCombo.getItemCount(); i++) {
+                        SettingsDialog.TimezoneEntry entry = tzCombo.getItemAt(i);
+                        if (entry.zone().equals(saved)) { tzCombo.setSelectedIndex(i); break; }
+                    }
+                }
+            }
+        });
 
         JLabel statusLabel = new JLabel(" ");
         statusLabel.setFont(statusLabel.getFont().deriveFont(11f));
@@ -397,10 +422,12 @@ final class FileChooserDialog extends JDialog {
             SwingUtilities.invokeLater(scheduleValidation);
         });
 
-        JPanel panel = new JPanel(new MigLayout("insets 8, fill, wrap 1", "[280px,grow]", "[][]4[]8[][grow]"));
+        JPanel panel = new JPanel(new MigLayout("insets 8, fill, wrap 1", "[280px,grow]", "[][]4[][]4[]8[][grow]"));
         panel.setMinimumSize(new Dimension(150, 0));
         panel.add(new JLabel(Messages.get("filechooser.parser.label")));
         panel.add(combo, "growx");
+        panel.add(new JLabel(Messages.get("filechooser.source.timezone.label")));
+        panel.add(tzCombo, "growx");
         panel.add(statusLabel, "growx");
         panel.add(previewLabel);
         panel.add(previewScroll, "grow");

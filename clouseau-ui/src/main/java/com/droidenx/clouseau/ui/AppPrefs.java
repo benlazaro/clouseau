@@ -13,6 +13,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,6 +44,8 @@ public final class AppPrefs {
     private static final String KEY_COLUMN_LAYOUTS        = "column.layouts";
     private static final String KEY_COLUMN_LAYOUT_DEFAULT = "column.layout.default";
     private static final String KEY_THEME                 = "theme";
+    private static final String KEY_DISPLAY_TIMEZONE      = "display.timezone";
+    private static final String KEY_SOURCE_TIMEZONES      = "source.timezones";
     private static final int    MAX_RECENT               = 10;
 
     /**
@@ -246,6 +249,47 @@ public final class AppPrefs {
 
     public static void setTheme(String name) {
         putString(KEY_THEME, name);
+    }
+
+    public static ZoneId getDisplayTimezone() {
+        String id = getString(KEY_DISPLAY_TIMEZONE, null);
+        if (id == null) return ZoneId.systemDefault();
+        try {
+            return ZoneId.of(id);
+        } catch (Exception e) {
+            return ZoneId.systemDefault();
+        }
+    }
+
+    public static void setDisplayTimezone(ZoneId zone) {
+        putString(KEY_DISPLAY_TIMEZONE, zone.getId());
+    }
+
+    /** Returns the saved source timezone for a specific log file, or {@code null} if none saved. */
+    public static ZoneId getSourceTimezone(Path file) {
+        if (!ROOT.has(KEY_SOURCE_TIMEZONES)) return null;
+        JsonObject map = ROOT.get(KEY_SOURCE_TIMEZONES).getAsJsonObject();
+        String key = file.toAbsolutePath().toString();
+        if (!map.has(key)) return null;
+        try {
+            return ZoneId.of(map.get(key).getAsString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public static void setSourceTimezone(Path file, ZoneId zone) {
+        if (!ROOT.has(KEY_SOURCE_TIMEZONES)) ROOT.add(KEY_SOURCE_TIMEZONES, new JsonObject());
+        ROOT.get(KEY_SOURCE_TIMEZONES).getAsJsonObject()
+                .addProperty(file.toAbsolutePath().toString(), zone.getId());
+        save();
+    }
+
+    public static void clearSourceTimezone(Path file) {
+        if (!ROOT.has(KEY_SOURCE_TIMEZONES)) return;
+        ROOT.get(KEY_SOURCE_TIMEZONES).getAsJsonObject()
+                .remove(file.toAbsolutePath().toString());
+        save();
     }
 
     public static boolean isTabCloseConfirm() {

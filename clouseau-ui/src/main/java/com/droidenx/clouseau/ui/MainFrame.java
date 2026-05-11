@@ -16,6 +16,7 @@ import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
 import java.nio.file.Path;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -261,7 +262,18 @@ public final class MainFrame extends JFrame {
     }
 
     private void openSettings() {
-        new SettingsDialog(this, activeLogPanel(), this::refreshRecentMenu).setVisible(true);
+        new SettingsDialog(this, activeLogPanel(), () -> {
+            refreshRecentMenu();
+            refreshAllTabTimezones();
+        }).setVisible(true);
+    }
+
+    private void refreshAllTabTimezones() {
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp) {
+                lp.refreshTimezone();
+            }
+        }
     }
 
     private void refreshRecentMenu() {
@@ -287,9 +299,14 @@ public final class MainFrame extends JFrame {
     private void openFile() {
         new FileChooserDialog(this, parsers, lastParserIndex).showDialog().ifPresent(r -> {
             lastParserIndex = r.parserIndex();
+            ZoneId srcTz = r.sourceTimezone();
             for (Path file : r.files()) {
                 log.info("Opening {} with parser: {}", file.getFileName(),
                         r.parser().map(LogParser::getName).orElse("Auto-detect"));
+                // Persist the selected source timezone so CLI/double-click reopens use it.
+                if (!srcTz.equals(ZoneId.systemDefault())) {
+                    AppPrefs.setSourceTimezone(file.toAbsolutePath(), srcTz);
+                }
                 openFile(file, r.parser());
             }
         });
@@ -318,6 +335,8 @@ public final class MainFrame extends JFrame {
         AppPrefs.addRecentFile(file);
         refreshRecentMenu();
         LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
+        ZoneId savedTz = AppPrefs.getSourceTimezone(abs);
+        if (savedTz != null) panel.setSourceTimezone(savedTz);
         addLogTab(file.getFileName().toString(), abs, panel);
         panel.load(file, parser, () -> {
             AppPrefs.removeRecentFile(file);
@@ -374,6 +393,7 @@ public final class MainFrame extends JFrame {
 
         java.awt.event.MouseAdapter tabMouseAdapter = new java.awt.event.MouseAdapter() {
             @Override public void mousePressed(java.awt.event.MouseEvent e) {
+                if (e.isPopupTrigger()) { showTabContextMenu(e, panel); return; }
                 int idx = tabbedPane.indexOfTabComponent(header);
                 if (idx >= 0) tabbedPane.setSelectedIndex(idx);
                 Point pt = SwingUtilities.convertPoint((Component) e.getSource(), e.getPoint(), header);
@@ -381,6 +401,7 @@ public final class MainFrame extends JFrame {
                 clickOff[1] = pt.y;
             }
             @Override public void mouseReleased(java.awt.event.MouseEvent e) {
+                if (e.isPopupTrigger()) { showTabContextMenu(e, panel); return; }
                 tabbedPane.setCursor(Cursor.getDefaultCursor());
                 if (ghost[0] != null) { ghost[0].dispose(); ghost[0] = null; }
             }
@@ -405,6 +426,14 @@ public final class MainFrame extends JFrame {
         label.addMouseMotionListener(tabMouseAdapter);
 
         return header;
+    }
+
+    private void showTabContextMenu(java.awt.event.MouseEvent e, LogPanel panel) {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem tzItem = new JMenuItem(Messages.get("tab.context.source.timezone"));
+        tzItem.addActionListener(ev -> panel.showSourceTimezoneDialog(this));
+        menu.add(tzItem);
+        menu.show((Component) e.getSource(), e.getX(), e.getY());
     }
 
     private JWindow createGhostWindow(JPanel tabHeader) {

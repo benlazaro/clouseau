@@ -6,6 +6,7 @@ import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
 import java.awt.*;
+import java.time.ZoneId;
 
 /**
  * Modal application settings / user preferences dialog.
@@ -37,6 +38,7 @@ final class SettingsDialog extends JDialog {
     // Appearance settings
     private final JComboBox<String> themeCombo;
     private final String originalThemeName;
+    private final JComboBox<TimezoneEntry> timezoneCombo;
 
     SettingsDialog(Frame owner, LogPanel logPanel, Runnable onApply) {
         super(owner, Messages.get("settings.title"), true);
@@ -52,6 +54,8 @@ final class SettingsDialog extends JDialog {
         followByDefaultCheckBox = new JCheckBox(Messages.get("settings.follow.by.default"), AppPrefs.isFollowByDefault());
         recentMaxSpinner       = new JSpinner(new SpinnerNumberModel(AppPrefs.getRecentFilesMax(), 1, 10, 1));
         maxEntriesSpinner      = new JSpinner(new SpinnerNumberModel(AppPrefs.getMaxEntriesPerTab(), 10_000, 2_000_000, 10_000));
+
+        timezoneCombo = buildTimezoneCombo(AppPrefs.getDisplayTimezone());
 
         originalThemeName = AppPrefs.getTheme();
         themeCombo = new JComboBox<>();
@@ -107,6 +111,8 @@ final class SettingsDialog extends JDialog {
         themeRow.add(themeCombo, "grow");
         themeRow.add(manageThemesBtn);
         content.add(themeRow, "span 2, growx");
+        content.add(new JLabel(Messages.get("settings.timezone")));
+        content.add(timezoneCombo, "growx");
 
         // ── Buttons ──────────────────────────────────────────────────────
         JButton ok     = new JButton(Messages.get("settings.button.ok"));
@@ -152,7 +158,49 @@ final class SettingsDialog extends JDialog {
         AppPrefs.setMaxEntriesPerTab((int) maxEntriesSpinner.getValue());
         String selTheme = (String) themeCombo.getSelectedItem();
         if (selTheme != null) AppPrefs.setTheme(selTheme);
+        TimezoneEntry selTz = (TimezoneEntry) timezoneCombo.getSelectedItem();
+        if (selTz != null) AppPrefs.setDisplayTimezone(selTz.zone());
         if (onApply != null) onApply.run();
+    }
+
+    // ── Timezone helpers ──────────────────────────────────────────────────────
+
+    record TimezoneEntry(ZoneId zone, String label) {
+        @Override public String toString() { return label; }
+    }
+
+    private static final String[] CURATED_ZONE_IDS = {
+        "UTC",
+        "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
+        "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+        "America/Sao_Paulo", "America/Toronto", "America/Vancouver",
+        "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Amsterdam",
+        "Europe/Moscow", "Europe/Istanbul",
+        "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Shanghai",
+        "Asia/Tokyo", "Asia/Seoul", "Asia/Jakarta",
+        "Australia/Sydney", "Australia/Melbourne", "Pacific/Auckland",
+        "Africa/Johannesburg", "Africa/Cairo",
+    };
+
+    static JComboBox<TimezoneEntry> buildTimezoneCombo(ZoneId current) {
+        ZoneId systemZone = ZoneId.systemDefault();
+
+        JComboBox<TimezoneEntry> combo = new JComboBox<>();
+        combo.addItem(new TimezoneEntry(systemZone, "System default (" + systemZone.getId() + ")"));
+        TimezoneEntry selected = (TimezoneEntry) combo.getItemAt(0);
+
+        for (String id : CURATED_ZONE_IDS) {
+            try {
+                ZoneId zone = ZoneId.of(id);
+                if (zone.equals(systemZone)) continue; // already shown as System default
+                TimezoneEntry entry = new TimezoneEntry(zone, id);
+                combo.addItem(entry);
+                if (zone.equals(current)) selected = entry;
+            } catch (Exception ignored) {}
+        }
+
+        combo.setSelectedItem(selected);
+        return combo;
     }
 
     private static JLabel sectionLabel(String text) {

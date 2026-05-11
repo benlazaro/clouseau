@@ -39,8 +39,14 @@ public final class LogTableModel extends AbstractTableModel {
     /** True while a bulk file load is in progress; defers structure changes to {@link #endBatchLoad()}. */
     private boolean batchLoad = false;
     private boolean structureChangePending = false;
-    private static final DateTimeFormatter TS_FMT =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
+    private DateTimeFormatter tsFmt =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(AppPrefs.getDisplayTimezone());
+
+    /** Rebuilds the timestamp formatter from the current preference and repaints the table. */
+    public void refreshTimezone() {
+        tsFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(AppPrefs.getDisplayTimezone());
+        fireTableDataChanged();
+    }
 
     private final List<LogEntry>         allEntries = new ArrayList<>();
     private       List<LogEntry>         rows       = new ArrayList<>();
@@ -353,7 +359,7 @@ public final class LogTableModel extends AbstractTableModel {
         LogEntry e = rows.get(row);
         if (col < FIXED_COLUMNS) return switch (col) {
             case 0 -> row + 1;
-            case 1 -> e.timestamp() != null ? TS_FMT.format(e.timestamp()) : "";
+            case 1 -> e.timestamp() != null ? tsFmt.format(e.timestamp()) : "";
             case 2 -> e.level()     != null ? e.level().name()             : "";
             case 3 -> e.thread()    != null ? e.thread()                   : "";
             case 4 -> e.logger()    != null ? e.logger()                   : "";

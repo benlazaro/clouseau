@@ -41,6 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipInputStream;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -105,9 +106,11 @@ public final class LogPanel extends JPanel {
     private JPanel centerCards;
     private static final String CARD_CONTENT = "content";
     private static final String CARD_LOADING = "loading";
+    private ZoneId sourceTimezone = ZoneId.systemDefault();
     private JPanel statusBar;
     private JLabel statusBarLabel;
     private JLabel statusBarPathLabel;
+    private JLabel sourceTzLabel;
     private JPanel highlightNavBar;
     private JPanel highlightNavSwatches;
     private JLabel highlightNavPosition;
@@ -229,6 +232,8 @@ public final class LogPanel extends JPanel {
 
         ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
 
+        final ZoneId srcTz = this.sourceTimezone; // capture before worker starts
+
         SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
@@ -246,7 +251,7 @@ public final class LogPanel extends JPanel {
                                       null, LogEntry.LogLevel.UNKNOWN,
                                       null, null,
                                       candidate, candidate, Map.of()));
-                        publish(entry);
+                        publish(correctTimezone(entry, srcTz));
                     }
                 }
                 return null;
@@ -408,6 +413,7 @@ public final class LogPanel extends JPanel {
         stopTailing();
         if (currentFile == null || isCompressed(currentFile)) return;
         final Optional<LogParser> parser = currentParser;
+        final ZoneId srcTz = this.sourceTimezone; // capture before worker starts
         tailWorker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
@@ -434,7 +440,7 @@ public final class LogPanel extends JPanel {
                                                         null, LogEntry.LogLevel.UNKNOWN,
                                                         null, null,
                                                         candidate, candidate, Map.of()));
-                                        publish(entry);
+                                        publish(correctTimezone(entry, srcTz));
                                     }
                                 }
                                 tailPosition = raf.getFilePointer();
@@ -480,6 +486,61 @@ public final class LogPanel extends JPanel {
         refreshDetail();
     }
 
+    // ── Source timezone ───────────────────────────────────────────────────────
+
+    public ZoneId getSourceTimezone() { return sourceTimezone; }
+
+    /** Sets the source timezone field and updates the status bar badge. Does NOT reload. */
+    public void setSourceTimezone(ZoneId zone) {
+        this.sourceTimezone = zone;
+        updateSourceTimezoneLabel();
+    }
+
+    /** Sets the source timezone, persists it for the current file, then reloads. */
+    public void applySourceTimezone(ZoneId zone) {
+        this.sourceTimezone = zone;
+        if (currentFile != null) AppPrefs.setSourceTimezone(currentFile, zone);
+        updateSourceTimezoneLabel();
+        reload();
+    }
+
+    /** Shows a timezone picker dialog; on confirmation calls {@link #applySourceTimezone}. */
+    public void showSourceTimezoneDialog(Component parent) {
+        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(sourceTimezone);
+        JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
+        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
+        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note };
+        int res = JOptionPane.showConfirmDialog(
+                parent, message,
+                Messages.get("source.timezone.dialog.title"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (res == JOptionPane.OK_OPTION) {
+            SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
+            if (sel != null) applySourceTimezone(sel.zone());
+        }
+    }
+
+    private void updateSourceTimezoneLabel() {
+        if (sourceTzLabel == null) return;
+        String id = sourceTimezone.getId();
+        sourceTzLabel.setText("[src: " + id + "]  ");
+        boolean isSystem = sourceTimezone.equals(ZoneId.systemDefault());
+        sourceTzLabel.setToolTipText(isSystem
+                ? "Source timezone: " + id + " (system default) — click to change"
+                : "Source timezone: " + id + " — click to change");
+    }
+
+    /**
+     * Adjusts a parsed entry's timestamp from the parser's assumed zone (systemDefault) to
+     * the configured source timezone. Only applied when they differ and the entry has a timestamp.
+     */
+    private static LogEntry correctTimezone(LogEntry e, ZoneId srcTz) {
+        if (e.timestamp() == null || srcTz.equals(ZoneId.systemDefault())) return e;
+        LocalDateTime ldt = e.timestamp().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        return new LogEntry(ldt.atZone(srcTz).toInstant(),
+                e.level(), e.logger(), e.thread(), e.message(), e.rawLine(), e.fields());
+    }
+
     // ── Status bar ────────────────────────────────────────────────────────────
 
     private JPanel buildStatusBar() {
@@ -494,10 +555,27 @@ public final class LogPanel extends JPanel {
         statusBarLabel.setHorizontalAlignment(SwingConstants.RIGHT);
         statusBarLabel.setBorder(BorderFactory.createEmptyBorder(6, 8, 8, 8));
 
+        sourceTzLabel = new JLabel();
+        sourceTzLabel.setForeground(UIManager.getColor("Button.foreground"));
+        sourceTzLabel.setFont(sourceTzLabel.getFont().deriveFont(12f));
+        sourceTzLabel.setBorder(BorderFactory.createEmptyBorder(6, 0, 8, 0));
+        sourceTzLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        sourceTzLabel.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(LogPanel.this));
+            }
+        });
+        updateSourceTimezoneLabel();
+
+        JPanel eastPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        eastPanel.setOpaque(false);
+        eastPanel.add(sourceTzLabel);
+        eastPanel.add(statusBarLabel);
+
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, ClouseauColors.separatorColor()));
         panel.add(statusBarPathLabel, BorderLayout.WEST);
-        panel.add(statusBarLabel, BorderLayout.EAST);
+        panel.add(eastPanel, BorderLayout.EAST);
         return panel;
     }
 
@@ -1696,8 +1774,15 @@ public final class LogPanel extends JPanel {
         return panel;
     }
 
-    private static final DateTimeFormatter DETAIL_TS_FMT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
+    private DateTimeFormatter detailTsFmt =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(AppPrefs.getDisplayTimezone());
+
+    /** Rebuilds timestamp formatters from the current preference and refreshes the table and detail panel. */
+    public void refreshTimezone() {
+        detailTsFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(AppPrefs.getDisplayTimezone());
+        logTableModel.refreshTimezone();
+        refreshDetail();
+    }
 
     /** Apply all formatters that can handle this input, in sequence. */
     private String applyFormatters(String input) {
@@ -1750,7 +1835,7 @@ public final class LogPanel extends JPanel {
         StyleConstants.setForeground(levelVal, ClouseauColors.levelColor(entry.level()));
         StyleConstants.setBold(levelVal, true);
 
-        String ts     = entry.timestamp() != null ? DETAIL_TS_FMT.format(entry.timestamp()) : "";
+        String ts     = entry.timestamp() != null ? detailTsFmt.format(entry.timestamp()) : "";
         String level  = entry.level()     != null ? entry.level().name()  : "";
         String thread = entry.thread()    != null ? entry.thread()        : "";
         String logger = entry.logger()    != null ? entry.logger()        : "";
