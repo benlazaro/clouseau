@@ -430,10 +430,37 @@ public final class MainFrame extends JFrame {
 
     private void showTabContextMenu(java.awt.event.MouseEvent e, LogPanel panel) {
         JPopupMenu menu = new JPopupMenu();
+
         JMenuItem tzItem = new JMenuItem(Messages.get("tab.context.source.timezone"));
         tzItem.addActionListener(ev -> panel.showSourceTimezoneDialog(this));
         menu.add(tzItem);
+
+        JMenuItem tzAllItem = new JMenuItem(Messages.get("tab.context.source.timezone.all"));
+        tzAllItem.setEnabled(tabbedPane.getTabCount() > 1);
+        tzAllItem.addActionListener(ev -> showSourceTimezoneAllTabsDialog(panel.getSourceTimezone()));
+        menu.add(tzAllItem);
+
         menu.show((Component) e.getSource(), e.getX(), e.getY());
+    }
+
+    private void showSourceTimezoneAllTabsDialog(ZoneId initial) {
+        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(initial);
+        JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
+        note.setFont(note.getFont().deriveFont(java.awt.Font.ITALIC, 11f));
+        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note };
+        int res = JOptionPane.showConfirmDialog(
+                this, message,
+                Messages.get("tab.context.source.timezone.all"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (res != JOptionPane.OK_OPTION) return;
+        SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
+        if (sel == null) return;
+        ZoneId zone = sel.zone();
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp) {
+                lp.applySourceTimezone(zone);
+            }
+        }
     }
 
     private JWindow createGhostWindow(JPanel tabHeader) {
