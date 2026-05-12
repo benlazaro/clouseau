@@ -15,7 +15,10 @@ import javax.swing.tree.TreePath;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.*;
-import java.time.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -199,7 +202,7 @@ final class FilterBar extends JPanel {
                     .filter(e -> e.timestamp() != null)
                     .findFirst()
                     .ifPresent(e -> {
-                        referenceDate = e.timestamp().atZone(ZoneId.systemDefault()).toLocalDate();
+                        referenceDate = e.timestamp().atZone(AppPrefs.getDisplayTimezone()).toLocalDate();
                         referenceDateSet = true;
                     });
         }
@@ -267,7 +270,7 @@ final class FilterBar extends JPanel {
         entries.stream()
             .filter(e -> e.timestamp() != null)
             .findFirst()
-            .ifPresent(e -> referenceDate = e.timestamp().atZone(ZoneId.systemDefault()).toLocalDate());
+            .ifPresent(e -> referenceDate = e.timestamp().atZone(AppPrefs.getDisplayTimezone()).toLocalDate());
 
         updateLoggerButtonLabel();
     }
@@ -572,11 +575,11 @@ final class FilterBar extends JPanel {
     private Instant parseTimestamp(String text) {
         if (text.isEmpty()) return null;
         for (DateTimeFormatter fmt : TS_FORMATS) {
-            try { return LocalDateTime.parse(text, fmt).atZone(ZoneId.systemDefault()).toInstant(); }
+            try { return LocalDateTime.parse(text, fmt).atZone(AppPrefs.getDisplayTimezone()).toInstant(); }
             catch (DateTimeParseException ignored) {}
-            try { return LocalDate.parse(text, fmt).atStartOfDay(ZoneId.systemDefault()).toInstant(); }
+            try { return LocalDate.parse(text, fmt).atStartOfDay(AppPrefs.getDisplayTimezone()).toInstant(); }
             catch (DateTimeParseException ignored) {}
-            try { return LocalTime.parse(text, fmt).atDate(referenceDate).atZone(ZoneId.systemDefault()).toInstant(); }
+            try { return LocalTime.parse(text, fmt).atDate(referenceDate).atZone(AppPrefs.getDisplayTimezone()).toInstant(); }
             catch (DateTimeParseException ignored) {}
         }
         return null;
