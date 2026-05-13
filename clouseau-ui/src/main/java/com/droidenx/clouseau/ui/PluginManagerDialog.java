@@ -123,7 +123,7 @@ public final class PluginManagerDialog extends JDialog {
 
         JButton downloadBtn = new JButton(Messages.get("plugins.dialog.download"));
         downloadBtn.addActionListener(e -> {
-            new DownloadPluginDialog((JFrame) getOwner(), pluginManager.getPluginsRoot(), () -> {
+            new DownloadPluginDialog(this, pluginManager.getPluginsRoot(), () -> {
                 pluginManager.refresh();
                 onRefresh.run();
                 tableModel.reload();

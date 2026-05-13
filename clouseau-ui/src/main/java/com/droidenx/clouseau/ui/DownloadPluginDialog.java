@@ -29,8 +29,8 @@ final class DownloadPluginDialog extends JDialog {
     private final ResultsModel  tableModel  = new ResultsModel();
     private       JTable        table;
 
-    DownloadPluginDialog(Frame owner, Path pluginsDir, Runnable onInstalled) {
-        super(owner, Messages.get("plugins.download.title"), true);
+    DownloadPluginDialog(Window owner, Path pluginsDir, Runnable onInstalled) {
+        super(owner, Messages.get("plugins.download.title"), ModalityType.APPLICATION_MODAL);
         this.pluginsDir  = pluginsDir;
         this.onInstalled = onInstalled;
         rebuildRepos();
@@ -75,7 +75,7 @@ final class DownloadPluginDialog extends JDialog {
 
         JButton manageBtn = new JButton(Messages.get("plugins.download.manage.repos"));
         manageBtn.addActionListener(e -> {
-            new PluginRepoManagerDialog((Frame) getOwner(), this::rebuildRepos).setVisible(true);
+            new PluginRepoManagerDialog(this, this::rebuildRepos).setVisible(true);
         });
 
         JPanel repoRow = new JPanel(new MigLayout("insets 0, gapx 6", "[][grow][]"));

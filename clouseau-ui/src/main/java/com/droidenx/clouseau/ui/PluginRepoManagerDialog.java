@@ -21,8 +21,8 @@ final class PluginRepoManagerDialog extends JDialog {
     private       JButton                   editBtn;
     private       JButton                   deleteBtn;
 
-    PluginRepoManagerDialog(Frame owner, Runnable onChange) {
-        super(owner, Messages.get("plugins.repos.title"), true);
+    PluginRepoManagerDialog(Window owner, Runnable onChange) {
+        super(owner, Messages.get("plugins.repos.title"), ModalityType.APPLICATION_MODAL);
         this.onChange = onChange;
         this.repos    = new ArrayList<>(AppPrefs.getPluginRepos());
         buildUI();
