@@ -31,11 +31,15 @@ clouseau-ui/build/distributions/clouseau-1.0.0.zip
 # App image only (unzipped folder, useful for testing)
 ./gradlew :clouseau-ui:jpackageImage "-PappVersion=1.0.0"
 
-# Native installer (requires WiX on Windows, no extra tools on macOS/Linux)
+# Native installer (local builds only, not published by CI;
+# requires WiX on Windows, no extra tools on macOS/Linux)
 ./gradlew :clouseau-ui:jpackage "-PappVersion=1.0.0"
 ```
 
 The zip bundles a trimmed JRE — users just extract and run, no Java installation needed.
+Releases publish only the portable zips (one per platform). The Windows installer is
+configured as per-user (`--win-per-user-install`) so its `data/` folder stays writable
+if installers are published later.
 
 ## Heap size
 

@@ -260,7 +260,7 @@ Settings, custom parsers, themes, plugins, logs and the credential keystore live
 | How you run Clouseau | Data directory |
 |---|---|
 | `-Dclouseau.data.dir=<path>` | `<path>` |
-| Windows installer or unzipped Windows build | `data/` next to `Clouseau.exe` (the installer is per-user, so this is writable) |
+| Windows release zip | `data/` next to `Clouseau.exe` (extract it to a folder you can write to, not `C:\Program Files`) |
 | macOS and Linux packages | `~/.clouseau/` (the launcher sets `-Dclouseau.data.dir=~/.clouseau`) |
 | Anything else (`gradlew :clouseau-ui:run` → `clouseau-ui/data/`, bare `java -jar`) | `data/` in the current working directory |
 
