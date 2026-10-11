@@ -28,7 +28,7 @@ import java.util.List;
 @Slf4j
 public final class ThemeManager {
 
-    public static final String DEFAULT_THEME = "Clouseau Dark";
+    public static final String DEFAULT_THEME = "Dark";
 
     /** Ordered map of builtin-name → setup runnable. */
     private static final LinkedHashMap<String, Runnable> BUILTINS = new LinkedHashMap<>();

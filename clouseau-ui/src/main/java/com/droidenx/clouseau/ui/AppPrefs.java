@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.ui.theme.ThemeManager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -244,7 +245,7 @@ public final class AppPrefs {
     }
 
     public static String getTheme() {
-        return getString(KEY_THEME, "Clouseau Dark");
+        return getString(KEY_THEME, ThemeManager.DEFAULT_THEME);
     }
 
     public static void setTheme(String name) {
