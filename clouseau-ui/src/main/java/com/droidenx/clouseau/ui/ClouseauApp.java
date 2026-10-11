@@ -17,10 +17,12 @@ import java.util.List;
 public final class ClouseauApp {
 
     public static void main(String[] args) {
-        // Configure Log4j2 to use ~/.clouseau/log4j2.xml
+        // Configure Log4j2 from <data dir>/log4j2.xml (the bundled copy is named default-log4j2.xml
+        // so Log4j2 does not auto-load it and create a log file before the data dir is known)
         configureLogging();
 
         log.info("Starting Clouseau Log Viewer");
+        log.info("Data dir: {}{}", AppDirs.dataDir(), AppDirs.isPortable() ? " (portable)" : "");
 
         FlatLaf.registerCustomDefaultsSource("com.droidenx.clouseau.ui.theme");
         ThemeManager.applyTheme(AppPrefs.getTheme());
@@ -29,11 +31,9 @@ public final class ClouseauApp {
 
         // Plugin parsers — loaded from the plugins directory; may be empty if dir not found
         String pluginsDirProp = System.getProperty("clouseau.plugins.dir");
-        // Default: ~/.clouseau/plugins/parser — safe in dev (won't collide with the project tree)
-        // and a sensible install location for end users.
         Path pluginsDir = pluginsDirProp != null
                 ? Path.of(pluginsDirProp)
-                : Path.of(System.getProperty("user.home"), ".clouseau", "plugins");
+                : AppDirs.dataDir().resolve("plugins");
 
         if (splash != null) splash.setStatus("Loading plugins...");
         ClouseauPluginManager pluginManager = new ClouseauPluginManager(pluginsDir);
@@ -77,18 +77,19 @@ public final class ClouseauApp {
         });
     }
 
-    /** Configure Log4j2 to load config from ~/.clouseau/log4j2.xml, creating it if needed. */
+    /** Configure Log4j2 to load config from the data dir, creating it if needed. */
     private static void configureLogging() {
-        Path clouseauDir = Path.of(System.getProperty("user.home"), ".clouseau");
+        Path clouseauDir = AppDirs.dataDir();
         Path configFile = clouseauDir.resolve("log4j2.xml");
 
         try {
             // Create directory if it doesn't exist
             Files.createDirectories(clouseauDir);
+            System.setProperty("clouseau.log.dir", clouseauDir.resolve("logs").toString());
 
-            // Copy default config to ~/.clouseau if not present
+            // Copy default config to the data dir if not present
             if (!Files.exists(configFile)) {
-                try (InputStream in = ClouseauApp.class.getResourceAsStream("/log4j2.xml")) {
+                try (InputStream in = ClouseauApp.class.getResourceAsStream("/default-log4j2.xml")) {
                     if (in != null) {
                         Files.copy(in, configFile);
                     }

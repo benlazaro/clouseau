@@ -236,11 +236,13 @@ runtime {
         appVersion    = bundleVersion
         mainJar       = tasks.shadowJar.get().archiveFileName.get()
 
-        // JVM flags baked into the native launcher.
-        jvmArgs = listOf("-Xms64m", "-Xmx2g")
-
         val os           = org.gradle.internal.os.OperatingSystem.current()
         val packagingDir = rootProject.file("packaging")
+
+        // JVM flags baked into the native launcher. On macOS/Linux the working directory of an
+        // installed app is not meaningful, so keep data in the home folder (AppDirs expands "~/").
+        jvmArgs = listOf("-Xms64m", "-Xmx2g") +
+                if (os.isWindows) emptyList() else listOf("-Dclouseau.data.dir=~/.clouseau")
 
         when {
             os.isWindows -> {
@@ -248,6 +250,7 @@ runtime {
                 imageOptions = listOf("--icon", packagingDir.resolve("windows/clouseau.ico").absolutePath)
                 installerOptions = listOf(
                     "--vendor", "Tlaloc",
+                    "--win-per-user-install",
                     "--win-dir-chooser",
                     "--win-menu",
                     "--win-shortcut",

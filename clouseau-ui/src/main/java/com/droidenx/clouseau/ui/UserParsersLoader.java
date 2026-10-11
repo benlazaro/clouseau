@@ -26,7 +26,7 @@ import java.util.regex.PatternSyntaxException;
  * Loads log parsers from two sources, in order:
  * <ol>
  *   <li>Bundled {@code default-parsers.json} (classpath resource) — always loaded.</li>
- *   <li>{@code ~/.clouseau/parsers.json} — user additions/overrides; loaded if present.</li>
+ *   <li>{@code parsers.json} in the data dir — user additions/overrides; loaded if present.</li>
  * </ol>
  *
  * <p>Each entry supports:
@@ -45,8 +45,7 @@ import java.util.regex.PatternSyntaxException;
 public final class UserParsersLoader {
 
     private static final String DEFAULT_RESOURCE = "com/droidenx/clouseau/ui/default-parsers.json";
-    private static final Path   USER_FILE =
-            Path.of(System.getProperty("user.home"), ".clouseau", "parsers.json");
+    private static final Path   USER_FILE = AppDirs.dataDir().resolve("parsers.json");
 
     private UserParsersLoader() {}
 
@@ -84,7 +83,7 @@ public final class UserParsersLoader {
         List<LogParser> result = new ArrayList<>(byName.values());
 
         if (result.isEmpty()) {
-            log.warn("No parsers loaded — open ~/.clouseau/parsers.json to add custom parsers");
+            log.warn("No parsers loaded — open {} to add custom parsers", USER_FILE);
         } else {
             log.info("Loaded {} parser(s): {}", result.size(),
                     result.stream().map(LogParser::getName).toList());

@@ -144,7 +144,7 @@ Default Logback console format. Two variants are supported:
 - **Layouts section** — lists your saved column layouts. The default layout (if set) is marked with ★. Click a layout name to apply it immediately. **Save current layout…** captures the current column order, visibility, and widths under a name you choose. **Manage layouts…** opens a dialog where you can set or clear the default layout and delete layouts you no longer need.
 - **Columns section** — a checkbox per column; uncheck to hide, check to show. At least one column is always kept visible. Column color-coding follows the column as you drag it to a new position.
 
-**Settings** — `File → Settings` (`Ctrl+,`). Stored at `~/.clouseau/settings.json`.
+**Settings** — `File → Settings` (`Ctrl+,`). Stored as `settings.json` in the [data directory](#data-directory).
 
 ---
 
@@ -169,7 +169,7 @@ clouseau-api  ←  clouseau-core  ←  clouseau-plugin  ←  clouseau-ui
 
 ## Custom Parsers
 
-You can add your own log format without writing a plugin. Create `~/.clouseau/parsers.json` as a JSON array of parser definitions:
+You can add your own log format without writing a plugin. Create `parsers.json` in the [data directory](#data-directory) as a JSON array of parser definitions:
 
 ```json
 [
@@ -253,7 +253,20 @@ public class MyParser implements LogParser {
 
 ## Settings
 
-User settings are stored at `~/.clouseau/settings.json`:
+### Data directory
+
+Settings, custom parsers, themes, plugins, logs and the credential keystore live in one data directory:
+
+| How you run Clouseau | Data directory |
+|---|---|
+| `-Dclouseau.data.dir=<path>` | `<path>` |
+| Windows installer or unzipped Windows build | `data/` next to `Clouseau.exe` (the installer is per-user, so this is writable) |
+| macOS and Linux packages | `~/.clouseau/` (the launcher sets `-Dclouseau.data.dir=~/.clouseau`) |
+| Anything else (`gradlew :clouseau-ui:run` → `clouseau-ui/data/`, bare `java -jar`) | `data/` in the current working directory |
+
+**Why macOS and Linux packages set the flag:** without a property, Clouseau uses `data/` relative to the working directory. That is fine for development and for the Windows build, where the app locates its own install folder. An installed macOS or Linux app has no meaningful working directory (a Finder-launched app starts in `/`, a menu-launched Linux app in `/` or the home folder), and the install location itself (inside the `.app` bundle or under `/opt`) isn't a place to write user data. So the macOS and Linux packages pass `-Dclouseau.data.dir=~/.clouseau` in their launcher (see `jpackage { jvmArgs }` in `clouseau-ui/build.gradle.kts`). A leading `~/` in the property means the home folder. To use a different location, set the property yourself.
+
+User settings are stored in `settings.json` there:
 
 ```json
 {
