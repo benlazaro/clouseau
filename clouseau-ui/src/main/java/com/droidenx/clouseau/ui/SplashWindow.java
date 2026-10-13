@@ -7,8 +7,7 @@ import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 
 @Slf4j
 public final class SplashWindow extends JWindow {
@@ -20,7 +19,7 @@ public final class SplashWindow extends JWindow {
     // Background is resolved at paint time so it picks up the active theme.
     // Falls back to the Clouseau Dark palette value when shown before theme init.
     private static final Color  BG_FALLBACK    = new Color(0x2c2c2c);
-    private static final long   MIN_DISPLAY_MS = 1_500;
+    private static final long   MIN_DISPLAY_MS = 500;
 
     private final long   shownAt = System.currentTimeMillis();
     private final JLabel statusLabel;
@@ -78,12 +77,12 @@ public final class SplashWindow extends JWindow {
     }
 
     /**
-     * Renders the splash SVG on the calling thread (safe to call from the main thread),
+     * Decodes the splash image on the calling thread (safe to call from the main thread),
      * then creates and shows the window on the EDT.  Returns {@code null} if the splash
-     * cannot be shown (resource missing, Batik unavailable, etc.).
+     * cannot be shown.
      */
     public static SplashWindow createAndShow() {
-        BufferedImage img = renderSplashImage();
+        BufferedImage img = loadSplashImage();
         SplashWindow[] ref = {null};
         try {
             SwingUtilities.invokeAndWait(() -> {
@@ -118,33 +117,19 @@ public final class SplashWindow extends JWindow {
         }
     }
 
-    // ── SVG rasterization ─────────────────────────────────────────────────────
+    // ── Splash image ──────────────────────────────────────────────────────────
 
-    private static BufferedImage renderSplashImage() {
-        var url = SplashWindow.class.getResource(
-                "/com/droidenx/clouseau/ui/images/clouseau_splash.svg");
-        if (url == null) {
-            log.warn("Splash SVG resource not found");
-            return null;
-        }
-        try {
-            // Render at 4× so small text (font-size 11) has enough pixels for clean
-            // antialiasing; paintComponent downscales to display size via bicubic.
-            int renderW = SVG_W * 4;
-            int renderH = SVG_H * 4;
-            var transcoder = new org.apache.batik.transcoder.image.PNGTranscoder();
-            transcoder.addTranscodingHint(
-                    org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_WIDTH,  (float) renderW);
-            transcoder.addTranscodingHint(
-                    org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_HEIGHT, (float) renderH);
-            var baos = new ByteArrayOutputStream();
-            transcoder.transcode(
-                    new org.apache.batik.transcoder.TranscoderInput(url.toString()),
-                    new org.apache.batik.transcoder.TranscoderOutput(baos));
-
-            return ImageIO.read(new ByteArrayInputStream(baos.toByteArray()));
+    /** Loads the 2x PNG that the {@code generateSplashPng} Gradle task renders from the SVG. */
+    private static BufferedImage loadSplashImage() {
+        try (InputStream in = SplashWindow.class.getResourceAsStream(
+                "/com/droidenx/clouseau/ui/images/clouseau_splash.png")) {
+            if (in == null) {
+                log.warn("Splash image resource not found");
+                return null;
+            }
+            return ImageIO.read(in);
         } catch (Exception e) {
-            log.warn("Could not rasterize splash SVG", e);
+            log.warn("Could not load splash image", e);
             return null;
         }
     }

@@ -44,6 +44,34 @@ val bundleVersion: String = run {
     if (parts[0].toIntOrNull() == 0) "1.${parts.drop(1).joinToString(".")}" else parts.joinToString(".")
 }
 
+// Pre-renders the splash SVG at 2x into a classpath PNG so startup doesn't pay for Batik
+// (cold class loading + rasterizing cost 0.7-1.9 s before the splash could appear).
+val splashPngDir = layout.buildDirectory.dir("generated/splash")
+val generateSplashPng = tasks.register("generateSplashPng") {
+    val svgFile = file("src/main/resources/com/droidenx/clouseau/ui/images/clouseau_splash.svg")
+    val pngFile = splashPngDir.map { it.file("com/droidenx/clouseau/ui/images/clouseau_splash.png").asFile }
+    inputs.file(svgFile)
+    outputs.dir(splashPngDir)
+
+    doLast {
+        val transcoder = org.apache.batik.transcoder.image.PNGTranscoder()
+        transcoder.addTranscodingHint(
+            org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_WIDTH, 1360f)
+        transcoder.addTranscodingHint(
+            org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_HEIGHT, 600f)
+        val baos = ByteArrayOutputStream()
+        transcoder.transcode(
+            org.apache.batik.transcoder.TranscoderInput(svgFile.toURI().toString()),
+            org.apache.batik.transcoder.TranscoderOutput(baos as OutputStream))
+        val out = pngFile.get()
+        out.parentFile.mkdirs()
+        out.writeBytes(baos.toByteArray())
+        logger.lifecycle("Generated ${out.name} (${out.length() / 1024} KB)")
+    }
+}
+sourceSets.main.get().resources.srcDir(files(splashPngDir).builtBy(generateSplashPng))
+tasks.processResources { exclude("**/clouseau_splash.svg") }
+
 // Generates packaging/windows/clouseau.ico from the SVG at 16/32/48/256 px.
 // Batik is available via the root buildscript classpath.
 tasks.register("generateWindowsIcon") {
