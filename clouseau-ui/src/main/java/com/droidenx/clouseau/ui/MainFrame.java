@@ -12,9 +12,7 @@ import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
-import java.awt.image.ColorConvertOp;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -242,8 +240,7 @@ public final class MainFrame extends JFrame {
     }
 
     private void openAbout() {
-        BufferedImage icon64 = rasterizeSvg(
-                MainFrame.class.getResource("/com/droidenx/clouseau/ui/icons/clouseau.svg").toString(), 64, 1.15f);
+        BufferedImage icon64 = loadIconImage("about-64.png");
         JOptionPane.showMessageDialog(
                 this,
                 "<html><b>" + Messages.get("about.version") + "</b>"
@@ -537,7 +534,7 @@ public final class MainFrame extends JFrame {
         JPanel content = new JPanel(new MigLayout("insets 0, wrap 1, gapy 0", "[center]"));
         content.setOpaque(false);
 
-        BufferedImage watermark = renderSvgWatermark(256);
+        BufferedImage watermark = loadIconImage("watermark-256.png");
         if (watermark != null) {
             content.add(new JLabel(new ImageIcon(watermark)), "gapbottom 28");
         }
@@ -600,77 +597,23 @@ public final class MainFrame extends JFrame {
         return badge;
     }
 
-    private static BufferedImage renderSvgWatermark(int size) {
-        var svgUrl = MainFrame.class.getResource("/com/droidenx/clouseau/ui/icons/clouseau.svg");
-        if (svgUrl == null) return null;
-        try {
-            // rasterize at 2x for crisp rendering on HiDPI displays
-            int renderSize = size * 2;
-            var transcoder = new org.apache.batik.transcoder.image.PNGTranscoder();
-            transcoder.addTranscodingHint(org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_WIDTH, (float) renderSize);
-            transcoder.addTranscodingHint(org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_HEIGHT, (float) renderSize);
-            var output = new java.io.ByteArrayOutputStream();
-            transcoder.transcode(new org.apache.batik.transcoder.TranscoderInput(svgUrl.toString()),
-                                 new org.apache.batik.transcoder.TranscoderOutput(output));
-            BufferedImage hi = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(output.toByteArray()));
-
-            // scale down smoothly to target size
-            BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g2 = img.createGraphics();
-            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.drawImage(hi, 0, 0, size, size, null);
-            g2.dispose();
-
-            new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null).filter(img, img);
-            for (int y = 0; y < img.getHeight(); y++) {
-                for (int x = 0; x < img.getWidth(); x++) {
-                    int argb = img.getRGB(x, y);
-                    int alpha = (argb >>> 24) & 0xFF;
-                    img.setRGB(x, y, (int)(alpha * 0.23) << 24 | (argb & 0x00FFFFFF));
-                }
+    /** Loads an icon PNG that the {@code generateIconPngs} Gradle task renders from clouseau.svg. */
+    private static BufferedImage loadIconImage(String name) {
+        try (var in = MainFrame.class.getResourceAsStream("/com/droidenx/clouseau/ui/icons/" + name)) {
+            if (in == null) {
+                log.warn("Icon resource not found: {}", name);
+                return null;
             }
-            return img;
+            return javax.imageio.ImageIO.read(in);
         } catch (Exception e) {
-            log.warn("Could not render SVG watermark", e);
-            return null;
-        }
-    }
-
-    private static BufferedImage rasterizeSvg(String svgUri, int size) {
-        return rasterizeSvg(svgUri, size, 1.0f);
-    }
-
-    private static BufferedImage rasterizeSvg(String svgUri, int size, float zoom) {
-        try {
-            int renderSize = Math.round(size * zoom);
-            var transcoder = new org.apache.batik.transcoder.image.PNGTranscoder();
-            transcoder.addTranscodingHint(org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_WIDTH, (float) renderSize);
-            transcoder.addTranscodingHint(org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_HEIGHT, (float) renderSize);
-            var output = new java.io.ByteArrayOutputStream();
-            transcoder.transcode(new org.apache.batik.transcoder.TranscoderInput(svgUri),
-                                 new org.apache.batik.transcoder.TranscoderOutput(output));
-            BufferedImage rendered = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(output.toByteArray()));
-            if (zoom == 1.0f) return rendered;
-            // center-crop back to target size
-            int offset = (renderSize - size) / 2;
-            BufferedImage cropped = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g2 = cropped.createGraphics();
-            g2.drawImage(rendered, 0, 0, size, size, offset, offset, offset + size, offset + size, null);
-            g2.dispose();
-            return cropped;
-        } catch (Exception e) {
-            log.warn("Could not rasterize SVG at size {}", size, e);
+            log.warn("Could not load icon {}", name, e);
             return null;
         }
     }
 
     private static List<Image> loadAppIcons() {
-        var svgUrl = MainFrame.class.getResource("/com/droidenx/clouseau/ui/icons/clouseau.svg");
-        if (svgUrl == null) return List.of();
-        return Stream.of(256, 64, 16)
-                .map(size -> rasterizeSvg(svgUrl.toString(), size, 1.19f))
+        return Stream.of("app-256.png", "app-64.png", "app-16.png")
+                .map(MainFrame::loadIconImage)
                 .filter(Objects::nonNull)
                 .map(img -> (Image) img)
                 .toList();

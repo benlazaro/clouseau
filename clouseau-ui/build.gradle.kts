@@ -1,10 +1,16 @@
 // clouseau-ui — Swing presentation layer (MVP)
 // Rule: no business logic, no direct log parsing.
 
+import java.awt.RenderingHints
+import java.awt.color.ColorSpace
+import java.awt.image.BufferedImage
+import java.awt.image.ColorConvertOp
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import javax.imageio.ImageIO
 
 plugins {
     java
@@ -69,8 +75,75 @@ val generateSplashPng = tasks.register("generateSplashPng") {
         logger.lifecycle("Generated ${out.name} (${out.length() / 1024} KB)")
     }
 }
+
+// Pre-renders the app icons, About icon and empty-state watermark from clouseau.svg, using the
+// same Batik/Java2D steps the app used to run at startup, so the runtime needs no SVG library.
+val iconPngDir = layout.buildDirectory.dir("generated/icons")
+val generateIconPngs = tasks.register("generateIconPngs") {
+    val svgFile = file("src/main/resources/com/droidenx/clouseau/ui/icons/clouseau.svg")
+    val outDir = iconPngDir.map { it.dir("com/droidenx/clouseau/ui/icons").asFile }
+    inputs.file(svgFile)
+    outputs.dir(iconPngDir)
+
+    doLast {
+        fun transcode(renderSize: Int): BufferedImage {
+            val transcoder = org.apache.batik.transcoder.image.PNGTranscoder()
+            transcoder.addTranscodingHint(
+                org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_WIDTH, renderSize.toFloat())
+            transcoder.addTranscodingHint(
+                org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_HEIGHT, renderSize.toFloat())
+            val baos = ByteArrayOutputStream()
+            transcoder.transcode(
+                org.apache.batik.transcoder.TranscoderInput(svgFile.toURI().toString()),
+                org.apache.batik.transcoder.TranscoderOutput(baos as OutputStream))
+            return ImageIO.read(ByteArrayInputStream(baos.toByteArray()))
+        }
+
+        // Render slightly larger than the target and center-crop back to it.
+        fun zoomCropped(size: Int, zoom: Float): BufferedImage {
+            val renderSize = Math.round(size * zoom)
+            val rendered = transcode(renderSize)
+            val offset = (renderSize - size) / 2
+            val cropped = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
+            val g2 = cropped.createGraphics()
+            g2.drawImage(rendered, 0, 0, size, size, offset, offset, offset + size, offset + size, null)
+            g2.dispose()
+            return cropped
+        }
+
+        fun watermark(size: Int): BufferedImage {
+            val hi = transcode(size * 2)
+            val img = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
+            val g2 = img.createGraphics()
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.drawImage(hi, 0, 0, size, size, null)
+            g2.dispose()
+            ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null)
+                .filter(img, img)
+            for (y in 0 until img.height) for (x in 0 until img.width) {
+                val argb = img.getRGB(x, y)
+                val alpha = (argb ushr 24) and 0xFF
+                img.setRGB(x, y, ((alpha * 0.23).toInt() shl 24) or (argb and 0x00FFFFFF))
+            }
+            return img
+        }
+
+        val dir = outDir.get()
+        dir.mkdirs()
+        listOf(256, 64, 16).forEach { size ->
+            ImageIO.write(zoomCropped(size, 1.19f), "png", File(dir, "app-$size.png"))
+        }
+        ImageIO.write(zoomCropped(64, 1.15f), "png", File(dir, "about-64.png"))
+        ImageIO.write(watermark(256), "png", File(dir, "watermark-256.png"))
+        logger.lifecycle("Generated icon PNGs in ${dir.name}/")
+    }
+}
+
 sourceSets.main.get().resources.srcDir(files(splashPngDir).builtBy(generateSplashPng))
-tasks.processResources { exclude("**/clouseau_splash.svg") }
+sourceSets.main.get().resources.srcDir(files(iconPngDir).builtBy(generateIconPngs))
+tasks.processResources { exclude("**/clouseau_splash.svg", "**/icons/clouseau.svg") }
 
 // Generates packaging/windows/clouseau.ico from the SVG at 16/32/48/256 px.
 // Batik is available via the root buildscript classpath.
@@ -241,7 +314,7 @@ runtime {
     // java.naming   — JNDI (log4j2 lookups)
     // java.prefs    — Preferences API
     // java.sql      — JDBC stubs pulled in transitively
-    // java.xml      — XML (Batik SVG, log4j2 config)
+    // java.xml      — XML (log4j2 config)
     // jdk.unsupported — sun.misc.Unsafe (Guava, Gson)
     // jdk.crypto.ec — TLS EC ciphers (HTTPS downloads, update checks)
     // jdk.zipfs     — ZipFileSystem (reading .zip log files)
@@ -319,8 +392,6 @@ dependencies {
     implementation("com.formdev:flatlaf-intellij-themes:${rootProject.extra["flatlafVersion"]}")
     implementation("com.miglayout:miglayout-swing:${rootProject.extra["migLayoutVersion"]}")
     implementation("com.fifesoft:rsyntaxtextarea:${rootProject.extra["rstaVersion"]}")
-    implementation("org.apache.xmlgraphics:batik-transcoder:1.17")
-    implementation("org.apache.xmlgraphics:batik-codec:1.17")
     implementation("com.hierynomus:sshj:0.38.0")
     // PF4J is on the runtime classpath via clouseau-plugin; needed here only for compilation
     // because LogParser extends ExtensionPoint
