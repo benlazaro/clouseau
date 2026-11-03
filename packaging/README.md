@@ -19,7 +19,7 @@ The source SVG is at:
 
 ## Building the distribution
 
-Requires JDK 17+. No additional tools needed on any platform.
+Requires JDK 21+. No additional tools needed on any platform.
 
 ```bash
 # Zipped app image (bundled JRE, no installer required) — recommended for releases

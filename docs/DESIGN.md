@@ -255,7 +255,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 
 ## 8. Packaging
 
-Clouseau builds with Gradle 8.8 (Kotlin DSL) on Java 17. The `org.beryx.runtime` plugin
+Clouseau builds with Gradle 8.8 (Kotlin DSL) on Java 21 (see D-12). The `org.beryx.runtime` plugin
 produces a jpackage image with a bundled JRE, published as a **portable zip**. The default
 heap is `-Xmx2g`. Icons and the splash image are pre-rendered at build time, so the
 runtime needs no SVG library.
@@ -342,6 +342,31 @@ log (UC-2). The format is an interchange format (section 7, rule 3).
 Readers for Loki, CloudWatch, and similar services are welcome, but only as plugins. This
 requires `LogSource` to become a discoverable extension point (see
 [G-3](#11-known-gaps)).
+
+### D-12 · Java 21 · Adopted
+
+The whole project, including `clouseau-api`, targets Java 21, and the release zips bundle
+a Java 21 runtime. Plugin authors and contributors need JDK 21 or later.
+
+Java 21 replaced Java 17 for a longer support window on the bundled runtime and access to
+newer language features. Java 25 was benchmarked and rejected (7-run medians, 1M-line
+log):
+
+| Config | Main window | Load 1M lines | Heap |
+|---|---|---|---|
+| Java 17 | 3.03 s | 5.63 s | 118 MB |
+| Java 25, defaults | 3.05 s | 5.68 s | 119 MB |
+| Java 25 + compact object headers | 3.07 s | 5.68 s | 115 MB |
+| Java 25 + AOT cache | 2.65 s | 4.95 s | 118 MB |
+
+Java 25 alone made no difference. Compact headers saved only about 3% of heap, because
+memory is mostly line text. The AOT cache saved about 12%, but it adds roughly 61 MB per
+platform, is tied to the exact JVM build and paths, and was measured before Batik was
+removed from startup (which already cut much of the class loading it speeds up). Gradle
+8.8 also can't run on JDK 25.
+
+Revisit when Java 21 nears the end of its free updates, or if a Java 25 feature becomes
+compelling. Re-measure first.
 
 ## 10. Planned features
 

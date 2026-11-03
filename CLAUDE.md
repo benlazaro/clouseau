@@ -31,7 +31,7 @@ plugins/
 | Log text rendering | RSyntaxTextArea 3.4.0 |
 | Event bus | Guava 33 AsyncEventBus |
 | Plugin system | PF4J 3.12.0 |
-| Build | Gradle 8.8 (Kotlin DSL), Java 17 |
+| Build | Gradle 8.8 (Kotlin DSL), Java 21 |
 | Test | JUnit 5 + AssertJ + Mockito |
 
 ## Key Classes
@@ -68,7 +68,7 @@ plugins/
 
 ## Coding Conventions
 
-- Java 17 records for immutable data classes
+- Java records for immutable data classes
 - All event types are records nested inside their owning class
 - EDT discipline: only touch Swing components on the Event Dispatch Thread
 - Use `SwingUtilities.invokeLater()` when posting results from async event handlers back to UI

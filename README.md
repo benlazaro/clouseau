@@ -2,7 +2,7 @@
 
 A log viewer for software engineers, born from a love of OtrosLogViewer and a desire to bring its core functionality into a cleaner, more modern interface — Support files of up to 2 GB in size, features fast filtering, and a clean dark UI.
 
-![Java 17](https://img.shields.io/badge/Java-17-blue) ![Gradle 8.8](https://img.shields.io/badge/Gradle-8.8-02303A) ![License MIT](https://img.shields.io/badge/License-MIT-green)
+![Java 21](https://img.shields.io/badge/Java-21-blue) ![Gradle 8.8](https://img.shields.io/badge/Gradle-8.8-02303A) ![License MIT](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
@@ -44,7 +44,7 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 
 ### Requirements
 
-- Java 17+
+- Java 21+
 
 ### Run from source
 
@@ -246,7 +246,7 @@ public class MyParser implements LogParser {
 | Log text rendering | RSyntaxTextArea 3.4.0 |
 | Event bus | Guava 33 AsyncEventBus |
 | Plugin system | PF4J 3.12.0 |
-| Build | Gradle 8.8 (Kotlin DSL), Java 17 |
+| Build | Gradle 8.8 (Kotlin DSL), Java 21 |
 | Tests | JUnit 5, AssertJ, Mockito |
 
 ---

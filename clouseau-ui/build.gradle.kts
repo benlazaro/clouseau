@@ -302,7 +302,7 @@ runtime {
     // jlink options: produce a lean JRE image.
     options.set(listOf(
         "--strip-debug",
-        "--compress", "2",
+        "--compress", "zip-6",
         "--no-header-files",
         "--no-man-pages"
     ))
