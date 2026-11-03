@@ -5,3 +5,6 @@ build/
 *.iml
 out/
 data/
+
+# IntelliJ project files (regenerated from the Gradle import; machine-specific)
+.idea/
