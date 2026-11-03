@@ -5,6 +5,7 @@ import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.core.FileTail;
 import com.droidenx.clouseau.core.LogIndex;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -33,7 +34,6 @@ import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.RandomAccessFile;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
@@ -425,26 +425,19 @@ public final class LogPanel extends JPanel {
                             tailPosition = 0;
                         }
                         if (currentSize > tailPosition) {
-                            try (RandomAccessFile raf = new RandomAccessFile(currentFile.toFile(), "r")) {
-                                raf.seek(tailPosition);
-                                String line;
-                                while ((line = raf.readLine()) != null && !isCancelled()) {
-                                    if (!line.isBlank()) {
-                                        final String candidate = line;
-                                        LogEntry entry = parser.map(Stream::of)
-                                                .orElseGet(parsers::stream)
-                                                .filter(p -> p.canParse(candidate))
-                                                .findFirst()
-                                                .map(p -> p.parse(candidate))
-                                                .orElseGet(() -> new LogEntry(
-                                                        null, LogEntry.LogLevel.UNKNOWN,
-                                                        null, null,
-                                                        candidate, candidate, Map.of()));
-                                        publish(correctTimezone(entry, srcTz));
-                                    }
-                                }
-                                tailPosition = raf.getFilePointer();
-                            }
+                            tailPosition = FileTail.readAppendedLines(currentFile, tailPosition, candidate -> {
+                                if (isCancelled()) return;
+                                LogEntry entry = parser.map(Stream::of)
+                                        .orElseGet(parsers::stream)
+                                        .filter(p -> p.canParse(candidate))
+                                        .findFirst()
+                                        .map(p -> p.parse(candidate))
+                                        .orElseGet(() -> new LogEntry(
+                                                null, LogEntry.LogLevel.UNKNOWN,
+                                                null, null,
+                                                candidate, candidate, Map.of()));
+                                publish(correctTimezone(entry, srcTz));
+                            });
                         }
                     } catch (IOException ignored) {}
                     Thread.sleep(500);

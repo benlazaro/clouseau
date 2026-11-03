@@ -180,8 +180,11 @@ can't handle.
 ### 6.3 Following a log (UC-6)
 
 - **Local files:** The tail worker checks the file size every 500 ms and reads new bytes
-  from the last position. If the file shrinks, Clouseau treats it as rotated and reads
-  from the start; existing rows are kept. Compressed files are never followed.
+  from the last position with `FileTail` (core). Like the initial load, it decodes UTF-8
+  with malformed input replaced. It only consumes complete lines: a line still being
+  written is held back until its newline arrives, so it never becomes two entries. If the
+  file shrinks, Clouseau treats it as rotated and reads from the start; existing rows are
+  kept. Compressed files are never followed.
 - **SSH:** `SshLogSource` runs `tail -n <N> -f <path>` on the server over sshj and
   receives lines as they're written. Nothing on the client polls.
 - **Memory bound:** `LogTableModel` keeps at most `max.entries.per.tab` entries (default
@@ -360,7 +363,7 @@ Remove an entry once it's fixed.
 | **G-1** | `LogIndex` and `ClouseauEventBus` are bypassed. `LogPanel` creates a `LogIndex` and clears it but never adds to it; entries go straight to `LogTableModel`. `LogTableModel` still subscribes to the global async bus, so if `LogIndex` ever posted events, **every open tab** would receive every other tab's entries. | Dead code with a hidden cross-tab bug waiting to trigger. Either remove both or make `LogIndex` the per-tab store with per-tab events. |
 | **G-2** | Plugin parsers are never used. `MainFrame` gets parsers only from `UserParsersLoader`; it never asks the plugin manager for `LogParser` extensions, though the Plugin Manager lists them. | Breaks UC-11 for parsers, the most important plugin type. |
 | **G-3** | `LogSource` and `LogFilter` are not `ExtensionPoint`s, and the UI constructs sources directly. `FileLogSource` (core) is unused; `SshLogSource` lives in `clouseau-ui`. | Plugins can't add sources (blocks D-11). Violates section 3, rule 2. |
-| **G-4** | Local follow polls every 500 ms and reads with `RandomAccessFile.readLine()`, which decodes bytes as ISO-8859-1. | Non-ASCII text in followed lines (accents, CJK, emoji) is garbled, while the same lines read correctly on initial load. Contradicts D-3. |
+| **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |
 | **G-5** | The entry limit applies to static files, and the default heap is 2 GB. | A large file silently loses its earliest lines. Contradicts D-7 and UC-1. |
 | **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. |
 | **G-7** | `SshLogSource` builds the remote command by concatenating the path unquoted: `"tail ... -f " + remotePath`. | Paths with spaces fail; shell metacharacters in the path are executed by the remote shell. |
