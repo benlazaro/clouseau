@@ -73,8 +73,10 @@ without manual configuration for common formats (Log4j, Logback/Spring Boot, JSO
 - *Export bundle:* Opening a review bundle (UC-8) loads the log together with its
   annotations.
 
-**Current behavior:** Only `File → Open` is supported; drag-and-drop and "Open with" are
-not implemented yet. Static files are subject to the per-tab entry limit (see UC-6), so
+**Current behavior:** Drag-and-drop is not implemented. Files passed on the command line
+are opened (and forwarded to an already-running instance), so "Open with" works if the
+user picks the Clouseau launcher manually, but the packages don't register file
+associations. Static files are subject to the per-tab entry limit (see UC-6), so
 the earliest lines of a very large file can be dropped without warning.
 
 ### UC-2 · Open compressed logs directly ✅
@@ -117,7 +119,7 @@ the earliest lines of a very large file can be dropped without warning.
 **Actor:** Developer, Field engineer
 **Goal:** Zero in on the window and kind of events around an incident.
 
-1. User filters by minimum level, a time range, and/or free text.
+1. User toggles which levels to show, and filters by a time range and/or free text.
 2. Filters combine with the logger filter (UC-4).
 3. User uses Find (`Ctrl+F`) to step through matches within the visible rows.
 
