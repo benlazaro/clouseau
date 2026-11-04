@@ -33,8 +33,8 @@ import java.util.function.Predicate;
  * and highlights are keyed by it.
  * <p>
  * A static file can be <em>indexed</em> (D-16): its entries then live in an
- * {@link IndexedEntries}, read back from disk on demand, and only entries that arrive
- * afterwards (following) are held in the list, after them. An indexed tab is never trimmed.
+ * {@link IndexedEntries}, read back from disk on demand. Following such a file adds to
+ * the index too ({@link #appendFollowed}), so an indexed tab is never trimmed.
  */
 public final class LogTableModel extends AbstractTableModel {
 
@@ -231,25 +231,41 @@ public final class LogTableModel extends AbstractTableModel {
      * Must be called on the EDT.
      */
     public void appendBatch(List<LogEntry> entries) {
-        if (indexed != null) {
-            int ordinal = indexedCount;
-            indexedCount += entries.size();
-            discoverFields(entries);
-            int first = rows.size();
-            for (LogEntry e : entries) {
-                if (activeFilter.test(e)) rows.add(ordinal);
-                ordinal++;
-            }
-            if (rows.size() > first) fireTableRowsInserted(first, rows.size() - 1);
-        } else {
-            addEntries(entries);
-        }
+        if (indexed != null) addIndexedRows(entries);
+        else addEntries(entries);
         staticCount += entries.size();
     }
 
     /**
-     * Appends entries from a live session (file follow or SSH), then drops the oldest
-     * entries if the tab is over its cap. Must be called on the EDT.
+     * Appends entries read by following the tab's file. On an indexed tab they are the
+     * rows just added to the index, in order, and are never trimmed (D-16); otherwise they
+     * are live entries ({@link #appendLive}). Must be called on the EDT.
+     */
+    public void appendFollowed(List<LogEntry> entries) {
+        if (indexed != null && allEntries.isEmpty()) addIndexedRows(entries);
+        else appendLive(entries);
+    }
+
+    /** The indexed file's entries, or null if this tab isn't indexed. Must be called on the EDT. */
+    public IndexedEntries indexedEntries() { return indexed; }
+
+    /** Counts in rows just added to the index, and shows those that pass the filter. */
+    private void addIndexedRows(List<LogEntry> entries) {
+        int ordinal = indexedCount;
+        indexedCount += entries.size();
+        discoverFields(entries);
+        int first = rows.size();
+        for (LogEntry e : entries) {
+            if (activeFilter.test(e)) rows.add(ordinal);
+            ordinal++;
+        }
+        if (rows.size() > first) fireTableRowsInserted(first, rows.size() - 1);
+    }
+
+    /**
+     * Appends entries from a live session (SSH, a plugin source, or following a file held
+     * in memory), then drops the oldest entries if the tab is over its cap. Must be called
+     * on the EDT.
      */
     public void appendLive(List<LogEntry> entries) {
         addEntries(entries);
@@ -281,9 +297,9 @@ public final class LogTableModel extends AbstractTableModel {
      * Drops the oldest entries from the front of the list when the entry count
      * exceeds {@link #entryCap()}. Must be called on the EDT.
      * <p>
-     * On an indexed tab the list holds only followed entries, which are capped at the
-     * configured limit; the indexed rows before them are never dropped. (Until D-16 step 5
-     * indexes followed lines too.)
+     * On an indexed tab the indexed rows are never dropped: following adds to the index
+     * ({@link #appendFollowed}). Only live entries appended after the index, which the
+     * app doesn't do, would be capped at the configured limit.
      */
     private void trimToLimit() {
         int cap = indexed != null ? Math.max(maxEntries, 0) : entryCap();
@@ -363,6 +379,12 @@ public final class LogTableModel extends AbstractTableModel {
                 }
                 filterProgress.accept(-1);
                 IntList newRows = acc;
+                // Rows indexed after the snapshot (loading or following) come before the list.
+                if (indexed != null) {
+                    for (int ord = to; ord < indexedCount; ord++) {
+                        if (passesOnEdt(filter, ord)) newRows.add(ord);
+                    }
+                }
                 for (int i = 0; i < listRows.size(); i++) newRows.add(listRows.get(i));
                 // drop entries trimmed meanwhile, and catch up any appended after the snapshot
                 newRows.removeRange(newRows.countBelow(droppedFrom()), newRows.countBelow(listBase()));
