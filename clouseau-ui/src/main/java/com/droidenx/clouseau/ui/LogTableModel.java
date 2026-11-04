@@ -1,6 +1,8 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogEntry;
+import com.droidenx.clouseau.core.EntryFilter;
+import com.droidenx.clouseau.core.EntryIndex;
 import com.droidenx.clouseau.core.IndexedEntries;
 
 import javax.swing.*;
@@ -17,6 +19,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.function.Predicate;
 
 /**
@@ -63,7 +67,7 @@ public final class LogTableModel extends AbstractTableModel {
     /** Ordinals of the entries that pass the active filter, ascending. */
     private       IntList                rows       = new IntList();
     private final Map<Integer, Color>    highlights = new HashMap<>();
-    private Predicate<LogEntry>          activeFilter = e -> true;
+    private EntryFilter                  activeFilter = EntryFilter.ALL;
     private int                          maxEntries = AppPrefs.getMaxEntriesPerTab();
     private int                          trimmedCount = 0;
     /** Entries added by static loads since the last {@link #clear()}; see {@link #entryCap()}. */
@@ -76,10 +80,22 @@ public final class LogTableModel extends AbstractTableModel {
     });
     private Future<?>  filterFuture;
     private long       filterGeneration = 0;
+    private IntConsumer filterProgress = p -> {};
+    /** Rows indexed during a text-filter run that are read on the EDT at the end, not in another run. */
+    private static final int EDT_CATCH_UP_ROWS = 2_000;
 
-    /** Stops the background filter thread. Call when the tab closes. */
+    private final ExecutorService findExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "clouseau-find");
+        t.setDaemon(true);
+        return t;
+    });
+    private Future<?>  findFuture;
+    private long       findGeneration = 0;
+
+    /** Stops the background filter and find threads. Call when the tab closes. */
     public void dispose() {
         filterExecutor.shutdownNow();
+        findExecutor.shutdownNow();
         closeIndexed();
     }
 
@@ -91,7 +107,7 @@ public final class LogTableModel extends AbstractTableModel {
 
     /** The ordinal of {@code allEntries.get(0)}. */
     private int listBase() {
-        return indexed != null ? indexedCount : trimmedCount;
+        return indexed != null ? indexedCount + trimmedCount : trimmedCount;
     }
 
     /** True if this tab shows an indexed static file. */
@@ -181,6 +197,8 @@ public final class LogTableModel extends AbstractTableModel {
             // A filter run still going is for the old entries: drop its result.
             if (filterFuture != null) filterFuture.cancel(true);
             filterGeneration++;
+            filterProgress.accept(-1);
+            cancelFind();
             allEntries.clear();
             closeIndexed();
             trimmedCount = 0;
@@ -262,74 +280,260 @@ public final class LogTableModel extends AbstractTableModel {
     /**
      * Drops the oldest entries from the front of the list when the entry count
      * exceeds {@link #entryCap()}. Must be called on the EDT.
+     * <p>
+     * On an indexed tab the list holds only followed entries, which are capped at the
+     * configured limit; the indexed rows before them are never dropped. (Until D-16 step 5
+     * indexes followed lines too.)
      */
     private void trimToLimit() {
-        if (indexed != null) return;   // the index costs too little per entry to need it (D-16)
-        int cap = entryCap();
+        int cap = indexed != null ? Math.max(maxEntries, 0) : entryCap();
         if (cap <= 0 || allEntries.size() <= cap) return;
         int toRemove = allEntries.size() - cap;
 
         allEntries.subList(0, toRemove).clear();
         trimmedCount += toRemove;
-        int firstKept = trimmedCount;
-        highlights.keySet().removeIf(ord -> ord < firstKept);
+        int gapStart = droppedFrom(), firstKept = listBase();
+        highlights.keySet().removeIf(ord -> ord >= gapStart && ord < firstKept);
 
-        // rows is ascending, so the dropped entries' rows are a prefix
-        int rowsToRemove = rows.countBelow(firstKept);
-        if (rowsToRemove > 0) {
-            rows.removeFirst(rowsToRemove);
-            fireTableRowsDeleted(0, rowsToRemove - 1);
+        // rows is ascending, so the dropped entries' rows are one run
+        int from = rows.countBelow(gapStart), to = rows.countBelow(firstKept);
+        if (to > from) {
+            rows.removeRange(from, to);
+            fireTableRowsDeleted(from, to - 1);
         }
+    }
+
+    /** The first ordinal that may have been dropped: dropped entries are droppedFrom() to listBase() - 1. */
+    private int droppedFrom() {
+        return indexed != null ? indexedCount : 0;
     }
 
     /** Updates the per-tab entry cap (0 = unlimited). */
     public void setMaxEntries(int max) { this.maxEntries = max; }
 
-    /** Total number of entries dropped from the front of this tab since it was opened. */
+    /** Total number of entries dropped since the tab was opened (on an indexed tab, followed ones). */
     public long getTrimmedCount() { return trimmedCount; }
 
+    /**
+     * Receives filter progress: a percentage while a filter run reads text from the file,
+     * and -1 when the run has finished or was superseded. Called on the EDT.
+     */
+    public void setFilterProgressListener(IntConsumer listener) {
+        this.filterProgress = listener != null ? listener : p -> {};
+    }
+
     /** Installs a new filter and schedules an off-EDT recompute of visible rows. Must be called on the EDT. */
-    public void applyFilter(Predicate<LogEntry> filter) {
+    public void applyFilter(EntryFilter filter) {
         activeFilter = filter;
         scheduleReapply();
     }
 
     private void scheduleReapply() {
         if (filterFuture != null) filterFuture.cancel(true);
+        long generation = ++filterGeneration;
+        submitFilterRun(generation, activeFilter, new IntList(), 0);
+    }
+
+    /**
+     * Filters indexed rows {@code from} up to the current indexed count into {@code acc},
+     * then the in-memory list, in the background, and installs the result on the EDT. If
+     * many rows that need text were indexed meanwhile (a load still running), it goes
+     * round again for those rather than reading them on the EDT.
+     */
+    private void submitFilterRun(long generation, EntryFilter filter, IntList acc, int from) {
+        IndexedEntries indexedSnapshot = indexed;
+        int to = indexedCount;
         List<LogEntry> snapshot = List.copyOf(allEntries);
         int base = listBase();
-        IndexedEntries indexedSnapshot = indexed;
-        int indexedRows = indexedCount;
-        Predicate<LogEntry> filter = activeFilter;
-        long generation = ++filterGeneration;
 
         filterFuture = filterExecutor.submit(() -> {
-            IntList newRows = new IntList();
-            if (indexedSnapshot != null) {
-                // Reads the file in order; rows added after indexedRows are caught up below.
-                indexedSnapshot.scan(0, indexedRows, (row, e) -> {
-                    if (filter.test(e)) newRows.add(row);
-                }, () -> Thread.currentThread().isInterrupted());
-                if (Thread.currentThread().isInterrupted()) return;
-            }
+            if (indexedSnapshot != null
+                    && !filterIndexed(indexedSnapshot, from, to, filter, acc, generation)) return;
+            IntList listRows = new IntList();
             for (int i = 0; i < snapshot.size(); i++) {
                 if (Thread.currentThread().isInterrupted()) return;
-                if (filter.test(snapshot.get(i))) newRows.add(base + i);
+                if (filter.test(snapshot.get(i))) listRows.add(base + i);
             }
             SwingUtilities.invokeLater(() -> {
                 if (filterGeneration != generation) return; // superseded by a newer filter
+                if (indexed != null && indexedCount - to > EDT_CATCH_UP_ROWS
+                        && filter.needsText(indexed.index())) {
+                    submitFilterRun(generation, filter, acc, to);
+                    return;
+                }
+                filterProgress.accept(-1);
+                IntList newRows = acc;
+                for (int i = 0; i < listRows.size(); i++) newRows.add(listRows.get(i));
                 // drop entries trimmed meanwhile, and catch up any appended after the snapshot
-                newRows.removeFirst(newRows.countBelow(trimmedCount));
+                newRows.removeRange(newRows.countBelow(droppedFrom()), newRows.countBelow(listBase()));
                 int end = nextOrdinal();
-                int from = base + snapshot.size();
-                for (int ord = Math.max(from, trimmedCount); ord < end; ord++) {
-                    LogEntry e = entryAtOrdinal(ord);
-                    if (e != null && filter.test(e)) newRows.add(ord);
+                for (int ord = Math.max(base + snapshot.size(), listBase()); ord < end; ord++) {
+                    if (passesOnEdt(filter, ord)) newRows.add(ord);
                 }
                 rows = newRows;
                 fireTableDataChanged();
             });
         });
+    }
+
+    /** Filters indexed rows [from, to) into {@code acc}; false if interrupted. Runs on the filter executor. */
+    private boolean filterIndexed(IndexedEntries entries, int from, int to, EntryFilter filter,
+                                  IntList acc, long generation) {
+        EntryIndex index = entries.index();
+        if (!filter.needsText(index)) {
+            for (int row = from; row < to; row++) {
+                if ((row & 0xFFFF) == 0 && Thread.currentThread().isInterrupted()) return false;
+                if (filter.testIndex(index, row)) acc.add(row);
+            }
+            return true;
+        }
+        // Only rows the columns pass are read, in file order, in large sequential reads.
+        Progress progress = new Progress(from, to, p -> postProgress(generation, p));
+        entries.scan(from, to, row -> {
+            progress.at(row);
+            return filter.testIndex(index, row);
+        }, (row, e) -> {
+            if (filter.test(e)) acc.add(row);
+        }, () -> Thread.currentThread().isInterrupted());
+        return !Thread.currentThread().isInterrupted();
+    }
+
+    /** Tests one entry on the EDT, reading an indexed row's text only if the filter needs it. */
+    private boolean passesOnEdt(EntryFilter filter, int ordinal) {
+        if (indexed != null && ordinal < indexedCount) {
+            EntryIndex index = indexed.index();
+            if (!filter.testIndex(index, ordinal)) return false;
+            if (!filter.needsText(index)) return true;
+        }
+        LogEntry e = entryAtOrdinal(ordinal);
+        return e != null && filter.test(e);
+    }
+
+    private void postProgress(long generation, int percent) {
+        SwingUtilities.invokeLater(() -> {
+            if (filterGeneration == generation) filterProgress.accept(percent);
+        });
+    }
+
+    // ── Find ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Finds the visible entries that match, in the background. An entry also matches if
+     * one of its continuation lines does, visible or not, since the detail panel shows
+     * them together. On the EDT, {@code progress} gets a percentage while the file is read
+     * and -1 at the end, and {@code done} gets the matching ordinals, ascending; neither
+     * is called if another find or {@link #clear()} comes first. Must be called on the EDT.
+     */
+    public void find(Predicate<LogEntry> matches, IntConsumer progress, Consumer<int[]> done) {
+        cancelFind();
+        long generation = findGeneration;
+        IntList visible = rows.copy();
+        IndexedEntries indexedSnapshot = indexed;
+        int indexedRows = indexedCount;
+        List<LogEntry> snapshot = List.copyOf(allEntries);
+        int base = listBase();
+
+        findFuture = findExecutor.submit(() -> {
+            FindScan scan = new FindScan(visible, matches);
+            int first = visible.size() > 0 ? visible.get(0) : Integer.MAX_VALUE;
+            if (indexedSnapshot != null && first < indexedRows) {
+                EntryIndex index = indexedSnapshot.index();
+                Progress p = new Progress(first, indexedRows, pct -> SwingUtilities.invokeLater(() -> {
+                    if (findGeneration == generation) progress.accept(pct);
+                }));
+                indexedSnapshot.scan(first, indexedRows, row -> {
+                    p.at(row);
+                    return scan.wanted(row, index.isContinuation(row));
+                }, scan::accept, () -> Thread.currentThread().isInterrupted());
+                if (Thread.currentThread().isInterrupted()) return;
+            }
+            for (int i = Math.max(0, first - base); i < snapshot.size(); i++) {
+                if (Thread.currentThread().isInterrupted()) return;
+                LogEntry e = snapshot.get(i);
+                if (scan.wanted(base + i, isContinuation(e))) scan.accept(base + i, e);
+            }
+            int[] found = scan.result();
+            SwingUtilities.invokeLater(() -> {
+                if (findGeneration != generation) return;
+                progress.accept(-1);
+                done.accept(found);
+            });
+        });
+    }
+
+    /** Stops a running {@link #find}; its callbacks won't be called. Must be called on the EDT. */
+    public void cancelFind() {
+        if (findFuture != null) findFuture.cancel(true);
+        findGeneration++;
+    }
+
+    private static boolean isContinuation(LogEntry e) {
+        return e.timestamp() == null || e.level() == LogEntry.LogLevel.UNKNOWN;
+    }
+
+    /**
+     * One pass of {@link #find} over entries in ordinal order. Keeps the visible entries
+     * whose continuation lines are still running ("open"), so a later continuation line
+     * that matches marks them; any entry that isn't a continuation closes them.
+     */
+    private static final class FindScan {
+        private final IntList visible;
+        private final Predicate<LogEntry> matches;
+        private final IntList open = new IntList();
+        private final IntList found = new IntList();
+        private int cursor = 0;
+        private boolean currentVisible;
+
+        FindScan(IntList visible, Predicate<LogEntry> matches) {
+            this.visible = visible;
+            this.matches = matches;
+        }
+
+        /** Called for every ordinal in order; true if the entry must be read and given to {@link #accept}. */
+        boolean wanted(int ordinal, boolean continuation) {
+            if (!continuation) open.clear();
+            while (cursor < visible.size() && visible.get(cursor) < ordinal) cursor++;
+            currentVisible = cursor < visible.size() && visible.get(cursor) == ordinal;
+            return currentVisible || open.size() > 0;
+        }
+
+        void accept(int ordinal, LogEntry e) {
+            if (matches.test(e)) {
+                for (int i = 0; i < open.size(); i++) found.add(open.get(i));
+                open.clear();
+                if (currentVisible) found.add(ordinal);
+            } else if (currentVisible) {
+                open.add(ordinal);
+            }
+        }
+
+        int[] result() {
+            int[] r = found.toArray();
+            Arrays.sort(r);
+            return r;
+        }
+    }
+
+    /** Turns rows done into a percentage, reporting only when it changes. */
+    private static final class Progress {
+        private final int from, total;
+        private final IntConsumer out;
+        private int last = -1;
+
+        Progress(int from, int to, IntConsumer out) {
+            this.from = from;
+            this.total = to - from;
+            this.out = out;
+        }
+
+        void at(int row) {
+            if (total <= 0) return;
+            int p = (int) ((row - from) * 100L / total);
+            if (p != last) {
+                last = p;
+                out.accept(p);
+            }
+        }
     }
 
     /** Returns the LogEntry at the given model row, or null if out of range. */
@@ -463,9 +667,34 @@ public final class LogTableModel extends AbstractTableModel {
             data[start + size++] = value;
         }
 
+        void clear() {
+            start = 0;
+            size = 0;
+        }
+
+        IntList copy() {
+            IntList c = new IntList();
+            c.data = Arrays.copyOfRange(data, start, start + Math.max(size, 64));
+            c.size = size;
+            return c;
+        }
+
+        int[] toArray() { return Arrays.copyOfRange(data, start, start + size); }
+
         void removeFirst(int n) {
             start += n;
             size  -= n;
+        }
+
+        /** Removes the values at positions {@code from} (inclusive) to {@code to} (exclusive). */
+        void removeRange(int from, int to) {
+            if (to <= from) return;
+            if (from == 0) {
+                removeFirst(to);
+                return;
+            }
+            System.arraycopy(data, start + to, data, start + from, size - to);
+            size -= to - from;
         }
 
         /** How many leading values are below {@code value}. */

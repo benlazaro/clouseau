@@ -77,10 +77,12 @@ without manual configuration for common formats (Log4j, Logback/Spring Boot, JSO
 **Current behavior:** Drag-and-drop is not implemented. Files passed on the command line
 are opened (and forwarded to an already-running instance), so "Open with" works if the
 user picks the Clouseau launcher manually, but the packages don't register file
-associations. Static files are never trimmed by the entry limit, but they are held in
-memory: if a file is too big for the heap, Clouseau stops reading, warns the user with
-the number of lines loaded and how to raise the memory limit, and marks the tab
-"partly loaded" in the status bar.
+associations. Static files are never trimmed by the entry limit. A plain file is indexed
+(D-16): the heap keeps about 29 bytes per line and text is read back from disk, so a
+1M-line, 125 MB log uses under 50 MB of heap. Compressed files and files inside a zip are
+still held in memory: if one is too big for the heap, Clouseau stops reading, warns the
+user with the number of lines loaded and how to raise the memory limit, and marks the
+tab "partly loaded" in the status bar.
 
 ### UC-2 · Open compressed logs directly ✅
 
@@ -135,6 +137,12 @@ there are others.
 **Success:** The user can get from "something broke around 14:05" to the relevant lines
 in a few interactions.
 
+**Current behavior:** On an indexed file, level, logger, field and time filters are
+decided from the index and take milliseconds even on a million lines. A text filter and
+Find read the text of the rows the other filters keep, in the background: the status bar
+shows "filtering n%" and the Find counter "Searching n%", and the window stays
+responsive (about 1.6 s for 1M lines). Times are compared to the millisecond.
+
 ### UC-6 · Follow a live log for a long time ✅
 
 **Actor:** Developer
@@ -151,7 +159,9 @@ in a few interactions.
 entries (default 200,000). The oldest entries are dropped when the limit is reached. This
 limit protects live sessions only; it never applies to opening a static file (UC-1).
 When following a file that was already larger than the limit, the tab keeps as many
-entries as it loaded, dropping one old entry per new one.
+entries as it loaded, dropping one old entry per new one. On an indexed file (UC-1) the
+lines already in the file are never dropped; the lines followed since are held in memory
+and kept to the limit, oldest first, until following extends the index (D-16 step 5).
 
 ### UC-7 · Annotate lines during an investigation ✅
 

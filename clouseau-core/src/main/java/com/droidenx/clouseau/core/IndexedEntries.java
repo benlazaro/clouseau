@@ -14,6 +14,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntPredicate;
 
 /**
  * The entries of an indexed static file (D-16), read back from disk on demand: each row's
@@ -106,6 +107,15 @@ public final class IndexedEntries implements Closeable {
      * @return true if every row was read
      */
     public boolean scan(int from, int to, RowSink sink, BooleanSupplier cancelled) {
+        return scan(from, to, row -> true, sink, cancelled);
+    }
+
+    /**
+     * Like {@link #scan(int, int, RowSink, BooleanSupplier)}, but reads and parses only the
+     * rows {@code wanted} accepts. {@code wanted} is asked about every row, in order, just
+     * before that row would be read, so it may keep state (for example, progress).
+     */
+    public boolean scan(int from, int to, IntPredicate wanted, RowSink sink, BooleanSupplier cancelled) {
         ByteBuffer block = ByteBuffer.allocate(SCAN_BLOCK);
         long blockStart = 0;
         int blockLen = 0;
@@ -114,6 +124,7 @@ public final class IndexedEntries implements Closeable {
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
             for (int row = from; row < to; row++) {
                 if (cancelled.getAsBoolean()) return false;
+                if (!wanted.test(row)) continue;
                 long offset = index.offset(row);
                 int length = index.length(row);
                 String text;

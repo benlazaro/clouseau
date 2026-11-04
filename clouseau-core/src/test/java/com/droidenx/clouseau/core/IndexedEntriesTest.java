@@ -66,6 +66,23 @@ class IndexedEntriesTest {
     }
 
     @Test
+    void scanReadsOnlyWantedRows() throws IOException {
+        Path file = write("a\nb\nc\nd\ne\n");
+        List<Integer> asked = new ArrayList<>();
+        List<String> got = new ArrayList<>();
+        try (IndexedEntries entries = index(file)) {
+            boolean complete = entries.scan(1, 5, row -> {
+                asked.add(row);
+                return row % 2 == 1;
+            }, (row, e) -> got.add(row + ":" + e.rawLine()), () -> false);
+
+            assertThat(complete).isTrue();
+            assertThat(asked).containsExactly(1, 2, 3, 4);
+            assertThat(got).containsExactly("1:b", "3:d");
+        }
+    }
+
+    @Test
     void cancelledScanStops() throws IOException {
         Path file = write("a\nb\nc\nd\n");
         List<String> got = new ArrayList<>();

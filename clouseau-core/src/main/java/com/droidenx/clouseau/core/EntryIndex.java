@@ -5,11 +5,9 @@ import com.droidenx.clouseau.api.LogEntry.LogLevel;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A compact index of a static log (D-16): one row per entry, in file order, holding where
@@ -23,11 +21,10 @@ import java.util.Map;
  * <p>
  * Columns grow in chunks, so no single array gets huge and appending stays cheap.
  * <p>
- * <b>Threads:</b> one thread appends. Other threads may read the column getters
- * ({@link #offset}, {@link #length}, {@link #timestamp}, {@link #level}, the ids) for rows
- * below a size the appending thread handed them through a happens-before edge (for
- * example {@code SwingWorker.publish}). The dictionaries and {@link #fieldNames} are for
- * the appending thread only.
+ * <b>Threads:</b> one thread appends. Other threads may read any getter, including the
+ * dictionaries and field lookups, for rows below a size the appending thread handed them
+ * through a happens-before edge (for example {@code SwingWorker.publish}); an id read
+ * from such a row always resolves. What they see beyond that size may be partial.
  */
 public final class EntryIndex {
 
@@ -39,6 +36,8 @@ public final class EntryIndex {
     public static final int MAX_FIELD_VALUES = 1_000;
 
     private static final LogLevel[] LEVELS = LogLevel.values();
+    /** The level byte of an entry whose parser gave no level (a plugin may). */
+    private static final byte NO_LEVEL = -1;
 
     private final int chunkBits;
     private final LongColumn offsets;
@@ -49,8 +48,10 @@ public final class EntryIndex {
     private final IntColumn  threadIds;
     private final Dictionary loggers = new Dictionary();
     private final Dictionary threads = new Dictionary();
-    /** Every custom field seen, in first-seen order; null once a field has too many values. */
-    private final Map<String, FieldColumn> fields = new LinkedHashMap<>();
+    /** Every custom field seen. A column is put here only once it covers every earlier row. */
+    private final Map<String, FieldColumn> fields = new ConcurrentHashMap<>();
+    /** The keys of {@link #fields} in first-seen order; replaced, never changed, when one is added. */
+    private volatile List<String> fieldNames = List.of();
     private int size;
 
     public EntryIndex() {
@@ -72,7 +73,7 @@ public final class EntryIndex {
         offsets.add(offset);
         lengths.add(length);
         timestamps.add(e.timestamp() != null ? e.timestamp().toEpochMilli() : NO_TIMESTAMP);
-        levels.add((byte) (e.level() != null ? e.level() : LogLevel.UNKNOWN).ordinal());
+        levels.add(e.level() != null ? (byte) e.level().ordinal() : NO_LEVEL);
         loggerIds.add(loggers.add(e.logger()));
         threadIds.add(threads.add(e.thread()));
 
@@ -82,14 +83,17 @@ public final class EntryIndex {
                 FieldColumn col = new FieldColumn(chunkBits);
                 col.ids.fill(size, NONE);   // earlier rows don't have it
                 fields.put(name, col);
+                List<String> names = new ArrayList<>(fieldNames);
+                names.add(name);
+                fieldNames = List.copyOf(names);
             }
         }
-        for (Map.Entry<String, FieldColumn> f : fields.entrySet()) {
-            FieldColumn col = f.getValue();
-            if (col == null) continue;
-            int id = col.values.add(values.get(f.getKey()));
+        for (String name : fieldNames) {
+            FieldColumn col = fields.get(name);
+            if (col.overflowed) continue;
+            int id = col.values.add(values.get(name));
             if (col.values.size() > MAX_FIELD_VALUES) {
-                f.setValue(null);           // too many values to be worth indexing
+                col.overflowed = true;      // too many values to be worth indexing
                 continue;
             }
             col.ids.add(id);
@@ -103,7 +107,16 @@ public final class EntryIndex {
     public int length(int row)         { return lengths.get(row); }
     /** Epoch milliseconds, or {@link #NO_TIMESTAMP}. */
     public long timestamp(int row)     { return timestamps.get(row); }
-    public LogLevel level(int row)     { return LEVELS[levels.get(row)]; }
+    /** The level, or null if the parser gave none. */
+    public LogLevel level(int row) {
+        byte b = levels.get(row);
+        return b == NO_LEVEL ? null : LEVELS[b];
+    }
+
+    /** True if the row is a continuation line: no timestamp, or level {@code UNKNOWN}. */
+    public boolean isContinuation(int row) {
+        return timestamp(row) == NO_TIMESTAMP || levels.get(row) == LogLevel.UNKNOWN.ordinal();
+    }
     public int loggerId(int row)       { return loggerIds.get(row); }
     public int threadId(int row)       { return threadIds.get(row); }
 
@@ -111,36 +124,53 @@ public final class EntryIndex {
     public Dictionary threads()        { return threads; }
 
     /** Every custom field seen so far, indexed or not, in the order first seen. */
-    public List<String> fieldNames()   { return List.copyOf(fields.keySet()); }
+    public List<String> fieldNames()   { return fieldNames; }
 
-    public boolean isFieldIndexed(String name) { return fields.get(name) != null; }
+    public boolean isFieldIndexed(String name) {
+        FieldColumn col = fields.get(name);
+        return col != null && !col.overflowed;
+    }
+
+    /**
+     * True if the field was seen but has too many values to be indexed, so a filter on it
+     * must read text. (A field never seen is simply missing from every row.)
+     */
+    public boolean hasTooManyValues(String name) {
+        FieldColumn col = fields.get(name);
+        return col != null && col.overflowed;
+    }
 
     /** The field's values, or null if it isn't indexed (unknown, or too many values). */
     public Dictionary fieldValues(String name) {
         FieldColumn col = fields.get(name);
-        return col != null ? col.values : null;
+        return col != null && !col.overflowed ? col.values : null;
     }
 
-    /** The id of the row's value in {@link #fieldValues}, or {@link #NONE}. */
+    /** The id of the row's value in {@link #fieldValues}, or {@link #NONE} (also if it isn't indexed). */
     public int fieldId(String name, int row) {
         FieldColumn col = fields.get(name);
-        return col != null ? col.ids.get(row) : NONE;
+        return col != null && !col.overflowed ? col.ids.get(row) : NONE;
     }
 
     /** Roughly how much heap the columns use, for diagnostics. */
     public long estimatedBytes() {
         long bytes = offsets.capacity() * 8 + timestamps.capacity() * 8 + levels.capacity()
                 + (lengths.capacity() + loggerIds.capacity() + threadIds.capacity()) * 4;
-        for (FieldColumn col : fields.values()) if (col != null) bytes += col.ids.capacity() * 4;
+        for (FieldColumn col : fields.values()) if (!col.overflowed) bytes += col.ids.capacity() * 4;
         return bytes;
     }
 
     // ── Dictionary ───────────────────────────────────────────────────────────
 
-    /** Distinct strings, each with a small id in the order first seen. Null has no id. */
+    /**
+     * Distinct strings, each with a small id in the order first seen. Null has no id.
+     * One thread adds; any thread may look up (see the class comment).
+     */
     public static final class Dictionary {
-        private final Map<String, Integer> ids = new HashMap<>();
-        private final List<String> values = new ArrayList<>();
+        private final Map<String, Integer> ids = new ConcurrentHashMap<>();
+        /** Grown by copying and published through the volatile write, like the columns. */
+        private volatile String[] values = new String[16];
+        private volatile int size;
 
         private Dictionary() {}
 
@@ -149,9 +179,18 @@ public final class EntryIndex {
             if (value == null) return NONE;
             Integer id = ids.get(value);
             if (id != null) return id;
-            values.add(value);
-            ids.put(value, values.size() - 1);
-            return values.size() - 1;
+            int n = size;
+            String[] vs = values;
+            if (n == vs.length) {
+                vs = Arrays.copyOf(vs, n * 2);
+                vs[n] = value;
+                values = vs;
+            } else {
+                vs[n] = value;
+            }
+            size = n + 1;           // publishes the value written above
+            ids.put(value, n);
+            return n;
         }
 
         /** The value's id, or {@link #NONE} if it hasn't been seen. */
@@ -161,11 +200,19 @@ public final class EntryIndex {
         }
 
         /** The value with this id, or null for {@link #NONE}. */
-        public String valueOf(int id) { return id == NONE ? null : values.get(id); }
+        public String valueOf(int id) {
+            if (id == NONE) return null;
+            if (id < 0 || id >= size) throw new IndexOutOfBoundsException(id);
+            return values[id];
+        }
 
-        public int size() { return values.size(); }
+        public int size() { return size; }
 
-        public List<String> values() { return Collections.unmodifiableList(values); }
+        /** A copy of the values, in id order. */
+        public List<String> values() {
+            int n = size;
+            return List.of(Arrays.copyOf(values, n));
+        }
     }
 
     // ── Columns ──────────────────────────────────────────────────────────────
@@ -173,6 +220,8 @@ public final class EntryIndex {
     private static final class FieldColumn {
         final IntColumn ids;
         final Dictionary values = new Dictionary();
+        /** Set once the field has too many values; {@link #ids} stops growing then. */
+        volatile boolean overflowed;
 
         FieldColumn(int chunkBits) { ids = new IntColumn(chunkBits); }
     }

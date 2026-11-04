@@ -39,6 +39,50 @@ class EntryIndexTest {
     }
 
     @Test
+    void noLevelIsKeptApartFromUnknown() {
+        EntryIndex index = new EntryIndex();
+        index.add(0, 1, entry(Instant.EPOCH, null, null, null, Map.of()));
+        index.add(2, 1, entry(Instant.EPOCH, LogLevel.UNKNOWN, null, null, Map.of()));
+        index.add(4, 1, entry(null, LogLevel.INFO, null, null, Map.of()));
+        index.add(6, 1, entry(Instant.EPOCH, LogLevel.INFO, null, null, Map.of()));
+
+        assertThat(index.level(0)).isNull();
+        assertThat(index.level(1)).isEqualTo(LogLevel.UNKNOWN);
+        assertThat(index.isContinuation(0)).isFalse();
+        assertThat(index.isContinuation(1)).isTrue();
+        assertThat(index.isContinuation(2)).isTrue();
+        assertThat(index.isContinuation(3)).isFalse();
+    }
+
+    @Test
+    void anotherThreadCanReadWhatItWasHanded() throws Exception {
+        EntryIndex index = new EntryIndex(4);
+        java.util.concurrent.BlockingQueue<Integer> handed = new java.util.concurrent.LinkedBlockingQueue<>();
+        java.util.concurrent.atomic.AtomicReference<Throwable> failure = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread reader = new Thread(() -> {
+            try {
+                for (int n; (n = handed.take()) >= 0; ) {
+                    int row = n - 1;
+                    assertThat(index.loggers().valueOf(index.loggerId(row))).isEqualTo("l" + row);
+                    assertThat(index.fieldValues("f").valueOf(index.fieldId("f", row))).isEqualTo("v" + row % 7);
+                    assertThat(index.fieldNames()).contains("f");
+                }
+            } catch (Throwable t) {
+                failure.set(t);
+            }
+        });
+        reader.start();
+        for (int i = 0; i < 20_000; i++) {
+            index.add(i, 1, entry(null, LogLevel.INFO, "l" + i, null, Map.of("f", "v" + i % 7)));
+            handed.put(i + 1);      // the queue is the happens-before edge
+        }
+        handed.put(-1);
+        reader.join(30_000);
+
+        assertThat(failure.get()).isNull();
+    }
+
+    @Test
     void repeatedNamesShareOneId() {
         EntryIndex index = new EntryIndex();
         index.add(0, 1, entry(null, LogLevel.INFO, "a", "t1", Map.of()));

@@ -88,11 +88,8 @@ public final class LogPanel extends JPanel {
      * file systems that send no notifications (some network drives).
      */
     private static final long FOLLOW_SAFETY_POLL_MS = 2_000;
-    /**
-     * Index plain static files instead of holding them in memory (D-16). Off unless
-     * {@code -Dclouseau.indexStaticFiles=true}, until the filters read the index directly.
-     */
-    static final boolean INDEX_STATIC_FILES = Boolean.getBoolean("clouseau.indexStaticFiles");
+    /** The running filter's progress while it reads text from the file, or -1. */
+    private int filterPercent = -1;
     private AnnotationStore  annotationStore   = AnnotationStore.inMemory();
     /** True once this tab has told the user its annotations couldn't be saved. */
     private boolean          annotationSaveWarned;
@@ -123,10 +120,14 @@ public final class LogPanel extends JPanel {
         this.formatters = formatters;
         this.syntaxHighlighters = syntaxHighlighters;
         FilterBar[] fbHolder = new FilterBar[1];
-        fbHolder[0] = new FilterBar(() -> logTableModel.applyFilter(fbHolder[0].buildPredicate()));
+        fbHolder[0] = new FilterBar(() -> logTableModel.applyFilter(fbHolder[0].buildFilter()));
         this.filterBar = fbHolder[0];
         filterBar.initFollow(follow, this::setFollow);
-        logTableModel.applyFilter(filterBar.buildPredicate());
+        logTableModel.setFilterProgressListener(percent -> {
+            filterPercent = percent;
+            if (statusBarLabel != null) updateStatusBar();
+        });
+        logTableModel.applyFilter(filterBar.buildFilter());
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildLogTable(),
                 detailPanel = new DetailPanel(formatters, syntaxHighlighters, this::currentDetail));
@@ -251,10 +252,9 @@ public final class LogPanel extends JPanel {
 
         final MemoryGuard memory = new MemoryGuard();
 
-        // D-16: a plain file can be indexed instead of held in memory. Opt-in until the
-        // filters read the index directly (D-16 step 3).
-        final EntryIndex index = INDEX_STATIC_FILES && entry == null && !LogReaders.isCompressed(file)
-                ? new EntryIndex() : null;
+        // D-16: a plain file is indexed instead of held in memory. Compressed files and
+        // zip entries are still loaded into memory until they go through the cache (step 4).
+        final EntryIndex index = entry == null && !LogReaders.isCompressed(file) ? new EntryIndex() : null;
         if (index != null) {
             try {
                 logTableModel.beginIndexedLoad(
@@ -651,6 +651,7 @@ public final class LogPanel extends JPanel {
                     : java.text.MessageFormat.format(Messages.get("status.lines.filtered"), visible, total);
         }
         if (partialLoad) text += Messages.get("status.partial");
+        if (filterPercent >= 0) text += java.text.MessageFormat.format(Messages.get("status.filtering"), filterPercent);
         statusBarLabel.setText(text);
     }
 
@@ -1575,20 +1576,32 @@ public final class LogPanel extends JPanel {
 
     private void updateSearchMatches(String query) {
         if (query == null || query.isBlank()) {
+            logTableModel.cancelFind();
             clearSearchMatches();
             return;
         }
         String lower = query.toLowerCase();
+        // Read in the background: on an indexed file, every visible row comes from disk.
+        logTableModel.find(e -> entryMatchesQuery(e, lower), percent -> {
+            if (percent < 0) return;
+            findCounter.setForeground(ClouseauColors.dimForeground());
+            findCounter.setText(java.text.MessageFormat.format(Messages.get("find.searching"), percent));
+        }, this::showSearchMatches);
+    }
+
+    /** Shows the result of a find: the ordinals of the matching entries, ascending. */
+    private void showSearchMatches(int[] ordinals) {
         List<Integer> list = new ArrayList<>();
         Set<Integer>  set  = new HashSet<>();
-        for (int viewRow = 0; viewRow < logTable.getRowCount(); viewRow++) {
-            int modelRow = logTable.convertRowIndexToModel(viewRow);
-            LogEntry entry = logTableModel.getEntry(modelRow);
-            if (entry != null && (entryMatchesQuery(entry, lower) || continuationsMatch(modelRow, lower))) {
+        for (int ordinal : ordinals) {
+            int modelRow = logTableModel.rowOfOrdinal(ordinal);   // rows may have changed since
+            if (modelRow >= 0) {
                 list.add(modelRow);
                 set.add(modelRow);
             }
         }
+        // Next and previous follow the view, which may be sorted.
+        list.sort(java.util.Comparator.comparingInt(logTable::convertRowIndexToView));
         searchMatchModelRows = Collections.unmodifiableSet(set);
         searchMatchList      = Collections.unmodifiableList(list);
         searchMatchCursor    = -1;
@@ -1605,13 +1618,6 @@ public final class LogPanel extends JPanel {
         searchMatchCursor    = -1;
         if (findCounter != null) findCounter.setText("");
         logTable.repaint();
-    }
-
-    private boolean continuationsMatch(int modelRow, String lower) {
-        for (LogEntry c : logTableModel.getContinuationLines(modelRow)) {
-            if (entryMatchesQuery(c, lower)) return true;
-        }
-        return false;
     }
 
     private static boolean entryMatchesQuery(LogEntry entry, String lower) {

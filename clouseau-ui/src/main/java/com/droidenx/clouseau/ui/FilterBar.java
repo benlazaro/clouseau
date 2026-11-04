@@ -2,6 +2,8 @@ package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogEntry.LogLevel;
+import com.droidenx.clouseau.core.CombinedFilter;
+import com.droidenx.clouseau.core.EntryFilter;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
@@ -23,13 +25,10 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.List;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * Per-tab filter bar: level toggles, logger picker, timestamp range, and text/regex search.
- * Call {@link #buildPredicate()} to get the current combined filter.
+ * Call {@link #buildFilter()} to get the current combined filter.
  * Call {@link #updateLoggers(List)} after a file is loaded to populate the logger picker.
  */
 final class FilterBar extends JPanel {
@@ -64,7 +63,7 @@ final class FilterBar extends JPanel {
     private final Set<String> excludedLoggers = new LinkedHashSet<>();
 
     /** Sentinel value representing a null/blank/absent field value in the fields filter popup. */
-    static final String EMPTY_SENTINEL = "(empty)";
+    static final String EMPTY_SENTINEL = CombinedFilter.EMPTY_VALUE;
 
     // Field value picker state: fieldKey → sorted distinct values / excluded values
     private final Map<String, TreeSet<String>> allFieldValues      = new LinkedHashMap<>();
@@ -275,13 +274,14 @@ final class FilterBar extends JPanel {
         updateLoggerButtonLabel();
     }
 
-    /** Returns a predicate that is the AND of all active filters. */
-    Predicate<LogEntry> buildPredicate() {
-        return buildLevelPredicate()
-            .and(buildLoggerPredicate())
-            .and(buildFieldPredicate())
-            .and(buildTimestampPredicate())
-            .and(buildTextPredicate());
+    /** Returns the AND of all active filters. */
+    EntryFilter buildFilter() {
+        EnumSet<LogLevel> allowed = EnumSet.noneOf(LogLevel.class);
+        levelButtons.forEach((level, btn) -> { if (btn.isSelected()) allowed.add(level); });
+        boolean noLoggers = !excludedLoggers.isEmpty() && excludedLoggers.containsAll(allLoggers);
+        return new CombinedFilter(allowed, excludedLoggers, noLoggers, excludedFieldValues,
+                parseTimestamp(fromField.getText().trim()), parseTimestamp(toField.getText().trim()),
+                searchField.getText());
     }
 
     /** Resets all filters to their default (pass-through) state. */
@@ -297,8 +297,6 @@ final class FilterBar extends JPanel {
         onChanged.run();
     }
 
-    // ── Predicates ───────────────────────────────────────────────────────────
-
     private void soloLevel(LogLevel target, boolean restore) {
         levelButtons.forEach((lvl, btn) -> {
             boolean on = restore ? lvl != LogLevel.UNKNOWN : lvl == target;
@@ -306,61 +304,6 @@ final class FilterBar extends JPanel {
             btn.setForeground(on ? ClouseauColors.levelColor(lvl) : ClouseauColors.offColor());
         });
         onChanged.run();
-    }
-
-    private Predicate<LogEntry> buildLevelPredicate() {
-        EnumSet<LogLevel> allowed = EnumSet.noneOf(LogLevel.class);
-        levelButtons.forEach((level, btn) -> { if (btn.isSelected()) allowed.add(level); });
-        if (allowed.size() == LEVELS.length) return e -> true;
-        return e -> e.level() == null || allowed.contains(e.level());
-    }
-
-    private Predicate<LogEntry> buildLoggerPredicate() {
-        if (excludedLoggers.isEmpty()) return e -> true;
-        if (excludedLoggers.containsAll(allLoggers)) return e -> false;
-        Set<String> snapshot = Set.copyOf(excludedLoggers);
-        return e -> e.logger() == null || !snapshot.contains(e.logger());
-    }
-
-    private Predicate<LogEntry> buildFieldPredicate() {
-        // Snapshot only the fields that actually have exclusions
-        Map<String, Set<String>> snapshot = new LinkedHashMap<>();
-        excludedFieldValues.forEach((k, v) -> { if (!v.isEmpty()) snapshot.put(k, Set.copyOf(v)); });
-        if (snapshot.isEmpty()) return e -> true;
-        return entry -> {
-            for (Map.Entry<String, Set<String>> excl : snapshot.entrySet()) {
-                Set<String> excluded = excl.getValue();
-                String val = entry.fields() != null ? entry.fields().get(excl.getKey()) : null;
-                boolean isEmpty = val == null || val.isBlank();
-                if (isEmpty  && excluded.contains(EMPTY_SENTINEL)) return false;
-                if (!isEmpty && excluded.contains(val))             return false;
-            }
-            return true;
-        };
-    }
-
-    private Predicate<LogEntry> buildTimestampPredicate() {
-        Instant from = parseTimestamp(fromField.getText().trim());
-        Instant to   = parseTimestamp(toField.getText().trim());
-        if (from == null && to == null) return e -> true;
-        return e -> {
-            if (e.timestamp() == null) return true;
-            if (from != null && e.timestamp().isBefore(from)) return false;
-            if (to   != null && e.timestamp().isAfter(to))   return false;
-            return true;
-        };
-    }
-
-    private Predicate<LogEntry> buildTextPredicate() {
-        String text = searchField.getText().trim();
-        if (text.isEmpty()) return e -> true;
-        try {
-            Pattern p = Pattern.compile(text, Pattern.CASE_INSENSITIVE);
-            return e -> p.matcher(e.message() != null ? e.message() : "").find();
-        } catch (PatternSyntaxException ex) {
-            String lower = text.toLowerCase();
-            return e -> (e.message() != null ? e.message().toLowerCase() : "").contains(lower);
-        }
     }
 
     // ── Logger picker popup ───────────────────────────────────────────────────

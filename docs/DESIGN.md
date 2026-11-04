@@ -189,10 +189,10 @@ refresh; open tabs keep the list they were created with.
    user tick files (filter box, Select all), and each opens in its own tab as
    `load(zip, entry, …)`. The tab keys its annotations to `ZipLogs.entryKey`,
    `<zip>!<entry>` next to the zip.
-1. `LogPanel.load` clears the tab and starts a load worker, which reads the file with
-   `LogFileReader` (core) and hands each entry to the tab. (With
-   `-Dclouseau.indexStaticFiles=true`, a plain file is instead indexed with
-   `LineScanner` into an `EntryIndex` and read back through `IndexedEntries`; see D-16.)
+1. `LogPanel.load` clears the tab and starts a load worker. A plain file is indexed with
+   `LineScanner` into an `EntryIndex` and read back through `IndexedEntries` (D-16). A
+   `.gz` or a zip entry is read with `LogFileReader` (core), and each entry is held in
+   memory (until D-16 step 4).
 2. `LogReaders.open` (core) picks the decoder from the file name: plain, `.gz` (`GZIPInputStream`),
    or one file of a `.zip` (`ZipLogs`, core). Bytes are decoded as UTF-8, with
    malformed input replaced rather than failing. A leading UTF-8 byte-order mark (written
@@ -246,15 +246,20 @@ refresh; open tabs keep the list they were created with.
   highlights. The cap is `max.entries.per.tab` (default 200,000, range
   10,000–2,000,000), or the number of entries the static load added if that was larger,
   so following a big file doesn't cut it to the limit all at once. `clear()` resets the
-  cap and the trimmed count.
+  cap and the trimmed count. On an indexed tab, only the followed entries (after the
+  index) are counted and trimmed, to `max.entries.per.tab`; the dropped ones leave a gap
+  in the ordinals between the index and the list. This lasts until D-16 step 5 indexes
+  followed lines.
 
 ### 6.4 Filtering (UC-4, UC-5)
 
-`FilterBar` combines the per-level toggles, logger tree, time range, and text filters
-into one `Predicate<LogEntry>` (`buildPredicate()`). `LogTableModel` re-evaluates it on the filter executor and swaps
-in the visible rows on the EDT. New entries arriving during a session are checked against
-the active filter as they are appended. Find (`Ctrl+F`) searches the visible rows,
-including their continuation lines.
+`FilterBar` combines the per-level toggles, logger tree, field values, time range, and
+text filters into one `CombinedFilter` (core, `buildFilter()`), an `EntryFilter`: a
+`Predicate<LogEntry>` that can also be tested on an index row (D-16). `LogTableModel`
+re-evaluates it on the filter executor and swaps in the visible rows on the EDT. New
+entries arriving during a session are checked against the active filter as they are
+appended. Find (`Ctrl+F`) searches the visible rows, including their continuation lines,
+on its own executor (`LogTableModel.find`) and returns matching ordinals to the EDT.
 
 ### 6.5 Detail panel (UC-3)
 
@@ -512,13 +517,16 @@ colleague with another theme sees the same slots in their own colors.
 ### D-16 · How static files are indexed · Accepted
 
 The design for D-8, written to close G-5. Accepted on 2026-11-04 with the recommended
-answer to each question at the end. Built so far: steps 1 and 2. Step 2 is switched on
-only with `-Dclouseau.indexStaticFiles=true`, because until step 3 every filter change
-re-reads the whole file; step 3 makes it the default.
+answer to each question at the end. Built so far: steps 1 to 3. Plain static files are
+indexed by default.
 
 **Measured after step 2** (a 1M-line, 125 MB log in the sample format; heap after a full
-GC, whole app): 478 MB without the index, **81 MB with it**. A level filter over the
-million rows, which still re-reads and re-parses the file, took under 3 s.
+GC, whole app): 478 MB without the index, **81 MB with it**.
+
+**Measured after step 3** (the same log, about 1M lines, on a `LogPanel` off-screen): load
+2 s, heap after GC 47 MB. A level filter took 31 ms. A text filter took 1.6 s, and so did
+Find over every visible row; both showed progress, and the EDT never waited more than
+9 ms.
 
 **Why.** A loaded entry costs about 120 bytes of heap per line today (the D-12 benchmark:
 118 MB for 1M lines), so the default 2 GB heap stops somewhere under 17M lines. That is a
@@ -570,10 +578,14 @@ SSH and plugin sources keep the in-memory model and its entry limit (D-7).
   file. (The design first called for an `EntryStore` interface with two
   implementations; one optional prefix turned out simpler, with the same effect.)
 - **Threads.** The load worker appends to the `EntryIndex` and publishes each entry; the
-  model only reads rows it has been handed through `publish`. The offset and length
-  columns are published safely (each column's chunk list is a volatile field that's
-  replaced, never changed in place, when it grows). The dictionaries are for the load
-  worker only until step 3 needs them elsewhere.
+  model, the filter executor and Find only read rows they have been handed through
+  `publish`. Columns are published safely (each column's chunk list is a volatile field
+  that's replaced, never changed in place, when it grows). Dictionaries do the same with
+  their value array and use a `ConcurrentHashMap` for lookups; a field that overflows is
+  marked with a volatile flag rather than removed, so a reader never sees half of it.
+- **Level `null`.** A plugin parser may give no level. The index stores that apart from
+  `UNKNOWN`, so filters treat it the same way on the index as on the entry (it always
+  shows).
 
 **Loading.** One pass: `LineScanner` → `LineParser` → `EntryIndex`. The parsed
 `LogEntry` is dropped after its columns are written. The table shows rows as chunks
@@ -590,16 +602,36 @@ known (a zip entry records it; a `.gz` doesn't reliably). If the disk fills mid-
 stops with the same partial-load warning used today. The copy is deleted when the tab
 closes, and anything left in `cache/` is deleted at startup.
 
-**Filtering.** `FilterBar` produces two parts instead of one `Predicate<LogEntry>`:
+**Filtering.** `FilterBar` produces an `EntryFilter` (core): a `Predicate<LogEntry>` with
+two more methods, so one object carries both parts:
 
-- an **index filter** over the columns (level, logger, thread, indexed fields, time
-  range). It needs no I/O, so it stays as fast as it is today.
-- an optional **text filter**. When it's set, the filter executor reads the rows the
-  index filter passed in file order, in large sequential reads (not one positioned read
-  per row), and tests the text the same way as today. It reports progress in the status
-  bar and can be cancelled. Find (`Ctrl+F`) uses the same scan.
+- `testIndex(index, row)`, the **index filter** over the columns (level, logger, indexed
+  fields, time range). It needs no I/O. It must never reject a row `test` would keep.
+- `needsText(index)`: true when there is message text, or an excluded value on a field
+  with too many values to index. Then the filter executor reads only the rows
+  `testIndex` passed, in file order, in large sequential reads (`IndexedEntries.scan`
+  with a row predicate), and gives each to `test`. It reports progress to the status bar
+  and is cancelled by the next filter change.
+
+`CombinedFilter` is the filter bar's implementation; `CombinedFilterTest` checks that the
+index and the entry decide alike. A plain lambda is also an `EntryFilter` whose rows are
+all read, which the tests use. Time ranges are compared in whole milliseconds on both
+paths, since that's what the index keeps.
+
+If the load is still running, rows indexed during a text run are filtered by another
+run rather than read on the EDT (only up to 2,000 are caught up on the EDT).
+
+Find (`Ctrl+F`) runs on its own executor with the same scan. It reads the visible rows,
+and the continuation lines that follow them (from the index's level and timestamp
+columns), in one ordered pass: a continuation line that matches marks the visible
+entries it belongs to. It returns ordinals; `LogPanel` maps them to model rows and
+orders them by the view.
 
 The generation counter and cancellation in section 6.1 are unchanged.
+
+**Not covered yet:** sorting by a column header reads every row on the EDT, which on an
+indexed file means reading the whole file. That predates the index (sorting a large
+in-memory tab is also slow), but the index makes it much slower.
 
 **Continuation lines.** They are rows with level `UNKNOWN`, as today. The detail panel and
 find read the rows that follow an entry until the next row with a timestamp.
@@ -632,11 +664,10 @@ removes that ceiling too.
 
 1. ✅ `LineScanner` and `EntryIndex`, with tests against the current reader on the sample
    logs (same entries, same entry numbers).
-2. ✅ `IndexedEntries` behind `LogTableModel`; plain static files are indexed when
-   `-Dclouseau.indexStaticFiles=true`. Until step 3, a filter change re-reads the file,
-   and Find reads rows on the EDT.
-3. The two-part filter, and the text scan with progress (Find included). Then index
-   plain static files by default and remove the property.
+2. ✅ `IndexedEntries` behind `LogTableModel`, at first behind a system property.
+3. ✅ The two-part filter, and the text scan with progress (Find included). Plain static
+   files are indexed by default; the property is gone. Until step 5, followed lines on an
+   indexed tab are held in memory and trimmed to the entry limit (section 6.3).
 4. Compressed files through `cache/`.
 5. Follow and rotation on the index.
 6. Update UC-1, close G-5, mark D-8 and D-16 Adopted.
@@ -702,5 +733,5 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-5** | Static files are held fully in memory (D-8 isn't built; its design, D-16, is accepted, and steps 1 and 2 of 6 are done, the second behind a system property), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
+| **G-5** | Plain static files are indexed (D-16, steps 1 to 3 of 6 done), but compressed files and zip entries are still held fully in memory, and the default heap is 2 GB. Followed lines on an indexed tab are held in memory and trimmed to the entry limit until step 5. | A `.gz` or zipped log bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. A plain file reaches the index's own ceiling (about 70M entries in 2 GB) instead. Falls short of UC-1's "however large the file is" for compressed files. |
 | **G-9** | Reading, parsing, following and annotation anchoring now live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`) and the detail pane in `DetailPanel`, but `LogPanel` is still about 1,650 lines of UI: table and renderers, context menus, find bar, highlight navigation and status bar. | Still long to review. Next splits: the find bar and the highlight navigation bar into their own classes. |

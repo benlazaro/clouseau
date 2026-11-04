@@ -25,7 +25,8 @@ clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyn
 clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogReaders, LogFileReader,
                     FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
-                    AnnotationStore, ZipLogs
+                    AnnotationStore, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
+                    EntryFilter, CombinedFilter
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -98,8 +99,9 @@ tags.
 - `LogFileReader` (core) — reads a static log, stopping early when memory runs low.
 - `FileFollower` (core) — follow loop for a local file: reads appends, handles rotation.
 - `LineScanner`, `EntryIndex`, `IndexedEntries` (core) — D-16: byte-offset line splitting, the compact
-  per-entry index, and reading entries back from disk. Used for plain static files only
-  with `-Dclouseau.indexStaticFiles=true` until D-16 step 3.
+  per-entry index, and reading entries back from disk. Every plain static file is indexed.
+- `EntryFilter`, `CombinedFilter` (core) — a filter that can also be decided from index
+  columns; `CombinedFilter` is the filter bar's (levels, loggers, fields, time, text).
 - `ClouseauPluginManager` (plugin) — `loadAll()` at startup, `refresh()` to hot-reload.
 - `MainFrame` (ui) — window, menus, tabs; holds the parser/formatter/highlighter lists.
 - `LogPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.
