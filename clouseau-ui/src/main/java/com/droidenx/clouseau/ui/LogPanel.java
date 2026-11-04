@@ -7,10 +7,11 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.AnnotationStore;
-import com.droidenx.clouseau.core.FileChangeWatcher;
-import com.droidenx.clouseau.core.FileTail;
+import com.droidenx.clouseau.core.FileFollower;
+import com.droidenx.clouseau.core.LineParser;
+import com.droidenx.clouseau.core.LogFileReader;
+import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.MemoryGuard;
-import com.droidenx.clouseau.core.Utf8Bom;
 import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -24,12 +25,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.DefaultHighlighter;
-import javax.swing.text.Highlighter;
-import javax.swing.text.SimpleAttributeSet;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
@@ -38,17 +33,9 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.ZipInputStream;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -57,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * Self-contained panel representing one open log file tab.
@@ -72,7 +58,7 @@ public final class LogPanel extends JPanel {
     private final LogTableModel   logTableModel = new LogTableModel();
     private final FilterBar       filterBar;
     private JTable logTable;
-    private JTextPane detailArea;
+    private DetailPanel detailPanel;
     private boolean tableColumnsManaged = false;
     private int fittedColumnsWidth = 0;
     /** model-column-index → hidden TableColumn, in insertion order for restore positioning */
@@ -93,34 +79,22 @@ public final class LogPanel extends JPanel {
     private boolean loading = false;
     /** True when the last static load stopped early because memory ran low (UC-1). */
     private boolean partialLoad = false;
-    /** Lines read between heap checks while loading a static file. */
-    private static final int MEMORY_CHECK_INTERVAL = 10_000;
     /**
      * Follow mode reads as soon as the OS reports a change; this is only the backstop for
      * file systems that send no notifications (some network drives).
      */
     private static final long FOLLOW_SAFETY_POLL_MS = 2_000;
-    private final java.util.Set<String> disabledFormatters = new java.util.HashSet<>();
     private AnnotationStore  annotationStore   = AnnotationStore.inMemory();
     /** True once this tab has told the user its annotations couldn't be saved. */
     private boolean          annotationSaveWarned;
     private JDialog          annotationsDialog;
     private AnnotationsPanel annotationsPanel;
-    private JPanel syntaxHighlightPanel;
-    private final List<JToggleButton> formatterBtnList       = new ArrayList<>();
-    private final List<JToggleButton> syntaxHighlightBtnList = new ArrayList<>();
-    private JPanel formatterPanel;
     private Set<Integer>  searchMatchModelRows = Set.of();
     private List<Integer> searchMatchList      = List.of();
     private int           searchMatchCursor    = -1;
     private JPanel        findBar;
     private JTextField    findField;
     private JLabel        findCounter;
-    private JButton       copyBtn;
-    private String        lastFormattedMessage = "";
-    private int           messageFieldStart    = -1;
-    private int           messageFieldEnd      = -1;
-    private boolean       wrapLines            = AppPrefs.isDetailWrapLines();
     private JPanel centerCards;
     private static final String CARD_CONTENT = "content";
     private static final String CARD_LOADING = "loading";
@@ -145,7 +119,8 @@ public final class LogPanel extends JPanel {
         filterBar.initFollow(follow, this::setFollow);
         logTableModel.applyFilter(filterBar.buildPredicate());
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildLogTable(), buildDetail());
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildLogTable(),
+                detailPanel = new DetailPanel(formatters, syntaxHighlighters, this::currentDetail));
         split.setResizeWeight(0.70);
         split.addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override public void componentResized(java.awt.event.ComponentEvent e) {
@@ -175,11 +150,8 @@ public final class LogPanel extends JPanel {
 
         logTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                int viewRow = logTable.getSelectedRow();
-                int modelRow = viewRow >= 0 ? logTable.convertRowIndexToModel(viewRow) : -1;
-                showDetail(modelRow >= 0 ? logTableModel.getEntry(modelRow) : null, modelRow);
+                refreshDetail();
                 updateHighlightNavPosition();
-                if (copyBtn != null) copyBtn.setEnabled(modelRow >= 0);
             }
         });
 
@@ -280,29 +252,18 @@ public final class LogPanel extends JPanel {
             protected Void doInBackground() throws Exception {
                 AnnotationStore annotations = AnnotationStore.load(annotationKey, AppDirs.annotationsDir());
                 AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
-                try (BufferedReader reader = openReader(file, entry)) {
-                    String line;
-                    long lineNo = 0;
-                    while ((line = reader.readLine()) != null && !isCancelled()) {
-                        if (++lineNo % MEMORY_CHECK_INTERVAL == 0 && memory.isLow()) {
-                            stoppedAtLine = lineNo - 1;
-                            log.warn("Low memory: stopped loading {} after {} lines (max heap {} MiB)",
-                                    file, stoppedAtLine, memory.maxMiB());
-                            break;
-                        }
-                        if (line.isBlank()) continue;
-                        final String candidate = line;
-                        LogEntry entry = parser.map(Stream::of)
-                              .orElseGet(parsers::stream)
-                              .filter(p -> p.canParse(candidate))
-                              .findFirst()
-                              .map(p -> p.parse(candidate))
-                              .orElseGet(() -> new LogEntry(
-                                      null, LogEntry.LogLevel.UNKNOWN,
-                                      null, null,
-                                      candidate, candidate, Map.of()));
-                        if (anchoring != null) anchoring.accept(entry.rawLine());
-                        publish(correctTimezone(entry, srcTz));
+                LineParser lineParser = new LineParser(parser, parsers, srcTz);
+                try (BufferedReader reader = LogReaders.open(file, entry)) {
+                    LogFileReader.Result result = LogFileReader.read(reader, lineParser,
+                            LogFileReader.DEFAULT_CHECK_INTERVAL, memory::isLow, this::isCancelled,
+                            e -> {
+                                if (anchoring != null) anchoring.accept(e.rawLine());
+                                publish(e);
+                            });
+                    if (result.partial()) {
+                        stoppedAtLine = result.stoppedAtLine();
+                        log.warn("Low memory: stopped loading {} after {} lines (max heap {} MiB)",
+                                file, stoppedAtLine, memory.maxMiB());
                     }
                 }
                 if (anchoring != null) anchoring.finish();
@@ -411,19 +372,10 @@ public final class LogPanel extends JPanel {
 
             @Override
             protected Void doInBackground() throws Exception {
+                LineParser lineParser = new LineParser(parser, parsers, null);
                 source.open(line -> {
                     if (line == null || line.isBlank() || isCancelled()) return;
-                    final String candidate = line;
-                    LogEntry entry = parser.map(Stream::of)
-                            .orElseGet(parsers::stream)
-                            .filter(p -> p.canParse(candidate))
-                            .findFirst()
-                            .map(p -> p.parse(candidate))
-                            .orElseGet(() -> new LogEntry(
-                                    null, LogEntry.LogLevel.UNKNOWN,
-                                    null, null,
-                                    candidate, candidate, Map.of()));
-                    publish(entry);
+                    publish(lineParser.parse(line));
                 });
                 return null;
             }
@@ -481,80 +433,24 @@ public final class LogPanel extends JPanel {
         return source.getClass().getSimpleName();
     }
 
-    private static boolean isCompressed(Path file) {
-        String name = file.getFileName().toString().toLowerCase();
-        return name.endsWith(".gz") || name.endsWith(".zip");
-    }
-
-    static BufferedReader openReader(Path file) throws IOException {
-        return openReader(file, null);
-    }
-
-    /** Opens a log for reading; {@code entry} picks a file inside a zip (null: the first one). */
-    static BufferedReader openReader(Path file, String entry) throws IOException {
-        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
-                .onMalformedInput(CodingErrorAction.REPLACE)
-                .onUnmappableCharacter(CodingErrorAction.REPLACE);
-        String name = file.getFileName().toString().toLowerCase();
-        java.io.InputStream in;
-        if (name.endsWith(".gz")) {
-            in = new GZIPInputStream(Files.newInputStream(file));
-        } else if (entry != null) {
-            in = ZipLogs.open(file, entry);
-        } else if (name.endsWith(".zip")) {
-            ZipInputStream zis = new ZipInputStream(Files.newInputStream(file));
-            zis.getNextEntry();
-            in = zis;
-        } else {
-            in = Files.newInputStream(file);
-        }
-        // The BOM check is on the decompressed bytes, so a .gz of a BOM file works too.
-        return new BufferedReader(new InputStreamReader(Utf8Bom.skip(in), decoder));
-    }
-
     private void startTailing() {
         stopTailing();
-        if (currentFile == null || isCompressed(currentFile)) return;
+        if (currentFile == null || LogReaders.isCompressed(currentFile)) return;
         final Optional<LogParser> parser = currentParser;
+        final Path file = currentFile;
         final ZoneId srcTz = this.sourceTimezone; // capture before worker starts
         tailWorker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
-                try (FileChangeWatcher watcher = FileChangeWatcher.watch(currentFile)) {
-                    followUntilCancelled(watcher);
+                LineParser lineParser = new LineParser(parser, parsers, srcTz);
+                try {
+                    FileFollower.follow(file, tailPosition, pos -> tailPosition = pos,
+                            line -> publish(lineParser.parse(line)), this::isCancelled,
+                            FOLLOW_SAFETY_POLL_MS);
                 } catch (InterruptedException e) {
                     // cancel(true) interrupts the wait: following stopped
                 }
                 return null;
-            }
-
-            /** Reads what was appended, then waits for the next change (D-3). */
-            private void followUntilCancelled(FileChangeWatcher watcher) throws InterruptedException {
-                while (!isCancelled()) {
-                    try {
-                        long currentSize = Files.size(currentFile);
-                        if (currentSize < tailPosition) {
-                            // File was rotated — reset position to read new file from the beginning
-                            tailPosition = 0;
-                        }
-                        if (currentSize > tailPosition) {
-                            tailPosition = FileTail.readAppendedLines(currentFile, tailPosition, candidate -> {
-                                if (isCancelled()) return;
-                                LogEntry entry = parser.map(Stream::of)
-                                        .orElseGet(parsers::stream)
-                                        .filter(p -> p.canParse(candidate))
-                                        .findFirst()
-                                        .map(p -> p.parse(candidate))
-                                        .orElseGet(() -> new LogEntry(
-                                                null, LogEntry.LogLevel.UNKNOWN,
-                                                null, null,
-                                                candidate, candidate, Map.of()));
-                                publish(correctTimezone(entry, srcTz));
-                            });
-                        }
-                    } catch (IOException ignored) {}
-                    watcher.awaitChange(FOLLOW_SAFETY_POLL_MS);
-                }
             }
 
             @Override
@@ -580,15 +476,11 @@ public final class LogPanel extends JPanel {
     public JTable getLogTable() { return logTable; }
 
     public void applyDetailFontSize(int size) {
-        int viewRow = logTable.getSelectedRow();
-        int modelRow = viewRow >= 0 ? logTable.convertRowIndexToModel(viewRow) : -1;
-        showDetail(modelRow >= 0 ? logTableModel.getEntry(modelRow) : null, modelRow);
+        refreshDetail();
     }
 
     public void applyWrapLines(boolean wrap) {
-        this.wrapLines = wrap;
-        detailArea.revalidate();
-        refreshDetail();
+        detailPanel.setWrapLines(wrap);
     }
 
     // ── Source timezone ───────────────────────────────────────────────────────
@@ -639,13 +531,6 @@ public final class LogPanel extends JPanel {
      * Adjusts a parsed entry's timestamp from the parser's assumed zone (systemDefault) to
      * the configured source timezone. Only applied when they differ and the entry has a timestamp.
      */
-    private static LogEntry correctTimezone(LogEntry e, ZoneId srcTz) {
-        if (e.timestamp() == null || srcTz.equals(ZoneId.systemDefault())) return e;
-        LocalDateTime ldt = e.timestamp().atZone(ZoneId.systemDefault()).toLocalDateTime();
-        return new LogEntry(ldt.atZone(srcTz).toInstant(),
-                e.level(), e.logger(), e.thread(), e.message(), e.rawLine(), e.fields());
-    }
-
     // ── Status bar ────────────────────────────────────────────────────────────
 
     private JPanel buildStatusBar() {
@@ -694,7 +579,7 @@ public final class LogPanel extends JPanel {
         stopTailing();
         try { tailPosition = currentFile != null ? Files.size(currentFile) : 0; } catch (IOException ignored) { tailPosition = 0; }
         logTableModel.clear();
-        showDetail(null, -1);
+        refreshDetail();
         clearSearchMatches();
         updateStatusBar();
         if (follow) startTailing();
@@ -1344,9 +1229,7 @@ public final class LogPanel extends JPanel {
     }
 
     private void refreshDetailAfterHighlight() {
-        int viewRow = logTable.getSelectedRow();
-        int modelRow = viewRow >= 0 ? logTable.convertRowIndexToModel(viewRow) : -1;
-        showDetail(modelRow >= 0 ? logTableModel.getEntry(modelRow) : null, modelRow);
+        refreshDetail();
         refreshHighlightNav();
     }
 
@@ -1741,378 +1624,24 @@ public final class LogPanel extends JPanel {
 
     // ── Detail panel ─────────────────────────────────────────────────────────
 
-    private void refreshDetail() {
+    /** What the detail panel should show for the selected row, or null. */
+    private DetailPanel.Content currentDetail() {
         int viewRow = logTable.getSelectedRow();
         int modelRow = viewRow >= 0 ? logTable.convertRowIndexToModel(viewRow) : -1;
-        showDetail(modelRow >= 0 ? logTableModel.getEntry(modelRow) : null, modelRow);
+        LogEntry entry = modelRow >= 0 ? logTableModel.getEntry(modelRow) : null;
+        if (entry == null) return null;
+        return new DetailPanel.Content(entry, logTableModel.getHighlight(modelRow),
+                annotationStore.at(logTableModel.ordinalAt(modelRow)),
+                logTableModel.getContinuationLines(modelRow));
     }
 
-    private void flashMessageField() {
-        if (messageFieldStart < 0 || messageFieldEnd <= messageFieldStart) return;
-        final Color peak = ClouseauColors.flashPeakColor();
-        final Color bg   = ClouseauColors.detailBackground();
-        final int   steps = 25;
-        final int[] step  = {0};
-        final Object[] tag = {null};
-
-        Highlighter hl = detailArea.getHighlighter();
-        try {
-            tag[0] = hl.addHighlight(messageFieldStart, messageFieldEnd,
-                    new DefaultHighlighter.DefaultHighlightPainter(peak));
-        } catch (BadLocationException ignored) { return; }
-
-        Timer timer = new Timer(16, null);
-        timer.addActionListener(e -> {
-            step[0]++;
-            hl.removeHighlight(tag[0]);
-            if (step[0] >= steps) {
-                ((Timer) e.getSource()).stop();
-            } else {
-                float t = 1f - (float) step[0] / steps;
-                try {
-                    tag[0] = hl.addHighlight(messageFieldStart, messageFieldEnd,
-                            new DefaultHighlighter.DefaultHighlightPainter(blend(peak, bg, t)));
-                } catch (BadLocationException ignored) {}
-            }
-        });
-        timer.setRepeats(true);
-        timer.start();
+    private void refreshDetail() {
+        detailPanel.refresh();
     }
-
-    private JPanel buildDetailToolbar() {
-        JPanel bar = new JPanel(new BorderLayout());
-        bar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
-
-        // ── Left: formatter / syntax highlight toggles ───────────────────────────────
-        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 3));
-        controls.setOpaque(false);
-
-        formatterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        formatterPanel.setOpaque(false);
-        formatterPanel.setVisible(false);
-        if (!formatters.isEmpty()) {
-            JLabel label = new JLabel(Messages.get("detail.toolbar.format"));
-            label.setForeground(ClouseauColors.dimForeground());
-            label.setFont(label.getFont().deriveFont(11f));
-            formatterPanel.add(label);
-
-            for (LogFormatter formatter : formatters) {
-                JToggleButton btn = new JToggleButton(formatter.getName());
-                btn.setSelected(true);
-                btn.setEnabled(false);
-                btn.setFont(btn.getFont().deriveFont(11f));
-                FilterBar.applyToggleStyle(btn);
-                btn.addActionListener(e -> {
-                    if (btn.isSelected()) disabledFormatters.remove(formatter.getName());
-                    else                  disabledFormatters.add(formatter.getName());
-                    refreshDetail();
-                });
-                formatterPanel.add(btn);
-                formatterBtnList.add(btn);
-            }
-        }
-        controls.add(formatterPanel);
-
-        syntaxHighlightPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        syntaxHighlightPanel.setOpaque(false);
-        syntaxHighlightPanel.setVisible(false);
-        if (!syntaxHighlighters.isEmpty()) {
-            if (!formatters.isEmpty()) {
-                JSeparator sep = new JSeparator(JSeparator.VERTICAL);
-                sep.setPreferredSize(new Dimension(1, 18));
-                syntaxHighlightPanel.add(sep);
-            }
-            JLabel label = new JLabel(Messages.get("detail.toolbar.color"));
-            label.setForeground(ClouseauColors.dimForeground());
-            label.setFont(label.getFont().deriveFont(11f));
-            syntaxHighlightPanel.add(label);
-
-            for (LogSyntaxHighlighter hl : syntaxHighlighters) {
-                JToggleButton btn = new JToggleButton(hl.getName());
-                btn.setSelected(true);
-                btn.setEnabled(false);
-                btn.setFont(btn.getFont().deriveFont(11f));
-                FilterBar.applyToggleStyle(btn);
-                btn.addActionListener(e -> refreshDetail());
-                syntaxHighlightPanel.add(btn);
-                syntaxHighlightBtnList.add(btn);
-            }
-        }
-        controls.add(syntaxHighlightPanel);
-
-        bar.add(controls, BorderLayout.CENTER);
-
-        // ── Right: font size + copy button ───────────────────────────────────
-        copyBtn = new JButton(Messages.get("detail.toolbar.copy"));
-        copyBtn.setFont(copyBtn.getFont().deriveFont(11f));
-        copyBtn.setMargin(new Insets(2, 6, 2, 6));
-        copyBtn.setEnabled(false);
-        copyBtn.addActionListener(e -> {
-            if (lastFormattedMessage.isEmpty()) return;
-            Toolkit.getDefaultToolkit().getSystemClipboard()
-                    .setContents(new java.awt.datatransfer.StringSelection(lastFormattedMessage), null);
-            flashMessageField();
-        });
-
-        JButton fontDecBtn = new JButton("A\u207B");
-        JButton fontIncBtn = new JButton("A\u207A");
-        for (JButton btn : new JButton[]{fontDecBtn, fontIncBtn}) {
-            btn.setFont(btn.getFont().deriveFont(11f));
-            btn.setMargin(new Insets(2, 5, 2, 5));
-        }
-        fontDecBtn.setToolTipText("Decrease font size");
-        fontIncBtn.setToolTipText("Increase font size");
-        fontDecBtn.addActionListener(e -> {
-            int sz = Math.max(8, AppPrefs.getDetailFontSize() - 1);
-            AppPrefs.setDetailFontSize(sz);
-            refreshDetail();
-        });
-        fontIncBtn.addActionListener(e -> {
-            int sz = Math.min(32, AppPrefs.getDetailFontSize() + 1);
-            AppPrefs.setDetailFontSize(sz);
-            refreshDetail();
-        });
-
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 3));
-        right.setOpaque(false);
-        right.add(fontDecBtn);
-        right.add(fontIncBtn);
-        JSeparator fontSep = new JSeparator(JSeparator.VERTICAL);
-        fontSep.setPreferredSize(new Dimension(1, 18));
-        right.add(fontSep);
-        right.add(copyBtn);
-        bar.add(right, BorderLayout.EAST);
-
-        return bar;
-    }
-
-
-    private static void disableDetailBtn(JToggleButton btn) {
-        if (btn.isEnabled()) {
-            btn.putClientProperty("savedSelected", btn.isSelected());
-        }
-        btn.setSelected(false);
-        btn.setEnabled(false);
-    }
-
-    private static void enableDetailBtn(JToggleButton btn) {
-        if (!btn.isEnabled()) {
-            btn.setEnabled(true);
-            Boolean saved = (Boolean) btn.getClientProperty("savedSelected");
-            btn.setSelected(saved != null ? saved : true);
-        }
-    }
-
-    private JPanel buildDetail() {
-        detailArea = new JTextPane() {
-            @Override
-            public boolean getScrollableTracksViewportWidth() {
-                return wrapLines;
-            }
-        };
-        detailArea.setEditable(false);
-        detailArea.setBackground(ClouseauColors.detailBackground());
-        detailArea.setForeground(ClouseauColors.foreground());
-        detailArea.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
-        JPanel toolbar = buildDetailToolbar();
-        showDetail(null, -1);
-        JScrollPane scroll = new JScrollPane(detailArea);
-
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.add(toolbar, BorderLayout.NORTH);
-        panel.add(scroll, BorderLayout.CENTER);
-        return panel;
-    }
-
-    private DateTimeFormatter detailTsFmt =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(AppPrefs.getDisplayTimezone());
 
     /** Rebuilds timestamp formatters from the current preference and refreshes the table and detail panel. */
     public void refreshTimezone() {
-        detailTsFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(AppPrefs.getDisplayTimezone());
         logTableModel.refreshTimezone();
-        refreshDetail();
-    }
-
-    /** Apply all formatters that can handle this input, in sequence. */
-    private String applyFormatters(String input) {
-        String result = input;
-        log.trace("applyFormatters: {} formatters available, input length={}", formatters.size(), input.length());
-        for (LogFormatter formatter : formatters) {
-            boolean canFormat = formatter.canFormat(result);
-            log.trace("  {} canFormat={}", formatter.getName(), canFormat);
-            if (canFormat && !disabledFormatters.contains(formatter.getName())) {
-                try {
-                    result = formatter.format(result);
-                    log.trace("  {} formatted successfully, new length={}", formatter.getName(), result.length());
-                } catch (Exception e) {
-                    log.warn("Formatter {} failed", formatter.getName(), e);
-                }
-            }
-        }
-        return result;
-    }
-
-    private void showDetail(LogEntry entry, int modelRow) {
-        formatterPanel.setVisible(entry != null && !formatters.isEmpty());
-        StyledDocument doc = detailArea.getStyledDocument();
-        try { doc.remove(0, doc.getLength()); } catch (BadLocationException ignored) {}
-
-        int fontSize = AppPrefs.getDetailFontSize();
-
-        SimpleAttributeSet key = new SimpleAttributeSet();
-        StyleConstants.setFontFamily(key, Font.MONOSPACED);
-        StyleConstants.setFontSize(key, fontSize);
-        StyleConstants.setBold(key, true);
-        StyleConstants.setForeground(key, ClouseauColors.detailKeyColor());
-
-        SimpleAttributeSet val = new SimpleAttributeSet();
-        StyleConstants.setFontFamily(val, Font.MONOSPACED);
-        StyleConstants.setFontSize(val, fontSize);
-        StyleConstants.setForeground(val, ClouseauColors.foreground());
-
-        if (entry == null) {
-            lastFormattedMessage = "";
-            messageFieldStart = messageFieldEnd = -1;
-            formatterPanel.setVisible(false);
-            syntaxHighlightPanel.setVisible(false);
-            insertText(doc, Messages.get("detail.placeholder"), val);
-            detailArea.setCaretPosition(0);
-            return;
-        }
-
-        SimpleAttributeSet levelVal = new SimpleAttributeSet(val);
-        StyleConstants.setForeground(levelVal, ClouseauColors.levelColor(entry.level()));
-        StyleConstants.setBold(levelVal, true);
-
-        String ts     = entry.timestamp() != null ? detailTsFmt.format(entry.timestamp()) : "";
-        String level  = entry.level()     != null ? entry.level().name()  : "";
-        String thread = entry.thread()    != null ? entry.thread()        : "";
-        String logger = entry.logger()    != null ? entry.logger()        : "";
-
-        Color hl = logTableModel.getHighlight(modelRow);
-        if (hl != null) {
-            SimpleAttributeSet swatchStyle = new SimpleAttributeSet();
-            StyleConstants.setFontFamily(swatchStyle, Font.MONOSPACED);
-            StyleConstants.setFontSize(swatchStyle, fontSize);
-            StyleConstants.setForeground(swatchStyle, hl);
-            appendField(doc, key, swatchStyle, Messages.get("detail.highlight.label"), "\u2588\u2588\u2588\u2588\u2588\u2588");
-        }
-
-        {
-            AnnotationStore.Annotation annotation = annotationStore.at(logTableModel.ordinalAt(modelRow));
-            if (annotation != null) {
-                SimpleAttributeSet noteKey = new SimpleAttributeSet(key);
-                StyleConstants.setForeground(noteKey, ClouseauColors.annotationIndicatorColor());
-                SimpleAttributeSet noteVal = new SimpleAttributeSet(val);
-                StyleConstants.setForeground(noteVal, ClouseauColors.annotationIndicatorColor());
-                SimpleAttributeSet noteMeta = new SimpleAttributeSet(val);
-                StyleConstants.setFontSize(noteMeta, Math.max(10, fontSize - 1));
-                StyleConstants.setForeground(noteMeta, ClouseauColors.dimForeground());
-                appendField(doc, noteKey, noteVal, "\u270e " + Messages.get("annotation.detail.label"), annotation.note());
-                String byLine = "  " + Messages.get("annotation.detail.by") + " " + annotation.author()
-                        + (annotation.createdAt() != null ? "  \u00b7  " + annotation.createdAt().replace("T", " ").replaceFirst("\\.\\d+Z$", " UTC") : "");
-                insertText(doc, byLine + "\n", noteMeta);
-            }
-        }
-
-        appendField(doc, key, val,      Messages.get("table.col.timestamp"), ts);
-        appendField(doc, key, levelVal, Messages.get("table.col.level"),     level);
-        appendField(doc, key, val,      Messages.get("table.col.thread"),    thread);
-        appendField(doc, key, val,      Messages.get("table.col.logger"),    logger);
-
-        if (entry.fields() != null) {
-            entry.fields().forEach((k, v) -> appendField(doc, key, val, k, v));
-        }
-
-        formatterPanel.setVisible(!formatters.isEmpty());
-        syntaxHighlightPanel.setVisible(!syntaxHighlighters.isEmpty());
-
-        String rawMsg = entry.message() != null ? entry.message() : "";
-
-        // Fold continuation lines (HL7 segments, stack traces, wrapped lines) into the message
-        // so they are included in formatting, syntax highlighting, and the copy action.
-        if (modelRow >= 0) {
-            List<LogEntry> continuations = logTableModel.getContinuationLines(modelRow);
-            if (!continuations.isEmpty()) {
-                StringBuilder sb = new StringBuilder(rawMsg);
-                for (LogEntry c : continuations) sb.append("\n").append(c.rawLine());
-                rawMsg = sb.toString();
-            }
-        }
-
-        for (int i = 0; i < formatters.size(); i++) {
-            if (formatters.get(i).canFormat(rawMsg)) enableDetailBtn(formatterBtnList.get(i));
-            else                                     disableDetailBtn(formatterBtnList.get(i));
-        }
-
-        String messageText = applyFormatters(rawMsg);
-        lastFormattedMessage = messageText;
-
-        for (int i = 0; i < syntaxHighlighters.size(); i++) {
-            if (syntaxHighlighters.get(i).canHighlight(messageText)) enableDetailBtn(syntaxHighlightBtnList.get(i));
-            else                                                      disableDetailBtn(syntaxHighlightBtnList.get(i));
-        }
-
-        LogSyntaxHighlighter colorizer = null;
-        for (int i = 0; i < syntaxHighlighters.size(); i++) {
-            if (syntaxHighlighters.get(i).canHighlight(messageText) && syntaxHighlightBtnList.get(i).isSelected()) {
-                colorizer = syntaxHighlighters.get(i);
-                break;
-            }
-        }
-        String msgLabel = String.format("%-12s ", Messages.get("table.col.message") + ":");
-        messageFieldStart = doc.getLength() + msgLabel.length();
-        if (colorizer != null) {
-            renderSyntaxHighlightedField(doc, key, val, Messages.get("table.col.message"), messageText, colorizer);
-        } else {
-            appendField(doc, key, val, Messages.get("table.col.message"), messageText);
-        }
-        messageFieldEnd = doc.getLength() - 1; // exclude trailing newline
-
-//        if (entry.rawLine() != null) {
-//            insertText(doc, "\n" + "─".repeat(60) + "\n", val);
-//            insertText(doc, Messages.get("detail.raw.label") + "\n", key);
-//            insertText(doc, entry.rawLine(), msgVal);
-//        }
-
-        detailArea.setCaretPosition(0);
-    }
-
-    private static void appendField(StyledDocument doc, SimpleAttributeSet keyStyle,
-                                    SimpleAttributeSet valStyle, String label, String value) {
-        insertText(doc, String.format("%-12s ", label + ":"), keyStyle);
-        insertText(doc, value + "\n", valStyle);
-    }
-
-    private static void renderSyntaxHighlightedField(StyledDocument doc, SimpleAttributeSet keyStyle,
-                                             SimpleAttributeSet baseStyle, String label,
-                                             String text, LogSyntaxHighlighter colorizer) {
-        insertText(doc, String.format("%-12s ", label + ":"), keyStyle);
-        List<LogSyntaxHighlighter.ColorSpan> spans;
-        try {
-            spans = colorizer.highlight(text);
-        } catch (Exception e) {
-            insertText(doc, text + "\n", baseStyle);
-            return;
-        }
-        int pos = 0;
-        for (LogSyntaxHighlighter.ColorSpan span : spans) {
-            if (span.start() > pos) {
-                insertText(doc, text.substring(pos, span.start()), baseStyle);
-            }
-            SimpleAttributeSet spanStyle = new SimpleAttributeSet(baseStyle);
-            StyleConstants.setForeground(spanStyle, new Color(span.rgb()));
-            insertText(doc, text.substring(span.start(), span.end()), spanStyle);
-            pos = span.end();
-        }
-        if (pos < text.length()) {
-            insertText(doc, text.substring(pos), baseStyle);
-        }
-        insertText(doc, "\n", baseStyle);
-    }
-
-    private static void insertText(StyledDocument doc, String text, SimpleAttributeSet style) {
-        try { doc.insertString(doc.getLength(), text, style); } catch (BadLocationException ignored) {}
+        detailPanel.refreshTimezone();
     }
 }

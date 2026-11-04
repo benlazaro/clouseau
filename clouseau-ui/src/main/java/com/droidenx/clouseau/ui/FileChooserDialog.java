@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -325,7 +326,7 @@ final class FileChooserDialog extends JDialog {
                     @Override
                     protected PreviewResult doInBackground() {
                         List<String> lines = new ArrayList<>(50);
-                        try (BufferedReader reader = LogPanel.openReader(filePath)) {
+                        try (BufferedReader reader = LogReaders.open(filePath, null)) {
                             String line;
                             while ((line = reader.readLine()) != null && lines.size() < 50) {
                                 if (isCancelled()) return null;

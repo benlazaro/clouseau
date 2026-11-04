@@ -4,6 +4,7 @@ import com.google.gson.*;
 import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.RegexLogParser;
+import com.droidenx.clouseau.core.LogReaders;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
@@ -532,7 +533,7 @@ public final class ParserEditorDialog extends JDialog {
             fileTestLabel.setForeground(ClouseauColors.statusError());
             return;
         }
-        try (var reader = LogPanel.openReader(chooser.getSelectedFile().toPath())) {
+        try (var reader = LogReaders.open(chooser.getSelectedFile().toPath(), null)) {
             int total = 0, matched = 0;
             String line;
             while ((line = reader.readLine()) != null && total < 200) {

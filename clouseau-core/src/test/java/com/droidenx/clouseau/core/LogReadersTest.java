@@ -1,4 +1,4 @@
-package com.droidenx.clouseau.ui;
+package com.droidenx.clouseau.core;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,8 +16,8 @@ import java.util.zip.ZipOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** {@link LogPanel#openReader} drops a UTF-8 BOM so the first line parses (plain, .gz, .zip). */
-class OpenReaderTest {
+/** {@link LogReaders#open} drops a UTF-8 BOM so the first line parses (plain, .gz, .zip). */
+class LogReadersTest {
 
     private static final byte[] BOM_TEXT = withBom("2026-03-27 08:00:00.001 INFO first\nsecond\n");
 
@@ -32,7 +32,7 @@ class OpenReaderTest {
     }
 
     private static String firstLine(Path file) throws IOException {
-        try (BufferedReader r = LogPanel.openReader(file)) {
+        try (BufferedReader r = LogReaders.open(file, null)) {
             return r.readLine();
         }
     }
@@ -79,7 +79,7 @@ class OpenReaderTest {
             out.closeEntry();
         }
 
-        try (BufferedReader r = LogPanel.openReader(file, "b.log")) {
+        try (BufferedReader r = LogReaders.open(file, "b.log")) {
             assertThat(r.readLine()).isEqualTo("2026-03-27 08:00:00.001 INFO first");
         }
     }

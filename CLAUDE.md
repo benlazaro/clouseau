@@ -22,7 +22,8 @@ as the code.
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
                     LogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
-clouseau-core     ← UI-independent engine: RegexLogParser, FileTail, FileChangeWatcher, Utf8Bom,
+clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogReaders, LogFileReader,
+                    FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
                     AnnotationStore, ZipLogs
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
@@ -92,9 +93,14 @@ tags.
 - `RegexLogParser` (core) — the parser behind every JSON-defined format.
 - `FileTail` (core) — reads complete UTF-8 lines appended to a file, for follow mode.
 - `FileChangeWatcher` (core) — wakes follow mode when the OS reports the file changed.
+- `LogReaders` (core) — opens a plain, `.gz` or `.zip` log as UTF-8 text.
+- `LineParser` (core) — one line → `LogEntry` (chosen parser or per-line auto-detection, source timezone).
+- `LogFileReader` (core) — reads a static log, stopping early when memory runs low.
+- `FileFollower` (core) — follow loop for a local file: reads appends, handles rotation.
 - `ClouseauPluginManager` (plugin) — `loadAll()` at startup, `refresh()` to hot-reload.
 - `MainFrame` (ui) — window, menus, tabs; holds the parser/formatter/highlighter lists.
-- `LogPanel` (ui) — one tab: loading, tailing, table, filters, detail panel, annotations.
+- `LogPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.
+- `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row
   highlights, and the per-tab entry limit.
 - `AnnotationStore` (core) — annotations for one file, anchored by entry number and content
@@ -113,4 +119,4 @@ tags.
 - New persistent files go in the data folder (`AppDirs.dataDir()`); credentials only
   through `CredentialStore`.
 - Read text files as UTF-8 with malformed input replaced and a leading BOM skipped
-  (see `LogPanel.openReader`, `FileTail` and `Utf8Bom`).
+  (see `LogReaders`, `FileTail` and `Utf8Bom`).

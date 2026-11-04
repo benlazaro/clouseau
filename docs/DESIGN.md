@@ -34,13 +34,14 @@ quality goals. The ones that shape the design most:
 
 ```
 clouseau-ui ─────────────┐   MainFrame, tabs, LogPanel, LogTableModel, FilterBar,
-   │                     │   detail panel, annotations, dialogs, SSH source,
+   │                     │   DetailPanel, annotations, dialogs, SSH source,
    │                     │   parser loader, settings, themes
    │                     ▼
    │               clouseau-plugin   ClouseauPluginManager (PF4J wrapper)
    │                     │
    ▼                     │
-clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, FileChangeWatcher,
+clouseau-core ◀──────────┘   RegexLogParser, ParserList, LineParser, LogReaders,
+                             LogFileReader, FileFollower, FileTail, FileChangeWatcher,
                              SshLogSource, SourceSettings, AnnotationStore, ZipLogs, …
    │
    ▼
@@ -188,13 +189,14 @@ refresh; open tabs keep the list they were created with.
    user tick files (filter box, Select all), and each opens in its own tab as
    `load(zip, entry, …)`. The tab keys its annotations to `ZipLogs.entryKey`,
    `<zip>!<entry>` next to the zip.
-1. `LogPanel.load` clears the tab and starts a load worker.
-2. `openReader` picks the decoder from the file name: plain, `.gz` (`GZIPInputStream`),
+1. `LogPanel.load` clears the tab and starts a load worker, which reads the file with
+   `LogFileReader` (core) and hands each entry to the tab.
+2. `LogReaders.open` (core) picks the decoder from the file name: plain, `.gz` (`GZIPInputStream`),
    or one file of a `.zip` (`ZipLogs`, core). Bytes are decoded as UTF-8, with
    malformed input replaced rather than failing. A leading UTF-8 byte-order mark (written
    by PowerShell, Notepad and other Windows tools) is skipped with `Utf8Bom` (core), after
    decompression, so it doesn't break the first line.
-3. For each non-blank line, the parser is either the one the user picked, or (with
+3. For each non-blank line, `LineParser` (core) uses either the parser the user picked, or (with
    auto-detection) the first parser whose `canParse` accepts the line. Auto-detection
    happens **per line**, so a file mixing formats still parses.
 4. Entries are published in chunks; on the EDT, `LogTableModel.appendBatch` stores them
@@ -210,7 +212,7 @@ refresh; open tabs keep the list they were created with.
 
 ### 6.3 Following a log (UC-6)
 
-- **Local files:** The tail worker waits on a `FileChangeWatcher` (core), which uses the
+- **Local files:** The tail worker runs `FileFollower` (core), which waits on a `FileChangeWatcher` (core). It uses the
   OS change notifications (`WatchService`) for the file's folder. When the file is written,
   created or replaced, it reads the new bytes from the last position with `FileTail`
   (core). If no notification comes within 2 s it reads anyway, as a backstop for file
@@ -234,7 +236,7 @@ refresh; open tabs keep the list they were created with.
   `CredentialStore`. Exceptions from a plugin's `getName`, `settings` or `create` are
   logged and shown, never thrown into the UI.
 - **Live tabs:** SSH and plugin sources share `LogPanel.loadSource`: a source worker
-  calls `open`, parses each line with the chosen parser or auto-detection, and appends
+  calls `open`, parses each line with `LineParser` (chosen parser or auto-detection), and appends
   live entries. Columns are sized after the first batch arrives, and again when a later
   line brings a new field. Closing the tab (or loading something else) calls `close()`.
 - **Memory bound:** Live entries (tail, SSH and plugin sources) go through `LogTableModel.appendLive`,
@@ -515,7 +517,7 @@ Accepted in the use cases, with no design decision needed beyond the above:
   The single-instance manager already routes the file to the running window.
 - **Plain-text view (UC-13):** When no parser recognizes any of the first 50 lines (the
   same sample the open dialog's preview uses), `LogPanel` shows a read-only text card
-  instead of the table, reading through the same `openReader` path and following with
+  instead of the table, reading through the same `LogReaders` path and following with
   `FileTail`. "Create a parser for this file" opens `ParserEditorDialog` with those lines
   as samples; saving reloads the tab with the new parser. Large files need the same
   on-demand reading as D-8 rather than loading the whole text into one component.
@@ -546,4 +548,4 @@ Remove an entry once it's fixed.
 | ID | Gap | Impact |
 |---|---|---|
 | **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
-| **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |
+| **G-9** | Reading, parsing, following and annotation anchoring now live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`) and the detail pane in `DetailPanel`, but `LogPanel` is still about 1,650 lines of UI: table and renderers, context menus, find bar, highlight navigation and status bar. | Still long to review. Next splits: the find bar and the highlight navigation bar into their own classes. |
