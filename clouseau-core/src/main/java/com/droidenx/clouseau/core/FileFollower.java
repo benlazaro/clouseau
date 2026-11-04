@@ -41,7 +41,7 @@ public final class FileFollower {
     /** Receives what {@link #follow(Path, long, Listener, BooleanSupplier, long)} reads. Called on its thread. */
     public interface Listener {
         /**
-         * A complete, non-blank line.
+         * A complete line; blank lines only when following with {@code keepBlank}.
          *
          * @param offset where it starts in the file being followed now, in bytes
          * @param length its length in bytes, without its line ending
@@ -89,6 +89,15 @@ public final class FileFollower {
      */
     public static void follow(Path file, long start, Listener listener, BooleanSupplier cancelled,
                               long pollMillis) throws InterruptedException {
+        follow(file, start, listener, cancelled, pollMillis, false);
+    }
+
+    /**
+     * Like {@link #follow(Path, long, Listener, BooleanSupplier, long)}; with
+     * {@code keepBlank}, blank lines are reported too (the plain-text view, UC-13).
+     */
+    public static void follow(Path file, long start, Listener listener, BooleanSupplier cancelled,
+                              long pollMillis, boolean keepBlank) throws InterruptedException {
         long position = start;
         SeekableByteChannel channel = null;
         Object fileKey = null;
@@ -105,14 +114,14 @@ public final class FileFollower {
                         listener.rotated(Rotation.TRUNCATED);
                         listener.position(position);
                     }
-                    long read = FileTail.readAppendedLines(channel, position, listener::line, cancelled);
+                    long read = FileTail.readAppendedLines(channel, position, listener::line, cancelled, keepBlank);
                     if (read != position) {
                         position = read;
                         listener.position(position);
                     }
                     if (!cancelled.getAsBoolean() && replaced(file, fileKey, position)) {
                         // Read what was written to the old file since, then switch to the new one.
-                        read = FileTail.readAppendedLines(channel, position, listener::line, cancelled);
+                        read = FileTail.readAppendedLines(channel, position, listener::line, cancelled, keepBlank);
                         if (read != position) {
                             position = read;
                             listener.position(position);

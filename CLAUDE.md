@@ -26,7 +26,8 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
                     AnnotationStore, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
-                    EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle
+                    EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
+                    LogSniffer, TextLines
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -115,6 +116,9 @@ tags.
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.
+- `LogSniffer`, `TextLines` (core), `PlainTextView` (ui) — UC-13: a file no parser recognizes
+  opens as plain text. `LogSniffer` samples the first lines (parser match, binary check),
+  `TextLines` keeps every line's offset and reads text back from disk, `PlainTextView` shows it.
 - `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row
   highlights, and the per-tab entry limit.
 - `AnnotationStore` (core) — annotations for one file, anchored by entry number and content

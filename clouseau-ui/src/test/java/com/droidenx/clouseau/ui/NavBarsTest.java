@@ -85,7 +85,7 @@ class NavBarsTest {
 
     @Test
     void findSelectsMatchesInTurnAndWraps() throws Exception {
-        FindBar bar = onEdt(() -> new FindBar(table, model));
+        FindBar bar = onEdt(() -> new FindBar(table, FindBar.searchIn(model)));
         onEdt(() -> bar.search("NEEDLE"));
 
         // The search runs in the background; the first match is selected when it finishes.

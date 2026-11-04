@@ -261,8 +261,8 @@ colors, and filters.
 **Success:** No Java code or regex expertise is required.
 
 **Variation:** When started from a file no parser recognizes (UC-13), the editor is
-pre-filled with that file's first lines as samples. Saving the parser reopens the file
-with it.
+pre-filled with a new parser and the file's first non-blank line as the sample. Saving
+the parser reopens the file with it.
 
 ### UC-11 · Extend Clouseau with plugins ✅
 
@@ -347,7 +347,7 @@ often visible through an ID that appears in both files.
 The offset is applied after the file's source timezone: the timezone setting says how to
 read the timestamps, and the offset corrects a clock that is simply wrong.
 
-### UC-13 · Read a file no parser recognizes ❌
+### UC-13 · Read a file no parser recognizes ✅
 
 **Actor:** Field engineer, Developer
 **Goal:** Read any log, even one in a format Clouseau doesn't know yet, without
@@ -380,12 +380,17 @@ away.
 - **Merged views:** A file no parser recognizes has no timestamps to merge on, so it
   opens in its own plain-text tab (UC-12).
 
-**Current behavior:** From `File → Open`, the preview reports "No compatible parser
-available" and the Open button is disabled, so the file can't be opened at all. Opened
-any other way (command line, "Open with", recent files), the file loads, but every line
-becomes an `UNKNOWN` entry, and the `UNKNOWN` level toggle is off by default, so the
-table looks empty. The parser editor is only reachable from the menu, and the sample
-must be typed or pasted in by hand.
+**Current behavior:** However the file is opened, Clouseau checks its first 50 lines
+(the same sample the open dialog previews). If no parser recognizes any of them, or the
+chosen parser doesn't, the tab shows plain text: line numbers, every line including blank
+ones, tabs shown as spaces, Find (`Ctrl+F`), copy (the selected lines' text only) and a
+Follow toggle in the banner. A rotated file is reloaded from the start. The open dialog
+keeps Open enabled and says in amber that the file will open as plain text. A file that
+looks binary (more than 5% control or undecodable characters) asks first, and closes its
+tab if declined. **Create a Parser…** opens the parser editor on a new parser, with the
+file's first non-blank line as the sample. After saving, the tab switches to the table
+if a parser now recognizes the file, and otherwise says it still doesn't. A compressed
+file in plain text isn't followed.
 
 ### UC-14 · Customize the app's appearance ✅
 

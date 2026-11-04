@@ -41,7 +41,7 @@ public final class LineScanner {
      * @return the number of bytes read, which is where a follow should resume
      */
     public static long scan(InputStream in, Sink sink, BooleanSupplier cancelled) throws IOException {
-        return scan(in, 0, sink, cancelled, BUFFER_SIZE);
+        return scan(in, 0, sink, cancelled, BUFFER_SIZE, false);
     }
 
     /**
@@ -52,15 +52,29 @@ public final class LineScanner {
      * @return the file position just past what was read
      */
     public static long scan(InputStream in, long start, Sink sink, BooleanSupplier cancelled) throws IOException {
-        return scan(in, start, sink, cancelled, BUFFER_SIZE);
+        return scan(in, start, sink, cancelled, BUFFER_SIZE, false);
+    }
+
+    /**
+     * Like {@link #scan(InputStream, long, Sink, BooleanSupplier)}, but blank lines are passed
+     * on too, so every line of the file is reported and line numbers match an editor's (the
+     * plain-text view, UC-13).
+     */
+    public static long scanAllLines(InputStream in, long start, Sink sink, BooleanSupplier cancelled)
+            throws IOException {
+        return scan(in, start, sink, cancelled, BUFFER_SIZE, true);
     }
 
     static long scan(InputStream in, Sink sink, BooleanSupplier cancelled, int bufferSize) throws IOException {
-        return scan(in, 0, sink, cancelled, bufferSize);
+        return scan(in, 0, sink, cancelled, bufferSize, false);
     }
 
-    private static long scan(InputStream in, long start, Sink sink, BooleanSupplier cancelled, int bufferSize)
-            throws IOException {
+    static long scanAllLines(InputStream in, Sink sink, BooleanSupplier cancelled, int bufferSize) throws IOException {
+        return scan(in, 0, sink, cancelled, bufferSize, true);
+    }
+
+    private static long scan(InputStream in, long start, Sink sink, BooleanSupplier cancelled, int bufferSize,
+                             boolean keepBlank) throws IOException {
         byte[] buf = new byte[Math.max(bufferSize, Utf8Bom.LENGTH)];
         // Holds the start of a line that runs past the end of the buffer.
         byte[] carry = new byte[256];
@@ -87,11 +101,11 @@ public final class LineScanner {
                 if (b != '\n' && b != '\r') continue;
 
                 if (carryLen == 0) {
-                    emit(sink, lineStart, buf, segStart, i - segStart);
+                    emit(sink, lineStart, buf, segStart, i - segStart, keepBlank);
                 } else {
                     carry = append(carry, carryLen, buf, segStart, i - segStart);
                     carryLen += i - segStart;
-                    emit(sink, lineStart, carry, 0, carryLen);
+                    emit(sink, lineStart, carry, 0, carryLen, keepBlank);
                     carryLen = 0;
                 }
                 if (cancelled.getAsBoolean()) return base + i + 1;
@@ -107,7 +121,7 @@ public final class LineScanner {
             n = in.read(buf);
             i = 0;
         }
-        if (carryLen > 0) emit(sink, lineStart, carry, 0, carryLen);
+        if (carryLen > 0) emit(sink, lineStart, carry, 0, carryLen, keepBlank);
         return base;
     }
 
@@ -119,9 +133,9 @@ public final class LineScanner {
         return dest;
     }
 
-    private static void emit(Sink sink, long offset, byte[] bytes, int from, int len) {
+    private static void emit(Sink sink, long offset, byte[] bytes, int from, int len, boolean keepBlank) {
         // new String(..., UTF_8) replaces malformed input, like the decoder LogReaders uses.
         String text = new String(bytes, from, len, StandardCharsets.UTF_8);
-        if (!text.isBlank()) sink.line(offset, len, text);
+        if (keepBlank || !text.isBlank()) sink.line(offset, len, text);
     }
 }

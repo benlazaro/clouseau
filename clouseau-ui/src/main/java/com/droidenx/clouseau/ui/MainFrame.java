@@ -471,16 +471,26 @@ public final class MainFrame extends JFrame {
         String title = zipEntry == null ? file.getFileName().toString()
                 : new ZipLogs.Entry(zipEntry, -1).fileName();
         addLogTab(title, abs, panel);
+        panel.setCloseAction(() -> removeTab(panel));
+        panel.setCreateParserAction(samples -> new ParserEditorDialog(this, () -> {
+            reloadParsers();
+            panel.retryWithParsers(parsers);
+        }, samples).setVisible(true));
         panel.load(file, zipEntry, parser, () -> {
             AppPrefs.removeRecentFile(file);
             refreshRecentMenu();
-            int idx = tabbedPane.indexOfComponent(panel);
-            if (idx >= 0) {
-                panel.dispose();
-                tabbedPane.removeTabAt(idx);
-                updateCard();
-            }
+            removeTab(panel);
         });
+    }
+
+    /** Closes a tab without asking. */
+    private void removeTab(LogPanel panel) {
+        int idx = tabbedPane.indexOfComponent(panel);
+        if (idx >= 0) {
+            panel.dispose();
+            tabbedPane.removeTabAt(idx);
+            updateCard();
+        }
     }
 
     private void openSsh() {

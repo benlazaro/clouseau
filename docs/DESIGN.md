@@ -388,6 +388,34 @@ Dropped files open as `openFile(Path)` does for "Open with": auto-detected parse
 per file, a picker for a zip with several logs. Folders are skipped, and files are opened
 after the drop completes, so a dialog never holds up the drag source.
 
+### 6.11 Plain-text view (UC-13)
+
+- **Deciding:** The load worker first reads a sample with `LogSniffer.read` (core): up to
+  50 lines or 64K characters, decoded as `LogReaders` decodes them, and flagged binary
+  when more than 5% of the characters are control characters or U+FFFD.
+  `LogSniffer.detect` is the open dialog's check as well, so the dialog and the tab agree.
+  If the sample has a non-blank line and no parser (or not the chosen one) recognizes any
+  of them, the worker skips indexing and `LogPanel` switches to the plain-text card. A
+  binary sample asks first; declining closes the tab.
+- **Storing:** `TextLines` (core) keeps each line's byte offset and length (12 bytes per
+  line, in fixed 64K-line chunks that never move, so the EDT can read while the loader
+  adds) and reads text back from disk. `line()` has a 4,000-line LRU cache for painting;
+  `scan()` reads in 1 MiB blocks on its own channel, for Find. Lines come from
+  `LineScanner.scanAllLines`, which unlike `scan` keeps blank lines so numbers match the
+  file. A compressed log is unpacked to the tab's cache copy during the same pass, as in
+  D-16, and isn't followed.
+- **Following:** `FileFollower.follow(…, keepBlank = true)` feeds `TextLines.add`. With
+  blank lines kept, `FileTail` skips the `\n` of a `\r\n` split across two reads, so it
+  isn't counted as an empty line. On rotation the view reloads the file from the start,
+  since its offsets point into the old content.
+- **UI:** `PlainTextView` (ui) holds the banner (Create a Parser…, Follow), its own
+  `FindBar` searching through `TextLines.scan` on a background thread, and a two-column
+  table (line number, text) whose copy action copies only the text. The filter bar, the
+  table's find bar and the highlight bar are hidden. **Create a Parser…** calls the hook
+  `MainFrame` sets, which opens `ParserEditorDialog` with the samples. On save,
+  `LogPanel.retryWithParsers` reloads with auto-detection if a parser now recognizes the
+  sample, and otherwise updates the banner.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:
@@ -883,14 +911,8 @@ removes that ceiling too.
 
 ## 10. Planned features
 
-Accepted in the use cases, with no design decision needed beyond the above:
-
-- **Plain-text view (UC-13):** When no parser recognizes any of the first 50 lines (the
-  same sample the open dialog's preview uses), `LogPanel` shows a read-only text card
-  instead of the table, reading through the same `LogReaders` path and following with
-  `FileTail`. "Create a parser for this file" opens `ParserEditorDialog` with those lines
-  as samples; saving reloads the tab with the new parser. Large files need the same
-  on-demand reading as D-8 rather than loading the whole text into one component.
+Accepted in the use cases, with no design decision needed beyond the above: none at
+the moment. (The plain-text view, UC-13, is now built; see 6.11.)
 
 ## 11. Known gaps
 

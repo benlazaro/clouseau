@@ -16,6 +16,7 @@ import com.droidenx.clouseau.core.LineScanner;
 import com.droidenx.clouseau.core.LogCache;
 import com.droidenx.clouseau.core.LogFileReader;
 import com.droidenx.clouseau.core.LogReaders;
+import com.droidenx.clouseau.core.LogSniffer;
 import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.ZipLogs;
@@ -54,7 +55,8 @@ import java.util.Optional;
 @Slf4j
 public final class LogPanel extends JPanel {
 
-    private final List<LogParser> parsers;
+    /** Replaced by {@link #retryWithParsers} after the user creates a parser. */
+    private List<LogParser> parsers;
     private final List<LogFormatter> formatters;
     private final List<LogSyntaxHighlighter> syntaxHighlighters;
     private final LogTableModel   logTableModel = new LogTableModel();
@@ -110,6 +112,17 @@ public final class LogPanel extends JPanel {
     private JPanel centerCards;
     private static final String CARD_CONTENT = "content";
     private static final String CARD_LOADING = "loading";
+    private static final String CARD_PLAIN   = "plain";
+    /** Shows a file no parser recognizes (UC-13); built the first time it's needed. */
+    private PlainTextView plainView;
+    /** True while the tab shows {@link #plainView} instead of the table. */
+    private boolean plainMode;
+    /** The first lines of the file shown as plain text, offered as samples for a new parser. */
+    private List<String> plainSamples = List.of();
+    /** Opens the parser editor for the plain-text file's samples; set by the window. */
+    private java.util.function.Consumer<List<String>> createParserAction;
+    /** Closes this tab; set by the window. */
+    private Runnable closeAction = () -> {};
     private ZoneId sourceTimezone = ZoneId.systemDefault();
     private JPanel statusBar;
     private JLabel statusBarLabel;
@@ -146,10 +159,10 @@ public final class LogPanel extends JPanel {
         centerCards.add(buildLoadingPanel(), CARD_LOADING);
 
         statusBar = buildStatusBar();
-        findBar = new FindBar(logTable, logTableModel);
+        findBar = new FindBar(logTable, FindBar.searchIn(logTableModel));
         highlightNavBar = new HighlightNavBar(logTable, logTableModel);
 
-        add(filterBar, "growx, wrap");
+        add(filterBar, "growx, wrap, hidemode 3");
         add(findBar, "growx, wrap, hidemode 3");
         add(highlightNavBar, "growx, wrap, hidemode 3");
         add(centerCards, "grow, pushy, wrap");
@@ -172,7 +185,10 @@ public final class LogPanel extends JPanel {
         getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                 .put(KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK), "showFind");
         getActionMap().put("showFind", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) { findBar.open(); }
+            @Override public void actionPerformed(ActionEvent e) {
+                if (plainMode) plainView.openFind();
+                else findBar.open();
+            }
         });
 
         // Ctrl+Shift+N: open the annotations panel
@@ -188,7 +204,9 @@ public final class LogPanel extends JPanel {
     public void setFollow(boolean follow) {
         this.follow = follow;
         filterBar.setFollowSelected(follow);
-        if (follow) {
+        if (plainMode) {
+            plainView.setFollow(follow);
+        } else if (follow) {
             startTailing();
         } else {
             stopTailing();
@@ -240,6 +258,7 @@ public final class LogPanel extends JPanel {
         stopTailing();
         SwingWorker<?, ?> old = currentWorker;
         if (old != null) old.cancel(true);
+        leavePlainMode();
         loading = true;
         annotationStore = AnnotationStore.inMemory();
         annotationSaveWarned = false;
@@ -286,9 +305,16 @@ public final class LogPanel extends JPanel {
             volatile AnnotationStore loadedAnnotations;
             /** Bytes of a plain file the index covers, where following resumes; -1 if not indexed. */
             volatile long indexedTo = -1;
+            /** The file's first lines, when no parser recognizes them: it opens as plain text (UC-13). */
+            volatile LogSniffer.Sample unrecognized;
 
             @Override
             protected Void doInBackground() throws Exception {
+                LogSniffer.Sample sample = LogSniffer.read(file, entry);
+                if (!sample.empty() && LogSniffer.detect(sample.lines(), parser, parsers).isEmpty()) {
+                    unrecognized = sample;
+                    return null;
+                }
                 // A review bundle's log starts from the bundle's notes until its own sidecar exists (D-10).
                 AnnotationStore annotations = ReviewBundle.loadAnnotations(file, entry, annotationKey, AppDirs.annotationsDir());
                 AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
@@ -365,6 +391,10 @@ public final class LogPanel extends JPanel {
                 if (isCancelled()) return;
                 try {
                     get();
+                    if (unrecognized != null) {
+                        showPlainText(unrecognized, parser);
+                        return;
+                    }
                     if (loadedAnnotations != null) annotationStore = loadedAnnotations;
                     applySavedHighlights();
                     autoResizeColumns();
@@ -409,6 +439,81 @@ public final class LogPanel extends JPanel {
         if (currentFile != null) load(currentFile, currentEntry, currentParser, () -> {});
     }
 
+    // ── Plain text (UC-13) ────────────────────────────────────────────────────
+
+    /** True while the tab shows its file as plain text because no parser recognizes it. */
+    public boolean isPlainText() { return plainMode; }
+
+    /** What "Create a parser" does: open the parser editor with these sample lines. */
+    public void setCreateParserAction(java.util.function.Consumer<List<String>> action) {
+        createParserAction = action;
+    }
+
+    /** Closes this tab without asking, e.g. when the user declines to open a binary file. */
+    public void setCloseAction(Runnable action) {
+        closeAction = action != null ? action : () -> {};
+    }
+
+    /**
+     * Takes the window's parsers after the user saved one. A plain-text tab reloads with
+     * auto-detection if one of them now recognizes the file, and says so if none does.
+     */
+    public void retryWithParsers(List<LogParser> newParsers) {
+        parsers = newParsers;
+        if (!plainMode || currentFile == null) return;
+        if (LogSniffer.detect(plainSamples, Optional.empty(), parsers).isPresent()) {
+            load(currentFile, currentEntry, Optional.empty(), () -> {});
+        } else {
+            plainView.setBanner(Messages.get("plain.banner.still"));
+        }
+    }
+
+    /** Swaps the (empty) table for the plain-text view, after asking first for a binary file. */
+    private void showPlainText(LogSniffer.Sample sample, Optional<LogParser> parser) {
+        if (sample.binary()) {
+            String name = currentEntry != null ? currentEntry : currentFile.getFileName().toString();
+            int answer = JOptionPane.showConfirmDialog(SwingUtilities.getWindowAncestor(this),
+                    java.text.MessageFormat.format(Messages.get("plain.binary.message"), name),
+                    Messages.get("plain.binary.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (answer != JOptionPane.YES_OPTION) {
+                closeAction.run();
+                return;
+            }
+        }
+        log.info("No parser recognizes {}; showing it as plain text", currentFile);
+        plainSamples = sample.lines();
+        logTableModel.clear();          // closes the index; the unpacked copy is reused below
+        filterBar.clearLoggers();
+        findBar.cancel();
+        filterBar.setVisible(false);
+        findBar.setVisible(false);
+        highlightNavBar.setVisible(false);
+        if (plainView == null) {
+            plainView = new PlainTextView(
+                    () -> { if (createParserAction != null) createParserAction.accept(plainSamples); },
+                    this::setFollow,
+                    this::updateStatusBar);
+            centerCards.add(plainView, CARD_PLAIN);
+        }
+        plainMode = true;               // only now: the status bar asks plainView for its line count
+        String banner = parser.map(p -> java.text.MessageFormat.format(Messages.get("plain.banner.chosen"), p.getName()))
+                .orElse(Messages.get("plain.banner.auto"));
+        plainView.load(currentFile, currentEntry, cacheCopy, follow, banner);
+        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_PLAIN);
+        plainView.table().requestFocusInWindow();   // so Ctrl+F and copy reach the view
+        updateStatusBar();
+    }
+
+    /** Back to the table, before loading the file again. */
+    private void leavePlainMode() {
+        if (!plainMode) return;
+        plainMode = false;
+        plainView.stop();
+        filterBar.setVisible(true);
+        highlightNavBar.refresh();
+        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
+    }
+
     public void cancelLoad() {
         stopTailing();
         SwingWorker<?, ?> w = currentWorker;
@@ -438,6 +543,7 @@ public final class LogPanel extends JPanel {
         statusBarPathLabel.setText(name);
         statusBarPathLabel.setToolTipText(name);
         cancelLoad();   // closes any prior source, cancels in-flight workers
+        leavePlainMode();
         partialLoad = false;
         annotationStore = AnnotationStore.inMemory();
 
@@ -592,6 +698,7 @@ public final class LogPanel extends JPanel {
 
     public void dispose() {
         cancelLoad();
+        if (plainView != null) plainView.dispose();
         logTableModel.dispose();
         deleteCacheCopy();
     }
@@ -751,6 +858,10 @@ public final class LogPanel extends JPanel {
     }
 
     private void updateStatusBar() {
+        if (plainMode) {
+            statusBarLabel.setText(java.text.MessageFormat.format(Messages.get("status.plain"), plainView.lineCount()));
+            return;
+        }
         int  visible  = logTableModel.getRowCount();
         int  total    = logTableModel.getTotalCount();
         long trimmed  = logTableModel.getTrimmedCount();

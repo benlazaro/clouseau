@@ -382,6 +382,16 @@ public final class ParserEditorDialog extends JDialog {
         updatingForm = false;
     }
 
+    /**
+     * Opens the editor on a new parser for a file no parser recognizes (UC-13), with its
+     * first non-blank line as the sample to test against.
+     */
+    public ParserEditorDialog(Frame owner, Runnable onSave, java.util.List<String> samples) {
+        this(owner, onSave);
+        addParser();
+        samples.stream().filter(s -> !s.isBlank()).findFirst().ifPresent(sampleField::setText);
+    }
+
     // ── Parser CRUD ───────────────────────────────────────────────────────────
 
     private void addParser() {

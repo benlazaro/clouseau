@@ -48,11 +48,40 @@ public final class FileTail {
      */
     public static long readAppendedLines(SeekableByteChannel channel, long from, LineScanner.Sink sink,
                                          BooleanSupplier cancelled) throws IOException {
+        return readAppendedLines(channel, from, sink, cancelled, false);
+    }
+
+    /**
+     * Like {@link #readAppendedLines(SeekableByteChannel, long, LineScanner.Sink, BooleanSupplier)};
+     * with {@code keepBlank}, blank lines are passed on too (the plain-text view, UC-13).
+     */
+    public static long readAppendedLines(SeekableByteChannel channel, long from, LineScanner.Sink sink,
+                                         BooleanSupplier cancelled, boolean keepBlank) throws IOException {
         long end = endOfLastLine(channel, from);
         if (end <= from) return from;
+        if (keepBlank && endsCrlfSplit(channel, from)) {
+            from++;                                   // the \n of a \r\n cut after its \r last time
+            if (end <= from) return from;
+        }
         channel.position(from);
         InputStream in = limited(Channels.newInputStream(channel), end - from);
-        return LineScanner.scan(in, from, sink, cancelled);
+        return keepBlank ? LineScanner.scanAllLines(in, from, sink, cancelled)
+                         : LineScanner.scan(in, from, sink, cancelled);
+    }
+
+    /**
+     * True if the last read stopped after a {@code \r} and the next byte is its {@code \n}.
+     * Without blank lines it would read as a blank line and be skipped; with them it must be
+     * skipped here, or a {@code \r\n} split between two reads would add a blank line.
+     */
+    private static boolean endsCrlfSplit(SeekableByteChannel channel, long from) throws IOException {
+        if (from == 0) return false;
+        ByteBuffer two = ByteBuffer.allocate(2);
+        channel.position(from - 1);
+        while (two.hasRemaining()) {
+            if (channel.read(two) < 0) return false;
+        }
+        return two.get(0) == '\r' && two.get(1) == '\n';
     }
 
     /**

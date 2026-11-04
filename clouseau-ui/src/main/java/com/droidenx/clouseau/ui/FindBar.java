@@ -18,13 +18,48 @@ import java.util.List;
  * The find bar of one tab (Ctrl+F): searches every column of the rows the filters show,
  * in the background, and steps through the matches with Enter / Shift+Enter.
  *
- * <p>The table's renderer asks {@link #isMatch(int)} to tint matching rows. Must be used
- * on the EDT.
+ * <p>The table's renderer asks {@link #isMatch(int)} to tint matching rows. What is searched
+ * comes from a {@link Search}: a log table's entries ({@link #searchIn(LogTableModel)}) or
+ * a plain-text view's lines. Must be used on the EDT.
  */
 final class FindBar extends JPanel {
 
+    /** Runs a find for the bar, in the background. */
+    interface Search {
+        /**
+         * Finds the rows matching {@code lowerQuery} (already lower case), replacing any
+         * find still running. On the EDT, {@code progress} gets a percentage while it reads,
+         * and {@code done} gets the matching model rows; neither is called once cancelled.
+         */
+        void find(String lowerQuery, java.util.function.IntConsumer progress,
+                  java.util.function.Consumer<int[]> done);
+
+        /** Stops a running find; its callbacks won't be called. */
+        void cancel();
+    }
+
+    /** Searches every column of the entries a log table shows. */
+    static Search searchIn(LogTableModel model) {
+        return new Search() {
+            @Override
+            public void find(String lowerQuery, java.util.function.IntConsumer progress,
+                             java.util.function.Consumer<int[]> done) {
+                model.find(e -> matches(e, lowerQuery), pct -> { if (pct >= 0) progress.accept(pct); },
+                        ordinals -> done.accept(java.util.Arrays.stream(ordinals)
+                                .map(model::rowOfOrdinal)          // rows may have changed since
+                                .filter(row -> row >= 0)
+                                .toArray()));
+            }
+
+            @Override
+            public void cancel() {
+                model.cancelFind();
+            }
+        };
+    }
+
     private final JTable table;
-    private final LogTableModel model;
+    private final Search searcher;
     private final JTextField field = new JTextField();
     private final JLabel counter = new JLabel();
 
@@ -34,10 +69,10 @@ final class FindBar extends JPanel {
     private int cursor = -1;
     private javax.swing.Timer debounce;
 
-    FindBar(JTable table, LogTableModel model) {
+    FindBar(JTable table, Search searcher) {
         super(new MigLayout("insets 3 8 3 8, gap 4", "[][grow][][][]", "[center]"));
         this.table = table;
-        this.model = model;
+        this.searcher = searcher;
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
         setVisible(false);
 
@@ -145,29 +180,30 @@ final class FindBar extends JPanel {
 
     void search(String query) {
         if (query == null || query.isBlank()) {
-            model.cancelFind();
+            searcher.cancel();
             clearMatches();
             return;
         }
-        String lower = query.toLowerCase();
         // Read in the background: on an indexed file, every visible row comes from disk.
-        model.find(e -> matches(e, lower), percent -> {
-            if (percent < 0) return;
+        searcher.find(query.toLowerCase(), percent -> {
             ClouseauColors.themedForeground(counter, ClouseauColors::dimForeground);
             counter.setText(MessageFormat.format(Messages.get("find.searching"), percent));
         }, this::showMatches);
     }
 
-    /** Shows the result of a find: the ordinals of the matching entries, ascending. */
-    private void showMatches(int[] ordinals) {
+    /** Stops a running find, e.g. when the tab's content is replaced. */
+    void cancel() {
+        searcher.cancel();
+        clearMatches();
+    }
+
+    /** Shows the result of a find: the matching model rows. */
+    private void showMatches(int[] modelRows) {
         List<Integer> list = new ArrayList<>();
         Set<Integer>  set  = new HashSet<>();
-        for (int ordinal : ordinals) {
-            int modelRow = model.rowOfOrdinal(ordinal);   // rows may have changed since
-            if (modelRow >= 0) {
-                list.add(modelRow);
-                set.add(modelRow);
-            }
+        for (int modelRow : modelRows) {
+            list.add(modelRow);
+            set.add(modelRow);
         }
         // Next and previous follow the view, which may be sorted.
         list.sort(Comparator.comparingInt(table::convertRowIndexToView));

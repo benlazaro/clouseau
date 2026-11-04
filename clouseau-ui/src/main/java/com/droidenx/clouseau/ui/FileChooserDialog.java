@@ -1,7 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogParser;
-import com.droidenx.clouseau.core.LogReaders;
+import com.droidenx.clouseau.core.LogSniffer;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -12,7 +12,6 @@ import javax.swing.filechooser.FileSystemView;
 import javax.swing.plaf.basic.BasicFileChooserUI;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -325,13 +324,10 @@ final class FileChooserDialog extends JDialog {
                 pendingWorker = new SwingWorker<>() {
                     @Override
                     protected PreviewResult doInBackground() {
-                        List<String> lines = new ArrayList<>(50);
-                        try (BufferedReader reader = LogReaders.open(filePath, null)) {
-                            String line;
-                            while ((line = reader.readLine()) != null && lines.size() < 50) {
-                                if (isCancelled()) return null;
-                                lines.add(line);
-                            }
+                        // The same sample and verdict the tab uses to choose the table or plain text (UC-13).
+                        LogSniffer.Sample sample;
+                        try {
+                            sample = LogSniffer.read(filePath, null);
                         } catch (IOException e) {
                             log.warn("Preview read failed for {}", filePath, e);
                             return new PreviewResult(Messages.get("filechooser.preview.error"),
@@ -341,32 +337,18 @@ final class FileChooserDialog extends JDialog {
                         if (isCancelled()) return null;
 
                         String previewText;
-                        if (lines.isEmpty()) {
+                        if (sample.empty()) {
                             previewText = Messages.get("filechooser.preview.empty.file");
                         } else {
-                            String joined = String.join("\n", lines);
-                            long nonPrintable = joined.chars()
-                                    .filter(c -> c < 32 && c != '\n' && c != '\r' && c != '\t')
-                                    .count();
-                            previewText = nonPrintable > joined.length() * 0.05
-                                    ? Messages.get("filechooser.preview.binary") : joined;
+                            previewText = sample.binary()
+                                    ? Messages.get("filechooser.preview.binary") : String.join("\n", sample.lines());
                         }
 
                         // Multi-file: status is already set; only preview text needed.
                         if (multiFile) return new PreviewResult(previewText, null, null, true);
                         if (isCancelled()) return null;
 
-                        Optional<LogParser> matched = Optional.empty();
-                        for (String line : lines) {
-                            if (isCancelled()) return null;
-                            if (line.isBlank()) continue;
-                            final String candidate = line;
-                            matched = chosen.map(Stream::of)
-                                    .orElseGet(parsers::stream)
-                                    .filter(p -> p.canParse(candidate))
-                                    .findFirst();
-                            if (matched.isPresent()) break;
-                        }
+                        Optional<LogParser> matched = LogSniffer.detect(sample.lines(), chosen, parsers);
 
                         String statusText;
                         Color statusColor;
@@ -378,12 +360,18 @@ final class FileChooserDialog extends JDialog {
                                     : Messages.get("filechooser.status.compatible.detected")
                                             .formatted(matched.get().getName());
                             canOpen = true;
+                        } else if (sample.empty()) {
+                            statusColor = ClouseauColors.dimForeground();
+                            statusText = " ";
+                            canOpen = true;
                         } else {
-                            statusColor = ClouseauColors.statusError();
-                            statusText = Messages.get("filechooser.status.incompatible")
-                                    .formatted(chosen.map(LogParser::getName)
-                                            .orElse(Messages.get("filechooser.parser.autodetect")));
-                            canOpen = false;
+                            // Still openable: the tab shows it as plain text and offers to create a parser.
+                            statusColor = ClouseauColors.statusWarn();
+                            statusText = chosen.map(p -> Messages.get("filechooser.status.plain.chosen")
+                                            .formatted(p.getName()))
+                                    .orElse(Messages.get(sample.binary()
+                                            ? "filechooser.status.plain.binary" : "filechooser.status.plain"));
+                            canOpen = true;
                         }
                         return new PreviewResult(previewText, statusText, statusColor, canOpen);
                     }
