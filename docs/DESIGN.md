@@ -415,6 +415,18 @@ Accepted in the use cases, with no design decision needed beyond the above:
   `updateUI`, and saves it with `AppPrefs.setTheme`, the same path the Settings dropdown
   uses, so the two stay in sync. The submenu rebuilds its items each time it opens, so
   newly installed themes appear.
+- **Tab switching shortcuts (UC-15):** Handled by a `KeyEventDispatcher` registered with
+  the `KeyboardFocusManager` for the main window, not by ordinary key bindings, because
+  two Swing behaviors would otherwise swallow the keys:
+  - `Ctrl+Tab` and `Ctrl+Shift+Tab` are default focus-traversal keys, consumed by the
+    focus manager before any key binding runs (`JTable` also uses them to move focus).
+  - `JTable` binds `Ctrl+PageUp`/`Ctrl+PageDown` for horizontal scrolling, and a
+    focused component's bindings are checked before window-level
+    (`WHEN_IN_FOCUSED_WINDOW`) ones.
+
+  A dispatcher sees key events before both, so the shortcuts work wherever focus is.
+  It acts only when the main window is active, so dialogs keep their own keys, and it
+  consumes only the shortcuts it handles. Plain `Tab` and `Shift+Tab` still move focus.
 
 ## 11. Known gaps
 
