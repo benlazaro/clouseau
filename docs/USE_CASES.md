@@ -77,12 +77,13 @@ without manual configuration for common formats (Log4j, Logback/Spring Boot, JSO
 **Current behavior:** Drag-and-drop is not implemented. Files passed on the command line
 are opened (and forwarded to an already-running instance), so "Open with" works if the
 user picks the Clouseau launcher manually, but the packages don't register file
-associations. Static files are never trimmed by the entry limit. A plain file is indexed
-(D-16): the heap keeps about 29 bytes per line and text is read back from disk, so a
-1M-line, 125 MB log uses under 50 MB of heap. Compressed files and files inside a zip are
-still held in memory: if one is too big for the heap, Clouseau stops reading, warns the
-user with the number of lines loaded and how to raise the memory limit, and marks the
-tab "partly loaded" in the status bar.
+associations. Static files are never trimmed by the entry limit. Every static file is
+indexed (D-16): the heap keeps about 29 bytes per line and text is read back from disk,
+so a 1M-line, 125 MB log uses under 50 MB of heap. Compressed files are indexed through
+an unpacked copy (UC-2). In the rare case the index itself fills the heap (tens of
+millions of lines), Clouseau stops reading, warns the user with the number of lines
+loaded and how to raise the memory limit, and marks the tab "partly loaded" in the
+status bar.
 
 ### UC-2 · Open compressed logs directly ✅
 
@@ -97,8 +98,15 @@ tab "partly loaded" in the status bar.
 **Variation:** A `.zip` containing several logs lets the user choose which ones to open,
 and opens them as a merged view (UC-12).
 
-**Current behavior:** Only the first file in a `.zip` is read, with no indication that
-there are others.
+**Current behavior:** A `.zip` with one file opens it directly. With several, a picker
+lets the user tick the files to open (with a filter box and Select all); each opens in
+its own tab, since the merged view (UC-12) doesn't exist yet. A `.gz` or zipped file is
+unpacked to a copy in the data folder's `cache/` while it's indexed (D-16), so it takes
+no more heap than a plain file of the same size. The user never handles the copy: it's
+deleted when the tab closes, and the folder is emptied at startup and exit. If the disk
+fills while unpacking, Clouseau stops there, warns the user (naming the folder), and
+marks the tab "partly loaded (disk full)". If a zip records a size the disk can't hold,
+the file is loaded into memory instead, as before.
 
 ### UC-3 · Spot errors and warnings at a glance ✅
 

@@ -60,6 +60,11 @@ public final class ClouseauApp {
             System.exit(0);
         }
 
+        // Only the running instance may do this: copies in use belong to its open tabs.
+        com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir());
+        Runtime.getRuntime().addShutdownHook(new Thread(
+                () -> com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir()), "cache-cleanup"));
+
         SwingUtilities.invokeLater(() -> {
             MainFrame frame = new MainFrame(pluginManager);
             frameRef[0] = frame;

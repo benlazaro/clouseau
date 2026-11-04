@@ -9,6 +9,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipInputStream;
@@ -35,20 +36,44 @@ public final class LogReaders {
         CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPLACE)
                 .onUnmappableCharacter(CodingErrorAction.REPLACE);
+        // The BOM check is on the decompressed bytes, so a .gz of a BOM file works too.
+        return new BufferedReader(new InputStreamReader(Utf8Bom.skip(openBytes(file, entry)), decoder));
+    }
+
+    /**
+     * The log's bytes after decompression, exactly as stored: a BOM is not skipped. Used
+     * to index a compressed log through a decompressed copy (D-16).
+     *
+     * @param entry the file to read inside a {@code .zip}, or null (for a zip: its first file)
+     */
+    public static InputStream openBytes(Path file, String entry) throws IOException {
         String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        InputStream in;
         if (name.endsWith(".gz")) {
-            in = new GZIPInputStream(Files.newInputStream(file));
+            return new GZIPInputStream(Files.newInputStream(file), 64 * 1024);
         } else if (entry != null) {
-            in = ZipLogs.open(file, entry);
+            return ZipLogs.open(file, entry);
         } else if (name.endsWith(".zip")) {
             ZipInputStream zis = new ZipInputStream(Files.newInputStream(file));
             zis.getNextEntry();
-            in = zis;
-        } else {
-            in = Files.newInputStream(file);
+            return zis;
         }
-        // The BOM check is on the decompressed bytes, so a .gz of a BOM file works too.
-        return new BufferedReader(new InputStreamReader(Utf8Bom.skip(in), decoder));
+        return Files.newInputStream(file);
+    }
+
+    /**
+     * The log's size after decompression, or -1 if it isn't known before reading it. A zip
+     * records each file's size; a {@code .gz} only keeps it modulo 4 GiB (and only for its
+     * last member), so it is never trusted.
+     */
+    public static long uncompressedSize(Path file, String entry) throws IOException {
+        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (entry == null && !name.endsWith(".zip")) {
+            return isCompressed(file) ? -1 : Files.size(file);
+        }
+        List<ZipLogs.Entry> entries = ZipLogs.list(file);
+        for (ZipLogs.Entry e : entries) {
+            if (entry == null || e.name().equals(entry)) return e.size();
+        }
+        return -1;
     }
 }

@@ -7,11 +7,13 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.AnnotationStore;
+import com.droidenx.clouseau.core.CopyingInputStream;
 import com.droidenx.clouseau.core.EntryIndex;
 import com.droidenx.clouseau.core.FileFollower;
 import com.droidenx.clouseau.core.IndexedEntries;
 import com.droidenx.clouseau.core.LineParser;
 import com.droidenx.clouseau.core.LineScanner;
+import com.droidenx.clouseau.core.LogCache;
 import com.droidenx.clouseau.core.LogFileReader;
 import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.MemoryGuard;
@@ -77,12 +79,16 @@ public final class LogPanel extends JPanel {
     private Path currentFile;
     /** The file inside a .zip that this tab shows, or null for a plain file (G-6). */
     private String currentEntry;
+    /** The decompressed copy of a compressed log this tab reads rows from, or null (D-16). */
+    private Path cacheCopy;
     private Optional<LogParser> currentParser = Optional.empty();
     private volatile long tailPosition = 0;
     private boolean follow  = AppPrefs.isFollowByDefault();
     private boolean loading = false;
     /** True when the last static load stopped early because memory ran low (UC-1). */
     private boolean partialLoad = false;
+    /** Why the load was partial: the disk filled while unpacking, rather than low memory. */
+    private boolean partialDiskFull = false;
     /**
      * Follow mode reads as soon as the OS reports a change; this is only the backstop for
      * file systems that send no notifications (some network drives).
@@ -240,6 +246,7 @@ public final class LogPanel extends JPanel {
         annotationSaveWarned = false;
         partialLoad = false;
         logTableModel.clear();
+        deleteCacheCopy();
         filterBar.clearLoggers();
         hiddenColumns.clear();
         activeLayoutName = null;
@@ -252,22 +259,29 @@ public final class LogPanel extends JPanel {
 
         final MemoryGuard memory = new MemoryGuard();
 
-        // D-16: a plain file is indexed instead of held in memory. Compressed files and
-        // zip entries are still loaded into memory until they go through the cache (step 4).
-        final EntryIndex index = entry == null && !LogReaders.isCompressed(file) ? new EntryIndex() : null;
-        if (index != null) {
+        // D-16: the file is indexed instead of held in memory. A compressed one is unpacked
+        // to a copy in the cache folder during the same pass, and rows are read from that.
+        final boolean compressed = entry != null || LogReaders.isCompressed(file);
+        final Path copy = compressed ? newCacheCopy(file, entry) : null;
+        final Path rowSource = compressed ? copy : file;
+        final EntryIndex index = new EntryIndex();
+        if (rowSource != null) {
             try {
                 logTableModel.beginIndexedLoad(
-                        IndexedEntries.open(file, index, new LineParser(parser, parsers, srcTz)));
+                        IndexedEntries.open(rowSource, index, new LineParser(parser, parsers, srcTz)));
+                cacheCopy = copy;
             } catch (IOException ex) {
-                log.warn("Can't open {} for indexing; it will be loaded into memory", file, ex);
+                log.warn("Can't open {} for indexing; it will be loaded into memory", rowSource, ex);
+                LogCache.delete(copy);
             }
         }
         final boolean indexed = logTableModel.isIndexed();
 
         SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
-            /** Lines read before loading stopped for lack of memory, or -1 if it didn't. */
+            /** Lines read before loading stopped for lack of memory or disk, or -1 if it didn't. */
             volatile long stoppedAtLine = -1;
+            /** True if loading stopped because the unpacked copy filled the disk. */
+            volatile boolean diskFull;
             /** Annotations read and anchored by the worker; handed to the tab in done(). */
             volatile AnnotationStore loadedAnnotations;
 
@@ -304,7 +318,10 @@ public final class LogPanel extends JPanel {
             private void indexFile(LineParser lineParser, AnnotationStore.Anchoring anchoring) throws IOException {
                 long[] count = {0};
                 boolean[] lowMemory = {false};
-                try (InputStream in = Files.newInputStream(file)) {
+                InputStream source = compressed
+                        ? new CopyingInputStream(LogReaders.openBytes(file, entry), Files.newOutputStream(rowSource))
+                        : Files.newInputStream(file);
+                try (InputStream in = source) {
                     LineScanner.scan(in, (offset, length, text) -> {
                         LogEntry e = lineParser.parse(text);
                         index.add(offset, length, e);
@@ -315,7 +332,12 @@ public final class LogPanel extends JPanel {
                         }
                     }, () -> lowMemory[0] || isCancelled());
                 }
-                if (lowMemory[0]) {
+                if (source instanceof CopyingInputStream c && c.writeFailure() != null && !isCancelled()) {
+                    diskFull = true;
+                    stoppedAtLine = count[0];
+                    log.warn("Stopped unpacking {} to {} after {} entries", file, rowSource, stoppedAtLine,
+                            c.writeFailure());
+                } else if (lowMemory[0]) {
                     stoppedAtLine = count[0];
                     log.warn("Low memory: stopped indexing {} after {} entries (max heap {} MiB)",
                             file, stoppedAtLine, memory.maxMiB());
@@ -345,11 +367,16 @@ public final class LogPanel extends JPanel {
                     if (stoppedAtLine >= 0) {
                         // Partial content: following would append after a gap, so don't.
                         partialLoad = true;
+                        partialDiskFull = diskFull;
                         updateStatusBar();
+                        String message = diskFull
+                                ? java.text.MessageFormat.format(Messages.get("load.diskfull.message"),
+                                        file.getFileName().toString(), stoppedAtLine, AppDirs.cacheDir().toString())
+                                : java.text.MessageFormat.format(Messages.get("load.lowmemory.message"),
+                                        file.getFileName().toString(), stoppedAtLine, memory.maxMiB());
                         JOptionPane.showMessageDialog(
                                 SwingUtilities.getWindowAncestor(LogPanel.this),
-                                java.text.MessageFormat.format(Messages.get("load.lowmemory.message"),
-                                        file.getFileName().toString(), stoppedAtLine, memory.maxMiB()),
+                                message,
                                 Messages.get("load.lowmemory.title"),
                                 JOptionPane.WARNING_MESSAGE);
                         return;
@@ -522,6 +549,38 @@ public final class LogPanel extends JPanel {
     public void dispose() {
         cancelLoad();
         logTableModel.dispose();
+        deleteCacheCopy();
+    }
+
+    /**
+     * Creates the file a compressed log is unpacked to, or returns null (the log is then
+     * loaded into memory, as before D-16) if its unpacked size is known and the disk
+     * doesn't have room for it, or the file can't be created.
+     */
+    private static Path newCacheCopy(Path file, String entry) {
+        Path dir = AppDirs.cacheDir();
+        try {
+            long size = LogReaders.uncompressedSize(file, entry);
+            if (!LogCache.hasRoom(dir, size)) {
+                log.warn("Not enough free space in {} to unpack {} ({} bytes); loading it into memory",
+                        dir, file, size);
+                return null;
+            }
+            return LogCache.newCopy(dir, file, entry);
+        } catch (IOException ex) {
+            log.warn("Can't create a copy of {} in {}; loading it into memory", file, dir, ex);
+            return null;
+        }
+    }
+
+    /**
+     * Deletes this tab's unpacked copy. Call after the model has closed its channel. The
+     * load worker may still be writing it; files are opened with delete sharing, so the
+     * copy goes when the last handle closes (and at the next start if it doesn't).
+     */
+    private void deleteCacheCopy() {
+        LogCache.delete(cacheCopy);
+        cacheCopy = null;
     }
 
     public JTable getLogTable() { return logTable; }
@@ -650,7 +709,7 @@ public final class LogPanel extends JPanel {
                     ? java.text.MessageFormat.format(Messages.get("status.lines"), total)
                     : java.text.MessageFormat.format(Messages.get("status.lines.filtered"), visible, total);
         }
-        if (partialLoad) text += Messages.get("status.partial");
+        if (partialLoad) text += Messages.get(partialDiskFull ? "status.partial.diskfull" : "status.partial");
         if (filterPercent >= 0) text += java.text.MessageFormat.format(Messages.get("status.filtering"), filterPercent);
         statusBarLabel.setText(text);
     }

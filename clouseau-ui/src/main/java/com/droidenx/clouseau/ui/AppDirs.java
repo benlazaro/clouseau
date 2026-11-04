@@ -28,6 +28,9 @@ public final class AppDirs {
     /** Where annotations go when a log's own folder can't be written (D-9). */
     public static Path annotationsDir() { return DATA_DIR.resolve("annotations"); }
 
+    /** Decompressed copies of the compressed logs open in tabs (D-16); emptied at startup. */
+    public static Path cacheDir() { return DATA_DIR.resolve("cache"); }
+
     /** {@code true} when data lives next to the install (Windows jpackage image). */
     public static boolean isPortable() { return findInstallRoot() != null; }
 

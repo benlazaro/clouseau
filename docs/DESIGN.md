@@ -191,8 +191,10 @@ refresh; open tabs keep the list they were created with.
    `<zip>!<entry>` next to the zip.
 1. `LogPanel.load` clears the tab and starts a load worker. A plain file is indexed with
    `LineScanner` into an `EntryIndex` and read back through `IndexedEntries` (D-16). A
-   `.gz` or a zip entry is read with `LogFileReader` (core), and each entry is held in
-   memory (until D-16 step 4).
+   `.gz` or a zip entry is indexed the same way, through a decompressed copy written to
+   `<data>/cache/` during the same pass. Only if that copy can't be made (no room for a
+   zip entry's recorded size, or the file can't be created) is it read with
+   `LogFileReader` (core) and each entry held in memory.
 2. `LogReaders.open` (core) picks the decoder from the file name: plain, `.gz` (`GZIPInputStream`),
    or one file of a `.zip` (`ZipLogs`, core). Bytes are decoded as UTF-8, with
    malformed input replaced rather than failing. A leading UTF-8 byte-order mark (written
@@ -327,6 +329,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
 | `<logfile>.annotations` | **Next to the log, not in the data folder.** Annotations for that file. |
 | `annotations/` | Annotations for logs whose own folder is read-only, named after a hash of the log's path (D-9). |
+| `cache/` | Decompressed copies of the compressed logs open in tabs (D-16), named `<hash of path and entry>-<unique>.log`. Not persistent: a copy is deleted when its tab closes, and the folder is emptied at startup (by the running instance only) and at exit. |
 
 **Rules:**
 
@@ -394,7 +397,7 @@ heap stops loading with a warning (section 6.2) until D-8 removes that ceiling.
 
 To have no size ceiling, a static file is read once to build a compact index (byte offset,
 timestamp, level, and logger per entry). Text is read from disk on demand for visible
-rows, the detail panel, and text filters. Compressed files would first be decompressed to
+rows, the detail panel, and text filters. Compressed files are first decompressed to
 a temporary file in the data folder. Live sessions keep the current in-memory model with
 its limit. Until this exists, a file that can't be fully loaded must produce a clear
 warning (UC-1). The detailed design is D-16.
@@ -517,8 +520,8 @@ colleague with another theme sees the same slots in their own colors.
 ### D-16 · How static files are indexed · Accepted
 
 The design for D-8, written to close G-5. Accepted on 2026-11-04 with the recommended
-answer to each question at the end. Built so far: steps 1 to 3. Plain static files are
-indexed by default.
+answer to each question at the end. Built so far: steps 1 to 4. Every static file is
+indexed, compressed ones through a decompressed copy.
 
 **Measured after step 2** (a 1M-line, 125 MB log in the sample format; heap after a full
 GC, whole app): 478 MB without the index, **81 MB with it**.
@@ -527,6 +530,10 @@ GC, whole app): 478 MB without the index, **81 MB with it**.
 2 s, heap after GC 47 MB. A level filter took 31 ms. A text filter took 1.6 s, and so did
 Find over every visible row; both showed progress, and the EDT never waited more than
 9 ms.
+
+**Measured after step 4** (a 1M-line `.gz`, 8 MB packed and 89 MB unpacked, on a
+`LogPanel` off-screen): load 2.5 s, heap after GC 49 MB, EDT never waited more than
+3 ms. Closing the tab deleted the copy.
 
 **Why.** A loaded entry costs about 120 bytes of heap per line today (the D-12 benchmark:
 118 MB for 1M lines), so the default 2 GB heap stops somewhere under 17M lines. That is a
@@ -596,11 +603,27 @@ format (D-9, D-15) carry over unchanged. The `MemoryGuard` stop stays as a safet
 for the index itself.
 
 **Compressed files.** A `.gz`, or a file inside a `.zip`, is decompressed during the same
-pass to `<data>/cache/<hash of path and entry>.log`, and the index points into that copy.
-Before starting, Clouseau checks the free space against the uncompressed size when it's
-known (a zip entry records it; a `.gz` doesn't reliably). If the disk fills mid-way, it
-stops with the same partial-load warning used today. The copy is deleted when the tab
-closes, and anything left in `cache/` is deleted at startup.
+pass to `<data>/cache/<hash of path and entry>-<unique>.log` (`LogCache`), and the index
+points into that copy. The unique part keeps two tabs on the same log from sharing one.
+`LogReaders.openBytes` gives the decompressed bytes as stored (the BOM is left for
+`LineScanner`, so offsets match the copy), and `CopyingInputStream` writes every block to
+the copy, unbuffered, before `LineScanner` sees it, so a row can be read back as soon as
+it's indexed.
+
+- **Free space.** Before starting, Clouseau checks the free space against the
+  uncompressed size plus 256 MB when the size is known (`LogReaders.uncompressedSize`: a
+  zip entry records it; a `.gz` keeps it only modulo 4 GiB, so it's never trusted). If
+  there isn't room, the file is loaded into memory as before D-16.
+- **Disk full mid-way.** `CopyingInputStream` ends the stream at the last block it
+  wrote instead of throwing, so the index holds exactly what the copy holds. The tab
+  stops with a partial-load warning that names the cache folder, and the status bar
+  says "partly loaded (disk full)".
+- **Cleanup.** The copy is deleted when the tab closes or reloads. The load worker may
+  still be writing it then; Java opens files with delete sharing on Windows, so the
+  delete succeeds and the file goes when the last handle closes. The running instance
+  empties `cache/` at startup (a second launch, which only forwards its files, never
+  does) and from a shutdown hook at exit, since the window closes with `EXIT_ON_CLOSE`.
+- Compressed files are still never followed.
 
 **Filtering.** `FilterBar` produces an `EntryFilter` (core): a `Predicate<LogEntry>` with
 two more methods, so one object carries both parts:
@@ -668,7 +691,7 @@ removes that ceiling too.
 3. ✅ The two-part filter, and the text scan with progress (Find included). Plain static
    files are indexed by default; the property is gone. Until step 5, followed lines on an
    indexed tab are held in memory and trimmed to the entry limit (section 6.3).
-4. Compressed files through `cache/`.
+4. ✅ Compressed files through `cache/`.
 5. Follow and rotation on the index.
 6. Update UC-1, close G-5, mark D-8 and D-16 Adopted.
 
@@ -733,5 +756,5 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-5** | Plain static files are indexed (D-16, steps 1 to 3 of 6 done), but compressed files and zip entries are still held fully in memory, and the default heap is 2 GB. Followed lines on an indexed tab are held in memory and trimmed to the entry limit until step 5. | A `.gz` or zipped log bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. A plain file reaches the index's own ceiling (about 70M entries in 2 GB) instead. Falls short of UC-1's "however large the file is" for compressed files. |
+| **G-5** | Static files are indexed (D-16, steps 1 to 4 of 6 done), compressed ones through a decompressed copy in `cache/`. Followed lines on an indexed tab are still held in memory and trimmed to the entry limit until step 5. | A followed file keeps only the newest followed lines (200,000 by default) after what was in the file at load. Any static file, compressed or not, reaches the index's own ceiling (about 70M entries in the default 2 GB heap); a compressed one also needs its unpacked size free on the data folder's disk. |
 | **G-9** | Reading, parsing, following and annotation anchoring now live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`) and the detail pane in `DetailPanel`, but `LogPanel` is still about 1,650 lines of UI: table and renderers, context menus, find bar, highlight navigation and status bar. | Still long to review. Next splits: the find bar and the highlight navigation bar into their own classes. |
