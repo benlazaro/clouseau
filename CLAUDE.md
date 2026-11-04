@@ -22,7 +22,7 @@ as the code.
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
                     LogSource, LogFilter. No Swing, no implementation.
-clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, FileTail, LogIndex,
+clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, FileTail, MemoryGuard, LogIndex,
                     ClouseauEventBus
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application

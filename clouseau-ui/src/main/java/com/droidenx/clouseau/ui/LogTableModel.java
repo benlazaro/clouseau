@@ -54,6 +54,8 @@ public final class LogTableModel extends AbstractTableModel {
     private Predicate<LogEntry>          activeFilter = e -> true;
     private int                          maxEntries = AppPrefs.getMaxEntriesPerTab();
     private long                         trimmedCount = 0;
+    /** Entries added by static loads since the last {@link #clear()}; see {@link #entryCap()}. */
+    private int                          staticCount  = 0;
 
     private final ExecutorService filterExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "clouseau-filter");
@@ -143,6 +145,8 @@ public final class LogTableModel extends AbstractTableModel {
     public void clear() {
         Runnable doClear = () -> {
             allEntries.clear();
+            trimmedCount = 0;
+            staticCount  = 0;
             highlights.clear();
             knownFieldKeys.clear();
             customFields = List.of();
@@ -154,8 +158,25 @@ public final class LogTableModel extends AbstractTableModel {
         else SwingUtilities.invokeLater(doClear);
     }
 
-    /** Appends a batch of entries from streaming load. Must be called on the EDT. */
+    /**
+     * Appends a batch read from a static file. Never trims: opening a file must not drop
+     * lines (D-7). Must be called on the EDT.
+     */
     public void appendBatch(List<LogEntry> entries) {
+        addEntries(entries);
+        staticCount += entries.size();
+    }
+
+    /**
+     * Appends entries from a live session (file follow or SSH), then drops the oldest
+     * entries if the tab is over its cap. Must be called on the EDT.
+     */
+    public void appendLive(List<LogEntry> entries) {
+        addEntries(entries);
+        trimToLimit();
+    }
+
+    private void addEntries(List<LogEntry> entries) {
         allEntries.addAll(entries);
         discoverFields(entries);
         int first = rows.size();
@@ -164,28 +185,25 @@ public final class LogTableModel extends AbstractTableModel {
             rows.addAll(matching);
             fireTableRowsInserted(first, rows.size() - 1);
         }
-        trimToLimit();
     }
 
-    /** Appends a single entry from file tailing. Must be called on the EDT. */
-    public void append(LogEntry entry) {
-        allEntries.add(entry);
-        discoverFields(List.of(entry));
-        if (activeFilter.test(entry)) {
-            int idx = rows.size();
-            rows.add(entry);
-            fireTableRowsInserted(idx, idx);
-        }
-        trimToLimit();
+    /**
+     * The most entries this tab keeps once live entries arrive: the configured limit, or
+     * the size of the static load if that was larger, so following a big file never cuts
+     * what was already loaded down to the limit at once. 0 = unlimited.
+     */
+    int entryCap() {
+        return maxEntries <= 0 ? 0 : Math.max(maxEntries, staticCount);
     }
 
     /**
      * Drops the oldest entries from the front of the list when the entry count
-     * exceeds {@code maxEntries}. Must be called on the EDT.
+     * exceeds {@link #entryCap()}. Must be called on the EDT.
      */
     private void trimToLimit() {
-        if (maxEntries <= 0 || allEntries.size() <= maxEntries) return;
-        int toRemove = allEntries.size() - maxEntries;
+        int cap = entryCap();
+        if (cap <= 0 || allEntries.size() <= cap) return;
+        int toRemove = allEntries.size() - cap;
 
         // Build identity set of the entries being evicted
         Set<LogEntry> evicted = Collections.newSetFromMap(new IdentityHashMap<>());

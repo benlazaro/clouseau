@@ -6,6 +6,7 @@ import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.FileTail;
+import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.LogIndex;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -84,6 +85,10 @@ public final class LogPanel extends JPanel {
     private volatile long tailPosition = 0;
     private boolean follow  = AppPrefs.isFollowByDefault();
     private boolean loading = false;
+    /** True when the last static load stopped early because memory ran low (UC-1). */
+    private boolean partialLoad = false;
+    /** Lines read between heap checks while loading a static file. */
+    private static final int MEMORY_CHECK_INTERVAL = 10_000;
     private final java.util.Set<String> disabledFormatters = new java.util.HashSet<>();
     private AnnotationStore  annotationStore   = AnnotationStore.empty();
     private JDialog          annotationsDialog;
@@ -222,6 +227,7 @@ public final class LogPanel extends JPanel {
         SwingWorker<?, ?> old = currentWorker;
         if (old != null) old.cancel(true);
         loading = true;
+        partialLoad = false;
         logIndex.clear();
         logTableModel.clear();
         filterBar.clearLoggers();
@@ -234,12 +240,24 @@ public final class LogPanel extends JPanel {
 
         final ZoneId srcTz = this.sourceTimezone; // capture before worker starts
 
+        final MemoryGuard memory = new MemoryGuard();
+
         SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
+            /** Lines read before loading stopped for lack of memory, or -1 if it didn't. */
+            volatile long stoppedAtLine = -1;
+
             @Override
             protected Void doInBackground() throws Exception {
                 try (BufferedReader reader = openReader(file)) {
                     String line;
+                    long lineNo = 0;
                     while ((line = reader.readLine()) != null && !isCancelled()) {
+                        if (++lineNo % MEMORY_CHECK_INTERVAL == 0 && memory.isLow()) {
+                            stoppedAtLine = lineNo - 1;
+                            log.warn("Low memory: stopped loading {} after {} lines (max heap {} MiB)",
+                                    file, stoppedAtLine, memory.maxMiB());
+                            break;
+                        }
                         if (line.isBlank()) continue;
                         final String candidate = line;
                         LogEntry entry = parser.map(Stream::of)
@@ -276,6 +294,18 @@ public final class LogPanel extends JPanel {
                     applyDefaultLayoutIfSet();
                     annotationStore = AnnotationStore.forFile(currentFile);
                     logTable.repaint();
+                    if (stoppedAtLine >= 0) {
+                        // Partial content: following would append after a gap, so don't.
+                        partialLoad = true;
+                        updateStatusBar();
+                        JOptionPane.showMessageDialog(
+                                SwingUtilities.getWindowAncestor(LogPanel.this),
+                                java.text.MessageFormat.format(Messages.get("load.lowmemory.message"),
+                                        file.getFileName().toString(), stoppedAtLine, memory.maxMiB()),
+                                Messages.get("load.lowmemory.title"),
+                                JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
                     try { tailPosition = Files.size(currentFile); } catch (IOException ignored) {}
                     if (follow) startTailing();
                 } catch (Exception ex) {
@@ -315,6 +345,7 @@ public final class LogPanel extends JPanel {
         statusBarPathLabel.setText(config.displayName());
         statusBarPathLabel.setToolTipText(config.displayName());
         cancelLoad();   // closes any prior SSH source, cancels in-flight workers
+        partialLoad = false;
 
         logIndex.clear();
         logTableModel.clear();
@@ -361,7 +392,7 @@ public final class LogPanel extends JPanel {
                     applyDefaultLayoutIfSet();
                     autoResizeColumns();
                 }
-                logTableModel.appendBatch(chunk);
+                logTableModel.appendLive(chunk);
                 filterBar.addBatch(chunk);
                 if (follow) scrollToBottom();
             }
@@ -449,7 +480,7 @@ public final class LogPanel extends JPanel {
             protected void process(List<LogEntry> entries) {
                 if (isCancelled()) return;
                 filterBar.addBatch(entries);
-                for (LogEntry entry : entries) logTableModel.append(entry);
+                logTableModel.appendLive(entries);
             }
         };
         tailWorker.execute();
@@ -603,6 +634,7 @@ public final class LogPanel extends JPanel {
                     ? java.text.MessageFormat.format(Messages.get("status.lines"), total)
                     : java.text.MessageFormat.format(Messages.get("status.lines.filtered"), visible, total);
         }
+        if (partialLoad) text += Messages.get("status.partial");
         statusBarLabel.setText(text);
     }
 

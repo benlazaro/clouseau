@@ -77,8 +77,10 @@ without manual configuration for common formats (Log4j, Logback/Spring Boot, JSO
 **Current behavior:** Drag-and-drop is not implemented. Files passed on the command line
 are opened (and forwarded to an already-running instance), so "Open with" works if the
 user picks the Clouseau launcher manually, but the packages don't register file
-associations. Static files are subject to the per-tab entry limit (see UC-6), so
-the earliest lines of a very large file can be dropped without warning.
+associations. Static files are never trimmed by the entry limit, but they are held in
+memory: if a file is too big for the heap, Clouseau stops reading, warns the user with
+the number of lines loaded and how to raise the memory limit, and marks the tab
+"partly loaded" in the status bar.
 
 ### UC-2 · Open compressed logs directly 🟡
 
@@ -148,6 +150,8 @@ in a few interactions.
 **Memory limit:** While following, each tab holds at most a configurable number of
 entries (default 200,000). The oldest entries are dropped when the limit is reached. This
 limit protects live sessions only; it never applies to opening a static file (UC-1).
+When following a file that was already larger than the limit, the tab keeps as many
+entries as it loaded, dropping one old entry per new one.
 
 ### UC-7 · Annotate lines during an investigation 🟡
 

@@ -173,8 +173,14 @@ can't handle.
    auto-detection) the first parser whose `canParse` accepts the line. Auto-detection
    happens **per line**, so a file mixing formats still parses.
 4. Entries are published in chunks; on the EDT, `LogTableModel.appendBatch` stores them
-   and `FilterBar` learns new logger names for the logger tree.
-5. When loading finishes, Clouseau sizes columns, applies the default column layout,
+   and `FilterBar` learns new logger names for the logger tree. `appendBatch` never
+   trims: the entry limit doesn't apply to static loads (D-7).
+5. Every 10,000 lines the worker asks `MemoryGuard` (core) whether the heap is nearly
+   full (headroom below 10% of the maximum heap, at least 64 MiB, after one GC). If it
+   is, loading stops, the user gets a warning with the line count and heap size, the
+   status bar marks the tab as partly loaded, and follow mode isn't started, since new
+   lines would follow a gap.
+6. When loading finishes, Clouseau sizes columns, applies the default column layout,
    loads annotations, and starts following if follow mode is on.
 
 ### 6.3 Following a log (UC-6)
@@ -189,8 +195,12 @@ can't handle.
   receives lines as they're written. Nothing on the client polls. The path is
   single-quoted for a POSIX shell, so spaces and shell metacharacters are taken
   literally; a leading `~/` is left unquoted so it still expands to the remote home.
-- **Memory bound:** `LogTableModel` keeps at most `max.entries.per.tab` entries (default
-  200,000, range 10,000–2,000,000) and evicts the oldest, along with their highlights.
+- **Memory bound:** Live entries (tail and SSH) go through `LogTableModel.appendLive`,
+  which keeps the tab at most at its cap and evicts the oldest entries, along with their
+  highlights. The cap is `max.entries.per.tab` (default 200,000, range
+  10,000–2,000,000), or the number of entries the static load added if that was larger,
+  so following a big file doesn't cut it to the limit all at once. `clear()` resets the
+  cap and the trimmed count.
 
 ### 6.4 Filtering (UC-4, UC-5)
 
@@ -300,10 +310,12 @@ modified.
 Sharing findings means sending files (the log plus annotations). There is no account,
 sync, or backend. See the non-goals in the use cases.
 
-### D-7 · The entry limit applies to live sessions only · Accepted
+### D-7 · The entry limit applies to live sessions only · Adopted
 
 The per-tab entry limit protects long follow sessions (UC-6). Opening a static file must
-never drop lines (UC-1). Today the limit applies to both (see [G-5](#11-known-gaps)).
+never drop lines (UC-1). Static loads are never trimmed; live entries are, down to the
+larger of the limit and the static load's size (section 6.3). A file too big for the
+heap stops loading with a warning (section 6.2) until D-8 removes that ceiling.
 
 ### D-8 · Static files are indexed, not held in memory · Accepted (direction)
 
@@ -441,7 +453,7 @@ Remove an entry once it's fixed.
 | **G-2** | Plugin parsers are never used. `MainFrame` gets parsers only from `UserParsersLoader`; it never asks the plugin manager for `LogParser` extensions, though the Plugin Manager lists them. | Breaks UC-11 for parsers, the most important plugin type. |
 | **G-3** | `LogSource` and `LogFilter` are not `ExtensionPoint`s, and the UI constructs sources directly. `FileLogSource` (core) is unused; `SshLogSource` lives in `clouseau-ui`. | Plugins can't add sources (blocks D-11). Violates section 3, rule 2. |
 | **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |
-| **G-5** | The entry limit applies to static files, and the default heap is 2 GB. | A large file silently loses its earliest lines. Contradicts D-7 and UC-1. |
+| **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
 | **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. The zip picker in UC-12 will close this. |
 | **G-8** | Annotations are keyed by content hash only, and saving fails silently if the log's folder is read-only. | Contradicts D-9 and UC-7. |
 | **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |
