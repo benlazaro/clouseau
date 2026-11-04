@@ -27,8 +27,11 @@ application {
 }
 
 tasks.processResources {
+    // Read the version now, not while the task runs, so the configuration cache can store it.
+    val appVersion = project.version.toString()
+    inputs.property("appVersion", appVersion)
     filesMatching("version.properties") {
-        expand("appVersion" to project.version)
+        expand("appVersion" to appVersion)
     }
 }
 
@@ -272,8 +275,17 @@ tasks.register("generateMacOsIcon") {
     }
 }
 
+// Read once at configuration time; onlyIf blocks must not touch `project` while running.
+val isSnapshot = project.version.toString().endsWith("-SNAPSHOT")
+
+// The org.beryx.runtime plugin's tasks hold a Project reference, which the configuration
+// cache can't store. Builds that run them skip the cache instead of failing.
+listOf("jre", "jpackageImage", "jpackage").forEach { name ->
+    tasks.named(name) { notCompatibleWithConfigurationCache("org.beryx.runtime holds a Project reference") }
+}
+
 tasks.named("jpackageImage") {
-    onlyIf { !(project.version as String).endsWith("-SNAPSHOT") }
+    onlyIf { !isSnapshot }
     val os = org.gradle.internal.os.OperatingSystem.current()
     when {
         os.isWindows -> dependsOn("generateWindowsIcon")
@@ -286,7 +298,8 @@ tasks.named("jpackageImage") {
 tasks.register<Zip>("distZipImage") {
     group       = "distribution"
     description = "Zips the jpackageImage output for distribution."
-    onlyIf { !(project.version as String).endsWith("-SNAPSHOT") }
+    notCompatibleWithConfigurationCache("runs after org.beryx.runtime tasks, which can't be cached")
+    onlyIf { !isSnapshot }
     dependsOn("jpackageImage")
     from(layout.buildDirectory.dir("jpackage"))
     archiveBaseName.set("clouseau")
@@ -295,7 +308,7 @@ tasks.register<Zip>("distZipImage") {
 }
 
 tasks.named("jpackage") {
-    onlyIf { !(project.version as String).endsWith("-SNAPSHOT") }
+    onlyIf { !isSnapshot }
 }
 
 runtime {

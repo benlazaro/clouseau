@@ -71,6 +71,11 @@ the project's JDK) before running `./gradlew`.
 ./gradlew :clouseau-ui:distZipImage -PappVersion=0.1.1    # release zip with bundled JRE
 ```
 
+- `gradle.properties` turns on parallel builds, the build cache and the configuration
+  cache. Build logic must not touch `project` while a task runs (read values at
+  configuration time instead). The release tasks (`jre`, `jpackageImage`, `jpackage`,
+  `distZipImage`) are marked incompatible because the `org.beryx.runtime` plugin isn't, so
+  release builds skip the configuration cache.
 - `distZipImage` and `jpackage` are skipped for `-SNAPSHOT` versions, so pass a release
   version to build them locally.
 - Only one Clouseau runs at a time (localhost port 54823). A second launch forwards its

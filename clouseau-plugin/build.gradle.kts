@@ -18,7 +18,13 @@ dependencies {
     examplePlugin(project(":clouseau-example-plugin"))
 }
 
+// A provider object, not a doFirst lambda, so the configuration cache can store the task.
+class ExamplePluginJarArg(
+    @get:InputFiles @get:PathSensitive(PathSensitivity.NONE) val jar: FileCollection
+) : CommandLineArgumentProvider {
+    override fun asArguments() = listOf("-Dclouseau.examplePlugin.jar=${jar.singleFile.absolutePath}")
+}
+
 tasks.test {
-    inputs.files(examplePlugin)
-    doFirst { systemProperty("clouseau.examplePlugin.jar", examplePlugin.singleFile.absolutePath) }
+    jvmArgumentProviders.add(ExamplePluginJarArg(examplePlugin))
 }
