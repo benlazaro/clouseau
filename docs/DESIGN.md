@@ -242,7 +242,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `parsers.json` | User-defined parsers |
 | `plugins/` | Installed plugin JARs |
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
-| `themes/` | User-installed FlatLaf themes (`ThemeManager`) |
+| `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
 | `<logfile>.annotations` | **Next to the log, not in the data folder.** Annotations for that file. |
 
 **Rules:**
@@ -409,6 +409,12 @@ Accepted in the use cases, with no design decision needed beyond the above:
   `FileTail`. "Create a parser for this file" opens `ParserEditorDialog` with those lines
   as samples; saving reloads the tab with the new parser. Large files need the same
   on-demand reading as D-8 rather than loading the whole text into one component.
+- **Theme menu (UC-14):** A new **View** menu in the main window with a **Theme**
+  submenu: one radio item per `ThemeManager.getAllThemes()` entry, then **Manage
+  themes…** (`ThemeManagerDialog`). Picking an item calls `ThemeManager.applyTheme` and
+  `updateUI`, and saves it with `AppPrefs.setTheme`, the same path the Settings dropdown
+  uses, so the two stay in sync. The submenu rebuilds its items each time it opens, so
+  newly installed themes appear.
 
 ## 11. Known gaps
 

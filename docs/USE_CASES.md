@@ -337,6 +337,38 @@ becomes an `UNKNOWN` entry, and the `UNKNOWN` level toggle is off by default, so
 table looks empty. The parser editor is only reachable from the menu, and the sample
 must be typed or pasted in by hand.
 
+### UC-14 · Customize the app's appearance 🟡
+
+**Actor:** Field engineer, Developer
+**Goal:** Make Clouseau comfortable to look at for hours, for example dark or light to
+suit the room, or a theme that matches my other tools.
+
+1. From the main window, the user picks a theme from a list of the built-in themes
+   (Dark, Light) and any custom themes they've installed.
+2. The theme applies immediately to the whole window and every open tab, with no
+   restart.
+3. Clouseau remembers the choice for next time.
+
+**Success:** Switching themes takes a couple of clicks from where the user is working,
+and logs stay just as readable in every theme.
+
+**Variation: custom themes.**
+1. User installs a FlatLaf theme file (`.properties`) through the theme manager.
+2. The theme appears in the theme list alongside the built-in ones.
+3. User can remove a custom theme they no longer want. If it was the active theme,
+   Clouseau switches back to the default.
+
+**Rules:**
+- **Level colors stay readable:** Every built-in theme colors ERROR, WARN, and the other
+  levels so they're easy to tell apart (UC-3). A custom theme can set its own level
+  colors; if it doesn't, Clouseau's defaults are used.
+- **Settings stays in sync:** The theme can also be picked in Settings, and both places
+  always show the same current theme.
+
+**Current behavior:** Themes can only be picked in Settings (with a live preview), and
+the theme manager is only reachable from there. There is no theme choice in the main
+window.
+
 ---
 
 ## 5. Quality goals
