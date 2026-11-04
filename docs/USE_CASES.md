@@ -111,7 +111,8 @@ no more heap than a plain file of the same size. The user never handles the copy
 deleted when the tab closes, and the folder is emptied at startup and exit. If the disk
 fills while unpacking, Clouseau stops there, warns the user (naming the folder), and
 marks the tab "partly loaded (disk full)". If a zip records a size the disk can't hold,
-the file is loaded into memory instead, as before.
+the file is loaded into memory instead, as before. A `.gz` inside a zip is unpacked
+too. A zip that is a review bundle (UC-9) opens its log directly.
 
 ### UC-3 · Spot errors and warnings at a glance ✅
 
@@ -203,7 +204,7 @@ line.
 (common in retry loops) share one annotation. If the log's folder is read-only, the
 annotations cannot be saved.
 
-### UC-8 · Hand off a log with annotations 🟡
+### UC-8 · Hand off a log with annotations ✅
 
 **Actor:** Field engineer → Developer
 **Goal:** Send my findings to the dev team so they don't have to rediscover them.
@@ -216,11 +217,15 @@ annotations cannot be saved.
 
 **Success:** Sending takes one action and one file, and nothing gets lost along the way.
 
-**Current behavior:** There is no export. Annotations live in a `<logfile>.annotations`
-sidecar next to the log, which the field engineer has to know about and attach
-separately.
+**Current behavior:** `File → Export for Review…` asks where to save, suggesting
+`<log>-review.zip` next to the log, and writes the bundle in the background (D-10). The
+bundle holds the log byte-for-byte (a `.gz` stays a `.gz`; a file opened from a zip is
+copied out of it), every annotation and highlight of the tab, including ones that no
+longer match a line, and a manifest. A tab opened from a bundle can be exported again,
+with the reviewer's notes added. SSH and plugin-source tabs can't be exported, and a
+file can't be exported while it is still loading.
 
-### UC-9 · Review a handed-off log 🟡
+### UC-9 · Review a handed-off log ✅
 
 **Actor:** Developer
 **Goal:** Pick up where the field engineer left off.
@@ -233,8 +238,13 @@ separately.
 **Success:** The developer sees exactly what the field engineer flagged, on the right
 lines, and knows who flagged it.
 
-**Current behavior:** Works when the developer places the log and its sidecar in the
-same folder; review bundles do not exist yet.
+**Current behavior:** A bundle opens like any `.zip` (File → Open, Open Recent, the
+command line or "Open with"): Clouseau recognizes it by its manifest, opens its log in
+one tab without asking which file, and attaches each annotation and highlight to its
+line (D-9), with its author. Notes the developer adds are saved next to the bundle in
+`<bundle>.zip!<log>.annotations`, never inside the bundle, and from then on that file is
+what loads, so the received bundle stays as it was sent. A `.zip` without a Clouseau
+manifest still opens as an ordinary compressed log (UC-2).
 
 ### UC-10 · Define a parser for a new format ✅
 

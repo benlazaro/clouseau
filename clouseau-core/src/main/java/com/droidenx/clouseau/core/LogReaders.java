@@ -51,13 +51,28 @@ public final class LogReaders {
         if (name.endsWith(".gz")) {
             return new GZIPInputStream(Files.newInputStream(file), 64 * 1024);
         } else if (entry != null) {
-            return ZipLogs.open(file, entry);
+            // A .gz inside a zip (as in a review bundle of a .gz log, D-10) is unpacked too.
+            InputStream in = ZipLogs.open(file, entry);
+            return isGz(entry) ? gunzip(in) : in;
         } else if (name.endsWith(".zip")) {
             ZipInputStream zis = new ZipInputStream(Files.newInputStream(file));
             zis.getNextEntry();
             return zis;
         }
         return Files.newInputStream(file);
+    }
+
+    private static boolean isGz(String name) {
+        return name.toLowerCase(Locale.ROOT).endsWith(".gz");
+    }
+
+    private static InputStream gunzip(InputStream in) throws IOException {
+        try {
+            return new GZIPInputStream(in, 64 * 1024);
+        } catch (IOException | RuntimeException e) {
+            in.close();
+            throw e;
+        }
     }
 
     /**
@@ -70,6 +85,7 @@ public final class LogReaders {
         if (entry == null && !name.endsWith(".zip")) {
             return isCompressed(file) ? -1 : Files.size(file);
         }
+        if (entry != null && isGz(entry)) return -1;
         List<ZipLogs.Entry> entries = ZipLogs.list(file);
         for (ZipLogs.Entry e : entries) {
             if (entry == null || e.name().equals(entry)) return e.size();

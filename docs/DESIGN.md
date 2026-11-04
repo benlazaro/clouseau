@@ -188,7 +188,9 @@ refresh; open tabs keep the list they were created with.
    UTF-8, else CP437). One file opens directly; for several, `ZipPickerDialog` lets the
    user tick files (filter box, Select all), and each opens in its own tab as
    `load(zip, entry, …)`. The tab keys its annotations to `ZipLogs.entryKey`,
-   `<zip>!<entry>` next to the zip.
+   `<zip>!<entry>` next to the zip. A zip that `ReviewBundle.read` recognizes as a
+   review bundle (D-10) skips the picker and opens the log the manifest names. A zip
+   entry ending in `.gz` is unpacked as well.
 1. `LogPanel.load` clears the tab and starts a load worker. A plain file is indexed with
    `LineScanner` into an `EntryIndex` and read back through `IndexedEntries` (D-16). A
    `.gz` or a zip entry is indexed the same way, through a decompressed copy written to
@@ -309,6 +311,11 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
 - **Highlights (D-15):** stored in the same sidecar under `highlights`, each with the
   same two anchors and a palette slot (0–7) rather than an RGB color. After a load, the
   attached ones are applied to the model; every highlight change saves the store.
+- **Review bundles (D-10):** the load worker reads the store with
+  `ReviewBundle.loadAnnotations`, which, for a bundle's log with no sidecar saved yet,
+  adds the bundle's `annotations.json` as orphans before anchoring. Exporting reads
+  `AnnotationStore.toJson()` on the EDT (the store is EDT-only once loaded) and writes
+  the zip on a `SwingWorker`.
 - SSH and plugin-source tabs have an in-memory store.
 
 ### 6.7 Plugin lifecycle (UC-11)
@@ -385,6 +392,54 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 2. Passwords and tokens are stored only through `CredentialStore`, never in plain text.
 3. File formats that leave the machine (annotations, review bundles) are **interchange
    formats**: other people's Clouseau versions read them, so keep them backward compatible.
+
+### 7.1 Interchange formats
+
+**Annotations sidecar** (`<log>.annotations`, `annotations.json` in a bundle). UTF-8
+JSON, written by `AnnotationStore`:
+
+```json
+{
+  "version": 2,
+  "annotations": [
+    { "lineHash": "3f2a…16 hex", "line": 42, "logTimestamp": "…", "logPreview": "…",
+      "note": "…", "author": "…", "createdAt": "…" }
+  ],
+  "highlights": [ { "lineHash": "…", "line": 57, "color": 3 } ]
+}
+```
+
+`line` is the 1-based entry number and may be missing (version 1 sidecars); `lineHash`
+is required (D-9). `highlights` is omitted when there are none; `color` is a palette slot
+0–7 (D-15). Orphans are written like attached ones.
+
+**Review bundle** (`*.zip`, D-10). A zip (entry names in UTF-8) with, at its root:
+
+| Entry | Contents |
+|---|---|
+| `manifest.json` | UTF-8 JSON, below. Written first. |
+| the log | The log's bytes as they were stored, under the name in `log` (normally the original file name; `log-<name>` if that name is `manifest.json` or `annotations.json`). A `.gz` stays a `.gz`. |
+| `annotations.json` | The sidecar format above: every note and highlight of the tab, orphans included. |
+
+```json
+{
+  "format": "clouseau-review-bundle",
+  "formatVersion": 1,
+  "clouseauVersion": "0.1.1",
+  "originalFileName": "app.log.gz",
+  "log": "app.log.gz",
+  "annotations": "annotations.json",
+  "exportedAt": "2026-11-04T09:30:00.123Z"
+}
+```
+
+Reading rules (`ReviewBundle.read`): a zip is a bundle only if `manifest.json` exists,
+parses, has `format` equal to `clouseau-review-bundle`, and the entry named by `log`
+(else `originalFileName`) exists. Anything else is an ordinary zip. Unknown fields are
+ignored, `annotations` defaults to `annotations.json`, and a newer `formatVersion` is
+opened anyway (with a log warning), so new fields must stay optional. A later version
+can add entries (for example, the extra files of a merged view, D-13) but must keep
+these meanings.
 
 ## 8. Packaging
 
@@ -474,7 +529,7 @@ aren't counted. It is stable for an unchanged file, which is all the anchor need
 lines are inserted above a group of identical lines, a note can move to a different one
 of them; the content still matches, so this is accepted. Details in section 6.6.
 
-### D-10 · Review bundle · Accepted
+### D-10 · Review bundle · Adopted
 
 `File → Export for review…` (UC-8) writes one `.zip` containing:
 
@@ -486,7 +541,28 @@ annotations.json       the annotations and highlights, same format as the sideca
 
 When opening a `.zip`, Clouseau checks for `manifest.json`. If it's there, the file is a
 bundle: it opens the log and loads its annotations. Otherwise it's an ordinary compressed
-log (UC-2). The format is an interchange format (section 7, rule 3).
+log (UC-2). The format is an interchange format (section 7, rule 3); section 7.1 has the
+details. `ReviewBundle` (core) writes and reads it; `ReviewExporter` (ui) is the menu
+action.
+
+- **A bundle is recognized by its manifest's `format`, not just by `manifest.json`.**
+  Other zips have a `manifest.json` too (browser extensions, for one), and those must
+  still open as logs.
+- **The reviewer's notes are saved next to the bundle, not in it.** The log is a zip
+  entry, so its sidecar is the zip-entry one, `<bundle>.zip!<log>.annotations` (section
+  6.2, step 0). Until that file exists the store starts from the bundle's
+  `annotations.json`; the first change writes the whole store, bundled notes included,
+  and from then on the sidecar is what loads (so deleting a bundled note sticks). The
+  bundle stays exactly as received, so it can be compared with or re-sent, and the
+  reviewer passes their notes on by exporting again, which bundles the same log with
+  everything in the store. Rejected: rewriting `annotations.json` inside the bundle
+  (rewrites a possibly large zip on every keystroke-sized change and modifies a file the
+  user received), and saving only in the data folder (the notes would not travel with the
+  bundle's folder).
+- **The log is copied as stored.** A `.gz` goes in as a `.gz` (stored, not deflated
+  again); a log opened from an ordinary zip goes in as that entry's bytes, under its file
+  name. Reading a bundle's `.gz` uses the compressed-file path (`LogReaders` unpacks a
+  `.gz` zip entry, `LogCache` holds the copy), like any other zipped log.
 
 ### D-11 · Aggregator sources are plugins · Adopted
 
