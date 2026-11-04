@@ -312,6 +312,23 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
 a new launch forwards its file arguments to it and exits, so double-clicking several files
 opens tabs in one window.
 
+### 6.9 Tab switching shortcuts (UC-15)
+
+`TabShortcuts` is a `KeyEventDispatcher` registered with the `KeyboardFocusManager` by
+`MainFrame`, not a set of ordinary key bindings, because two Swing behaviors would
+otherwise swallow the keys:
+
+- `Ctrl+Tab` and `Ctrl+Shift+Tab` are default focus-traversal keys, consumed by the
+  focus manager before any key binding runs (`JTable` also uses them to move focus).
+- `JTable` binds `Ctrl+PageUp`/`Ctrl+PageDown` for horizontal scrolling, and a focused
+  component's bindings are checked before window-level (`WHEN_IN_FOCUSED_WINDOW`) ones.
+
+A dispatcher sees key events before both, so the shortcuts work wherever focus is. It
+acts only while the main window is active, so dialogs keep their own keys, and it
+consumes only the shortcuts it handles (a `Ctrl+digit` past the last tab is left alone).
+Plain `Tab` and `Shift+Tab` still move focus. The index arithmetic is a static method,
+unit-tested without a display.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:
@@ -730,18 +747,6 @@ Accepted in the use cases, with no design decision needed beyond the above:
   `FileTail`. "Create a parser for this file" opens `ParserEditorDialog` with those lines
   as samples; saving reloads the tab with the new parser. Large files need the same
   on-demand reading as D-8 rather than loading the whole text into one component.
-- **Tab switching shortcuts (UC-15):** Handled by a `KeyEventDispatcher` registered with
-  the `KeyboardFocusManager` for the main window, not by ordinary key bindings, because
-  two Swing behaviors would otherwise swallow the keys:
-  - `Ctrl+Tab` and `Ctrl+Shift+Tab` are default focus-traversal keys, consumed by the
-    focus manager before any key binding runs (`JTable` also uses them to move focus).
-  - `JTable` binds `Ctrl+PageUp`/`Ctrl+PageDown` for horizontal scrolling, and a
-    focused component's bindings are checked before window-level
-    (`WHEN_IN_FOCUSED_WINDOW`) ones.
-
-  A dispatcher sees key events before both, so the shortcuts work wherever focus is.
-  It acts only when the main window is active, so dialogs keep their own keys, and it
-  consumes only the shortcuts it handles. Plain `Tab` and `Shift+Tab` still move focus.
 
 ## 11. Known gaps
 

@@ -400,7 +400,7 @@ Manage Themes…, which opens the theme manager. Settings still offers the theme
 (with a live preview, applied on OK); both read and save the same preference, so they
 always agree.
 
-### UC-15 · Work with several logs in tabs 🟡
+### UC-15 · Work with several logs in tabs ✅
 
 **Actor:** Developer, Field engineer
 **Goal:** Keep several logs open at once and move between them easily, for example the
@@ -430,8 +430,10 @@ opening the same file twice.
 - **Shortcuts work anywhere in the window,** whether focus is in the table, the detail
   panel, or a filter field, and they're listed in Help → Keyboard Shortcuts.
 
-**Current behavior:** Tabs can only be switched by clicking; there are no keyboard
-shortcuts for it.
+**Current behavior:** All of the above works, including the keyboard shortcuts, which
+apply wherever focus is in the main window (not in dialogs) and are listed in Help →
+Keyboard Shortcuts. `Ctrl+1` to `Ctrl+8` past the last open tab do nothing. The
+shortcuts use `Ctrl` on every platform, including macOS.
 
 ---
 

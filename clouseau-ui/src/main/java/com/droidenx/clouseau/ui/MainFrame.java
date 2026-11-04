@@ -71,6 +71,15 @@ public final class MainFrame extends JFrame {
         getRootPane().getActionMap().put("openSettings", new AbstractAction() {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) { openSettings(); }
         });
+
+        // Tab switching (UC-15): a dispatcher, not key bindings; see TabShortcuts.
+        KeyEventDispatcher tabShortcuts = new TabShortcuts(this, tabbedPane);
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(tabShortcuts);
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(tabShortcuts);
+            }
+        });
     }
 
     // ── Extension list management ─────────────────────────────────────────────
@@ -269,6 +278,14 @@ public final class MainFrame extends JFrame {
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.open"),      "Ctrl+O");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.close.tab"), "Ctrl+W");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.settings"),  "Ctrl+,");
+
+        addDialogSection(grid, Messages.get("shortcuts.section.tabs"), "gaptop 20");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.next"),      "Ctrl+Tab");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.prev"),      "Ctrl+Shift+Tab");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.next"),      "Ctrl+PgDn");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.prev"),      "Ctrl+PgUp");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.jump"),      "Ctrl+1\u20268");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.last"),      "Ctrl+9");
 
         addDialogSection(grid, Messages.get("shortcuts.section.table"), "gaptop 20");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.first.row"),  "Ctrl+Home");
