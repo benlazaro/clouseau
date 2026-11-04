@@ -66,7 +66,8 @@ Each use case lists its current support status: ✅ supported · 🟡 partial ·
 without manual configuration for common formats (Log4j, Logback/Spring Boot, JSON).
 
 **Variations:**
-- *Unknown format:* The user defines one in the parser editor (UC-10).
+- *Unknown format:* The file opens as plain text, with an offer to create a parser for
+  it (UC-13).
 - *Very large file:* Every line of a static file stays available, however large the file
   is (see [Scale](#5-quality-goals)). If a file cannot be fully loaded, Clouseau warns the
   user clearly instead of silently dropping lines.
@@ -202,18 +203,23 @@ lines, and knows who flagged it.
 **Current behavior:** Works when the developer places the log and its sidecar in the
 same folder; review bundles do not exist yet.
 
-### UC-10 · Read a log in an unsupported format ✅
+### UC-10 · Define a parser for a new format ✅
 
 **Actor:** Developer, Field engineer
-**Goal:** Read a log whose format Clouseau doesn't know.
+**Goal:** Teach Clouseau a log format it doesn't know, so those logs get columns,
+colors, and filters.
 
 1. User opens the parser editor and describes the line format with a simple template
    (for example `{date} [{thread}] {level} {logger} - {message}`), or pastes a
    Log4j/Logback pattern.
-2. Clouseau shows the generated regex and tests it against a real file.
+2. Clouseau shows the generated regex and tests it against a sample line.
 3. User saves the parser; it is available from then on and in auto-detection.
 
 **Success:** No Java code or regex expertise is required.
+
+**Variation:** When started from a file no parser recognizes (UC-13), the editor is
+pre-filled with that file's first lines as samples. Saving the parser reopens the file
+with it.
 
 ### UC-11 · Extend Clouseau with plugins ✅
 
@@ -290,6 +296,46 @@ often visible through an ID that appears in both files.
 
 The offset is applied after the file's source timezone: the timezone setting says how to
 read the timestamps, and the offset corrects a clock that is simply wrong.
+
+### UC-13 · Read a file no parser recognizes ❌
+
+**Actor:** Field engineer, Developer
+**Goal:** Read any log, even one in a format Clouseau doesn't know yet, without
+switching to a text editor.
+
+1. User opens a file (UC-1) and no parser recognizes any of its first lines.
+2. Clouseau opens the file anyway, as **read-only plain text**: every line as written,
+   with no columns, level colors, or level/logger/time filters.
+3. A banner above the text says no parser recognized the file and offers **Create a
+   parser for this file**.
+4. If the user accepts, the parser editor opens with the file's first lines as samples
+   (UC-10). When the parser is saved, the tab reopens the file with it and switches to
+   the normal table view.
+5. If the user ignores the offer, they keep reading the plain text.
+
+**Success:** Opening a log never leads to an empty screen or a disabled Open button.
+The user can always read the file, and turning it into a fully parsed log is one click
+away.
+
+**Rules:**
+- **Plain text still has the basics:** line numbers, Find (`Ctrl+F`), copying text, and
+  follow mode for a file that's still growing (UC-6).
+- **No annotations in plain text:** To keep this view simple, annotating lines (UC-7)
+  needs a parser. Creating one is the path to annotating an unknown format.
+- **A chosen parser that doesn't match:** If the user picks a parser in the open dialog
+  that doesn't recognize the file, Clouseau warns and offers plain text, rather than
+  showing an empty table.
+- **Binary files:** If the file looks binary rather than text, Clouseau warns before
+  showing it.
+- **Merged views:** A file no parser recognizes has no timestamps to merge on, so it
+  opens in its own plain-text tab (UC-12).
+
+**Current behavior:** From `File → Open`, the preview reports "No compatible parser
+available" and the Open button is disabled, so the file can't be opened at all. Opened
+any other way (command line, "Open with", recent files), the file loads, but every line
+becomes an `UNKNOWN` entry, and the `UNKNOWN` level toggle is off by default, so the
+table looks empty. The parser editor is only reachable from the menu, and the sample
+must be typed or pasted in by hand.
 
 ---
 

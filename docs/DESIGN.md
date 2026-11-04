@@ -403,6 +403,12 @@ Accepted in the use cases, with no design decision needed beyond the above:
 - **File associations:** Register `.log` (and optionally `.gz`/`.zip`) with the
   jpackage-based packages, so "Open with" and double-click work without manual setup.
   The single-instance manager already routes the file to the running window.
+- **Plain-text view (UC-13):** When no parser recognizes any of the first 50 lines (the
+  same sample the open dialog's preview uses), `LogPanel` shows a read-only text card
+  instead of the table, reading through the same `openReader` path and following with
+  `FileTail`. "Create a parser for this file" opens `ParserEditorDialog` with those lines
+  as samples; saving reloads the tab with the new parser. Large files need the same
+  on-demand reading as D-8 rather than loading the whole text into one component.
 
 ## 11. Known gaps
 
