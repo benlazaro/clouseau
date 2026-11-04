@@ -1,6 +1,6 @@
 package com.droidenx.clouseau.ui;
 
-import com.droidenx.clouseau.api.LogEntry;
+import com.droidenx.clouseau.core.AnnotationStore;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
@@ -11,6 +11,7 @@ import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -38,19 +39,22 @@ public final class AnnotationsPanel extends JPanel {
     private final LogTableModel             logTableModel;
     private final JTable                    logTable;
     private final Runnable                  onDismiss;
-    private final Runnable                  onAnnotationChanged;
+    private final Consumer<Boolean>          onAnnotationChanged;
 
     private final DefaultTableModel panelModel;
     private final JTable            annotationsTable;
 
-    /** Parallel list of line hashes in the order they appear in the panel table. */
-    private final List<String> hashOrder = new ArrayList<>();
+    /**
+     * Parallel to the panel rows: the entry ordinal (Integer) of an attached annotation, or
+     * the {@link AnnotationStore.Annotation} itself for an orphan.
+     */
+    private final List<Object> rowKeys = new ArrayList<>();
 
     public AnnotationsPanel(Supplier<AnnotationStore> storeSupplier,
                             LogTableModel logTableModel,
                             JTable logTable,
                             Runnable onDismiss,
-                            Runnable onAnnotationChanged) {
+                            Consumer<Boolean> onAnnotationChanged) {
         super(new BorderLayout());
         this.storeSupplier        = storeSupplier;
         this.logTableModel        = logTableModel;
@@ -89,8 +93,8 @@ public final class AnnotationsPanel extends JPanel {
         annotationsTable.getSelectionModel().addListSelectionListener(e -> {
             if (e.getValueIsAdjusting()) return;
             int sel = annotationsTable.getSelectedRow();
-            if (sel >= 0 && sel < hashOrder.size())
-                jumpToHash(hashOrder.get(sel));
+            if (sel >= 0 && sel < rowKeys.size() && rowKeys.get(sel) instanceof Integer ordinal)
+                jumpToOrdinal(ordinal);
         });
 
         // Delete key removes the selected annotation
@@ -139,34 +143,25 @@ public final class AnnotationsPanel extends JPanel {
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
-     * Rebuilds the table from the current annotation store and the current log
-     * table contents. Annotations are listed in log-line order; any annotation
-     * whose line is no longer visible (e.g. filtered out) is shown at the bottom
-     * with a "–" line number.
+     * Rebuilds the table from the current annotation store. Annotations are listed in
+     * entry order; the # column shows the row number in the log table, or – when the
+     * entry is filtered out. Orphans (annotations whose line is no longer in the file)
+     * come last.
      */
     public void refresh() {
         AnnotationStore store = storeSupplier.get();
         panelModel.setRowCount(0);
-        hashOrder.clear();
+        rowKeys.clear();
 
-        // Pass 1: annotations for lines that are currently visible in the log table, in order
-        for (int i = 0; i < logTableModel.getRowCount(); i++) {
-            LogEntry entry = logTableModel.getEntry(i);
-            if (entry == null || entry.rawLine() == null) continue;
-            String hash = AnnotationStore.hashOf(entry.rawLine());
-            AnnotationStore.Annotation a = store.get(hash);
-            if (a == null || hashOrder.contains(hash)) continue; // skip duplicates
-            hashOrder.add(hash);
-            panelModel.addRow(row(i + 1, a));
+        for (AnnotationStore.Placed p : store.placed()) {
+            int modelRow = logTableModel.rowOfOrdinal(p.ordinal());
+            rowKeys.add(p.ordinal());
+            panelModel.addRow(row(modelRow >= 0 ? modelRow + 1 : null, p.annotation()));
         }
-
-        // Pass 2: orphan annotations (line filtered out or log has been cleared)
-        store.all().forEach(a -> {
-            if (!hashOrder.contains(a.lineHash())) {
-                hashOrder.add(a.lineHash());
-                panelModel.addRow(row(null, a));
-            }
-        });
+        for (AnnotationStore.Annotation a : store.orphans()) {
+            rowKeys.add(a);
+            panelModel.addRow(row(null, a));
+        }
 
         applyColumnWidths();
     }
@@ -208,7 +203,7 @@ public final class AnnotationsPanel extends JPanel {
 
     private void deleteSelected() {
         int sel = annotationsTable.getSelectedRow();
-        if (sel < 0 || sel >= hashOrder.size()) return;
+        if (sel < 0 || sel >= rowKeys.size()) return;
         if (AppPrefs.isAnnotationDeleteConfirm()) {
             JCheckBox dontAsk = new JCheckBox(Messages.get("annotation.delete.dontask"));
             int result = JOptionPane.showConfirmDialog(
@@ -220,28 +215,26 @@ public final class AnnotationsPanel extends JPanel {
             if (dontAsk.isSelected()) AppPrefs.setAnnotationDeleteConfirm(false);
             if (result != JOptionPane.YES_OPTION) return;
         }
-        storeSupplier.get().remove(hashOrder.get(sel));
+        AnnotationStore store = storeSupplier.get();
+        boolean saved = rowKeys.get(sel) instanceof Integer ordinal
+                ? store.remove(ordinal)
+                : store.removeOrphan((AnnotationStore.Annotation) rowKeys.get(sel));
         logTable.repaint();
         refresh();
-        if (onAnnotationChanged != null) onAnnotationChanged.run();
+        if (onAnnotationChanged != null) onAnnotationChanged.accept(saved);
         // keep selection on the next row if possible
         int newCount = annotationsTable.getRowCount();
         if (newCount > 0) annotationsTable.setRowSelectionInterval(Math.min(sel, newCount - 1), Math.min(sel, newCount - 1));
     }
 
-    private void jumpToHash(String hash) {
-        for (int i = 0; i < logTableModel.getRowCount(); i++) {
-            LogEntry entry = logTableModel.getEntry(i);
-            if (entry == null || entry.rawLine() == null) continue;
-            if (hash.equals(AnnotationStore.hashOf(entry.rawLine()))) {
-                int viewRow = logTable.convertRowIndexToView(i);
-                if (viewRow >= 0) {
-                    logTable.setRowSelectionInterval(viewRow, viewRow);
-                    logTable.scrollRectToVisible(logTable.getCellRect(viewRow, 0, true));
-                    logTable.requestFocusInWindow();
-                }
-                return;
-            }
+    private void jumpToOrdinal(int ordinal) {
+        int modelRow = logTableModel.rowOfOrdinal(ordinal);
+        if (modelRow < 0) return;
+        int viewRow = logTable.convertRowIndexToView(modelRow);
+        if (viewRow >= 0) {
+            logTable.setRowSelectionInterval(viewRow, viewRow);
+            logTable.scrollRectToVisible(logTable.getCellRect(viewRow, 0, true));
+            logTable.requestFocusInWindow();
         }
     }
 }

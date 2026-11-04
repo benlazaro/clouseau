@@ -5,11 +5,10 @@ import com.droidenx.clouseau.api.LogEntry;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import java.awt.Color;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +22,10 @@ import java.util.function.Predicate;
  * The entry store for one tab: every entry ({@code allEntries}), the rows that pass the
  * active filter, row highlights, and the live-session entry cap. Loaders and tailers hand
  * entries in on the EDT; filtering runs on a background executor.
+ * <p>
+ * Every entry has an <em>ordinal</em>: its 0-based position in the source. It never
+ * changes while the tab is open, even as old live entries are dropped, so annotations
+ * and highlights are keyed by it.
  */
 public final class LogTableModel extends AbstractTableModel {
 
@@ -46,12 +49,14 @@ public final class LogTableModel extends AbstractTableModel {
         fireTableDataChanged();
     }
 
+    /** Every entry still held, oldest first; the entry at index i has ordinal trimmedCount + i. */
     private final List<LogEntry>         allEntries = new ArrayList<>();
-    private       List<LogEntry>         rows       = new ArrayList<>();
-    private final Map<LogEntry, Color>   highlights = new IdentityHashMap<>();
+    /** Ordinals of the entries that pass the active filter, ascending. */
+    private       IntList                rows       = new IntList();
+    private final Map<Integer, Color>    highlights = new HashMap<>();
     private Predicate<LogEntry>          activeFilter = e -> true;
     private int                          maxEntries = AppPrefs.getMaxEntriesPerTab();
-    private long                         trimmedCount = 0;
+    private int                          trimmedCount = 0;
     /** Entries added by static loads since the last {@link #clear()}; see {@link #entryCap()}. */
     private int                          staticCount  = 0;
 
@@ -68,22 +73,48 @@ public final class LogTableModel extends AbstractTableModel {
         filterExecutor.shutdownNow();
     }
 
-    public Color getHighlight(LogEntry entry) {
-        return entry != null ? highlights.get(entry) : null;
+    // ── Ordinals ─────────────────────────────────────────────────────────────
+
+    /** The ordinal of the entry at a model row, or -1 if out of range. */
+    public int ordinalAt(int modelRow) {
+        return modelRow >= 0 && modelRow < rows.size() ? rows.get(modelRow) : -1;
     }
 
-    public void setHighlight(LogEntry entry, Color color) {
-        if (color == null) highlights.remove(entry);
-        else highlights.put(entry, color);
-        for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i) == entry) { fireTableRowsUpdated(i, i); return; }
-        }
+    /** The model row showing the entry with this ordinal, or -1 if it's filtered out or gone. */
+    public int rowOfOrdinal(int ordinal) {
+        return rows.binarySearch(ordinal);
+    }
+
+    /** The entry with this ordinal, or null if it was dropped or doesn't exist yet. */
+    public LogEntry entryAtOrdinal(int ordinal) {
+        int i = ordinal - trimmedCount;
+        return i >= 0 && i < allEntries.size() ? allEntries.get(i) : null;
+    }
+
+    /** The ordinal the next appended entry gets. */
+    public int nextOrdinal() {
+        return trimmedCount + allEntries.size();
+    }
+
+    // ── Highlights ───────────────────────────────────────────────────────────
+
+    public Color getHighlight(int modelRow) {
+        int ord = ordinalAt(modelRow);
+        return ord >= 0 ? highlights.get(ord) : null;
+    }
+
+    public void setHighlight(int modelRow, Color color) {
+        int ord = ordinalAt(modelRow);
+        if (ord < 0) return;
+        if (color == null) highlights.remove(ord);
+        else highlights.put(ord, color);
+        fireTableRowsUpdated(modelRow, modelRow);
     }
 
     public void clearAllHighlights() {
         if (highlights.isEmpty()) return;
         highlights.clear();
-        if (!rows.isEmpty()) fireTableRowsUpdated(0, rows.size() - 1);
+        if (rows.size() > 0) fireTableRowsUpdated(0, rows.size() - 1);
     }
 
     public boolean hasHighlights() {
@@ -103,9 +134,14 @@ public final class LogTableModel extends AbstractTableModel {
     /** Returns the set of colors currently in use, in row order. */
     public Set<Color> getActiveHighlightColors() {
         Set<Color> set = new LinkedHashSet<>();
-        for (LogEntry e : rows) { Color c = highlights.get(e); if (c != null) set.add(c); }
+        for (int i = 0; i < rows.size(); i++) {
+            Color c = highlights.get(rows.get(i));
+            if (c != null) set.add(c);
+        }
         return set;
     }
+
+    // ── Loading ──────────────────────────────────────────────────────────────
 
     public void clear() {
         Runnable doClear = () -> {
@@ -115,8 +151,7 @@ public final class LogTableModel extends AbstractTableModel {
             highlights.clear();
             knownFieldKeys.clear();
             customFields = List.of();
-            int last = rows.size() - 1;
-            rows.clear();
+            rows = new IntList();
             fireTableStructureChanged();
         };
         if (SwingUtilities.isEventDispatchThread()) doClear.run();
@@ -142,14 +177,15 @@ public final class LogTableModel extends AbstractTableModel {
     }
 
     private void addEntries(List<LogEntry> entries) {
+        int ordinal = nextOrdinal();
         allEntries.addAll(entries);
         discoverFields(entries);
         int first = rows.size();
-        List<LogEntry> matching = entries.stream().filter(activeFilter).toList();
-        if (!matching.isEmpty()) {
-            rows.addAll(matching);
-            fireTableRowsInserted(first, rows.size() - 1);
+        for (LogEntry e : entries) {
+            if (activeFilter.test(e)) rows.add(ordinal);
+            ordinal++;
         }
+        if (rows.size() > first) fireTableRowsInserted(first, rows.size() - 1);
     }
 
     /**
@@ -170,23 +206,15 @@ public final class LogTableModel extends AbstractTableModel {
         if (cap <= 0 || allEntries.size() <= cap) return;
         int toRemove = allEntries.size() - cap;
 
-        // Build identity set of the entries being evicted
-        Set<LogEntry> evicted = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (int i = 0; i < toRemove; i++) evicted.add(allEntries.get(i));
-
         allEntries.subList(0, toRemove).clear();
         trimmedCount += toRemove;
+        int firstKept = trimmedCount;
+        highlights.keySet().removeIf(ord -> ord < firstKept);
 
-        // Clean up highlight map for evicted entries
-        evicted.forEach(highlights::remove);
-
-        // Remove the corresponding leading rows (rows is always ordered oldest-first)
-        int rowsToRemove = 0;
-        while (rowsToRemove < rows.size() && evicted.contains(rows.get(rowsToRemove))) {
-            rowsToRemove++;
-        }
+        // rows is ascending, so the dropped entries' rows are a prefix
+        int rowsToRemove = rows.countBelow(firstKept);
         if (rowsToRemove > 0) {
-            rows.subList(0, rowsToRemove).clear();
+            rows.removeFirst(rowsToRemove);
             fireTableRowsDeleted(0, rowsToRemove - 1);
         }
     }
@@ -200,6 +228,8 @@ public final class LogTableModel extends AbstractTableModel {
     /** Replaces all entries and reapplies the active filter. Must be called on the EDT. */
     public void load(List<LogEntry> newEntries) {
         allEntries.clear();
+        trimmedCount = 0;
+        highlights.clear();
         allEntries.addAll(newEntries);
         reapplyFilter();
     }
@@ -213,20 +243,23 @@ public final class LogTableModel extends AbstractTableModel {
     private void scheduleReapply() {
         if (filterFuture != null) filterFuture.cancel(true);
         List<LogEntry> snapshot = List.copyOf(allEntries);
+        int base = trimmedCount;
         Predicate<LogEntry> filter = activeFilter;
         long generation = ++filterGeneration;
 
         filterFuture = filterExecutor.submit(() -> {
-            List<LogEntry> newRows = new ArrayList<>(snapshot.size());
-            for (LogEntry e : snapshot) {
+            IntList newRows = new IntList();
+            for (int i = 0; i < snapshot.size(); i++) {
                 if (Thread.currentThread().isInterrupted()) return;
-                if (filter.test(e)) newRows.add(e);
+                if (filter.test(snapshot.get(i))) newRows.add(base + i);
             }
             SwingUtilities.invokeLater(() -> {
                 if (filterGeneration != generation) return; // superseded by a newer filter
-                // catch up any entries appended via streaming after the snapshot was taken
-                for (int i = snapshot.size(); i < allEntries.size(); i++) {
-                    if (filter.test(allEntries.get(i))) newRows.add(allEntries.get(i));
+                // drop entries trimmed meanwhile, and catch up any appended after the snapshot
+                newRows.removeFirst(newRows.countBelow(trimmedCount));
+                int end = nextOrdinal();
+                for (int ord = Math.max(base + snapshot.size(), trimmedCount); ord < end; ord++) {
+                    if (filter.test(allEntries.get(ord - trimmedCount))) newRows.add(ord);
                 }
                 rows = newRows;
                 fireTableDataChanged();
@@ -235,15 +268,18 @@ public final class LogTableModel extends AbstractTableModel {
     }
 
     private void reapplyFilter() {
-        rows.clear();
-        allEntries.stream().filter(activeFilter).forEach(rows::add);
+        IntList newRows = new IntList();
+        for (int i = 0; i < allEntries.size(); i++) {
+            if (activeFilter.test(allEntries.get(i))) newRows.add(trimmedCount + i);
+        }
+        rows = newRows;
         fireTableDataChanged();
     }
 
     /** Returns the LogEntry at the given model row, or null if out of range. */
     public LogEntry getEntry(int row) {
-        if (row < 0 || row >= rows.size()) return null;
-        return rows.get(row);
+        int ord = ordinalAt(row);
+        return ord >= 0 ? entryAtOrdinal(ord) : null;
     }
 
     /**
@@ -252,16 +288,10 @@ public final class LogTableModel extends AbstractTableModel {
      * the detail panel even when UNKNOWN entries are filtered out of the table.
      */
     public List<LogEntry> getContinuationLines(int modelRow) {
-        if (modelRow < 0 || modelRow >= rows.size()) return List.of();
-        LogEntry anchor = rows.get(modelRow);
-        // Locate anchor in allEntries by identity (filter may have reordered rows)
-        int allIdx = -1;
-        for (int i = 0; i < allEntries.size(); i++) {
-            if (allEntries.get(i) == anchor) { allIdx = i; break; }
-        }
-        if (allIdx < 0) return List.of();
+        int ord = ordinalAt(modelRow);
+        if (ord < 0) return List.of();
         List<LogEntry> result = new ArrayList<>();
-        for (int i = allIdx + 1; i < allEntries.size(); i++) {
+        for (int i = ord - trimmedCount + 1; i < allEntries.size(); i++) {
             LogEntry next = allEntries.get(i);
             boolean isContinuation = next.timestamp() == null
                     || next.level() == LogEntry.LogLevel.UNKNOWN;
@@ -339,7 +369,8 @@ public final class LogTableModel extends AbstractTableModel {
 
     @Override
     public Object getValueAt(int row, int col) {
-        LogEntry e = rows.get(row);
+        LogEntry e = getEntry(row);
+        if (e == null) return "";
         if (col < FIXED_COLUMNS) return switch (col) {
             case 0 -> row + 1;
             case 1 -> e.timestamp() != null ? tsFmt.format(e.timestamp()) : "";
@@ -351,5 +382,44 @@ public final class LogTableModel extends AbstractTableModel {
         };
         Map<String, String> fields = e.fields();
         return fields != null ? fields.getOrDefault(customFields.get(col - FIXED_COLUMNS), "") : "";
+    }
+
+    /** A growable list of ascending ints: 4 bytes a row, and a cheap drop-from-front. */
+    static final class IntList {
+        private int[] data = new int[64];
+        private int start = 0;
+        private int size = 0;
+
+        int size() { return size; }
+
+        int get(int i) { return data[start + i]; }
+
+        void add(int value) {
+            if (start + size == data.length) {
+                int capacity = size * 2 > data.length ? size * 2 : data.length;
+                int[] grown = new int[Math.max(64, capacity)];
+                System.arraycopy(data, start, grown, 0, size);
+                data = grown;
+                start = 0;
+            }
+            data[start + size++] = value;
+        }
+
+        void removeFirst(int n) {
+            start += n;
+            size  -= n;
+        }
+
+        /** How many leading values are below {@code value}. */
+        int countBelow(int value) {
+            int i = Arrays.binarySearch(data, start, start + size, value);
+            return (i >= 0 ? i : -i - 1) - start;
+        }
+
+        /** Index of {@code value}, or -1. */
+        int binarySearch(int value) {
+            int i = Arrays.binarySearch(data, start, start + size, value);
+            return i >= 0 ? i - start : -1;
+        }
     }
 }

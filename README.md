@@ -133,7 +133,8 @@ Default Logback console format. Two variants are supported:
 - Annotated rows show a ✎ indicator in the `#` column in amber.
 - The note appears at the top of the detail panel when the row is selected.
 - Open **Annotations** (`Ctrl+Shift+N`) or right-click → **View All Notes…** to see every annotation in a floating window. Click any row to jump straight to that log line.
-- Annotations are saved to a `.annotations` sidecar file next to the log (e.g. `app.log.annotations`). Share it with colleagues — they place it next to the same log file and all notes load automatically.
+- Annotations are saved to a `.annotations` sidecar file next to the log (e.g. `app.log.annotations`). Share it with colleagues — they place it next to the same log file and all notes load automatically. If the log's folder is read-only, notes are saved in the `annotations` folder of the [data directory](#data-directory) instead.
+- Each note stays on the line it was written on, even when the same text appears on many lines, and follows that line if lines are added above it.
 
 **Table context menu** — right-click anywhere in the log table to:
 - **Reload File** — re-read the file from scratch (clears the table and re-parses from the beginning).

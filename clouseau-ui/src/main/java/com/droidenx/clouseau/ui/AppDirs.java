@@ -25,6 +25,9 @@ public final class AppDirs {
     /** Returns the resolved data directory. Always the same value for a given JVM run. */
     public static Path dataDir() { return DATA_DIR; }
 
+    /** Where annotations go when a log's own folder can't be written (D-9). */
+    public static Path annotationsDir() { return DATA_DIR.resolve("annotations"); }
+
     /** {@code true} when data lives next to the install (Windows jpackage image). */
     public static boolean isPortable() { return findInstallRoot() != null; }
 

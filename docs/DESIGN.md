@@ -40,7 +40,8 @@ clouseau-ui ─────────────┐   MainFrame, tabs, LogPan
    │               clouseau-plugin   ClouseauPluginManager (PF4J wrapper)
    │                     │
    ▼                     │
-clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, SshLogSource, SourceSettings, …
+clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, SshLogSource, SourceSettings,
+                             AnnotationStore, …
    │
    ▼
 clouseau-api                 LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
@@ -251,10 +252,26 @@ formatters and highlighters on or off.
 
 ### 6.6 Annotations (UC-7 to UC-9)
 
-`AnnotationStore` holds the annotations for one file, keyed by the first 16 hex
-characters of the SHA-256 of the line's `rawLine`. Each annotation records its note,
-author (defaulting to the OS user name), and date. The store is saved as JSON to the
-sidecar `<logfile>.annotations` after every change and loaded when the file is opened.
+`AnnotationStore` (core) holds the annotations for one file. Each records its note,
+author (defaulting to the OS user name) and date, plus two anchors (D-9): the entry
+number (the 1-based position of the entry in the file, blank lines not counted) and the
+first 16 hex characters of the SHA-256 of the line's `rawLine`.
+
+- **Ordinals:** `LogTableModel` gives every entry a 0-based ordinal, its position in the
+  source, which doesn't change when old live entries are dropped. Visible rows are kept
+  as a sorted list of ordinals, so row to ordinal and ordinal to row are cheap. The
+  store is keyed by ordinal.
+- **Loading:** The load worker reads the sidecar first. If it has annotations, the
+  worker hashes each line as it reads it (only then) and attaches each annotation: to
+  its own entry if the hash still matches there, otherwise to the nearest free entry
+  with the same hash. Annotations that match nothing are kept as orphans, listed last
+  in the annotations panel and written back on save, so they're never lost.
+- **Saving:** After every change, through a temp file and a rename, to
+  `<logfile>.annotations` next to the log. If that fails, it saves to
+  `<data>/annotations/<hash of the log's path>.annotations` and stays there. When both
+  exist, the newer one is read. If neither can be written, the tab warns once and keeps
+  the notes in memory.
+- SSH and plugin-source tabs have an in-memory store.
 
 ### 6.7 Plugin lifecycle (UC-11)
 
@@ -288,6 +305,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
 | `<logfile>.annotations` | **Next to the log, not in the data folder.** Annotations for that file. |
+| `annotations/` | Annotations for logs whose own folder is read-only, named after a hash of the log's path (D-9). |
 
 **Rules:**
 
@@ -358,7 +376,7 @@ a temporary file in the data folder. Live sessions keep the current in-memory mo
 its limit. Until this exists, a file that can't be fully loaded must produce a clear
 warning (UC-1). The details need a design pass before implementation.
 
-### D-9 · Annotations anchored by line number and content · Accepted
+### D-9 · Annotations anchored by line number and content · Adopted
 
 Each annotation stores both its line number and its line's content hash. On load, it
 attaches to the line at that number if the hash matches there; otherwise it falls back to
@@ -368,6 +386,11 @@ fallback.
 
 If the log's folder is not writable, the sidecar goes in `<data>/annotations/`, named
 after a hash of the log's absolute path.
+
+The "line number" is the entry number: blank lines are skipped when reading, so they
+aren't counted. It is stable for an unchanged file, which is all the anchor needs. When
+lines are inserted above a group of identical lines, a note can move to a different one
+of them; the content still matches, so this is accepted. Details in section 6.6.
 
 ### D-10 · Review bundle · Accepted
 
@@ -502,6 +525,5 @@ Remove an entry once it's fixed.
 | **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |
 | **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
 | **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. The zip picker in UC-12 will close this. |
-| **G-8** | Annotations are keyed by content hash only, and saving fails silently if the log's folder is read-only. | Contradicts D-9 and UC-7. |
 | **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |
 | **G-10** | Row highlights live only in memory. | They're lost when the tab closes and can't be shared. Whether they should be persisted or bundled like annotations is undecided. |

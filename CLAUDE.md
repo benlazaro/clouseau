@@ -23,7 +23,7 @@ as the code.
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
                     LogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
 clouseau-core     ← UI-independent engine: RegexLogParser, FileTail, Utf8Bom, MemoryGuard,
-                    ParserList, SshLogSource, SshConfig, SourceSettings
+                    ParserList, SshLogSource, SshConfig, SourceSettings, AnnotationStore
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -95,8 +95,10 @@ tags.
 - `LogPanel` (ui) — one tab: loading, tailing, table, filters, detail panel, annotations.
 - `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row
   highlights, and the per-tab entry limit.
-- `FilterBar`, `AnnotationStore`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`,
-  `AppDirs` (ui) — filters, annotation sidecars, parser editor, themes, settings, data folder.
+- `AnnotationStore` (core) — annotations for one file, anchored by entry number and content
+  hash (D-9); saved next to the log, or in `<data>/annotations/` if that fails.
+- `FilterBar`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`, `AppDirs` (ui) — filters,
+  parser editor, themes, settings, data folder.
 
 ## Coding conventions
 

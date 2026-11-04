@@ -103,6 +103,47 @@ class LogTableModelTest {
         assertThat(model.getTotalCount()).isEqualTo(100);   // back to the plain limit
     }
 
+    @Test
+    void ordinalsSurviveTrimming() {
+        model.appendLive(entries(120));   // 20 dropped
+
+        assertThat(model.ordinalAt(0)).isEqualTo(20);
+        assertThat(model.entryAtOrdinal(20).message()).isEqualTo("line 20");
+        assertThat(model.entryAtOrdinal(19)).isNull();
+        assertThat(model.rowOfOrdinal(25)).isEqualTo(5);
+        assertThat(model.nextOrdinal()).isEqualTo(120);
+    }
+
+    @Test
+    void highlightsFollowTheirEntryAndGoWhenItIsDropped() {
+        model.appendLive(entries(100));
+        model.setHighlight(10, java.awt.Color.RED);   // ordinal 10
+        model.setHighlight(50, java.awt.Color.BLUE);  // ordinal 50
+
+        model.appendLive(entries(20));                // ordinals 0..19 dropped
+
+        assertThat(model.getHighlight(model.rowOfOrdinal(50))).isEqualTo(java.awt.Color.BLUE);
+        assertThat(model.getHighlightedModelRows(null)).containsExactly(30);
+        model.appendLive(entries(40));                // ordinal 50 dropped too
+        assertThat(model.hasHighlights()).isFalse();
+    }
+
+    @Test
+    void filteredRowsMapBackToOrdinals() throws Exception {
+        model.appendBatch(entries(10));
+        model.applyFilter(e -> e.message().endsWith("5") || e.message().endsWith("7"));
+        // The filter runs on a background thread and posts its result to the EDT.
+        for (int i = 0; i < 50 && model.getRowCount() != 2; i++) {
+            Thread.sleep(20);
+            drainEdt();
+        }
+
+        assertThat(model.getRowCount()).isEqualTo(2);
+        assertThat(model.ordinalAt(1)).isEqualTo(7);
+        assertThat(model.rowOfOrdinal(5)).isZero();
+        assertThat(model.rowOfOrdinal(6)).isEqualTo(-1);
+    }
+
     private static void drainEdt() {
         try {
             javax.swing.SwingUtilities.invokeAndWait(() -> {});

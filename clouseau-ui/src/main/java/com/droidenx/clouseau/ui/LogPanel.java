@@ -6,6 +6,7 @@ import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.core.AnnotationStore;
 import com.droidenx.clouseau.core.FileTail;
 import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.Utf8Bom;
@@ -91,7 +92,9 @@ public final class LogPanel extends JPanel {
     /** Lines read between heap checks while loading a static file. */
     private static final int MEMORY_CHECK_INTERVAL = 10_000;
     private final java.util.Set<String> disabledFormatters = new java.util.HashSet<>();
-    private AnnotationStore  annotationStore   = AnnotationStore.empty();
+    private AnnotationStore  annotationStore   = AnnotationStore.inMemory();
+    /** True once this tab has told the user its annotations couldn't be saved. */
+    private boolean          annotationSaveWarned;
     private JDialog          annotationsDialog;
     private AnnotationsPanel annotationsPanel;
     private JPanel syntaxHighlightPanel;
@@ -228,6 +231,8 @@ public final class LogPanel extends JPanel {
         SwingWorker<?, ?> old = currentWorker;
         if (old != null) old.cancel(true);
         loading = true;
+        annotationStore = AnnotationStore.inMemory();
+        annotationSaveWarned = false;
         partialLoad = false;
         logTableModel.clear();
         filterBar.clearLoggers();
@@ -245,9 +250,13 @@ public final class LogPanel extends JPanel {
         SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
             /** Lines read before loading stopped for lack of memory, or -1 if it didn't. */
             volatile long stoppedAtLine = -1;
+            /** Annotations read and anchored by the worker; handed to the tab in done(). */
+            volatile AnnotationStore loadedAnnotations;
 
             @Override
             protected Void doInBackground() throws Exception {
+                AnnotationStore annotations = AnnotationStore.load(file.toAbsolutePath(), AppDirs.annotationsDir());
+                AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
                 try (BufferedReader reader = openReader(file)) {
                     String line;
                     long lineNo = 0;
@@ -269,9 +278,12 @@ public final class LogPanel extends JPanel {
                                       null, LogEntry.LogLevel.UNKNOWN,
                                       null, null,
                                       candidate, candidate, Map.of()));
+                        if (anchoring != null) anchoring.accept(entry.rawLine());
                         publish(correctTimezone(entry, srcTz));
                     }
                 }
+                if (anchoring != null) anchoring.finish();
+                loadedAnnotations = annotations;
                 return null;
             }
 
@@ -290,9 +302,9 @@ public final class LogPanel extends JPanel {
                 if (isCancelled()) return;
                 try {
                     get();
+                    if (loadedAnnotations != null) annotationStore = loadedAnnotations;
                     autoResizeColumns();
                     applyDefaultLayoutIfSet();
-                    annotationStore = AnnotationStore.forFile(currentFile);
                     logTable.repaint();
                     if (stoppedAtLine >= 0) {
                         // Partial content: following would append after a gap, so don't.
@@ -356,6 +368,7 @@ public final class LogPanel extends JPanel {
         statusBarPathLabel.setToolTipText(name);
         cancelLoad();   // closes any prior source, cancels in-flight workers
         partialLoad = false;
+        annotationStore = AnnotationStore.inMemory();
 
         logTableModel.clear();
         filterBar.clearLoggers();
@@ -730,8 +743,9 @@ public final class LogPanel extends JPanel {
             public Component getTableCellRendererComponent(
                     JTable t, Object v, boolean sel, boolean foc, int r, int c) {
                 super.getTableCellRendererComponent(t, v, sel, foc, r, c);
-                LogEntry entry = logTableModel.getEntry(logTable.convertRowIndexToModel(r));
-                Color hl = logTableModel.getHighlight(entry);
+                int rowModel = logTable.convertRowIndexToModel(r);
+                LogEntry entry = logTableModel.getEntry(rowModel);
+                Color hl = logTableModel.getHighlight(rowModel);
                 boolean hlSel = hl != null && sel;
 
                 // Background
@@ -773,8 +787,7 @@ public final class LogPanel extends JPanel {
                 setFont(getFont().deriveFont(sel || isLevel ? Font.BOLD : Font.PLAIN));
 
                 // Annotation indicator in the # column
-                if (modelCol == 0 && entry != null && entry.rawLine() != null
-                        && annotationStore.hasAnnotation(AnnotationStore.hashOf(entry.rawLine()))) {
+                if (modelCol == 0 && annotationStore.has(logTableModel.ordinalAt(rowModel))) {
                     setText("\u270e " + getText());
                     if (!sel) setForeground(ClouseauColors.annotationIndicatorColor());
                 }
@@ -891,15 +904,15 @@ public final class LogPanel extends JPanel {
             private void maybeShowTableMenu(MouseEvent e) {
                 if (!e.isPopupTrigger()) return;
                 int viewRow = logTable.rowAtPoint(e.getPoint());
-                List<LogEntry> entries = new ArrayList<>();
+                List<Integer> modelRows = new ArrayList<>();
                 if (viewRow >= 0) {
                     if (!logTable.isRowSelected(viewRow)) logTable.setRowSelectionInterval(viewRow, viewRow);
                     for (int vr : logTable.getSelectedRows()) {
-                        LogEntry entry = logTableModel.getEntry(logTable.convertRowIndexToModel(vr));
-                        if (entry != null) entries.add(entry);
+                        int mr = logTable.convertRowIndexToModel(vr);
+                        if (logTableModel.getEntry(mr) != null) modelRows.add(mr);
                     }
                 }
-                showHighlightMenu(entries, e.getX(), e.getY());
+                showHighlightMenu(modelRows, e.getX(), e.getY());
             }
         });
 
@@ -933,6 +946,11 @@ public final class LogPanel extends JPanel {
             for (int row = 0; row < sampleSize; row++) {
                 Component rc = logTable.prepareRenderer(logTable.getCellRenderer(row, col), row, col);
                 maxWidth = Math.max(maxWidth, rc.getPreferredSize().width);
+            }
+            if (logTable.getColumnModel().getColumn(col).getModelIndex() == 0) {
+                // Room for the note marker on any row, not just the sampled ones.
+                FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
+                maxWidth = Math.max(maxWidth, fm.stringWidth("✎ " + logTable.getRowCount()) + 16);
             }
             maxWidth += 8;
             logTable.getColumnModel().getColumn(col).setPreferredWidth(maxWidth);
@@ -1138,8 +1156,8 @@ public final class LogPanel extends JPanel {
 
     // ── Highlight menu ────────────────────────────────────────────────────────
 
-    private void showHighlightMenu(List<LogEntry> entries, int x, int y) {
-        boolean anyHighlighted = entries.stream().anyMatch(e -> logTableModel.getHighlight(e) != null);
+    private void showHighlightMenu(List<Integer> entries, int x, int y) {
+        boolean anyHighlighted = entries.stream().anyMatch(r -> logTableModel.getHighlight(r) != null);
 
         JPopupMenu menu = new JPopupMenu();
 
@@ -1147,7 +1165,7 @@ public final class LogPanel extends JPanel {
             JPanel swatches = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
             swatches.setOpaque(false);
             for (Color color : ClouseauColors.highlightColors()) {
-                boolean allMatch = entries.stream().allMatch(e -> color.equals(logTableModel.getHighlight(e)));
+                boolean allMatch = entries.stream().allMatch(r -> color.equals(logTableModel.getHighlight(r)));
                 JButton swatch = new JButton() {
                     @Override protected void paintComponent(Graphics g) {
                         Graphics2D g2 = (Graphics2D) g.create();
@@ -1167,7 +1185,7 @@ public final class LogPanel extends JPanel {
                 swatch.setContentAreaFilled(false);
                 swatch.setFocusPainted(false);
                 swatch.addActionListener(e -> {
-                    entries.forEach(entry -> logTableModel.setHighlight(entry, color));
+                    entries.forEach(r -> logTableModel.setHighlight(r, color));
                     menu.setVisible(false);
                     refreshDetailAfterHighlight();
                 });
@@ -1181,7 +1199,7 @@ public final class LogPanel extends JPanel {
             JMenuItem clearItem = new JMenuItem(Messages.get("highlight.clear"));
             if (anyHighlighted) {
                 clearItem.addActionListener(e -> {
-                    entries.forEach(entry -> logTableModel.setHighlight(entry, null));
+                    entries.forEach(r -> logTableModel.setHighlight(r, null));
                     refreshDetailAfterHighlight();
                 });
             } else {
@@ -1215,21 +1233,21 @@ public final class LogPanel extends JPanel {
 
         // ── Annotation section ────────────────────────────────────────────────
         if (entries.size() == 1) {
-            LogEntry annotationTarget = entries.get(0);
-            String hash = annotationTarget.rawLine() != null
-                    ? AnnotationStore.hashOf(annotationTarget.rawLine()) : null;
-            AnnotationStore.Annotation existing = hash != null ? annotationStore.get(hash) : null;
+            int targetRow = entries.get(0);
+            int ordinal = logTableModel.ordinalAt(targetRow);
+            LogEntry annotationTarget = logTableModel.getEntry(targetRow);
+            AnnotationStore.Annotation existing = annotationStore.at(ordinal);
 
             JMenuItem addEditItem = new JMenuItem(
                     existing != null ? Messages.get("annotation.edit") : Messages.get("annotation.add"));
-            addEditItem.addActionListener(e -> showAnnotationDialog(annotationTarget, hash, existing));
+            addEditItem.addActionListener(e -> showAnnotationDialog(annotationTarget, ordinal, existing));
             menu.add(addEditItem);
 
             JMenuItem removeItem = new JMenuItem(Messages.get("annotation.remove"));
             removeItem.setEnabled(existing != null);
             if (existing != null) {
                 removeItem.addActionListener(e -> {
-                    annotationStore.remove(hash);
+                    warnIfAnnotationsNotSaved(annotationStore.remove(ordinal));
                     logTable.repaint();
                     refreshDetail();
                 });
@@ -1266,15 +1284,15 @@ public final class LogPanel extends JPanel {
         refreshHighlightNav();
     }
 
-    private void showAnnotationDialog(LogEntry entry, String hash, AnnotationStore.Annotation existing) {
-        if (hash == null) return;
+    private void showAnnotationDialog(LogEntry entry, int ordinal, AnnotationStore.Annotation existing) {
+        if (entry == null || ordinal < 0) return;
         AnnotationDialog dlg = new AnnotationDialog(SwingUtilities.getWindowAncestor(this), existing);
         dlg.setVisible(true);
         if (!dlg.isConfirmed()) return;
         String note   = dlg.getNote();
         String author = dlg.getAuthor();
         if (note.isEmpty()) {
-            annotationStore.remove(hash);
+            warnIfAnnotationsNotSaved(annotationStore.remove(ordinal));
         } else {
             String ts      = entry.timestamp() != null ? entry.timestamp().toString() : "";
             String preview = entry.message()   != null
@@ -1282,14 +1300,29 @@ public final class LogPanel extends JPanel {
                     : entry.rawLine() != null
                     ? entry.rawLine().substring(0, Math.min(80, entry.rawLine().length()))
                     : "";
-            annotationStore.put(new AnnotationStore.Annotation(
-                    hash, ts, preview, note, author,
-                    java.time.Instant.now().toString()));
+            warnIfAnnotationsNotSaved(annotationStore.put(ordinal, new AnnotationStore.Annotation(
+                    AnnotationStore.hashOf(entry.rawLine()), null, ts, preview, note, author,
+                    java.time.Instant.now().toString())));
         }
         logTable.repaint();
         refreshDetail();
         if (annotationsPanel != null && annotationsDialog != null && annotationsDialog.isVisible())
             annotationsPanel.refresh();
+    }
+
+    /**
+     * Tells the user, once per opened file, that annotations couldn't be saved next to
+     * the log or in the data folder. They stay in memory until the tab closes.
+     */
+    void warnIfAnnotationsNotSaved(boolean saved) {
+        if (saved || annotationSaveWarned) return;
+        annotationSaveWarned = true;
+        JOptionPane.showMessageDialog(
+                SwingUtilities.getWindowAncestor(this),
+                java.text.MessageFormat.format(Messages.get("annotation.save.failed.message"),
+                        String.valueOf(annotationStore.getSavePath())),
+                Messages.get("annotation.save.failed.title"),
+                JOptionPane.WARNING_MESSAGE);
     }
 
     /** Opens (or brings to front) the non-modal annotations panel dialog. */
@@ -1299,7 +1332,7 @@ public final class LogPanel extends JPanel {
             annotationsPanel  = new AnnotationsPanel(
                     () -> annotationStore, logTableModel, logTable,
                     () -> annotationsDialog.setVisible(false),
-                    this::refreshDetail);
+                    saved -> { warnIfAnnotationsNotSaved(saved); refreshDetail(); });
             annotationsDialog = new JDialog(owner, Messages.get("annotations.dialog.title"),
                     java.awt.Dialog.ModalityType.MODELESS);
             annotationsDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -1891,7 +1924,7 @@ public final class LogPanel extends JPanel {
         String thread = entry.thread()    != null ? entry.thread()        : "";
         String logger = entry.logger()    != null ? entry.logger()        : "";
 
-        Color hl = logTableModel.getHighlight(entry);
+        Color hl = logTableModel.getHighlight(modelRow);
         if (hl != null) {
             SimpleAttributeSet swatchStyle = new SimpleAttributeSet();
             StyleConstants.setFontFamily(swatchStyle, Font.MONOSPACED);
@@ -1900,8 +1933,8 @@ public final class LogPanel extends JPanel {
             appendField(doc, key, swatchStyle, Messages.get("detail.highlight.label"), "\u2588\u2588\u2588\u2588\u2588\u2588");
         }
 
-        if (entry.rawLine() != null) {
-            AnnotationStore.Annotation annotation = annotationStore.get(AnnotationStore.hashOf(entry.rawLine()));
+        {
+            AnnotationStore.Annotation annotation = annotationStore.at(logTableModel.ordinalAt(modelRow));
             if (annotation != null) {
                 SimpleAttributeSet noteKey = new SimpleAttributeSet(key);
                 StyleConstants.setForeground(noteKey, ClouseauColors.annotationIndicatorColor());

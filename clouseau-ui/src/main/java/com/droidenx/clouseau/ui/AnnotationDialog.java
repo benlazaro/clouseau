@@ -2,6 +2,8 @@ package com.droidenx.clouseau.ui;
 
 import net.miginfocom.swing.MigLayout;
 
+import com.droidenx.clouseau.core.AnnotationStore;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyEvent;

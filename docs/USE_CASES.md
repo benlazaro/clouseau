@@ -153,7 +153,7 @@ limit protects live sessions only; it never applies to opening a static file (UC
 When following a file that was already larger than the limit, the tab keeps as many
 entries as it loaded, dropping one old entry per new one.
 
-### UC-7 · Annotate lines during an investigation 🟡
+### UC-7 · Annotate lines during an investigation ✅
 
 **Actor:** Field engineer
 **Goal:** Record what I noticed, right where I noticed it.
