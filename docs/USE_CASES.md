@@ -369,6 +369,30 @@ and logs stay just as readable in every theme.
 the theme manager is only reachable from there. There is no theme choice in the main
 window.
 
+### UC-15 · Work with several logs in tabs ✅
+
+**Actor:** Developer, Field engineer
+**Goal:** Keep several logs open at once and move between them easily, for example the
+logs from a ticket alongside my local one.
+
+1. Each file the user opens appears in its own tab.
+2. User switches between logs by clicking their tabs.
+3. User rearranges tabs by dragging one to a new position; a floating preview of the tab
+   follows the mouse while dragging.
+4. User closes a tab with its close button or `Ctrl+W`. Clouseau asks for confirmation
+   first, unless the user has turned that off with "Don't ask again".
+5. Right-clicking a tab offers per-tab actions, such as setting its source timezone or
+   applying a timezone to all tabs.
+
+**Success:** Juggling several logs never means losing track of which is which or
+opening the same file twice.
+
+**Rules:**
+- **One tab per file:** Opening a file that's already open switches to its existing tab
+  instead of opening a second copy.
+- **Tabs are independent:** Each tab keeps its own filters, follow mode, highlights,
+  column layout, and source timezone.
+
 ---
 
 ## 5. Quality goals
