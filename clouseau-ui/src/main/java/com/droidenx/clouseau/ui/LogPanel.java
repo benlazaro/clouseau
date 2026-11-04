@@ -7,6 +7,7 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.FileTail;
 import com.droidenx.clouseau.core.MemoryGuard;
+import com.droidenx.clouseau.core.Utf8Bom;
 import com.droidenx.clouseau.core.LogIndex;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -428,16 +429,18 @@ public final class LogPanel extends JPanel {
                 .onMalformedInput(CodingErrorAction.REPLACE)
                 .onUnmappableCharacter(CodingErrorAction.REPLACE);
         String name = file.getFileName().toString().toLowerCase();
+        java.io.InputStream in;
         if (name.endsWith(".gz")) {
-            return new BufferedReader(new InputStreamReader(
-                    new GZIPInputStream(Files.newInputStream(file)), decoder));
-        }
-        if (name.endsWith(".zip")) {
+            in = new GZIPInputStream(Files.newInputStream(file));
+        } else if (name.endsWith(".zip")) {
             ZipInputStream zis = new ZipInputStream(Files.newInputStream(file));
             zis.getNextEntry();
-            return new BufferedReader(new InputStreamReader(zis, decoder));
+            in = zis;
+        } else {
+            in = Files.newInputStream(file);
         }
-        return new BufferedReader(new InputStreamReader(Files.newInputStream(file), decoder));
+        // The BOM check is on the decompressed bytes, so a .gz of a BOM file works too.
+        return new BufferedReader(new InputStreamReader(Utf8Bom.skip(in), decoder));
     }
 
     private void startTailing() {

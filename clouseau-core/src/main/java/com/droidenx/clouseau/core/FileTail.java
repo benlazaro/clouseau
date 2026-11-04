@@ -17,6 +17,7 @@ import java.util.function.Consumer;
  * <p>Bytes are decoded as UTF-8 with malformed input replaced, matching how files are read
  * on initial load. Only complete lines (terminated by {@code \n}) are consumed: a trailing
  * line still being written is left for the next read, so it never becomes two entries.
+ * When reading from offset 0, a leading UTF-8 BOM is skipped (see {@link Utf8Bom}).
  */
 public final class FileTail {
 
@@ -35,9 +36,17 @@ public final class FileTail {
             channel.position(from);
 
             InputStream in = new BufferedInputStream(Channels.newInputStream(channel));
+            long start = from;
+            if (from == 0) {
+                // Start of file (first read, or after rotation): step over a UTF-8 BOM.
+                in.mark(Utf8Bom.LENGTH);
+                byte[] head = in.readNBytes(Utf8Bom.LENGTH);
+                if (Utf8Bom.isBom(head, head.length)) start = Utf8Bom.LENGTH;
+                else in.reset();
+            }
             ByteArrayOutputStream line = new ByteArrayOutputStream();
-            long offset = from;
-            long consumed = from;
+            long offset = start;
+            long consumed = start;
             int b;
             while ((b = in.read()) != -1) {
                 offset++;

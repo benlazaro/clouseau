@@ -22,7 +22,7 @@ as the code.
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
                     LogSource, LogFilter. No Swing, no implementation.
-clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, FileTail, MemoryGuard, LogIndex,
+clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, FileTail, Utf8Bom, MemoryGuard, LogIndex,
                     ClouseauEventBus
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
@@ -108,5 +108,5 @@ them without resolving that gap.
 - User-visible strings go in `messages.properties` and are read with `Messages.get(...)`.
 - New persistent files go in the data folder (`AppDirs.dataDir()`); credentials only
   through `CredentialStore`.
-- Read text files as UTF-8 with malformed input replaced (see `LogPanel.openReader` and
-  `FileTail`).
+- Read text files as UTF-8 with malformed input replaced and a leading BOM skipped
+  (see `LogPanel.openReader`, `FileTail` and `Utf8Bom`).

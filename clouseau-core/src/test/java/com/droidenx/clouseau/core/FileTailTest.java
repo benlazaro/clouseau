@@ -100,4 +100,47 @@ class FileTailTest {
         assertThat(FileTail.readAppendedLines(file, size, lines::add)).isEqualTo(size);
         assertThat(lines).isEmpty();
     }
+
+    private static final byte[] BOM = { (byte) 0xEF, (byte) 0xBB, (byte) 0xBF };
+
+    @Test
+    void skipsBomAtStartOfFile() throws IOException {
+        Path file = dir.resolve("app.log");
+        Files.write(file, BOM);
+        append(file, "first\nsecond\n".getBytes(StandardCharsets.UTF_8));
+        List<String> lines = new ArrayList<>();
+
+        long next = FileTail.readAppendedLines(file, 0, lines::add);
+
+        assertThat(lines).containsExactly("first", "second");
+        assertThat(next).isEqualTo(Files.size(file));
+    }
+
+    @Test
+    void bomOnlyFileHoldsItsPositionUntilALineArrives() throws IOException {
+        Path file = dir.resolve("app.log");
+        Files.write(file, BOM);
+        List<String> lines = new ArrayList<>();
+
+        long next = FileTail.readAppendedLines(file, 0, lines::add);
+        assertThat(lines).isEmpty();
+
+        append(file, "hello\n".getBytes(StandardCharsets.UTF_8));
+        FileTail.readAppendedLines(file, next, lines::add);
+        assertThat(lines).containsExactly("hello");
+    }
+
+    @Test
+    void bomBytesAfterOffsetZeroAreLeftAlone() throws IOException {
+        // Only the start of the file is checked; mid-file U+FEFF is data.
+        Path file = write("first\n");
+        long offset = Files.size(file);
+        append(file, BOM);
+        append(file, "second\n".getBytes(StandardCharsets.UTF_8));
+        List<String> lines = new ArrayList<>();
+
+        FileTail.readAppendedLines(file, offset, lines::add);
+
+        assertThat(lines).containsExactly("﻿second");
+    }
 }

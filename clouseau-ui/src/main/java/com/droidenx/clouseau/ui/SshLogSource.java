@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogSource;
+import com.droidenx.clouseau.core.Utf8Bom;
 import lombok.extern.slf4j.Slf4j;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
@@ -60,7 +61,7 @@ public class SshLogSource implements LogSource {
 
         log.info("SSH tail started: {}", config.displayName());
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
+                new InputStreamReader(Utf8Bom.skip(c.getInputStream()), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 lineConsumer.accept(line);

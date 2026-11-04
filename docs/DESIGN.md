@@ -168,7 +168,9 @@ can't handle.
 1. `LogPanel.load` clears the tab and starts a load worker.
 2. `openReader` picks the decoder from the file name: plain, `.gz` (`GZIPInputStream`),
    or `.zip` (`ZipInputStream`, **first entry only**). Bytes are decoded as UTF-8, with
-   malformed input replaced rather than failing.
+   malformed input replaced rather than failing. A leading UTF-8 byte-order mark (written
+   by PowerShell, Notepad and other Windows tools) is skipped with `Utf8Bom` (core), after
+   decompression, so it doesn't break the first line.
 3. For each non-blank line, the parser is either the one the user picked, or (with
    auto-detection) the first parser whose `canParse` accepts the line. Auto-detection
    happens **per line**, so a file mixing formats still parses.
@@ -187,7 +189,7 @@ can't handle.
 
 - **Local files:** The tail worker checks the file size every 500 ms and reads new bytes
   from the last position with `FileTail` (core). Like the initial load, it decodes UTF-8
-  with malformed input replaced. It only consumes complete lines: a line still being
+  with malformed input replaced, and skips a BOM when reading from offset 0. It only consumes complete lines: a line still being
   written is held back until its newline arrives, so it never becomes two entries. If the
   file shrinks, Clouseau treats it as rotated and reads from the start; existing rows are
   kept. Compressed files are never followed.

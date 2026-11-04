@@ -54,7 +54,7 @@ public final class FileLogSource implements LogSource {
                     .onMalformedInput(CodingErrorAction.REPLACE)
                     .onUnmappableCharacter(CodingErrorAction.REPLACE);
             try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(Files.newInputStream(file), decoder))) {
+                    new InputStreamReader(Utf8Bom.skip(Files.newInputStream(file)), decoder))) {
                 String line;
                 while ((line = reader.readLine()) != null
                         && !Thread.currentThread().isInterrupted()) {
