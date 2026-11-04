@@ -303,6 +303,7 @@ public final class LogPanel extends JPanel {
                 try {
                     get();
                     if (loadedAnnotations != null) annotationStore = loadedAnnotations;
+                    applySavedHighlights();
                     autoResizeColumns();
                     applyDefaultLayoutIfSet();
                     logTable.repaint();
@@ -1164,7 +1165,10 @@ public final class LogPanel extends JPanel {
         if (!entries.isEmpty()) {
             JPanel swatches = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
             swatches.setOpaque(false);
-            for (Color color : ClouseauColors.highlightColors()) {
+            Color[] palette = ClouseauColors.highlightColors();
+            for (int slotIndex = 0; slotIndex < palette.length; slotIndex++) {
+                final Color color = palette[slotIndex];
+                final int slot = slotIndex;
                 boolean allMatch = entries.stream().allMatch(r -> color.equals(logTableModel.getHighlight(r)));
                 JButton swatch = new JButton() {
                     @Override protected void paintComponent(Graphics g) {
@@ -1185,7 +1189,7 @@ public final class LogPanel extends JPanel {
                 swatch.setContentAreaFilled(false);
                 swatch.setFocusPainted(false);
                 swatch.addActionListener(e -> {
-                    entries.forEach(r -> logTableModel.setHighlight(r, color));
+                    setHighlights(entries, color, slot);
                     menu.setVisible(false);
                     refreshDetailAfterHighlight();
                 });
@@ -1199,7 +1203,7 @@ public final class LogPanel extends JPanel {
             JMenuItem clearItem = new JMenuItem(Messages.get("highlight.clear"));
             if (anyHighlighted) {
                 clearItem.addActionListener(e -> {
-                    entries.forEach(r -> logTableModel.setHighlight(r, null));
+                    setHighlights(entries, null, null);
                     refreshDetailAfterHighlight();
                 });
             } else {
@@ -1220,6 +1224,7 @@ public final class LogPanel extends JPanel {
                         if (confirm != JOptionPane.YES_OPTION) return;
                     }
                     logTableModel.clearAllHighlights();
+                    warnIfAnnotationsNotSaved(annotationStore.clearHighlights());
                     refreshDetailAfterHighlight();
                 });
             } else {
@@ -1275,6 +1280,27 @@ public final class LogPanel extends JPanel {
         menu.add(clearTableItem);
 
         menu.show(logTable, x, y);
+    }
+
+    /** Highlights model rows (null clears them) and saves them with the annotations (D-15). */
+    private void setHighlights(List<Integer> modelRows, Color color, Integer slot) {
+        Map<Integer, String> rawLines = new java.util.LinkedHashMap<>();
+        for (int r : modelRows) {
+            LogEntry entry = logTableModel.getEntry(r);
+            if (entry == null) continue;
+            logTableModel.setHighlight(r, color);
+            rawLines.put(logTableModel.ordinalAt(r), entry.rawLine());
+        }
+        warnIfAnnotationsNotSaved(annotationStore.setHighlights(rawLines, slot));
+    }
+
+    /** Shows the highlights saved with the file on the rows they attached to. */
+    private void applySavedHighlights() {
+        Color[] palette = ClouseauColors.highlightColors();
+        annotationStore.highlights().forEach((ord, slot) -> {
+            if (slot >= 0 && slot < palette.length) logTableModel.setHighlightAtOrdinal(ord, palette[slot]);
+        });
+        refreshHighlightNav();
     }
 
     private void refreshDetailAfterHighlight() {

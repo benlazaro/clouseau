@@ -112,7 +112,7 @@ Default Logback console format. Two variants are supported:
 2025-06-10T23:43:07.001-05:00  ERROR 31280 --- [demo] [http-nio-8080-exec-1] com.example.OrderService  : Order #4291 not found
 ```
 
-**Highlight rows** — right-click one or more rows and choose a colour. Use the highlight nav bar to jump between highlighted rows, filtered by colour.
+**Highlight rows** — right-click one or more rows and choose a colour. Use the highlight nav bar to jump between highlighted rows, filtered by colour. Highlights are saved in the same `.annotations` file as notes, so they come back when you reopen the log. A highlight stores its palette position, so it follows the theme of whoever opens it.
 
 **Filter** — use the level toggles, logger picker, time range, and message filter box. Filters combine (AND). Click **Clear All Filters** to reset all.
 - **Level solo** — Alt+click a level button to show only that level; Alt+click it again to restore all.

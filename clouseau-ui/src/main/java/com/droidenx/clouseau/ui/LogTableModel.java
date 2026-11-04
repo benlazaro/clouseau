@@ -111,6 +111,14 @@ public final class LogTableModel extends AbstractTableModel {
         fireTableRowsUpdated(modelRow, modelRow);
     }
 
+    /** Highlights the entry with this ordinal, if it is still held (used to restore saved highlights). */
+    public void setHighlightAtOrdinal(int ordinal, Color color) {
+        if (entryAtOrdinal(ordinal) == null) return;
+        highlights.put(ordinal, color);
+        int row = rowOfOrdinal(ordinal);
+        if (row >= 0) fireTableRowsUpdated(row, row);
+    }
+
     public void clearAllHighlights() {
         if (highlights.isEmpty()) return;
         highlights.clear();

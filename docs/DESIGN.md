@@ -252,7 +252,7 @@ formatters and highlighters on or off.
 
 ### 6.6 Annotations (UC-7 to UC-9)
 
-`AnnotationStore` (core) holds the annotations for one file. Each records its note,
+`AnnotationStore` (core) holds the annotations and row highlights for one file. Each records its note,
 author (defaulting to the OS user name) and date, plus two anchors (D-9): the entry
 number (the 1-based position of the entry in the file, blank lines not counted) and the
 first 16 hex characters of the SHA-256 of the line's `rawLine`.
@@ -271,6 +271,9 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   `<data>/annotations/<hash of the log's path>.annotations` and stays there. When both
   exist, the newer one is read. If neither can be written, the tab warns once and keeps
   the notes in memory.
+- **Highlights (D-15):** stored in the same sidecar under `highlights`, each with the
+  same two anchors and a palette slot (0–7) rather than an RGB color. After a load, the
+  attached ones are applied to the model; every highlight change saves the store.
 - SSH and plugin-source tabs have an in-memory store.
 
 ### 6.7 Plugin lifecycle (UC-11)
@@ -399,7 +402,7 @@ of them; the content still matches, so this is accepted. Details in section 6.6.
 ```
 manifest.json          format version, Clouseau version, original file name, export date
 <original file name>   the log, byte-for-byte (still .gz if it was)
-annotations.json       the annotations, same format as the sidecar
+annotations.json       the annotations and highlights, same format as the sidecar
 ```
 
 When opening a `.zip`, Clouseau checks for `manifest.json`. If it's there, the file is a
@@ -481,6 +484,16 @@ factory, `LogSourceProvider`, and the source itself stays a plain interface.
   it keeps its own form, but it streams through the same `LogPanel.loadSource` path.
   `SshLogSource` lives in `clouseau-core`.
 
+### D-15 · Highlights are saved with annotations · Adopted
+
+Row highlights are part of an investigation, like notes, so they're saved in the same
+sidecar and anchored the same way (D-9). They come back when the file is reopened and go
+into a review bundle (D-10) with the notes. Rejected: keeping them in memory only (lost
+on close), and saving them only in the data folder (private, so they can't be shared).
+
+A highlight stores its palette slot, not an RGB value: themes define the palette, so a
+colleague with another theme sees the same slots in their own colors.
+
 ## 10. Planned features
 
 Accepted in the use cases, with no design decision needed beyond the above:
@@ -526,4 +539,3 @@ Remove an entry once it's fixed.
 | **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
 | **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. The zip picker in UC-12 will close this. |
 | **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |
-| **G-10** | Row highlights live only in memory. | They're lost when the tab closes and can't be shared. Whether they should be persisted or bundled like annotations is undecided. |

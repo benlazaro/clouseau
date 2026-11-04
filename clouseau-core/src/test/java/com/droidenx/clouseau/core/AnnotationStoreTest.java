@@ -147,6 +147,47 @@ class AnnotationStoreTest {
     }
 
     @Test
+    void highlightsAreSavedAndAnchoredLikeNotes() throws IOException {
+        String[] lines = {"start", "retry", "retry", "retry"};
+        writeLog(lines);
+        AnnotationStore store = open(lines);
+        store.setHighlights(java.util.Map.of(1, "retry", 3, "retry"), 2);
+        store.put(1, note("retry", "same line as a highlight"));
+
+        AnnotationStore again = open(lines);
+
+        assertThat(again.highlights()).containsExactly(
+                java.util.Map.entry(1, 2), java.util.Map.entry(3, 2));
+        assertThat(again.at(1).note()).isEqualTo("same line as a highlight");
+    }
+
+    @Test
+    void clearingHighlightsKeepsNotesAndDropsOrphanHighlights() throws IOException {
+        writeLog("a", "b");
+        AnnotationStore store = open("a", "b");
+        store.setHighlights(java.util.Map.of(0, "a"), 0);
+        store.put(1, note("b", "note"));
+
+        AnnotationStore changed = open("x", "b");   // "a" is gone: its highlight is an orphan
+        assertThat(changed.highlights()).isEmpty();
+        changed.clearHighlights();
+
+        AnnotationStore again = open("a", "b");
+        assertThat(again.highlights()).isEmpty();
+        assertThat(again.at(1).note()).isEqualTo("note");
+    }
+
+    @Test
+    void settingANullSlotRemovesTheHighlight() throws IOException {
+        writeLog("a");
+        AnnotationStore store = open("a");
+        store.setHighlights(java.util.Map.of(0, "a"), 5);
+        store.setHighlights(java.util.Map.of(0, "a"), null);
+
+        assertThat(open("a").highlights()).isEmpty();
+    }
+
+    @Test
     void hashMatchesEarlierVersions() {
         // First 8 bytes of SHA-256("hello"), as the old UI store wrote them.
         assertThat(AnnotationStore.hashOf("hello")).isEqualTo("2cf24dba5fb0a30e");

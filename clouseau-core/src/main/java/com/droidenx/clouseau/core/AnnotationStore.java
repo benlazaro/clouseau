@@ -23,22 +23,24 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.BiConsumer;
 
 /**
- * The annotations of one log file (D-9).
+ * The annotations and row highlights of one log file (D-9, D-15).
  * <p>
- * Each annotation is anchored by its <em>entry number</em> (the 1-based position of the
- * entry in the file, blank lines not counted) and by a hash of the line's content. When
- * the file is read again, an annotation attaches to the entry at its number if the hash
- * matches there; otherwise to the nearest entry with a matching hash that isn't taken.
- * Annotations that match nothing are kept as orphans, so they're never lost.
+ * Each note and highlight is anchored by its <em>entry number</em> (the 1-based position
+ * of the entry in the file, blank lines not counted) and by a hash of the line's content.
+ * When the file is read again, it attaches to the entry at its number if the hash matches
+ * there; otherwise to the nearest entry with a matching hash that isn't taken. Ones that
+ * match nothing are kept as orphans, so they're never lost.
  * <p>
- * Annotations are saved to {@code <log>.annotations} next to the log. If that folder
- * can't be written, they go to {@code <fallbackDir>/<hash of the log's path>.annotations}
+ * Everything is saved to {@code <log>.annotations} next to the log. If that folder can't
+ * be written, it goes to {@code <fallbackDir>/<hash of the log's path>.annotations}
  * instead. On load, whichever of the two is newer wins.
  * <p>
  * Threading: {@link #load} and an {@link Anchoring} run on a background thread; once the
@@ -46,6 +48,12 @@ import java.util.TreeMap;
  */
 @Slf4j
 public final class AnnotationStore {
+
+    /** Something anchored to an entry. */
+    private interface Anchored {
+        String lineHash();
+        Integer line();
+    }
 
     /**
      * One note. {@code line} is the 1-based entry number (null in sidecars written before
@@ -59,9 +67,19 @@ public final class AnnotationStore {
             String note,
             String author,
             String createdAt
-    ) {
+    ) implements Anchored {
         Annotation atLine(int line) {
             return new Annotation(lineHash, line, logTimestamp, logPreview, note, author, createdAt);
+        }
+    }
+
+    /**
+     * One row highlight. {@code color} is a slot in the highlight palette, not an RGB
+     * value, so it follows the reader's theme.
+     */
+    public record Highlight(String lineHash, Integer line, int color) implements Anchored {
+        Highlight atLine(int line) {
+            return new Highlight(lineHash, line, color);
         }
     }
 
@@ -72,10 +90,12 @@ public final class AnnotationStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final char[] HEX = "0123456789abcdef".toCharArray();
 
-    /** Attached annotations, by 0-based entry ordinal. */
-    private final TreeMap<Integer, Annotation> byOrdinal = new TreeMap<>();
-    /** Annotations from the sidecar not attached to any entry (yet). */
-    private final List<Annotation> orphans = new ArrayList<>();
+    /** Attached notes and highlights, by 0-based entry ordinal. */
+    private final TreeMap<Integer, Annotation> byOrdinal  = new TreeMap<>();
+    private final TreeMap<Integer, Highlight>  highlights = new TreeMap<>();
+    /** Ones from the sidecar not attached to any entry (yet). */
+    private final List<Annotation> orphans          = new ArrayList<>();
+    private final List<Highlight>  orphanHighlights = new ArrayList<>();
 
     private final Path sidecar;
     private final Path fallback;
@@ -93,8 +113,8 @@ public final class AnnotationStore {
     }
 
     /**
-     * Reads the annotations of {@code logFile}. Every annotation starts as an orphan until
-     * an {@link Anchoring} attaches it. Does I/O: call off the UI thread.
+     * Reads the notes and highlights of {@code logFile}. Everything starts as an orphan
+     * until an {@link Anchoring} attaches it. Does I/O: call off the UI thread.
      *
      * @param fallbackDir where to save if the log's folder isn't writable; may be null
      */
@@ -106,9 +126,10 @@ public final class AnnotationStore {
         AnnotationStore store = new AnnotationStore(sidecar, fallback);
         Path source = newer(sidecar, fallback);
         if (source != null) {
-            store.orphans.addAll(read(source));
+            store.read(source);
             store.savePath = source;
-            log.debug("Loaded {} annotation(s) from {}", store.orphans.size(), source);
+            log.debug("Loaded {} annotation(s) and {} highlight(s) from {}",
+                    store.orphans.size(), store.orphanHighlights.size(), source);
         }
         return store;
     }
@@ -126,32 +147,38 @@ public final class AnnotationStore {
         return hasA ? a : hasB ? b : null;
     }
 
-    private static List<Annotation> read(Path file) {
-        List<Annotation> result = new ArrayList<>();
+    private void read(Path file) {
         try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             JsonElement root = JsonParser.parseReader(r);
-            if (!root.isJsonObject()) return result;
-            JsonArray arr = root.getAsJsonObject().getAsJsonArray("annotations");
-            if (arr == null) return result;
-            for (JsonElement el : arr) {
-                Annotation a = GSON.fromJson(el, Annotation.class);
-                if (a != null && a.lineHash() != null) result.add(a);
+            if (!root.isJsonObject()) return;
+            JsonArray notes = root.getAsJsonObject().getAsJsonArray("annotations");
+            if (notes != null) {
+                for (JsonElement el : notes) {
+                    Annotation a = GSON.fromJson(el, Annotation.class);
+                    if (a != null && a.lineHash() != null) orphans.add(a);
+                }
+            }
+            JsonArray marks = root.getAsJsonObject().getAsJsonArray("highlights");
+            if (marks != null) {
+                for (JsonElement el : marks) {
+                    Highlight h = GSON.fromJson(el, Highlight.class);
+                    if (h != null && h.lineHash() != null) orphanHighlights.add(h);
+                }
             }
         } catch (Exception e) {
             log.warn("Could not read annotations from {}", file, e);
         }
-        return result;
     }
 
     // ── Anchoring ────────────────────────────────────────────────────────────
 
     /**
-     * Starts attaching the loaded annotations to entries. Feed it every entry's raw line
-     * in file order, then call {@link Anchoring#finish()}. Returns null when there is
-     * nothing to attach, so callers can skip hashing lines.
+     * Starts attaching the loaded notes and highlights to entries. Feed it every entry's
+     * raw line in file order, then call {@link Anchoring#finish()}. Returns null when
+     * there is nothing to attach, so callers can skip hashing lines.
      */
     public Anchoring startAnchoring() {
-        return orphans.isEmpty() ? null : new Anchoring();
+        return orphans.isEmpty() && orphanHighlights.isEmpty() ? null : new Anchoring();
     }
 
     /** Collects where each wanted hash occurs while a file is read. Not thread-safe. */
@@ -162,6 +189,7 @@ public final class AnnotationStore {
 
         private Anchoring() {
             for (Annotation a : orphans) wanted.add(a.lineHash());
+            for (Highlight h : orphanHighlights) wanted.add(h.lineHash());
         }
 
         /** The raw line of the next entry (ordinal 0, 1, 2, …). */
@@ -171,44 +199,55 @@ public final class AnnotationStore {
             ordinal++;
         }
 
-        /** Attaches what it can. Unmatched annotations stay orphans. */
+        /** Attaches what it can. Anything unmatched stays an orphan. */
         public void finish() {
-            Set<Integer> taken = new HashSet<>();
-            List<Annotation> pending = new ArrayList<>(orphans);
+            List<Annotation> notes = new ArrayList<>(orphans);
             orphans.clear();
+            attach(notes, found, (ord, a) -> byOrdinal.put(ord, a.atLine(ord + 1)), orphans::add);
 
-            // First pass: annotations whose own entry still has the same content.
-            List<Annotation> moved = new ArrayList<>();
-            for (Annotation a : pending) {
-                List<Integer> at = found.getOrDefault(a.lineHash(), List.of());
-                Integer want = a.line() != null ? a.line() - 1 : null;
-                if (want != null && Collections.binarySearch(at, want) >= 0 && taken.add(want)) {
-                    byOrdinal.put(want, a);
-                } else {
-                    moved.add(a);
-                }
+            List<Highlight> marks = new ArrayList<>(orphanHighlights);
+            orphanHighlights.clear();
+            attach(marks, found, (ord, h) -> highlights.put(ord, h.atLine(ord + 1)), orphanHighlights::add);
+        }
+    }
+
+    /**
+     * Places each item: on its own entry if the hash still matches there, else on the
+     * nearest free entry with the same hash, else nowhere. Each entry takes one item.
+     */
+    private static <T extends Anchored> void attach(List<T> items, Map<String, List<Integer>> found,
+                                                    BiConsumer<Integer, T> place,
+                                                    java.util.function.Consumer<T> orphan) {
+        Set<Integer> taken = new HashSet<>();
+        List<T> moved = new ArrayList<>();
+        for (T item : items) {
+            List<Integer> at = found.getOrDefault(item.lineHash(), List.of());
+            Integer want = item.line() != null ? item.line() - 1 : null;
+            if (want != null && Collections.binarySearch(at, want) >= 0 && taken.add(want)) {
+                place.accept(want, item);
+            } else {
+                moved.add(item);
             }
-            // Second pass: the nearest free entry with the same content.
-            moved.sort(Comparator.comparing(a -> a.line() == null ? Integer.MAX_VALUE : a.line()));
-            for (Annotation a : moved) {
-                List<Integer> at = found.getOrDefault(a.lineHash(), List.of());
-                int want = a.line() != null ? a.line() - 1 : 0;
-                Integer best = null;
-                for (int candidate : at) {
-                    if (taken.contains(candidate)) continue;
-                    if (best == null || Math.abs(candidate - want) < Math.abs(best - want)) best = candidate;
-                }
-                if (best != null) {
-                    taken.add(best);
-                    byOrdinal.put(best, a.atLine(best + 1));
-                } else {
-                    orphans.add(a);
-                }
+        }
+        moved.sort(Comparator.comparing(item -> item.line() == null ? Integer.MAX_VALUE : item.line()));
+        for (T item : moved) {
+            List<Integer> at = found.getOrDefault(item.lineHash(), List.of());
+            int want = item.line() != null ? item.line() - 1 : 0;
+            Integer best = null;
+            for (int candidate : at) {
+                if (taken.contains(candidate)) continue;
+                if (best == null || Math.abs(candidate - want) < Math.abs(best - want)) best = candidate;
+            }
+            if (best != null) {
+                taken.add(best);
+                place.accept(best, item);
+            } else {
+                orphan.accept(item);
             }
         }
     }
 
-    // ── Queries and edits (UI thread) ────────────────────────────────────────
+    // ── Notes (UI thread) ────────────────────────────────────────────────────
 
     public Annotation at(int ordinal) { return byOrdinal.get(ordinal); }
 
@@ -224,13 +263,14 @@ public final class AnnotationStore {
     /** Annotations that match no entry in the file as it is now. */
     public List<Annotation> orphans() { return List.copyOf(orphans); }
 
+    /** Number of notes, attached or not. */
     public int size() { return byOrdinal.size() + orphans.size(); }
 
     /**
      * Sets (or replaces) the annotation on the entry at {@code ordinal}, then saves.
      * The annotation's line number is set from the ordinal.
      *
-     * @return false if the annotations couldn't be saved anywhere
+     * @return false if the store couldn't be saved anywhere
      */
     public boolean put(int ordinal, Annotation annotation) {
         byOrdinal.put(ordinal, annotation.atLine(ordinal + 1));
@@ -247,21 +287,55 @@ public final class AnnotationStore {
         return !orphans.remove(annotation) || save();
     }
 
-    /** Where the annotations are (or will be) saved, or null for in-memory stores. */
-    public Path getSavePath() { return savePath; }
+    // ── Highlights (UI thread) ───────────────────────────────────────────────
 
-    /** True when the annotations are saved in the data folder, not next to the log. */
-    public boolean isUsingFallback() { return savePath != null && savePath.equals(fallback); }
+    /** Attached highlights: entry ordinal → palette slot, in entry order. */
+    public Map<Integer, Integer> highlights() {
+        Map<Integer, Integer> result = new LinkedHashMap<>();
+        highlights.forEach((ord, h) -> result.put(ord, h.color()));
+        return result;
+    }
+
+    /**
+     * Sets the highlights of several entries at once, then saves. A null slot clears the
+     * entry's highlight.
+     *
+     * @param rawLines the raw line of each entry, used for the content anchor
+     */
+    public boolean setHighlights(Map<Integer, String> rawLines, Integer slot) {
+        rawLines.forEach((ord, raw) -> {
+            if (slot == null) highlights.remove(ord);
+            else highlights.put(ord, new Highlight(hashOf(raw), ord + 1, slot));
+        });
+        return save();
+    }
+
+    /** Removes every highlight, including orphans, then saves. */
+    public boolean clearHighlights() {
+        if (highlights.isEmpty() && orphanHighlights.isEmpty()) return true;
+        highlights.clear();
+        orphanHighlights.clear();
+        return save();
+    }
 
     // ── Saving ───────────────────────────────────────────────────────────────
 
+    /** Where the store is (or will be) saved, or null for in-memory stores. */
+    public Path getSavePath() { return savePath; }
+
+    /** True when the store is saved in the data folder, not next to the log. */
+    public boolean isUsingFallback() { return savePath != null && savePath.equals(fallback); }
+
     private boolean save() {
         if (savePath == null) return true;
-        List<Annotation> all = new ArrayList<>(byOrdinal.values());
-        all.addAll(orphans);
+        List<Annotation> notes = new ArrayList<>(byOrdinal.values());
+        notes.addAll(orphans);
+        List<Highlight> marks = new ArrayList<>(highlights.values());
+        marks.addAll(orphanHighlights);
         JsonObject root = new JsonObject();
         root.addProperty("version", 2);
-        root.add("annotations", GSON.toJsonTree(all));
+        root.add("annotations", GSON.toJsonTree(notes));
+        if (!marks.isEmpty()) root.add("highlights", GSON.toJsonTree(marks));
         String json = GSON.toJson(root);
 
         if (write(savePath, json)) return true;
