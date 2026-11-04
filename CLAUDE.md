@@ -24,7 +24,7 @@ clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyn
                     LogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
 clouseau-core     ← UI-independent engine: RegexLogParser, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
-                    AnnotationStore
+                    AnnotationStore, ZipLogs
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped

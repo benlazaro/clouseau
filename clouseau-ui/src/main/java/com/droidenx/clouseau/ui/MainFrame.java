@@ -7,6 +7,7 @@ import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.ParserList;
 import com.droidenx.clouseau.core.SshLogSource;
+import com.droidenx.clouseau.core.ZipLogs;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.ui.theme.ThemeManager;
@@ -17,7 +18,9 @@ import net.miginfocom.swing.MigLayout;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.text.MessageFormat;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -342,9 +345,48 @@ public final class MainFrame extends JFrame {
     }
 
     private void openFile(Path file, Optional<LogParser> parser) {
+        if (file.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".zip")) {
+            openZip(file, parser);
+            return;
+        }
+        openLog(file, null, parser);
+    }
+
+    /**
+     * Opens the logs in a zip: the only file directly, or the ones the user picks, each in
+     * its own tab (G-6).
+     */
+    private void openZip(Path zip, Optional<LogParser> parser) {
+        List<ZipLogs.Entry> entries;
+        try {
+            entries = ZipLogs.list(zip);
+        } catch (IOException e) {
+            log.warn("Could not read zip {}", zip, e);
+            JOptionPane.showMessageDialog(this,
+                    MessageFormat.format(Messages.get("zip.error.read"), zip.getFileName(), e.getMessage()),
+                    Messages.get("filechooser.error.title"), JOptionPane.ERROR_MESSAGE);
+            AppPrefs.removeRecentFile(zip);
+            refreshRecentMenu();
+            return;
+        }
+        if (entries.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    MessageFormat.format(Messages.get("zip.error.empty"), zip.getFileName()),
+                    Messages.get("filechooser.error.title"), JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        List<ZipLogs.Entry> chosen = entries.size() == 1
+                ? entries
+                : new ZipPickerDialog(this, zip.getFileName().toString(), entries).showDialog();
+        for (ZipLogs.Entry entry : chosen) openLog(zip, entry.name(), parser);
+    }
+
+    /** Opens a log in a new tab, or selects the tab that already shows it. */
+    private void openLog(Path file, String zipEntry, Optional<LogParser> parser) {
         Path abs = file.toAbsolutePath();
         for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp && abs.equals(lp.getFile())) {
+            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp && abs.equals(lp.getFile())
+                    && java.util.Objects.equals(zipEntry, lp.getZipEntry())) {
                 tabbedPane.setSelectedIndex(i);
                 return;
             }
@@ -354,8 +396,10 @@ public final class MainFrame extends JFrame {
         LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
         ZoneId savedTz = AppPrefs.getSourceTimezone(abs);
         if (savedTz != null) panel.setSourceTimezone(savedTz);
-        addLogTab(file.getFileName().toString(), abs, panel);
-        panel.load(file, parser, () -> {
+        String title = zipEntry == null ? file.getFileName().toString()
+                : new ZipLogs.Entry(zipEntry, -1).fileName();
+        addLogTab(title, abs, panel);
+        panel.load(file, zipEntry, parser, () -> {
             AppPrefs.removeRecentFile(file);
             refreshRecentMenu();
             int idx = tabbedPane.indexOfComponent(panel);

@@ -82,7 +82,7 @@ memory: if a file is too big for the heap, Clouseau stops reading, warns the use
 the number of lines loaded and how to raise the memory limit, and marks the tab
 "partly loaded" in the status bar.
 
-### UC-2 · Open compressed logs directly 🟡
+### UC-2 · Open compressed logs directly ✅
 
 **Actor:** Field engineer, Developer
 **Goal:** Read a `.gz` or `.zip` attachment without extracting it first.

@@ -68,6 +68,23 @@ class OpenReaderTest {
     }
 
     @Test
+    void chosenZipEntry() throws IOException {
+        Path file = dir.resolve("two.zip");
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(file))) {
+            out.putNextEntry(new ZipEntry("a.log"));
+            out.write("from a\n".getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+            out.putNextEntry(new ZipEntry("b.log"));
+            out.write(BOM_TEXT);
+            out.closeEntry();
+        }
+
+        try (BufferedReader r = LogPanel.openReader(file, "b.log")) {
+            assertThat(r.readLine()).isEqualTo("2026-03-27 08:00:00.001 INFO first");
+        }
+    }
+
+    @Test
     void fileWithoutBomIsUnchanged() throws IOException {
         Path file = dir.resolve("plain.log");
         Files.writeString(file, "abc\n", StandardCharsets.UTF_8);

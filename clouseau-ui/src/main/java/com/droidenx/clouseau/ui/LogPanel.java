@@ -11,6 +11,7 @@ import com.droidenx.clouseau.core.FileChangeWatcher;
 import com.droidenx.clouseau.core.FileTail;
 import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.Utf8Bom;
+import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
@@ -84,6 +85,8 @@ public final class LogPanel extends JPanel {
     /** The live source streaming into this tab (SSH or a plugin), or null. */
     private volatile LogSource liveSource;
     private Path currentFile;
+    /** The file inside a .zip that this tab shows, or null for a plain file (G-6). */
+    private String currentEntry;
     private Optional<LogParser> currentParser = Optional.empty();
     private volatile long tailPosition = 0;
     private boolean follow  = AppPrefs.isFollowByDefault();
@@ -224,15 +227,29 @@ public final class LogPanel extends JPanel {
 
     public Path getFile() { return currentFile; }
 
+    /** The entry of the zip this tab shows, or null for a plain file. */
+    public String getZipEntry() { return currentEntry; }
+
     public void load(Path file, Optional<LogParser> parser) {
-        load(file, parser, () -> {});
+        load(file, null, parser, () -> {});
     }
 
     public void load(Path file, Optional<LogParser> parser, Runnable onError) {
+        load(file, null, parser, onError);
+    }
+
+    /**
+     * Loads a log. {@code entry} names a file inside the zip {@code file}, or is null for a
+     * plain (or .gz) file.
+     */
+    public void load(Path file, String entry, Optional<LogParser> parser, Runnable onError) {
         currentFile = file.toAbsolutePath();
+        currentEntry = entry;
         currentParser = parser;
-        statusBarPathLabel.setText(currentFile.toString());
-        statusBarPathLabel.setToolTipText(currentFile.toString());
+        String shown = entry == null ? currentFile.toString() : currentFile + " › " + entry;
+        statusBarPathLabel.setText(shown);
+        statusBarPathLabel.setToolTipText(shown);
+        final Path annotationKey = entry == null ? currentFile : ZipLogs.entryKey(currentFile, entry);
         stopTailing();
         SwingWorker<?, ?> old = currentWorker;
         if (old != null) old.cancel(true);
@@ -261,9 +278,9 @@ public final class LogPanel extends JPanel {
 
             @Override
             protected Void doInBackground() throws Exception {
-                AnnotationStore annotations = AnnotationStore.load(file.toAbsolutePath(), AppDirs.annotationsDir());
+                AnnotationStore annotations = AnnotationStore.load(annotationKey, AppDirs.annotationsDir());
                 AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
-                try (BufferedReader reader = openReader(file)) {
+                try (BufferedReader reader = openReader(file, entry)) {
                     String line;
                     long lineNo = 0;
                     while ((line = reader.readLine()) != null && !isCancelled()) {
@@ -343,7 +360,7 @@ public final class LogPanel extends JPanel {
     }
 
     public void reload() {
-        if (currentFile != null) load(currentFile, currentParser);
+        if (currentFile != null) load(currentFile, currentEntry, currentParser, () -> {});
     }
 
     public void cancelLoad() {
@@ -370,6 +387,7 @@ public final class LogPanel extends JPanel {
     public void loadSource(LogSource source, Optional<LogParser> parser) {
         String name = sourceName(source);
         currentFile   = null;
+        currentEntry  = null;
         currentParser = parser;
         statusBarPathLabel.setText(name);
         statusBarPathLabel.setToolTipText(name);
@@ -469,6 +487,11 @@ public final class LogPanel extends JPanel {
     }
 
     static BufferedReader openReader(Path file) throws IOException {
+        return openReader(file, null);
+    }
+
+    /** Opens a log for reading; {@code entry} picks a file inside a zip (null: the first one). */
+    static BufferedReader openReader(Path file, String entry) throws IOException {
         CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPLACE)
                 .onUnmappableCharacter(CodingErrorAction.REPLACE);
@@ -476,6 +499,8 @@ public final class LogPanel extends JPanel {
         java.io.InputStream in;
         if (name.endsWith(".gz")) {
             in = new GZIPInputStream(Files.newInputStream(file));
+        } else if (entry != null) {
+            in = ZipLogs.open(file, entry);
         } else if (name.endsWith(".zip")) {
             ZipInputStream zis = new ZipInputStream(Files.newInputStream(file));
             zis.getNextEntry();

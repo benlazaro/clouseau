@@ -41,7 +41,7 @@ clouseau-ui ─────────────┐   MainFrame, tabs, LogPan
    │                     │
    ▼                     │
 clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, FileChangeWatcher,
-                             SshLogSource, SourceSettings, AnnotationStore, …
+                             SshLogSource, SourceSettings, AnnotationStore, ZipLogs, …
    │
    ▼
 clouseau-api                 LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
@@ -183,9 +183,14 @@ refresh; open tabs keep the list they were created with.
 
 ### 6.2 Opening a file (UC-1, UC-2)
 
+0. **Zips:** `MainFrame` lists a `.zip`'s files with `ZipLogs` (core; names read as
+   UTF-8, else CP437). One file opens directly; for several, `ZipPickerDialog` lets the
+   user tick files (filter box, Select all), and each opens in its own tab as
+   `load(zip, entry, …)`. The tab keys its annotations to `ZipLogs.entryKey`,
+   `<zip>!<entry>` next to the zip.
 1. `LogPanel.load` clears the tab and starts a load worker.
 2. `openReader` picks the decoder from the file name: plain, `.gz` (`GZIPInputStream`),
-   or `.zip` (`ZipInputStream`, **first entry only**). Bytes are decoded as UTF-8, with
+   or one file of a `.zip` (`ZipLogs`, core). Bytes are decoded as UTF-8, with
    malformed input replaced rather than failing. A leading UTF-8 byte-order mark (written
    by PowerShell, Notepad and other Windows tools) is skipped with `Utf8Bom` (core), after
    decompression, so it doesn't break the first line.
@@ -541,5 +546,4 @@ Remove an entry once it's fixed.
 | ID | Gap | Impact |
 |---|---|---|
 | **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
-| **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. The zip picker in UC-12 will close this. |
 | **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |

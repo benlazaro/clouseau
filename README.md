@@ -26,7 +26,7 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 
 - **Large file support** — handles hundreds of thousands of log lines without breaking a sweat
 - **Multi-format parsing** — Log4j pattern, Spring Boot, JSON; auto-detected on open
-- **Compressed files** — open `.gz` and `.zip` files directly
+- **Compressed files** — open `.gz` and `.zip` files directly; for a zip with several logs, tick the ones you want and each opens in its own tab
 - **Row highlighting** — color-code rows for visual triage; navigate between highlights by color
 - **Filtering** — filter by level, logger, time range, and free-text message search (all columns)
 - **Follow mode** — tail a live file like `tail -f`; survives log rotation without losing existing rows
