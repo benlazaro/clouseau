@@ -185,8 +185,10 @@ can't handle.
   written is held back until its newline arrives, so it never becomes two entries. If the
   file shrinks, Clouseau treats it as rotated and reads from the start; existing rows are
   kept. Compressed files are never followed.
-- **SSH:** `SshLogSource` runs `tail -n <N> -f <path>` on the server over sshj and
-  receives lines as they're written. Nothing on the client polls.
+- **SSH:** `SshLogSource` runs `tail -n <N> -f -- '<path>'` on the server over sshj and
+  receives lines as they're written. Nothing on the client polls. The path is
+  single-quoted for a POSIX shell, so spaces and shell metacharacters are taken
+  literally; a leading `~/` is left unquoted so it still expands to the remote home.
 - **Memory bound:** `LogTableModel` keeps at most `max.entries.per.tab` entries (default
   200,000, range 10,000–2,000,000) and evicts the oldest, along with their highlights.
 
@@ -441,7 +443,6 @@ Remove an entry once it's fixed.
 | **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |
 | **G-5** | The entry limit applies to static files, and the default heap is 2 GB. | A large file silently loses its earliest lines. Contradicts D-7 and UC-1. |
 | **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. The zip picker in UC-12 will close this. |
-| **G-7** | `SshLogSource` builds the remote command by concatenating the path unquoted: `"tail ... -f " + remotePath`. | Paths with spaces fail; shell metacharacters in the path are executed by the remote shell. |
 | **G-8** | Annotations are keyed by content hash only, and saving fails silently if the log's folder is read-only. | Contradicts D-9 and UC-7. |
 | **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |
 | **G-10** | Row highlights live only in memory. | They're lost when the tab closes and can't be shared. Whether they should be persisted or bundled like annotations is undecided. |

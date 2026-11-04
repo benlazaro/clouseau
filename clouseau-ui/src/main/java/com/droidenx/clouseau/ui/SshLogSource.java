@@ -12,7 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
 /**
- * Streams a remote log file over SSH using {@code tail -n <lines> -f <path>}.
+ * Streams a remote log file over SSH using {@code tail -n <lines> -f -- '<path>'}
+ * (see {@link #tailCommand}).
  * Call {@link #close()} to disconnect and unblock the streaming thread.
  *
  * <p>Note: uses {@link PromiscuousVerifier} (trust all hosts). For production use,
@@ -54,7 +55,7 @@ public class SshLogSource implements LogSource {
 
         Session s = client.startSession();
         this.session = s;
-        Session.Command c = s.exec("tail -n " + TAIL_LINES + " -f " + config.remotePath());
+        Session.Command c = s.exec(tailCommand(config.remotePath()));
         this.cmd = c;
 
         log.info("SSH tail started: {}", config.displayName());
@@ -66,6 +67,30 @@ public class SshLogSource implements LogSource {
             }
         }
         log.info("SSH tail ended: {}", config.displayName());
+    }
+
+    /**
+     * Builds the remote {@code tail} command for {@code remotePath}, quoted so the remote
+     * POSIX shell treats the path as one literal argument: spaces don't split it and
+     * metacharacters ({@code ; $ ` | &} …) are not executed. {@code --} stops a path
+     * starting with {@code -} from being read as an option. A leading {@code ~/} is left
+     * unquoted so it still expands to the remote user's home directory.
+     */
+    static String tailCommand(String remotePath) {
+        String target;
+        if (remotePath.equals("~")) {
+            target = "~";
+        } else if (remotePath.startsWith("~/")) {
+            target = "~/" + shellQuote(remotePath.substring(2));
+        } else {
+            target = shellQuote(remotePath);
+        }
+        return "tail -n " + TAIL_LINES + " -f -- " + target;
+    }
+
+    /** Wraps {@code s} in single quotes, encoding each embedded {@code '} as {@code '\''}. */
+    static String shellQuote(String s) {
+        return "'" + s.replace("'", "'\\''") + "'";
     }
 
     private void authenticate(SSHClient client) throws Exception {
