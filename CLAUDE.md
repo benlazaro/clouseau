@@ -132,3 +132,14 @@ tags.
   through `CredentialStore`.
 - Read text files as UTF-8 with malformed input replaced and a leading BOM skipped
   (see `LogReaders`, `FileTail` and `Utf8Bom`).
+
+## Parallel sessions
+
+While the project has a single developer: when a request splits into **3 or more**
+independent pieces (none needs another's result, none touches the same files, none has to
+land in the same change), start each in its own worktree session without asking first.
+With fewer than 3 pieces, work here or propose sessions as usual.
+
+- Ask before merging those sessions' branches into this checkout, and never push them.
+- Only one Clouseau runs at a time (port 54823), so parallel sessions must not launch the
+  GUI. Do GUI checks in the main session after their branches are merged.
