@@ -378,6 +378,13 @@ produces a jpackage image with a bundled JRE, published as a **portable zip**. T
 heap is `-Xmx2g`. Icons and the splash image are pre-rendered at build time, so the
 runtime needs no SVG library.
 
+The native installers (`jpackage` task: exe, dmg, deb; local builds only for now) pass
+`--file-associations packaging/file-associations/log.properties`, registering `.log`
+only: `.gz` and `.zip` are general archives, and the Windows installer would make
+Clouseau their default program. The OS starts Clouseau with the file as an argument, and
+`SingleInstanceManager` forwards it to a running window. macOS instead sends an
+open-files event, which `ClouseauApp` handles with `Desktop.setOpenFileHandler`.
+
 ## 9. Decisions
 
 Short records of choices that shape the design. Status is **Adopted** (in the code),
@@ -751,9 +758,6 @@ removes that ceiling too.
 
 Accepted in the use cases, with no design decision needed beyond the above:
 
-- **File associations:** Register `.log` (and optionally `.gz`/`.zip`) with the
-  jpackage-based packages, so "Open with" and double-click work without manual setup.
-  The single-instance manager already routes the file to the running window.
 - **Plain-text view (UC-13):** When no parser recognizes any of the first 50 lines (the
   same sample the open dialog's preview uses), `LogPanel` shows a read-only text card
   instead of the table, reading through the same `LogReaders` path and following with

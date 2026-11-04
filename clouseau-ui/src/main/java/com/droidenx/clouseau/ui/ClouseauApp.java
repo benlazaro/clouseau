@@ -44,6 +44,9 @@ public final class ClouseauApp {
 
         // Use an array so the IPC lambda can capture the reference set later on the EDT.
         MainFrame[] frameRef = new MainFrame[1];
+        // Files the OS asked us to open before the window existed (EDT only).
+        List<Path> pendingOpens = new java.util.ArrayList<>();
+        installOpenFileHandler(frameRef, pendingOpens);
 
         if (splash != null) splash.setStatus("Starting...");
         boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePath ->
@@ -72,6 +75,8 @@ public final class ClouseauApp {
             Runnable show = () -> {
                 frame.setVisible(true);
                 for (String arg : args) frame.openFile(Path.of(arg));
+                pendingOpens.forEach(frame::openFile);
+                pendingOpens.clear();
             };
 
             if (splash != null) {
@@ -79,6 +84,25 @@ public final class ClouseauApp {
             } else {
                 show.run();
             }
+        });
+    }
+
+    /**
+     * On macOS, files opened from Finder through a file association (or dropped on the
+     * Dock icon) arrive as an "open files" event instead of command-line arguments.
+     * Other platforms don't support this action and pass files as arguments.
+     */
+    private static void installOpenFileHandler(MainFrame[] frameRef, List<Path> pending) {
+        if (!java.awt.Desktop.isDesktopSupported()) return;
+        java.awt.Desktop desktop = java.awt.Desktop.getDesktop();
+        if (!desktop.isSupported(java.awt.Desktop.Action.APP_OPEN_FILE)) return;
+        desktop.setOpenFileHandler(e -> {
+            List<Path> files = e.getFiles().stream().map(java.io.File::toPath).toList();
+            SwingUtilities.invokeLater(() -> {
+                MainFrame frame = frameRef[0];
+                if (frame != null && frame.isVisible()) files.forEach(frame::openFile);
+                else pending.addAll(files);
+            });
         });
     }
 

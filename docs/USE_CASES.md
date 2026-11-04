@@ -76,10 +76,12 @@ without manual configuration for common formats (Log4j, Logback/Spring Boot, JSO
 
 **Current behavior:** Files dragged onto the window open anywhere they're dropped (table,
 detail panel, filter bar, tab strip or welcome screen), each in its own tab with the
-parser auto-detected, as with "Open with"; folders are ignored. Files passed on the command line
-are opened (and forwarded to an already-running instance), so "Open with" works if the
-user picks the Clouseau launcher manually, but the packages don't register file
-associations. Static files are never trimmed by the entry limit. Every static file is
+parser auto-detected, as with "Open with"; folders are ignored. The native installers
+(Windows exe, macOS dmg, Linux deb) register `.log` files with Clouseau, so double-click
+and "Open with" work; `.gz` and `.zip` aren't claimed, since they're general archives.
+Releases publish only the portable zip, which registers nothing: there, "Open with" works
+if the user picks the Clouseau launcher manually. Either way the file goes to an
+already-running window if there is one. Static files are never trimmed by the entry limit. Every static file is
 indexed (D-16): the heap keeps about 29 bytes per line and text is read back from disk,
 so a 1M-line, 125 MB log uses under 50 MB of heap. Compressed files are indexed through
 an unpacked copy (UC-2). In the rare case the index itself fills the heap (tens of
