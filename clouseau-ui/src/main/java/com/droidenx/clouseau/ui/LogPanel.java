@@ -24,8 +24,6 @@ import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
 import javax.swing.border.Border;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import javax.swing.event.TableModelEvent;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.JTableHeader;
@@ -44,13 +42,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Self-contained panel representing one open log file tab.
@@ -109,12 +104,9 @@ public final class LogPanel extends JPanel {
     private boolean          annotationSaveWarned;
     private JDialog          annotationsDialog;
     private AnnotationsPanel annotationsPanel;
-    private Set<Integer>  searchMatchModelRows = Set.of();
-    private List<Integer> searchMatchList      = List.of();
-    private int           searchMatchCursor    = -1;
-    private JPanel        findBar;
-    private JTextField    findField;
-    private JLabel        findCounter;
+    /** Built after the table, which they act on; the renderer checks for null. */
+    private FindBar         findBar;
+    private HighlightNavBar highlightNavBar;
     private JPanel centerCards;
     private static final String CARD_CONTENT = "content";
     private static final String CARD_LOADING = "loading";
@@ -123,10 +115,6 @@ public final class LogPanel extends JPanel {
     private JLabel statusBarLabel;
     private JLabel statusBarPathLabel;
     private JLabel sourceTzLabel;
-    private JPanel highlightNavBar;
-    private JPanel highlightNavSwatches;
-    private JLabel highlightNavPosition;
-    private Color  highlightNavColor = null;
 
     public LogPanel(List<LogParser> parsers, List<LogFormatter> formatters, List<LogSyntaxHighlighter> syntaxHighlighters) {
         super(new MigLayout("fill, insets 0, gapy 0", "[grow]", ""));
@@ -158,11 +146,12 @@ public final class LogPanel extends JPanel {
         centerCards.add(buildLoadingPanel(), CARD_LOADING);
 
         statusBar = buildStatusBar();
-        findBar = buildFindBar();
+        findBar = new FindBar(logTable, logTableModel);
+        highlightNavBar = new HighlightNavBar(logTable, logTableModel);
 
         add(filterBar, "growx, wrap");
         add(findBar, "growx, wrap, hidemode 3");
-        add(buildHighlightNavBar(), "growx, wrap, hidemode 3");
+        add(highlightNavBar, "growx, wrap, hidemode 3");
         add(centerCards, "grow, pushy, wrap");
         add(statusBar, "growx");
 
@@ -175,7 +164,7 @@ public final class LogPanel extends JPanel {
         logTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 refreshDetail();
-                updateHighlightNavPosition();
+                highlightNavBar.updatePosition();
             }
         });
 
@@ -183,11 +172,7 @@ public final class LogPanel extends JPanel {
         getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                 .put(KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK), "showFind");
         getActionMap().put("showFind", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) {
-                findBar.setVisible(true);
-                findField.selectAll();
-                findField.requestFocusInWindow();
-            }
+            @Override public void actionPerformed(ActionEvent e) { findBar.open(); }
         });
 
         // Ctrl+Shift+N: open the annotations panel
@@ -760,7 +745,7 @@ public final class LogPanel extends JPanel {
             }
         }
         refreshDetail();
-        clearSearchMatches();
+        findBar.clearMatches();
         updateStatusBar();
         if (follow) startTailing();
     }
@@ -857,7 +842,7 @@ public final class LogPanel extends JPanel {
                 boolean hlSel = hl != null && sel;
 
                 // Background
-                boolean isSearchMatch = searchMatchModelRows.contains(logTable.convertRowIndexToModel(r));
+                boolean isSearchMatch = findBar != null && findBar.isMatch(logTable.convertRowIndexToModel(r));
                 if (hl != null) {
                     setBackground(sel ? blend(hl, t.getSelectionBackground(), 0.55f) : hl);
                 } else if (sel) {
@@ -1407,12 +1392,12 @@ public final class LogPanel extends JPanel {
         annotationStore.highlights().forEach((ord, slot) -> {
             if (slot >= 0 && slot < palette.length) logTableModel.setHighlightAtOrdinal(ord, palette[slot]);
         });
-        refreshHighlightNav();
+        highlightNavBar.refresh();
     }
 
     private void refreshDetailAfterHighlight() {
         refreshDetail();
-        refreshHighlightNav();
+        highlightNavBar.refresh();
     }
 
     private void showAnnotationDialog(LogEntry entry, int ordinal, AnnotationStore.Annotation existing) {
@@ -1475,320 +1460,6 @@ public final class LogPanel extends JPanel {
         }
         annotationsDialog.setVisible(true);
         annotationsDialog.toFront();
-    }
-
-    // ── Highlight navigation ──────────────────────────────────────────────────
-
-    private JPanel buildHighlightNavBar() {
-        highlightNavBar = new JPanel(new MigLayout("insets 3 8 3 8, gapy 0", "[][grow][]", "[]"));
-        highlightNavBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
-        highlightNavBar.setVisible(false);
-
-        JLabel label = new JLabel(Messages.get("highlight.nav.label"));
-        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
-        label.setFont(label.getFont().deriveFont(12f));
-
-        highlightNavSwatches = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
-        highlightNavSwatches.setOpaque(false);
-
-        highlightNavPosition = new JLabel("0 / 0");
-        ClouseauColors.themedForeground(highlightNavPosition, ClouseauColors::dimForeground);
-        highlightNavPosition.setFont(highlightNavPosition.getFont().deriveFont(12f));
-
-        JButton prevBtn = makeNavArrowButton("\u25b2");
-        JButton nextBtn = makeNavArrowButton("\u25bc");
-        prevBtn.setToolTipText(Messages.get("highlight.nav.prev.tooltip"));
-        nextBtn.setToolTipText(Messages.get("highlight.nav.next.tooltip"));
-        prevBtn.addActionListener(e -> navigateHighlight(-1));
-        nextBtn.addActionListener(e -> navigateHighlight(+1));
-
-        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]6[]4[]", "[]"));
-        rightPanel.setOpaque(false);
-        rightPanel.add(highlightNavPosition);
-        rightPanel.add(prevBtn);
-        rightPanel.add(nextBtn);
-
-        highlightNavBar.add(label);
-        highlightNavBar.add(highlightNavSwatches, "grow");
-        highlightNavBar.add(rightPanel);
-        return highlightNavBar;
-    }
-
-    private JButton makeNavArrowButton(String text) {
-        JButton btn = new JButton(text);
-        btn.setFont(btn.getFont().deriveFont(11f));
-        btn.setPreferredSize(new Dimension(22, 18));
-        btn.setMargin(new Insets(0, 2, 0, 2));
-        return btn;
-    }
-
-    private void refreshHighlightNav() {
-        java.util.Set<Color> activeColors = logTableModel.getActiveHighlightColors();
-        if (activeColors.isEmpty()) {
-            highlightNavBar.setVisible(false);
-            highlightNavColor = null;
-            return;
-        }
-        // If selected color was removed, fall back to "All"
-        if (highlightNavColor != null && !activeColors.contains(highlightNavColor)) {
-            highlightNavColor = null;
-        }
-        highlightNavBar.setVisible(true);
-        highlightNavSwatches.removeAll();
-
-        // "All" button
-        final Color navColorSnap = highlightNavColor;
-        JButton allBtn = new JButton(Messages.get("highlight.nav.all")) {
-            @Override protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(navColorSnap == null ? ClouseauColors.highlightNavSelected() : ClouseauColors.highlightNavUnselected());
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 5, 5);
-                g2.setColor(navColorSnap == null ? Color.WHITE : ClouseauColors.dimForeground());
-                FontMetrics fm = g2.getFontMetrics();
-                int x = (getWidth() - fm.stringWidth(getText())) / 2;
-                int y = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
-                g2.drawString(getText(), x, y);
-                g2.dispose();
-            }
-        };
-        allBtn.setPreferredSize(new Dimension(30, 16));
-        allBtn.setBorderPainted(false);
-        allBtn.setContentAreaFilled(false);
-        allBtn.setFocusPainted(false);
-        allBtn.setFont(allBtn.getFont().deriveFont(11f));
-        allBtn.addActionListener(e -> { highlightNavColor = null; refreshHighlightNav(); });
-        highlightNavSwatches.add(allBtn);
-
-        // Color swatches in highlight palette order
-        for (Color palette : ClouseauColors.highlightColors()) {
-            if (!activeColors.contains(palette)) continue;
-            final Color c = palette;
-            final boolean selected = c.equals(highlightNavColor);
-            JButton swatch = new JButton() {
-                @Override protected void paintComponent(Graphics g) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g2.setColor(c);
-                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 5, 5);
-                    if (selected) {
-                        g2.setColor(Color.WHITE);
-                        g2.setStroke(new BasicStroke(1.5f));
-                        g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 4, 4);
-                    }
-                    g2.dispose();
-                }
-            };
-            swatch.setPreferredSize(new Dimension(16, 16));
-            swatch.setBorderPainted(false);
-            swatch.setContentAreaFilled(false);
-            swatch.setFocusPainted(false);
-            swatch.addActionListener(e -> { highlightNavColor = c; refreshHighlightNav(); });
-            highlightNavSwatches.add(swatch);
-        }
-
-        highlightNavSwatches.revalidate();
-        highlightNavSwatches.repaint();
-        updateHighlightNavPosition();
-    }
-
-    private void updateHighlightNavPosition() {
-        if (highlightNavBar == null || !highlightNavBar.isVisible()) return;
-        List<Integer> highlighted = logTableModel.getHighlightedModelRows(highlightNavColor);
-        if (highlighted.isEmpty()) { highlightNavPosition.setText("0 / 0"); return; }
-        int currentView  = logTable.getSelectedRow();
-        int currentModel = currentView >= 0 ? logTable.convertRowIndexToModel(currentView) : -1;
-        int pos = 0;
-        for (int i = 0; i < highlighted.size(); i++) {
-            if (highlighted.get(i) <= currentModel) pos = i + 1;
-        }
-        highlightNavPosition.setText(pos + " / " + highlighted.size());
-    }
-
-    private void navigateHighlight(int direction) {
-        List<Integer> highlighted = logTableModel.getHighlightedModelRows(highlightNavColor);
-        if (highlighted.isEmpty()) return;
-        int currentView  = logTable.getSelectedRow();
-        int currentModel = currentView >= 0 ? logTable.convertRowIndexToModel(currentView) : -1;
-        int targetModel;
-        if (direction > 0) {
-            targetModel = highlighted.stream()
-                    .filter(r -> r > currentModel)
-                    .findFirst()
-                    .orElse(highlighted.get(0));
-        } else {
-            targetModel = highlighted.stream()
-                    .filter(r -> r < currentModel)
-                    .reduce((a, b) -> b)
-                    .orElse(highlighted.get(highlighted.size() - 1));
-        }
-        int viewRow = logTable.convertRowIndexToView(targetModel);
-        if (viewRow >= 0) {
-            logTable.setRowSelectionInterval(viewRow, viewRow);
-            logTable.scrollRectToVisible(logTable.getCellRect(viewRow, 0, true));
-            logTable.requestFocusInWindow();
-            updateHighlightNavPosition();
-        }
-    }
-
-    // ── Find bar ──────────────────────────────────────────────────────────────
-
-    private JPanel buildFindBar() {
-        JPanel bar = new JPanel(new MigLayout("insets 3 8 3 8, gap 4", "[][grow][][][]", "[center]"));
-        bar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
-        bar.setVisible(false);
-
-        JLabel label = new JLabel("Find:");
-        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
-        label.setFont(label.getFont().deriveFont(12f));
-
-        findField = new JTextField();
-        findField.putClientProperty("JTextField.placeholderText", "Search all columns\u2026");
-
-        JButton clearFieldBtn = new JButton("\u00d7");
-        clearFieldBtn.setVisible(false);
-        clearFieldBtn.setFont(clearFieldBtn.getFont().deriveFont(14f));
-        clearFieldBtn.setBorderPainted(false);
-        clearFieldBtn.setContentAreaFilled(false);
-        clearFieldBtn.setFocusPainted(false);
-        clearFieldBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        clearFieldBtn.addActionListener(e -> { findField.setText(""); findField.requestFocusInWindow(); });
-        findField.putClientProperty("JTextField.trailingComponent", clearFieldBtn);
-
-        javax.swing.Timer[] findDebounce = {null};
-        findField.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { onFindTextChanged(); }
-            public void removeUpdate(DocumentEvent e) { onFindTextChanged(); }
-            public void changedUpdate(DocumentEvent e) {}
-            private void onFindTextChanged() {
-                clearFieldBtn.setVisible(!findField.getText().isEmpty());
-                if (findDebounce[0] != null) findDebounce[0].stop();
-                findDebounce[0] = new javax.swing.Timer(250, ev -> updateSearchMatches(findField.getText()));
-                findDebounce[0].setRepeats(false);
-                findDebounce[0].start();
-            }
-        });
-        findField.addActionListener(e -> navigateSearch(+1));
-        findField.registerKeyboardAction(
-                e -> navigateSearch(-1),
-                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK),
-                JComponent.WHEN_FOCUSED);
-        findField.registerKeyboardAction(
-                e -> { bar.setVisible(false); clearSearchMatches(); logTable.requestFocusInWindow(); },
-                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
-                JComponent.WHEN_FOCUSED);
-
-        findCounter = new JLabel();
-        ClouseauColors.themedForeground(findCounter, ClouseauColors::dimForeground);
-        findCounter.setFont(findCounter.getFont().deriveFont(11f));
-        findCounter.setPreferredSize(new Dimension(80, findCounter.getPreferredSize().height));
-
-        JButton prevBtn = makeNavArrowButton("\u25b2");
-        JButton nextBtn = makeNavArrowButton("\u25bc");
-        prevBtn.setToolTipText("Previous match (Shift+Enter)");
-        nextBtn.setToolTipText("Next match (Enter)");
-        prevBtn.addActionListener(e -> navigateSearch(-1));
-        nextBtn.addActionListener(e -> navigateSearch(+1));
-
-        JButton closeBtn = new JButton("\u00d7");
-        closeBtn.setFont(closeBtn.getFont().deriveFont(13f));
-        closeBtn.setMargin(new Insets(1, 4, 1, 4));
-        closeBtn.addActionListener(e -> { bar.setVisible(false); clearSearchMatches(); logTable.requestFocusInWindow(); });
-
-        bar.add(label);
-        bar.add(findField, "growx");
-        bar.add(findCounter);
-        bar.add(prevBtn);
-        bar.add(nextBtn);
-        bar.add(closeBtn);
-        return bar;
-    }
-
-    private void updateSearchMatches(String query) {
-        if (query == null || query.isBlank()) {
-            logTableModel.cancelFind();
-            clearSearchMatches();
-            return;
-        }
-        String lower = query.toLowerCase();
-        // Read in the background: on an indexed file, every visible row comes from disk.
-        logTableModel.find(e -> entryMatchesQuery(e, lower), percent -> {
-            if (percent < 0) return;
-            ClouseauColors.themedForeground(findCounter, ClouseauColors::dimForeground);
-            findCounter.setText(java.text.MessageFormat.format(Messages.get("find.searching"), percent));
-        }, this::showSearchMatches);
-    }
-
-    /** Shows the result of a find: the ordinals of the matching entries, ascending. */
-    private void showSearchMatches(int[] ordinals) {
-        List<Integer> list = new ArrayList<>();
-        Set<Integer>  set  = new HashSet<>();
-        for (int ordinal : ordinals) {
-            int modelRow = logTableModel.rowOfOrdinal(ordinal);   // rows may have changed since
-            if (modelRow >= 0) {
-                list.add(modelRow);
-                set.add(modelRow);
-            }
-        }
-        // Next and previous follow the view, which may be sorted.
-        list.sort(java.util.Comparator.comparingInt(logTable::convertRowIndexToView));
-        searchMatchModelRows = Collections.unmodifiableSet(set);
-        searchMatchList      = Collections.unmodifiableList(list);
-        searchMatchCursor    = -1;
-        int n = list.size();
-        ClouseauColors.themedForeground(findCounter, () -> n == 0 ? ClouseauColors.statusError() : ClouseauColors.dimForeground());
-        findCounter.setText(n + (n == 1 ? " match" : " matches"));
-        logTable.repaint();
-        if (n > 0) navigateSearch(+1);
-    }
-
-    private void clearSearchMatches() {
-        searchMatchModelRows = Set.of();
-        searchMatchList      = List.of();
-        searchMatchCursor    = -1;
-        if (findCounter != null) findCounter.setText("");
-        logTable.repaint();
-    }
-
-    private static boolean entryMatchesQuery(LogEntry entry, String lower) {
-        if (entry.message() != null && entry.message().toLowerCase().contains(lower)) return true;
-        if (entry.logger()  != null && entry.logger().toLowerCase().contains(lower))  return true;
-        if (entry.thread()  != null && entry.thread().toLowerCase().contains(lower))  return true;
-        if (entry.level()   != null && entry.level().name().toLowerCase().contains(lower)) return true;
-        if (entry.fields()  != null) {
-            for (String v : entry.fields().values()) {
-                if (v != null && v.toLowerCase().contains(lower)) return true;
-            }
-        }
-        return false;
-    }
-
-    private void navigateSearch(int direction) {
-        if (searchMatchList.isEmpty()) return;
-        if (searchMatchCursor < 0) {
-            int currentView  = logTable.getSelectedRow();
-            int currentModel = currentView >= 0 ? logTable.convertRowIndexToModel(currentView) : -1;
-            searchMatchCursor = 0;
-            if (direction > 0) {
-                for (int i = 0; i < searchMatchList.size(); i++) {
-                    if (searchMatchList.get(i) >= currentModel) { searchMatchCursor = i; break; }
-                }
-            } else {
-                searchMatchCursor = searchMatchList.size() - 1;
-                for (int i = searchMatchList.size() - 1; i >= 0; i--) {
-                    if (searchMatchList.get(i) <= currentModel) { searchMatchCursor = i; break; }
-                }
-            }
-        } else {
-            searchMatchCursor = (searchMatchCursor + direction + searchMatchList.size()) % searchMatchList.size();
-        }
-        int modelRow = searchMatchList.get(searchMatchCursor);
-        int viewRow  = logTable.convertRowIndexToView(modelRow);
-        if (viewRow >= 0) {
-            logTable.setRowSelectionInterval(viewRow, viewRow);
-            logTable.scrollRectToVisible(logTable.getCellRect(viewRow, 0, true));
-            findCounter.setText((searchMatchCursor + 1) + " / " + searchMatchList.size());
-        }
     }
 
     // ── Level color palette ───────────────────────────────────────────────────

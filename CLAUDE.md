@@ -113,6 +113,8 @@ tags.
 - `MainFrame` (ui) — window, menus, tabs; holds the parser/formatter/highlighter lists.
 - `LogPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
+- `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
+  that steps through highlighted rows.
 - `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row
   highlights, and the per-tab entry limit.
 - `AnnotationStore` (core) — annotations for one file, anchored by entry number and content
