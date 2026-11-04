@@ -352,6 +352,10 @@ runtime {
 
         val os           = org.gradle.internal.os.OperatingSystem.current()
         val packagingDir = rootProject.file("packaging")
+        // Installers register .log with the OS (see packaging/file-associations). The
+        // portable zip is never installed, so it registers nothing.
+        val fileAssociations = listOf("--file-associations",
+                packagingDir.resolve("file-associations/log.properties").absolutePath)
 
         // JVM flags baked into the native launcher. On macOS/Linux the working directory of an
         // installed app is not meaningful, so keep data in the home folder (AppDirs expands "~/").
@@ -362,7 +366,7 @@ runtime {
             os.isWindows -> {
                 installerType = "exe"
                 imageOptions = listOf("--icon", packagingDir.resolve("windows/clouseau.ico").absolutePath)
-                installerOptions = listOf(
+                installerOptions = fileAssociations + listOf(
                     "--vendor", "Tlaloc",
                     "--win-per-user-install",
                     "--win-dir-chooser",
@@ -374,7 +378,7 @@ runtime {
             os.isMacOsX -> {
                 installerType = "dmg"
                 imageOptions = listOf("--icon", packagingDir.resolve("macos/clouseau.icns").absolutePath)
-                installerOptions = listOf(
+                installerOptions = fileAssociations + listOf(
                     "--vendor", "Tlaloc",
                     "--mac-package-name", "Clouseau"
                 )
@@ -382,7 +386,7 @@ runtime {
             else -> {
                 installerType = "deb"
                 imageOptions = listOf("--icon", packagingDir.resolve("linux/clouseau.png").absolutePath)
-                installerOptions = listOf(
+                installerOptions = fileAssociations + listOf(
                     "--vendor", "Tlaloc",
                     "--linux-shortcut",
                     "--linux-menu-group", "Development;Utility;",

@@ -327,6 +327,38 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
 a new launch forwards its file arguments to it and exits, so double-clicking several files
 opens tabs in one window.
 
+### 6.9 Tab switching shortcuts (UC-15)
+
+`TabShortcuts` is a `KeyEventDispatcher` registered with the `KeyboardFocusManager` by
+`MainFrame`, not a set of ordinary key bindings, because two Swing behaviors would
+otherwise swallow the keys:
+
+- `Ctrl+Tab` and `Ctrl+Shift+Tab` are default focus-traversal keys, consumed by the
+  focus manager before any key binding runs (`JTable` also uses them to move focus).
+- `JTable` binds `Ctrl+PageUp`/`Ctrl+PageDown` for horizontal scrolling, and a focused
+  component's bindings are checked before window-level (`WHEN_IN_FOCUSED_WINDOW`) ones.
+
+A dispatcher sees key events before both, so the shortcuts work wherever focus is. It
+acts only while the main window is active, so dialogs keep their own keys, and it
+consumes only the shortcuts it handles (a `Ctrl+digit` past the last tab is left alone).
+Plain `Tab` and `Shift+Tab` still move focus. The index arithmetic is a static method,
+unit-tested without a display.
+
+### 6.10 Dropping files on the window (UC-1)
+
+Swing delivers a drop to the deepest component under the cursor that has a drop target,
+and every component with a `TransferHandler` has one: the log table, text fields and the
+detail text area get one from their UI, and those reject a file list. So
+`FileDropHandler.install` puts a handler on the frame (for empty areas such as the
+welcome screen and tab strip) and wraps the existing handler of every component in the
+window. It also wraps components added later, through one AWT container listener, which
+covers new tabs and components rebuilt by a theme switch. A wrapped handler opens a
+dropped file list and passes everything else (text drops, copy, paste, dragging out) to
+the original. It hides the drop location, so a drop doesn't move the table's selection.
+Dropped files open as `openFile(Path)` does for "Open with": auto-detected parser, one tab
+per file, a picker for a zip with several logs. Folders are skipped, and files are opened
+after the drop completes, so a dialog never holds up the drag source.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:
@@ -360,6 +392,13 @@ Clouseau builds with Gradle 8.8 (Kotlin DSL) on Java 21 (see D-12). The `org.ber
 produces a jpackage image with a bundled JRE, published as a **portable zip**. The default
 heap is `-Xmx2g`. Icons and the splash image are pre-rendered at build time, so the
 runtime needs no SVG library.
+
+The native installers (`jpackage` task: exe, dmg, deb; local builds only for now) pass
+`--file-associations packaging/file-associations/log.properties`, registering `.log`
+only: `.gz` and `.zip` are general archives, and the Windows installer would make
+Clouseau their default program. The OS starts Clouseau with the file as an argument, and
+`SingleInstanceManager` forwards it to a running window. macOS instead sends an
+open-files event, which `ClouseauApp` handles with `Desktop.setOpenFileHandler`.
 
 ## 9. Decisions
 
@@ -748,35 +787,12 @@ removes that ceiling too.
 
 Accepted in the use cases, with no design decision needed beyond the above:
 
-- **Drag-and-drop:** A `TransferHandler` on the main window that opens dropped files
-  through the same path as `File → Open`.
-- **File associations:** Register `.log` (and optionally `.gz`/`.zip`) with the
-  jpackage-based packages, so "Open with" and double-click work without manual setup.
-  The single-instance manager already routes the file to the running window.
 - **Plain-text view (UC-13):** When no parser recognizes any of the first 50 lines (the
   same sample the open dialog's preview uses), `LogPanel` shows a read-only text card
   instead of the table, reading through the same `LogReaders` path and following with
   `FileTail`. "Create a parser for this file" opens `ParserEditorDialog` with those lines
   as samples; saving reloads the tab with the new parser. Large files need the same
   on-demand reading as D-8 rather than loading the whole text into one component.
-- **Theme menu (UC-14):** A new **View** menu in the main window with a **Theme**
-  submenu: one radio item per `ThemeManager.getAllThemes()` entry, then **Manage
-  themes…** (`ThemeManagerDialog`). Picking an item calls `ThemeManager.applyTheme` and
-  `updateUI`, and saves it with `AppPrefs.setTheme`, the same path the Settings dropdown
-  uses, so the two stay in sync. The submenu rebuilds its items each time it opens, so
-  newly installed themes appear.
-- **Tab switching shortcuts (UC-15):** Handled by a `KeyEventDispatcher` registered with
-  the `KeyboardFocusManager` for the main window, not by ordinary key bindings, because
-  two Swing behaviors would otherwise swallow the keys:
-  - `Ctrl+Tab` and `Ctrl+Shift+Tab` are default focus-traversal keys, consumed by the
-    focus manager before any key binding runs (`JTable` also uses them to move focus).
-  - `JTable` binds `Ctrl+PageUp`/`Ctrl+PageDown` for horizontal scrolling, and a
-    focused component's bindings are checked before window-level
-    (`WHEN_IN_FOCUSED_WINDOW`) ones.
-
-  A dispatcher sees key events before both, so the shortcuts work wherever focus is.
-  It acts only when the main window is active, so dialogs keep their own keys, and it
-  consumes only the shortcuts it handles. Plain `Tab` and `Shift+Tab` still move focus.
 
 ## 11. Known gaps
 

@@ -74,10 +74,14 @@ without manual configuration for common formats (Log4j, Logback/Spring Boot, JSO
 - *Export bundle:* Opening a review bundle (UC-8) loads the log together with its
   annotations.
 
-**Current behavior:** Drag-and-drop is not implemented. Files passed on the command line
-are opened (and forwarded to an already-running instance), so "Open with" works if the
-user picks the Clouseau launcher manually, but the packages don't register file
-associations. Static files are never trimmed by the entry limit. Every static file is
+**Current behavior:** Files dragged onto the window open anywhere they're dropped (table,
+detail panel, filter bar, tab strip or welcome screen), each in its own tab with the
+parser auto-detected, as with "Open with"; folders are ignored. The native installers
+(Windows exe, macOS dmg, Linux deb) register `.log` files with Clouseau, so double-click
+and "Open with" work; `.gz` and `.zip` aren't claimed, since they're general archives.
+Releases publish only the portable zip, which registers nothing: there, "Open with" works
+if the user picks the Clouseau launcher manually. Either way the file goes to an
+already-running window if there is one. Static files are never trimmed by the entry limit. Every static file is
 indexed (D-16): the heap keeps about 29 bytes per line and text is read back from disk,
 so a 1M-line, 125 MB log uses under 50 MB of heap. Lines followed after the file opens
 (UC-6) are indexed the same way, so they are never dropped either. Compressed files are
@@ -373,7 +377,7 @@ becomes an `UNKNOWN` entry, and the `UNKNOWN` level toggle is off by default, so
 table looks empty. The parser editor is only reachable from the menu, and the sample
 must be typed or pasted in by hand.
 
-### UC-14 · Customize the app's appearance 🟡
+### UC-14 · Customize the app's appearance ✅
 
 **Actor:** Field engineer, Developer
 **Goal:** Make Clouseau comfortable to look at for hours, for example dark or light to
@@ -401,11 +405,13 @@ and logs stay just as readable in every theme.
 - **Settings stays in sync:** The theme can also be picked in Settings, and both places
   always show the same current theme.
 
-**Current behavior:** Themes can only be picked in Settings (with a live preview), and
-the theme manager is only reachable from there. There is no theme choice in the main
-window.
+**Current behavior:** View → Theme lists the built-in and installed themes, with the
+current one checked; picking one applies and saves it at once. The same submenu ends with
+Manage Themes…, which opens the theme manager. Settings still offers the theme dropdown
+(with a live preview, applied on OK); both read and save the same preference, so they
+always agree.
 
-### UC-15 · Work with several logs in tabs 🟡
+### UC-15 · Work with several logs in tabs ✅
 
 **Actor:** Developer, Field engineer
 **Goal:** Keep several logs open at once and move between them easily, for example the
@@ -435,8 +441,10 @@ opening the same file twice.
 - **Shortcuts work anywhere in the window,** whether focus is in the table, the detail
   panel, or a filter field, and they're listed in Help → Keyboard Shortcuts.
 
-**Current behavior:** Tabs can only be switched by clicking; there are no keyboard
-shortcuts for it.
+**Current behavior:** All of the above works, including the keyboard shortcuts, which
+apply wherever focus is in the main window (not in dialogs) and are listed in Help →
+Keyboard Shortcuts. `Ctrl+1` to `Ctrl+8` past the last open tab do nothing. The
+shortcuts use `Ctrl` on every platform, including macOS.
 
 ---
 

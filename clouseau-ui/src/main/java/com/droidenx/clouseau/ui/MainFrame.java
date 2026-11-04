@@ -71,6 +71,18 @@ public final class MainFrame extends JFrame {
         getRootPane().getActionMap().put("openSettings", new AbstractAction() {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) { openSettings(); }
         });
+
+        // Dropped files open like "Open with": auto-detect, one tab per file (UC-1).
+        FileDropHandler.install(this, files -> files.forEach(this::openFile));
+
+        // Tab switching (UC-15): a dispatcher, not key bindings; see TabShortcuts.
+        KeyEventDispatcher tabShortcuts = new TabShortcuts(this, tabbedPane);
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(tabShortcuts);
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(tabShortcuts);
+            }
+        });
     }
 
     // ── Extension list management ─────────────────────────────────────────────
@@ -175,6 +187,20 @@ public final class MainFrame extends JFrame {
 
         menuBar.add(fileMenu);
 
+        JMenu viewMenu = new JMenu(Messages.get("menu.view"));
+        // Rebuilt each time it opens, so newly installed themes and a theme picked in
+        // Settings show up.
+        JMenu themeMenu = new JMenu(Messages.get("menu.view.theme"));
+        themeMenu.setMargin(new Insets(7, mh, 7, mh));
+        themeMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildThemeMenu(themeMenu); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        });
+        rebuildThemeMenu(themeMenu);
+        viewMenu.add(themeMenu);
+        menuBar.add(viewMenu);
+
         JMenu toolsMenu = new JMenu(Messages.get("menu.tools"));
         JMenuItem parsersItem = menuItem(Messages.get("menu.tools.parsers"));
         parsersItem.addActionListener(e ->
@@ -215,6 +241,33 @@ public final class MainFrame extends JFrame {
         return menuBar;
     }
 
+    /** One radio item per theme (the current one selected), then "Manage Themes…". */
+    private void rebuildThemeMenu(JMenu menu) {
+        menu.removeAll();
+        String current = AppPrefs.getTheme();
+        ButtonGroup group = new ButtonGroup();
+        for (ThemeManager.ThemeEntry theme : ThemeManager.getAllThemes()) {
+            JRadioButtonMenuItem item = new JRadioButtonMenuItem(theme.name(), theme.name().equals(current));
+            item.setMargin(new Insets(7, 0, 7, 0));
+            item.addActionListener(e -> selectTheme(theme.name()));
+            group.add(item);
+            menu.add(item);
+        }
+        menu.addSeparator();
+        JMenuItem manage = menuItem(Messages.get("menu.view.theme.manage"));
+        manage.addActionListener(e -> new ThemeManagerDialog(this).setVisible(true));
+        menu.add(manage);
+    }
+
+    /** Applies and saves a theme: the same steps as the Settings dropdown plus OK. */
+    private void selectTheme(String name) {
+        log.info("Switching theme to {}", name);
+        ThemeManager.applyTheme(name);
+        AppPrefs.setTheme(name);
+        // After the menu has closed, so the popup isn't repainted mid-switch.
+        SwingUtilities.invokeLater(ThemeManager::updateUI);
+    }
+
     private void openShortcuts() {
         JDialog dialog = new JDialog(this, Messages.get("shortcuts.title"), true);
 
@@ -228,6 +281,14 @@ public final class MainFrame extends JFrame {
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.open"),      "Ctrl+O");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.close.tab"), "Ctrl+W");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.settings"),  "Ctrl+,");
+
+        addDialogSection(grid, Messages.get("shortcuts.section.tabs"), "gaptop 20");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.next"),      "Ctrl+Tab");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.prev"),      "Ctrl+Shift+Tab");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.next"),      "Ctrl+PgDn");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.prev"),      "Ctrl+PgUp");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.jump"),      "Ctrl+1\u20268");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.last"),      "Ctrl+9");
 
         addDialogSection(grid, Messages.get("shortcuts.section.table"), "gaptop 20");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.first.row"),  "Ctrl+Home");

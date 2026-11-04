@@ -41,6 +41,12 @@ Releases publish only the portable zips (one per platform). The Windows installe
 configured as per-user (`--win-per-user-install`) so its `data/` folder stays writable
 if installers are published later.
 
+## File associations
+
+The native installers register `.log` files with Clouseau using
+`file-associations/log.properties` (jpackage `--file-associations`). The portable zip
+isn't installed, so it registers nothing.
+
 ## Heap size
 
 The default heap is `-Xms64m -Xmx2g`, baked into the native launcher via
