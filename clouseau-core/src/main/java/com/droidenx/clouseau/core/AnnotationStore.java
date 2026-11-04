@@ -100,6 +100,8 @@ public final class AnnotationStore {
     private final Path sidecar;
     private final Path fallback;
     private Path savePath;
+    /** True if {@link #load} found a saved file for the log (even an empty one). */
+    private boolean loadedFromFile;
 
     private AnnotationStore(Path sidecar, Path fallback) {
         this.sidecar  = sidecar;
@@ -128,6 +130,7 @@ public final class AnnotationStore {
         if (source != null) {
             store.read(source);
             store.savePath = source;
+            store.loadedFromFile = true;
             log.debug("Loaded {} annotation(s) and {} highlight(s) from {}",
                     store.orphans.size(), store.orphanHighlights.size(), source);
         }
@@ -149,24 +152,44 @@ public final class AnnotationStore {
 
     private void read(Path file) {
         try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            JsonElement root = JsonParser.parseReader(r);
-            if (!root.isJsonObject()) return;
-            JsonArray notes = root.getAsJsonObject().getAsJsonArray("annotations");
-            if (notes != null) {
-                for (JsonElement el : notes) {
-                    Annotation a = GSON.fromJson(el, Annotation.class);
-                    if (a != null && a.lineHash() != null) orphans.add(a);
-                }
-            }
-            JsonArray marks = root.getAsJsonObject().getAsJsonArray("highlights");
-            if (marks != null) {
-                for (JsonElement el : marks) {
-                    Highlight h = GSON.fromJson(el, Highlight.class);
-                    if (h != null && h.lineHash() != null) orphanHighlights.add(h);
-                }
-            }
+            read(r);
         } catch (Exception e) {
             log.warn("Could not read annotations from {}", file, e);
+        }
+    }
+
+    /** True if {@link #load} found a saved file (next to the log or in the fallback folder). */
+    boolean hasSavedFile() { return loadedFromFile; }
+
+    /**
+     * Adds the notes and highlights in {@code json} (sidecar format) as orphans, for the
+     * next {@link Anchoring} to attach. Used to start a review bundle's store from the
+     * copy inside the bundle (D-10). Nothing is written until the store changes.
+     */
+    void seed(Reader json) {
+        try {
+            read(json);
+        } catch (Exception e) {
+            log.warn("Could not read the bundled annotations", e);
+        }
+    }
+
+    private void read(Reader r) {
+        JsonElement root = JsonParser.parseReader(r);
+        if (!root.isJsonObject()) return;
+        JsonArray notes = root.getAsJsonObject().getAsJsonArray("annotations");
+        if (notes != null) {
+            for (JsonElement el : notes) {
+                Annotation a = GSON.fromJson(el, Annotation.class);
+                if (a != null && a.lineHash() != null) orphans.add(a);
+            }
+        }
+        JsonArray marks = root.getAsJsonObject().getAsJsonArray("highlights");
+        if (marks != null) {
+            for (JsonElement el : marks) {
+                Highlight h = GSON.fromJson(el, Highlight.class);
+                if (h != null && h.lineHash() != null) orphanHighlights.add(h);
+            }
         }
     }
 
@@ -326,8 +349,11 @@ public final class AnnotationStore {
     /** True when the store is saved in the data folder, not next to the log. */
     public boolean isUsingFallback() { return savePath != null && savePath.equals(fallback); }
 
-    private boolean save() {
-        if (savePath == null) return true;
+    /**
+     * Everything in the store, attached and orphaned, in the sidecar format: what
+     * {@code <log>.annotations} contains, and what a review bundle carries (D-10).
+     */
+    public String toJson() {
         List<Annotation> notes = new ArrayList<>(byOrdinal.values());
         notes.addAll(orphans);
         List<Highlight> marks = new ArrayList<>(highlights.values());
@@ -336,7 +362,12 @@ public final class AnnotationStore {
         root.addProperty("version", 2);
         root.add("annotations", GSON.toJsonTree(notes));
         if (!marks.isEmpty()) root.add("highlights", GSON.toJsonTree(marks));
-        String json = GSON.toJson(root);
+        return GSON.toJson(root);
+    }
+
+    private boolean save() {
+        if (savePath == null) return true;
+        String json = toJson();
 
         if (write(savePath, json)) return true;
         if (fallback != null && !savePath.equals(fallback)) {

@@ -6,6 +6,7 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.ParserList;
+import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
@@ -146,6 +147,10 @@ public final class MainFrame extends JFrame {
             @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
         });
         fileMenu.add(sourceMenu);
+
+        JMenuItem exportReviewItem = menuItem(Messages.get("menu.file.export.review"));
+        exportReviewItem.addActionListener(e -> ReviewExporter.export(this, activeLogPanel()));
+        fileMenu.add(exportReviewItem);
 
         closeTabItem = menuItem(Messages.get("menu.file.close.tab"));
         closeTabItem.setEnabled(false);
@@ -373,6 +378,12 @@ public final class MainFrame extends JFrame {
             JOptionPane.showMessageDialog(this,
                     MessageFormat.format(Messages.get("zip.error.empty"), zip.getFileName()),
                     Messages.get("filechooser.error.title"), JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        // A review bundle (D-10) opens its log directly; its annotations load with it.
+        Optional<ReviewBundle.Manifest> bundle = ReviewBundle.read(zip);
+        if (bundle.isPresent()) {
+            openLog(zip, bundle.get().log(), parser);
             return;
         }
         List<ZipLogs.Entry> chosen = entries.size() == 1

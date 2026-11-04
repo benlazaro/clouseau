@@ -17,6 +17,7 @@ import com.droidenx.clouseau.core.LogCache;
 import com.droidenx.clouseau.core.LogFileReader;
 import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.MemoryGuard;
+import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -218,6 +219,12 @@ public final class LogPanel extends JPanel {
     /** The entry of the zip this tab shows, or null for a plain file. */
     public String getZipEntry() { return currentEntry; }
 
+    /**
+     * The tab's annotations and highlights in the sidecar format, for a review bundle
+     * (D-10), or null while the file is still loading (its notes aren't read yet).
+     */
+    public String annotationsJson() { return loading ? null : annotationStore.toJson(); }
+
     public void load(Path file, Optional<LogParser> parser) {
         load(file, null, parser, () -> {});
     }
@@ -287,7 +294,8 @@ public final class LogPanel extends JPanel {
 
             @Override
             protected Void doInBackground() throws Exception {
-                AnnotationStore annotations = AnnotationStore.load(annotationKey, AppDirs.annotationsDir());
+                // A review bundle's log starts from the bundle's notes until its own sidecar exists (D-10).
+                AnnotationStore annotations = ReviewBundle.loadAnnotations(file, entry, annotationKey, AppDirs.annotationsDir());
                 AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
                 LineParser lineParser = new LineParser(parser, parsers, srcTz);
                 if (indexed) {

@@ -26,7 +26,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
                     AnnotationStore, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
-                    EntryFilter, CombinedFilter, LogCache, CopyingInputStream
+                    EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -112,6 +112,8 @@ tags.
   highlights, and the per-tab entry limit.
 - `AnnotationStore` (core) — annotations for one file, anchored by entry number and content
   hash (D-9); saved next to the log, or in `<data>/annotations/` if that fails.
+- `ReviewBundle` (core) — D-10: writes and recognizes the review bundle `.zip` (manifest, log,
+  annotations); `ReviewExporter` (ui) is `File → Export for Review…`.
 - `FilterBar`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`, `AppDirs` (ui) — filters,
   parser editor, themes, settings, data folder.
 
