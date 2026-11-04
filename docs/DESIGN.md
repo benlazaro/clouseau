@@ -40,7 +40,7 @@ clouseau-ui ─────────────┐   MainFrame, tabs, LogPan
    │               clouseau-plugin   ClouseauPluginManager (PF4J wrapper)
    │                     │
    ▼                     │
-clouseau-core ◀──────────┘   RegexLogParser, FileLogSource, FileTail, MemoryGuard, Utf8Bom
+clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, MemoryGuard, Utf8Bom, FileLogSource
    │
    ▼
 clouseau-api                 LogEntry, LogParser, LogSource, LogFormatter,
@@ -108,7 +108,7 @@ tab.
 
 | Interface | Purpose | Discovered from plugins? | Built-in implementations |
 |---|---|---|---|
-| `LogParser` | Turn a raw line into a `LogEntry` | Declared, but **not used** (see [G-2](#11-known-gaps)) | `RegexLogParser`, configured from JSON |
+| `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the JSON-defined parsers (section 5.1) | `RegexLogParser`, configured from JSON |
 | `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
 | `LogSyntaxHighlighter` | Color spans in the detail panel | Yes | `JsonSyntaxHighlighter` |
 | `LogSource` | Deliver lines from somewhere | No: not an `ExtensionPoint` (see [G-3](#11-known-gaps)) | `FileLogSource` (unused), `SshLogSource` |
@@ -141,6 +141,17 @@ plus any custom ones).
 
 This lets anyone add a format without writing a plugin. Plugins are for formats regex
 can't handle.
+
+**Combined list.** `MainFrame.reloadParsers` builds the list the open dialog, SSH dialog
+and tabs use with `ParserList.combine` (core): JSON-defined parsers first, then plugin
+`LogParser` extensions. Order matters because auto-detection takes the first parser
+that accepts a line, so a plugin can't take over a format that already works. A plugin
+parser whose name is already used, or that has no name, is skipped with a warning, so
+`parsers.json` stays the way to override by name. Each plugin parser is wrapped so its
+exceptions can't abort a load: a throwing `canParse` counts as no match, and a throwing
+(or `null`-returning) `parse` yields an UNKNOWN entry; the first failure of each kind is
+logged. The list is rebuilt at startup, when `parsers.json` is saved, and after a plugin
+refresh; open tabs keep the list they were created with.
 
 ## 6. Runtime behavior
 
@@ -451,7 +462,6 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-2** | Plugin parsers are never used. `MainFrame` gets parsers only from `UserParsersLoader`; it never asks the plugin manager for `LogParser` extensions, though the Plugin Manager lists them. | Breaks UC-11 for parsers, the most important plugin type. |
 | **G-3** | `LogSource` and `LogFilter` are not `ExtensionPoint`s, and the UI constructs sources directly. `FileLogSource` (core) is unused; `SshLogSource` lives in `clouseau-ui`. | Plugins can't add sources (blocks D-11). Violates section 3, rule 2. |
 | **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |
 | **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |

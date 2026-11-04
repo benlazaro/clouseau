@@ -3,6 +3,7 @@ package com.droidenx.clouseau.ui;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.core.ParserList;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.ui.theme.ThemeManager;
@@ -41,18 +42,7 @@ public final class MainFrame extends JFrame {
     public MainFrame(ClouseauPluginManager pluginManager) {
         super(Messages.get("app.title"));
         this.pluginManager = pluginManager;
-        this.parsers = new ArrayList<>(UserParsersLoader.load());
-        this.formatters = new ArrayList<>();
-        this.formatters.add(new JsonMessageFormatter());
-        this.formatters.addAll(pluginManager.getExtensions(LogFormatter.class));
-        log.info("Loaded {} formatter(s): {}", formatters.size(),
-                formatters.stream().map(LogFormatter::getName).toList());
-
-        this.syntaxHighlighters = new ArrayList<>();
-        this.syntaxHighlighters.add(new JsonSyntaxHighlighter());
-        this.syntaxHighlighters.addAll(pluginManager.getExtensions(LogSyntaxHighlighter.class));
-        log.info("Loaded {} syntax highlighter(s): {}", syntaxHighlighters.size(),
-                syntaxHighlighters.stream().map(LogSyntaxHighlighter::getName).toList());
+        reloadExtensions();
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1280, 800);
         setMinimumSize(new Dimension(800, 500));
@@ -78,24 +68,37 @@ public final class MainFrame extends JFrame {
 
     // ── Extension list management ─────────────────────────────────────────────
 
-    /** Called after parsers.json is saved to reload user-defined parsers. */
+    /**
+     * Rebuilds the parser list: JSON-defined parsers (built-in and {@code parsers.json})
+     * first, then plugin parsers (see {@link ParserList}). Called at startup, after
+     * parsers.json is saved, and after a plugin refresh.
+     */
     void reloadParsers() {
-        this.parsers = new ArrayList<>(UserParsersLoader.load());
+        this.parsers = ParserList.combine(UserParsersLoader.load(),
+                pluginManager.getExtensions(LogParser.class));
         if (lastParserIndex > parsers.size()) lastParserIndex = 0;
+        log.info("Loaded {} parser(s): {}", parsers.size(),
+                parsers.stream().map(LogParser::getName).toList());
     }
 
-    /** Called after a plugin refresh to re-fetch formatters and highlighters from the plugin manager. */
+    /**
+     * Fetches parsers, formatters and highlighters, including those from plugins.
+     * Called at startup and after a plugin refresh. Open tabs keep the extensions they
+     * were created with; new tabs get the new ones.
+     */
     void reloadExtensions() {
+        reloadParsers();
+
         this.formatters = new ArrayList<>();
         this.formatters.add(new JsonMessageFormatter());
         this.formatters.addAll(pluginManager.getExtensions(LogFormatter.class));
-        log.info("Reloaded {} formatter(s): {}", formatters.size(),
+        log.info("Loaded {} formatter(s): {}", formatters.size(),
                 formatters.stream().map(LogFormatter::getName).toList());
 
         this.syntaxHighlighters = new ArrayList<>();
         this.syntaxHighlighters.add(new JsonSyntaxHighlighter());
         this.syntaxHighlighters.addAll(pluginManager.getExtensions(LogSyntaxHighlighter.class));
-        log.info("Reloaded {} syntax highlighter(s): {}", syntaxHighlighters.size(),
+        log.info("Loaded {} syntax highlighter(s): {}", syntaxHighlighters.size(),
                 syntaxHighlighters.stream().map(LogSyntaxHighlighter::getName).toList());
     }
 
