@@ -47,6 +47,7 @@ public final class AppPrefs {
     private static final String KEY_THEME                 = "theme";
     private static final String KEY_DISPLAY_TIMEZONE      = "display.timezone";
     private static final String KEY_SOURCE_TIMEZONES      = "source.timezones";
+    private static final String KEY_SOURCE_SETTINGS       = "source.settings";
     private static final int    MAX_RECENT               = 10;
 
     /**
@@ -479,6 +480,39 @@ public final class AppPrefs {
             arr.add(o);
         }
         ROOT.add(KEY_PLUGIN_REPOS, arr);
+        save();
+    }
+
+    /**
+     * The values last used for a plugin source, keyed by setting key. {@code providerId}
+     * identifies the provider (its class name). Values for {@code secretKeys} are decrypted.
+     */
+    public static java.util.Map<String, String> getSourceSettings(String providerId,
+                                                                java.util.Set<String> secretKeys) {
+        java.util.Map<String, String> values = new java.util.HashMap<>();
+        if (!ROOT.has(KEY_SOURCE_SETTINGS)) return values;
+        JsonObject all = ROOT.getAsJsonObject(KEY_SOURCE_SETTINGS);
+        if (!all.has(providerId)) return values;
+        JsonObject o = all.getAsJsonObject(providerId);
+        for (String key : o.keySet()) {
+            String stored = jsonString(o, key, null);
+            if (stored != null) values.put(key, secretKeys.contains(key) ? CredentialStore.decrypt(stored) : stored);
+        }
+        return values;
+    }
+
+    /**
+     * Remembers the values used for a plugin source. Values whose keys are in
+     * {@code secretKeys} are encrypted with {@link CredentialStore}.
+     */
+    public static void saveSourceSettings(String providerId, java.util.Map<String, String> values,
+                                          java.util.Set<String> secretKeys) {
+        JsonObject all = ROOT.has(KEY_SOURCE_SETTINGS) ? ROOT.getAsJsonObject(KEY_SOURCE_SETTINGS) : new JsonObject();
+        JsonObject o = new JsonObject();
+        values.forEach((key, value) ->
+                o.addProperty(key, secretKeys.contains(key) ? CredentialStore.encrypt(value) : value));
+        all.add(providerId, o);
+        ROOT.add(KEY_SOURCE_SETTINGS, all);
         save();
     }
 

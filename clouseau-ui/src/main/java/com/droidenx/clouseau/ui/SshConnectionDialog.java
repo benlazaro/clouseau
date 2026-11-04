@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.core.SshConfig;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;

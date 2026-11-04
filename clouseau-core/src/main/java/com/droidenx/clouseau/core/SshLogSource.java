@@ -1,7 +1,6 @@
-package com.droidenx.clouseau.ui;
+package com.droidenx.clouseau.core;
 
 import com.droidenx.clouseau.api.LogSource;
-import com.droidenx.clouseau.core.Utf8Bom;
 import lombok.extern.slf4j.Slf4j;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;

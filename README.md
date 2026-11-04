@@ -152,11 +152,11 @@ Default Logback console format. Two variants are supported:
 
 ```
 clouseau/
-├── clouseau-api/       # Plugin contract — interfaces only (LogParser, LogFilter, LogSource)
-├── clouseau-core/      # Engine — RegexLogParser, file reading and tailing (no Swing)
+├── clouseau-api/       # Plugin contract — interfaces only (LogParser, LogSource, LogSourceProvider, …)
+├── clouseau-core/      # Engine — RegexLogParser, file tailing, SSH source (no Swing)
 ├── clouseau-plugin/    # PF4J plugin loader and lifecycle
 ├── clouseau-ui/        # Swing UI — MainFrame, LogPanel, FilterBar, SettingsDialog
-└── clouseau-example-plugin/  # Example plugin (logfmt parser) — a template for your own
+└── clouseau-example-plugin/  # Example plugin (logfmt parser, demo source) — a template for your own
 ```
 
 **Dependency rules:**
@@ -223,8 +223,8 @@ After installing a plugin the new extensions are immediately available — no re
 
 ## Writing a Plugin
 
-A plugin adds a `LogParser`, `LogFormatter` or `LogSyntaxHighlighter` from `clouseau-api`.
-(Plugins can't add a `LogSource` or `LogFilter` yet.) For a format a regex can describe,
+A plugin adds a `LogParser`, `LogFormatter`, `LogSyntaxHighlighter` or
+`LogSourceProvider` from `clouseau-api`. For a format a regex can describe,
 you don't need a plugin: add it to `parsers.json` instead (see above).
 
 The quickest start is to copy **[`clouseau-example-plugin`](clouseau-example-plugin)**, a
@@ -258,6 +258,34 @@ use it right away.
 Plugin parsers come after the built-in and `parsers.json` parsers during auto-detection,
 and a plugin parser can't reuse a name that's already taken. Exceptions thrown by a plugin
 parser are logged and the line is shown as UNKNOWN, so a bug can't stop a file loading.
+
+### Log sources
+
+A `LogSourceProvider` brings in live lines from somewhere else (a log aggregator, a
+message queue, …). It declares its settings, and Clouseau draws the form under
+**File → Open Source**, checks required fields, numbers and choices, and remembers the
+values (passwords encrypted). The example's `DemoStreamSource` shows the shape:
+
+```java
+@Extension
+public class DemoStreamSource implements LogSourceProvider {
+    @Override public String getName() { return "Demo log stream (example plugin)"; }
+
+    @Override public List<SourceSetting> settings() {
+        return List.of(
+                SourceSetting.text("service", "Service name").withDefault("checkout"),
+                SourceSetting.number("interval", "Milliseconds between lines").withDefault("500"),
+                SourceSetting.number("count", "Stop after this many lines").optional());
+    }
+
+    // Called on the UI thread: check values and build the source, but do no I/O here.
+    @Override public LogSource create(Map<String, String> values) { /* new Stream(...) */ }
+}
+```
+
+The `LogSource` it returns does the work: `open(consumer)` runs on a background thread
+and blocks, pushing each line to the consumer, until the stream ends or `close()` is
+called (from another thread, when the user closes the tab).
 
 ---
 

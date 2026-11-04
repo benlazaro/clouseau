@@ -39,7 +39,7 @@ exactly where the field left off.
 | Email | Attachments, often compressed | Saved to disk, then opened as a local file |
 | Local development | Plain files written by the running app, still growing | Opened directly, optionally followed live |
 | Remote hosts | Files on a server reachable over SSH | Streamed via SSH (`tail -f`) |
-| Log aggregators | Loki, CloudWatch, and similar services | Third-party `LogSource` plugins only (UC-11) |
+| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Open Source (UC-11) |
 
 Logs from tickets and email are **local files the user has already saved**. Opening them
 should be as easy as possible (drag-and-drop, "Open with"), but Clouseau does not fetch
@@ -235,13 +235,20 @@ ship with.
 2. User installs it by dropping the JAR in the plugins folder, or from a plugin repository
    (Nexus or Maven Central) in the Plugin Manager.
 3. The new capability is available without restarting.
+4. For a log source, the user picks it under **File → Open Source**, fills in the form
+   Clouseau builds from the settings the plugin declares, and the lines stream into a new
+   tab.
 
 **Success:** Plugins depend only on `clouseau-api` and keep working across Clouseau
 releases that don't change that API.
 
+**Current behavior:** Parsers, formatters, syntax highlighters and log sources
+(`LogSourceProvider`) can all come from plugins. A source's settings are remembered per
+plugin, with passwords encrypted. Plugins can't add filters. The example plugin ships a
+logfmt parser and a demo live source.
+
 **Scope note:** Sources that read from log aggregators (Loki, CloudWatch, and similar)
-are welcome as plugins, and `LogSource` must make them possible. The core application
-does not ship them.
+are welcome as plugins. The core application does not ship them.
 
 ### UC-12 · View related logs in one merged view ❌
 

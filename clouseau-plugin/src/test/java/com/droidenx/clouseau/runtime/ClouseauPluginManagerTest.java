@@ -2,6 +2,10 @@ package com.droidenx.clouseau.runtime;
 
 import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.api.LogSource;
+import com.droidenx.clouseau.api.LogSourceProvider;
+import com.droidenx.clouseau.api.SourceSetting;
+import com.droidenx.clouseau.core.SourceSettings;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,7 +14,10 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,10 +81,38 @@ class ClouseauPluginManagerTest {
                 .satisfies(info -> {
                     assertThat(info.id()).isEqualTo(PLUGIN_ID);
                     assertThat(info.version()).isEqualTo("1.0.0");
-                    assertThat(info.types()).isEqualTo("Parser");
+                    assertThat(info.types()).isEqualTo("Parser, Source");
                     assertThat(info.enabled()).isTrue();
                 });
         assertThat(manager.getExtensionDetails(PLUGIN_ID))
-                .anySatisfy(line -> assertThat(line).contains("logfmt (example plugin)"));
+                .anySatisfy(line -> assertThat(line).contains("logfmt (example plugin)"))
+                .anySatisfy(line -> assertThat(line).startsWith("Source:").contains("Demo log stream"));
+    }
+
+    @Test
+    void sourceProviderCreatesAWorkingSource() throws Exception {
+        List<LogSourceProvider> providers = manager.getExtensions(LogSourceProvider.class);
+        assertThat(providers).hasSize(1);
+        LogSourceProvider provider = providers.get(0);
+
+        assertThat(provider.settings()).extracting(SourceSetting::key)
+                .containsExactly("service", "interval", "mix", "count");
+
+        // The same path the app takes: check the form's values, create, open, parse.
+        Map<String, String> entered = new HashMap<>();
+        provider.settings().forEach(s -> entered.put(s.key(), s.defaultValue()));
+        entered.put("interval", "10");
+        entered.put("count", "2");
+        SourceSettings.Result checked = SourceSettings.check(provider.settings(), entered);
+        assertThat(checked.ok()).isTrue();
+
+        LogSource source = provider.create(checked.values());
+        List<String> lines = new ArrayList<>();
+        source.open(lines::add);
+
+        assertThat(lines).hasSize(2);
+        LogParser parser = logfmtParser();
+        assertThat(parser.canParse(lines.get(0))).isTrue();
+        assertThat(parser.parse(lines.get(0)).logger()).isEqualTo("checkout");
     }
 }

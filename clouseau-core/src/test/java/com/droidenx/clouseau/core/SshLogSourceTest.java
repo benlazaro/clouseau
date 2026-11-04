@@ -1,4 +1,4 @@
-package com.droidenx.clouseau.ui;
+package com.droidenx.clouseau.core;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

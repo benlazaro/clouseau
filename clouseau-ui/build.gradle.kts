@@ -391,7 +391,7 @@ dependencies {
     implementation("com.formdev:flatlaf-intellij-themes:${rootProject.extra["flatlafVersion"]}")
     implementation("com.miglayout:miglayout-swing:${rootProject.extra["migLayoutVersion"]}")
     implementation("com.fifesoft:rsyntaxtextarea:${rootProject.extra["rstaVersion"]}")
-    implementation("com.hierynomus:sshj:0.38.0")
+
     // PF4J is on the runtime classpath via clouseau-plugin; needed here only for compilation
     // because LogParser extends ExtensionPoint
     compileOnly("org.pf4j:pf4j:${rootProject.extra["pf4jVersion"]}")

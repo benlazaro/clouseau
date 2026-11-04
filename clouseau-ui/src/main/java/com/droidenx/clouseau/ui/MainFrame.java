@@ -3,7 +3,10 @@ package com.droidenx.clouseau.ui;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.api.LogSourceProvider;
+import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.ParserList;
+import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.ui.theme.ThemeManager;
@@ -29,6 +32,7 @@ public final class MainFrame extends JFrame {
     private List<LogParser> parsers;
     private List<LogFormatter> formatters;
     private List<LogSyntaxHighlighter> syntaxHighlighters;
+    private List<LogSourceProvider> sourceProviders = List.of();
     private final JTabbedPane tabbedPane = new JTabbedPane();
     private final CardLayout cardLayout  = new CardLayout();
     private final JPanel contentArea     = new JPanel(cardLayout);
@@ -89,6 +93,9 @@ public final class MainFrame extends JFrame {
     void reloadExtensions() {
         reloadParsers();
 
+        this.sourceProviders = List.copyOf(pluginManager.getExtensions(LogSourceProvider.class));
+        log.info("Loaded {} source provider(s)", sourceProviders.size());
+
         this.formatters = new ArrayList<>();
         this.formatters.add(new JsonMessageFormatter());
         this.formatters.addAll(pluginManager.getExtensions(LogFormatter.class));
@@ -126,6 +133,16 @@ public final class MainFrame extends JFrame {
         JMenuItem sshItem = menuItem(Messages.get("menu.file.ssh"));
         sshItem.addActionListener(e -> openSsh());
         fileMenu.add(sshItem);
+
+        // Rebuilt each time it opens, so sources from newly installed plugins appear.
+        JMenu sourceMenu = new JMenu(Messages.get("menu.file.source"));
+        sourceMenu.setMargin(new Insets(7, mh, 7, mh));
+        sourceMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildSourceMenu(sourceMenu); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        });
+        fileMenu.add(sourceMenu);
 
         closeTabItem = menuItem(Messages.get("menu.file.close.tab"));
         closeTabItem.setEnabled(false);
@@ -356,7 +373,49 @@ public final class MainFrame extends JFrame {
             LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
             String title = r.config().user() + "@" + r.config().host();
             addLogTab(title, null, panel);
-            panel.loadSsh(r.config(), r.parser());
+            panel.loadSource(new SshLogSource(r.config()), r.parser());
+        });
+    }
+
+    private void rebuildSourceMenu(JMenu menu) {
+        menu.removeAll();
+        if (sourceProviders.isEmpty()) {
+            JMenuItem none = menuItem(Messages.get("menu.file.source.none"));
+            none.setEnabled(false);
+            menu.add(none);
+            return;
+        }
+        for (LogSourceProvider provider : sourceProviders) {
+            String name;
+            try {
+                name = provider.getName();
+            } catch (RuntimeException e) {
+                log.warn("Source plugin {} failed in getName()", provider.getClass().getName(), e);
+                continue;
+            }
+            JMenuItem item = menuItem(name + "…");
+            item.addActionListener(e -> openSource(provider, name));
+            menu.add(item);
+        }
+    }
+
+    /** Shows a source plugin's settings form, then streams the source into a new tab. */
+    private void openSource(LogSourceProvider provider, String name) {
+        List<SourceSetting> settings;
+        try {
+            settings = List.copyOf(provider.settings());
+        } catch (RuntimeException | LinkageError e) {
+            log.error("Source plugin '{}' failed in settings()", name, e);
+            JOptionPane.showMessageDialog(this,
+                    java.text.MessageFormat.format(Messages.get("source.dialog.create.failed"), e),
+                    Messages.get("source.error.title"), JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        new SourceSettingsDialog(this, provider, settings, parsers).showDialog().ifPresent(r -> {
+            log.info("Opening source '{}'", name);
+            LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
+            addLogTab(name, null, panel);
+            panel.loadSource(r.source(), r.parser());
         });
     }
 

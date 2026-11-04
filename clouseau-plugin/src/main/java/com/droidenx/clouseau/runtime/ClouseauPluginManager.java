@@ -2,6 +2,7 @@ package com.droidenx.clouseau.runtime;
 
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.DefaultPluginManager;
@@ -50,6 +51,7 @@ public final class ClouseauPluginManager {
         if (!pf4j.getExtensions(LogParser.class,           pluginId).isEmpty()) types.add("Parser");
         if (!pf4j.getExtensions(LogFormatter.class,        pluginId).isEmpty()) types.add("Formatter");
         if (!pf4j.getExtensions(LogSyntaxHighlighter.class, pluginId).isEmpty()) types.add("Highlighter");
+        if (!pf4j.getExtensions(LogSourceProvider.class,    pluginId).isEmpty()) types.add("Source");
         return types.isEmpty() ? "\u2014" : String.join(", ", types);
     }
 
@@ -62,6 +64,7 @@ public final class ClouseauPluginManager {
         addGroup(details, "Parser",      pf4j.getExtensions(LogParser.class,            pluginId).stream().map(LogParser::getName).toList());
         addGroup(details, "Formatter",   pf4j.getExtensions(LogFormatter.class,         pluginId).stream().map(LogFormatter::getName).toList());
         addGroup(details, "Highlighter", pf4j.getExtensions(LogSyntaxHighlighter.class, pluginId).stream().map(LogSyntaxHighlighter::getName).toList());
+        addGroup(details, "Source",      pf4j.getExtensions(LogSourceProvider.class,    pluginId).stream().map(LogSourceProvider::getName).toList());
         return details;
     }
 

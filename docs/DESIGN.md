@@ -40,11 +40,11 @@ clouseau-ui ─────────────┐   MainFrame, tabs, LogPan
    │               clouseau-plugin   ClouseauPluginManager (PF4J wrapper)
    │                     │
    ▼                     │
-clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, MemoryGuard, Utf8Bom, FileLogSource
+clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, SshLogSource, SourceSettings, …
    │
    ▼
-clouseau-api                 LogEntry, LogParser, LogSource, LogFormatter,
-   ▲                         LogSyntaxHighlighter, LogFilter
+clouseau-api                 LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
+   ▲                         LogSource, LogSourceProvider, SourceSetting
    │ compileOnly
 third-party plugins
 ```
@@ -112,8 +112,7 @@ tab.
 | `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the JSON-defined parsers (section 5.1) | `RegexLogParser`, configured from JSON |
 | `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
 | `LogSyntaxHighlighter` | Color spans in the detail panel | Yes | `JsonSyntaxHighlighter` |
-| `LogSource` | Deliver lines from somewhere | No: not an `ExtensionPoint` (see [G-3](#11-known-gaps)) | `FileLogSource` (unused), `SshLogSource` |
-| `LogFilter` | Accept or reject entries | No: not an `ExtensionPoint` | None; filtering uses predicates in the UI |
+| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File → Open Source (section 6.3) | None; SSH has its own dialog and creates `SshLogSource` directly |
 
 **Contract notes:**
 
@@ -123,9 +122,15 @@ tab.
 - `LogFormatter` and `LogSyntaxHighlighter` work on message text, so one implementation
   works for any log format.
 - `LogSource.open(Consumer<String>)` **pushes** lines to the consumer. The source decides
-  how to get them: reading to the end of a file, a server-side `tail -f`, or a streaming
-  API. This is what lets aggregator sources such as Loki or CloudWatch exist as plugins
-  (UC-11).
+  how to get them: a server-side `tail -f`, or a streaming API. `open` runs on a
+  background thread and blocks until the stream ends or `close()` is called; `close()`
+  comes from another thread, maybe more than once, maybe before `open` connects. This is
+  what lets aggregator sources such as Loki or CloudWatch exist as plugins (UC-11, D-11).
+- `LogSourceProvider` is the discoverable part (D-14). PF4J shares one instance, so
+  per-connection state lives in the `LogSource` it creates. `settings()` declares
+  `SourceSetting`s (text, password, number, choice; required or optional; default);
+  `create(values)` runs on the EDT, so it only checks values and builds the source, and
+  throws `IllegalArgumentException` with a message for the user if a value is wrong.
 
 ### 5.1 Parsers as data
 
@@ -164,7 +169,7 @@ refresh; open tabs keep the list they were created with.
 | **Load worker** (`SwingWorker`, one per tab) | Read and parse the file; `publish` entries in chunks. |
 | **Tail worker** (`SwingWorker`, one per tab) | Read new lines while following. |
 | **Filter executor** (`clouseau-filter`, one per tab) | Re-run the active filter over all entries; a generation counter discards stale results. |
-| **SSH worker** (`SwingWorker`, one per tab) | Receive lines from the remote `tail -f`. |
+| **Source worker** (`SwingWorker`, one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. |
 
 **Rules:**
 
@@ -201,15 +206,28 @@ refresh; open tabs keep the list they were created with.
 
 - **Local files:** The tail worker checks the file size every 500 ms and reads new bytes
   from the last position with `FileTail` (core). Like the initial load, it decodes UTF-8
-  with malformed input replaced, and skips a BOM when reading from offset 0. It only consumes complete lines: a line still being
-  written is held back until its newline arrives, so it never becomes two entries. If the
+  with malformed input replaced, and skips a BOM when reading from offset 0. It only
+  consumes complete lines: a line still being written is held back until its newline
+  arrives, so it never becomes two entries. If the
   file shrinks, Clouseau treats it as rotated and reads from the start; existing rows are
   kept. Compressed files are never followed.
 - **SSH:** `SshLogSource` runs `tail -n <N> -f -- '<path>'` on the server over sshj and
   receives lines as they're written. Nothing on the client polls. The path is
   single-quoted for a POSIX shell, so spaces and shell metacharacters are taken
   literally; a leading `~/` is left unquoted so it still expands to the remote home.
-- **Memory bound:** Live entries (tail and SSH) go through `LogTableModel.appendLive`,
+- **Plugin sources (D-14):** **File → Open Source** lists every `LogSourceProvider`,
+  rebuilt each time the menu opens. Choosing one opens `SourceSettingsDialog`, a form
+  with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`
+  (core) trims values, drops empty optional ones, and checks required values, numbers
+  and choices; then `create` is called. The values are remembered per provider (keyed by
+  its class name) in `settings.json`, with password values encrypted by
+  `CredentialStore`. Exceptions from a plugin's `getName`, `settings` or `create` are
+  logged and shown, never thrown into the UI.
+- **Live tabs:** SSH and plugin sources share `LogPanel.loadSource`: a source worker
+  calls `open`, parses each line with the chosen parser or auto-detection, and appends
+  live entries. Columns are sized after the first batch arrives, and again when a later
+  line brings a new field. Closing the tab (or loading something else) calls `close()`.
+- **Memory bound:** Live entries (tail, SSH and plugin sources) go through `LogTableModel.appendLive`,
   which keeps the tab at most at its cap and evicts the oldest entries, along with their
   highlights. The cap is `max.entries.per.tab` (default 200,000, range
   10,000–2,000,000), or the number of entries the static load added if that was larger,
@@ -365,11 +383,10 @@ When opening a `.zip`, Clouseau checks for `manifest.json`. If it's there, the f
 bundle: it opens the log and loads its annotations. Otherwise it's an ordinary compressed
 log (UC-2). The format is an interchange format (section 7, rule 3).
 
-### D-11 · Aggregator sources are plugins · Accepted
+### D-11 · Aggregator sources are plugins · Adopted
 
-Readers for Loki, CloudWatch, and similar services are welcome, but only as plugins. This
-requires `LogSource` to become a discoverable extension point (see
-[G-3](#11-known-gaps)).
+Readers for Loki, CloudWatch, and similar services are welcome, but only as plugins.
+Plugins provide them through `LogSourceProvider` (D-14).
 
 ### D-12 · Java 21 · Adopted
 
@@ -422,6 +439,25 @@ worker, and `AnnotationStore`. A single-file tab is just a tab with one source.
 - **Scale:** A merged view multiplies the data in one tab, so it relies on D-7 and D-8
   even more than a single file does.
 
+### D-14 · Plugin sources declare their settings; no plugin filters · Adopted
+
+A `LogSource` needs settings for each connection (a URL, a query, a token), but PF4J
+creates one instance of each extension, with no arguments. So the extension point is a
+factory, `LogSourceProvider`, and the source itself stays a plain interface.
+
+- **Settings are declared, not drawn.** A provider lists `SourceSetting`s, and Clouseau
+  draws one generic form for all providers. This keeps Swing out of `clouseau-api`
+  (section 3, rule 3), makes every source look and behave the same, and lets Clouseau
+  own validation and credential storage. Rejected: a single location string such as
+  `loki://…` (awkward for several values and secrets, and each plugin invents a syntax),
+  and letting plugins show their own dialog (puts Swing in the API).
+- **`LogFilter` was removed from `clouseau-api`.** It was never discoverable, so no
+  plugin could have used it, and no use case asks for plugin filters. It can come back
+  with a use case behind it.
+- **SSH stays special.** Its dialog has auth modes, key files and saved connections, so
+  it keeps its own form, but it streams through the same `LogPanel.loadSource` path.
+  `SshLogSource` lives in `clouseau-core`.
+
 ## 10. Planned features
 
 Accepted in the use cases, with no design decision needed beyond the above:
@@ -463,7 +499,6 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-3** | `LogSource` and `LogFilter` are not `ExtensionPoint`s, and the UI constructs sources directly. `FileLogSource` (core) is unused; `SshLogSource` lives in `clouseau-ui`. | Plugins can't add sources (blocks D-11). Violates section 3, rule 2. |
 | **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |
 | **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
 | **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. The zip picker in UC-12 will close this. |

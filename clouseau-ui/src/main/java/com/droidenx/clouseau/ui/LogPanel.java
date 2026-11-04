@@ -4,6 +4,7 @@ import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.FileTail;
 import com.droidenx.clouseau.core.MemoryGuard;
@@ -78,7 +79,8 @@ public final class LogPanel extends JPanel {
     private JScrollPane tableScrollPane;
     private volatile SwingWorker<?, ?> currentWorker;
     private volatile SwingWorker<Void, LogEntry> tailWorker;
-    private volatile SshLogSource sshSource;
+    /** The live source streaming into this tab (SSH or a plugin), or null. */
+    private volatile LogSource liveSource;
     private Path currentFile;
     private Optional<LogParser> currentParser = Optional.empty();
     private volatile long tailPosition = 0;
@@ -329,20 +331,30 @@ public final class LogPanel extends JPanel {
         stopTailing();
         SwingWorker<?, ?> w = currentWorker;
         if (w != null) w.cancel(true);
-        SshLogSource s = sshSource;
-        if (s != null) { s.close(); sshSource = null; }
+        LogSource s = liveSource;
+        liveSource = null;
+        if (s != null) {
+            try {
+                s.close();
+            } catch (Exception | LinkageError e) {
+                log.warn("Error closing source {}", s.getClass().getName(), e);
+            }
+        }
     }
 
     /**
-     * Connects to a remote host via SSH and streams log lines using {@code tail -f}.
-     * The panel immediately shows the content card; rows appear as they arrive.
+     * Streams a live source (SSH, or one from a plugin) into this tab: {@code source.open}
+     * runs on a background worker, and each line is parsed with {@code parser} (or
+     * auto-detected) and appended as a live entry, subject to the entry cap. Rows appear
+     * as they arrive. Closing the tab closes the source.
      */
-    public void loadSsh(SshConfig config, Optional<LogParser> parser) {
+    public void loadSource(LogSource source, Optional<LogParser> parser) {
+        String name = sourceName(source);
         currentFile   = null;
         currentParser = parser;
-        statusBarPathLabel.setText(config.displayName());
-        statusBarPathLabel.setToolTipText(config.displayName());
-        cancelLoad();   // closes any prior SSH source, cancels in-flight workers
+        statusBarPathLabel.setText(name);
+        statusBarPathLabel.setToolTipText(name);
+        cancelLoad();   // closes any prior source, cancels in-flight workers
         partialLoad = false;
 
         logTableModel.clear();
@@ -354,8 +366,7 @@ public final class LogPanel extends JPanel {
 
         ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
 
-        SshLogSource source = new SshLogSource(config);
-        sshSource = source;
+        liveSource = source;
 
         SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
             boolean firstBatch = true;
@@ -363,7 +374,7 @@ public final class LogPanel extends JPanel {
             @Override
             protected Void doInBackground() throws Exception {
                 source.open(line -> {
-                    if (line.isBlank() || isCancelled()) return;
+                    if (line == null || line.isBlank() || isCancelled()) return;
                     final String candidate = line;
                     LogEntry entry = parser.map(Stream::of)
                             .orElseGet(parsers::stream)
@@ -382,14 +393,19 @@ public final class LogPanel extends JPanel {
             @Override
             protected void process(List<LogEntry> chunk) {
                 if (isCancelled()) return;
+                int columnsBefore = logTableModel.getColumnCount();
+                logTableModel.appendLive(chunk);
                 if (firstBatch) {
+                    // Size columns once the first rows (and their fields) are in, so the
+                    // fit uses real content and field columns aren't pushed off-screen.
                     firstBatch = false;
                     logTableModel.endBatchLoad();
                     ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
                     applyDefaultLayoutIfSet();
                     autoResizeColumns();
+                } else if (logTableModel.getColumnCount() != columnsBefore) {
+                    autoResizeColumns();   // a later line brought a new field column
                 }
-                logTableModel.appendLive(chunk);
                 filterBar.addBatch(chunk);
                 if (follow) scrollToBottom();
             }
@@ -402,17 +418,29 @@ public final class LogPanel extends JPanel {
                     get();
                 } catch (java.util.concurrent.ExecutionException ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    log.error("SSH error for {}", config.displayName(), cause);
+                    log.error("Source error for {}", name, cause);
+                    String message = cause.getMessage() != null ? cause.getMessage() : cause.toString();
                     JOptionPane.showMessageDialog(
                             SwingUtilities.getWindowAncestor(LogPanel.this),
-                            cause.getMessage(),
-                            Messages.get("ssh.error.title"),
+                            message,
+                            Messages.get("source.error.title"),
                             JOptionPane.ERROR_MESSAGE);
                 } catch (Exception ignored) {}
             }
         };
         currentWorker = worker;
         worker.execute();
+    }
+
+    /** The source's name, or its class name if a plugin's {@code getName} fails. */
+    private static String sourceName(LogSource source) {
+        try {
+            String name = source.getName();
+            if (name != null && !name.isBlank()) return name;
+        } catch (RuntimeException e) {
+            log.warn("getName() failed for source {}", source.getClass().getName(), e);
+        }
+        return source.getClass().getSimpleName();
     }
 
     private static boolean isCompressed(Path file) {

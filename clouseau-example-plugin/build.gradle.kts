@@ -1,4 +1,5 @@
-// clouseau-example-plugin — a complete, minimal third-party plugin: a logfmt LogParser.
+// clouseau-example-plugin — a complete, minimal third-party plugin: a logfmt LogParser and
+// a demo LogSourceProvider.
 // Copy this module to start your own plugin. Like any plugin, it depends only on
 // clouseau-api (compileOnly); the app provides it at runtime. Not shipped with the app.
 
@@ -28,7 +29,7 @@ tasks.jar {
             "Plugin-Id"       to pluginId,
             "Plugin-Version"  to pluginVersion,
             "Plugin-Provider" to "Clouseau",
-            "Plugin-Description" to "Example plugin: parses logfmt (key=value) lines",
+            "Plugin-Description" to "Example plugin: a logfmt parser and a demo live source",
         )
     }
 }

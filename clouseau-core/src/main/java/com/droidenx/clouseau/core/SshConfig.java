@@ -1,4 +1,4 @@
-package com.droidenx.clouseau.ui;
+package com.droidenx.clouseau.core;
 
 /**
  * Immutable SSH connection parameters.

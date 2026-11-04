@@ -21,12 +21,12 @@ as the code.
 
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
-                    LogSource, LogFilter. No Swing, no implementation.
-clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, FileTail, Utf8Bom,
-                    MemoryGuard, ParserList
+                    LogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
+clouseau-core     ← UI-independent engine: RegexLogParser, FileTail, Utf8Bom, MemoryGuard,
+                    ParserList, SshLogSource, SshConfig, SourceSettings
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
-clouseau-example-plugin ← example third-party plugin (logfmt LogParser); not shipped
+clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
 ```
 
 **Dependency rules (enforce these):**
@@ -86,7 +86,8 @@ tags.
 - `LogEntry` (api) — immutable record: timestamp, level, logger, thread, message, rawLine,
   fields. Lines no parser accepts become `UNKNOWN` entries (continuation lines).
 - `LogParser` / `LogFormatter` / `LogSyntaxHighlighter` (api) — PF4J extension points.
-- `LogSource` / `LogFilter` (api) — not discoverable from plugins yet (G-3).
+- `LogSource` (api) — pushes live lines; `LogSourceProvider` (extension point) creates one
+  from declared `SourceSetting`s, shown under File → Open Source by `SourceSettingsDialog`.
 - `RegexLogParser` (core) — the parser behind every JSON-defined format.
 - `FileTail` (core) — reads complete UTF-8 lines appended to a file, for follow mode.
 - `ClouseauPluginManager` (plugin) — `loadAll()` at startup, `refresh()` to hot-reload.
