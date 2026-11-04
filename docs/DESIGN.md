@@ -190,7 +190,9 @@ refresh; open tabs keep the list they were created with.
    `load(zip, entry, …)`. The tab keys its annotations to `ZipLogs.entryKey`,
    `<zip>!<entry>` next to the zip.
 1. `LogPanel.load` clears the tab and starts a load worker, which reads the file with
-   `LogFileReader` (core) and hands each entry to the tab.
+   `LogFileReader` (core) and hands each entry to the tab. (With
+   `-Dclouseau.indexStaticFiles=true`, a plain file is instead indexed with
+   `LineScanner` into an `EntryIndex` and read back through `IndexedEntries`; see D-16.)
 2. `LogReaders.open` (core) picks the decoder from the file name: plain, `.gz` (`GZIPInputStream`),
    or one file of a `.zip` (`ZipLogs`, core). Bytes are decoded as UTF-8, with
    malformed input replaced rather than failing. A leading UTF-8 byte-order mark (written
@@ -510,7 +512,13 @@ colleague with another theme sees the same slots in their own colors.
 ### D-16 · How static files are indexed · Accepted
 
 The design for D-8, written to close G-5. Accepted on 2026-11-04 with the recommended
-answer to each question at the end. Built so far: step 1 (`LineScanner`, `EntryIndex`).
+answer to each question at the end. Built so far: steps 1 and 2. Step 2 is switched on
+only with `-Dclouseau.indexStaticFiles=true`, because until step 3 every filter change
+re-reads the whole file; step 3 makes it the default.
+
+**Measured after step 2** (a 1M-line, 125 MB log in the sample format; heap after a full
+GC, whole app): 478 MB without the index, **81 MB with it**. A level filter over the
+million rows, which still re-reads and re-parses the file, took under 3 s.
 
 **Why.** A loaded entry costs about 120 bytes of heap per line today (the D-12 benchmark:
 118 MB for 1M lines), so the default 2 GB heap stops somewhere under 17M lines. That is a
@@ -523,10 +531,12 @@ SSH and plugin sources keep the in-memory model and its entry limit (D-7).
 **Pieces** (all in `clouseau-core` unless noted):
 
 - **`LineScanner`** reads the file as **bytes**, not characters, and reports each line's
-  byte offset and length. It splits on `\n` and drops a trailing `\r`; the newline byte
-  never occurs inside a multi-byte UTF-8 character, so this is safe. It skips a leading
-  BOM (offsets start after it) and skips blank lines, as `LogFileReader` does now. A
-  `BufferedReader` can't be used, because it hides byte positions.
+  byte offset and length. Lines end at `\n`, `\r\n` or a lone `\r`, exactly as
+  `BufferedReader.readLine` splits them, so entry numbers match the in-memory loader;
+  neither byte occurs inside a multi-byte UTF-8 character. It skips a leading BOM (the
+  offsets still count it, so they are true file positions) and skips blank lines, as
+  `LogFileReader` does. A `BufferedReader` can't be used, because it hides byte
+  positions.
 - **`EntryIndex`** holds one row per entry, in file order, as columns of primitives:
 
   | Column | Type | Bytes |
@@ -549,11 +559,21 @@ SSH and plugin sources keep the in-memory model and its entry limit (D-7).
   `length` bytes at `offset` (one `FileChannel` per tab), UTF-8 decoding with malformed
   input replaced, then `LineParser` on the line. A cache of the last 10,000 entries
   covers scrolling, the detail panel and the renderers, which ask for the same rows many
-  times.
-- **`EntryStore`** (interface) is what `LogTableModel` (ui) reads entries through. It
-  has two implementations: the current list, used for live tabs, and `IndexedEntries`.
-  Rows stay a sorted list of ordinals, and an ordinal is still the entry's position in
-  the file.
+  times; it is used on the EDT only. `scan` reads a range of rows in order, in 1 MB
+  sequential reads, for the filter executor. It opens its own channel each time,
+  because the executor is cancelled by interrupts, and interrupting a thread inside
+  `FileChannel.read` closes that channel.
+- **`LogTableModel`** (ui) holds an optional `IndexedEntries` in front of its in-memory
+  list: ordinals below the indexed count are read through it, and entries that arrive
+  later (following) go in the list after them. An indexed tab is never trimmed. Rows
+  stay a sorted list of ordinals, and an ordinal is still the entry's position in the
+  file. (The design first called for an `EntryStore` interface with two
+  implementations; one optional prefix turned out simpler, with the same effect.)
+- **Threads.** The load worker appends to the `EntryIndex` and publishes each entry; the
+  model only reads rows it has been handed through `publish`. The offset and length
+  columns are published safely (each column's chunk list is a volatile field that's
+  replaced, never changed in place, when it grows). The dictionaries are for the load
+  worker only until step 3 needs them elsewhere.
 
 **Loading.** One pass: `LineScanner` → `LineParser` → `EntryIndex`. The parsed
 `LogEntry` is dropped after its columns are written. The table shows rows as chunks
@@ -596,7 +616,10 @@ how the file was rotated:
   channel on the old file, so older rows stay readable. On Windows this needs the channel
   opened with delete sharing, or the writer can't rename the file. A channel from
   `Files.newByteChannel` shares delete by default; `RandomAccessFile` doesn't, so it
-  must not be used. The new file is followed as new rows, as it is today.
+  must not be used. The new file is followed as new rows, as it is today. `scan`
+  currently opens the file again by name, which after a rename is the new file, so
+  step 5 must give it the old one (for example by keeping a second open channel that
+  only the filter executor uses, and reopening it if an interrupt closes it).
 - **Truncated in place** (copytruncate): the old text is gone. Older rows keep what the
   index holds (time, level, logger, thread). The message reads "Text no longer in the file
   (rotated)", and the status bar says the file was rotated.
@@ -607,10 +630,13 @@ removes that ceiling too.
 
 **Order of work** (each step ships and is tested on its own):
 
-1. `LineScanner` and `EntryIndex`, with tests against the current reader on the sample
+1. ✅ `LineScanner` and `EntryIndex`, with tests against the current reader on the sample
    logs (same entries, same entry numbers).
-2. `EntryStore` behind `LogTableModel`; static files read through `IndexedEntries`.
-3. The two-part filter, and the text scan with progress.
+2. ✅ `IndexedEntries` behind `LogTableModel`; plain static files are indexed when
+   `-Dclouseau.indexStaticFiles=true`. Until step 3, a filter change re-reads the file,
+   and Find reads rows on the EDT.
+3. The two-part filter, and the text scan with progress (Find included). Then index
+   plain static files by default and remove the property.
 4. Compressed files through `cache/`.
 5. Follow and rotation on the index.
 6. Update UC-1, close G-5, mark D-8 and D-16 Adopted.
@@ -676,5 +702,5 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-5** | Static files are held fully in memory (D-8 isn't built; its design, D-16, is accepted and step 1 of 6 is done), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
+| **G-5** | Static files are held fully in memory (D-8 isn't built; its design, D-16, is accepted, and steps 1 and 2 of 6 are done, the second behind a system property), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
 | **G-9** | Reading, parsing, following and annotation anchoring now live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`) and the detail pane in `DetailPanel`, but `LogPanel` is still about 1,650 lines of UI: table and renderers, context menus, find bar, highlight navigation and status bar. | Still long to review. Next splits: the find bar and the highlight navigation bar into their own classes. |

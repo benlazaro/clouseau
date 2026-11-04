@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogEntry;
+import com.droidenx.clouseau.core.IndexedEntries;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
@@ -26,6 +27,10 @@ import java.util.function.Predicate;
  * Every entry has an <em>ordinal</em>: its 0-based position in the source. It never
  * changes while the tab is open, even as old live entries are dropped, so annotations
  * and highlights are keyed by it.
+ * <p>
+ * A static file can be <em>indexed</em> (D-16): its entries then live in an
+ * {@link IndexedEntries}, read back from disk on demand, and only entries that arrive
+ * afterwards (following) are held in the list, after them. An indexed tab is never trimmed.
  */
 public final class LogTableModel extends AbstractTableModel {
 
@@ -49,7 +54,11 @@ public final class LogTableModel extends AbstractTableModel {
         fireTableDataChanged();
     }
 
-    /** Every entry still held, oldest first; the entry at index i has ordinal trimmedCount + i. */
+    /** The indexed static file's entries (ordinals 0 to indexedCount - 1), or null. */
+    private IndexedEntries               indexed;
+    /** Rows of {@link #indexed} handed to this model so far. */
+    private int                          indexedCount = 0;
+    /** Entries held in memory, oldest first; the entry at index i has ordinal listBase() + i. */
     private final List<LogEntry>         allEntries = new ArrayList<>();
     /** Ordinals of the entries that pass the active filter, ascending. */
     private       IntList                rows       = new IntList();
@@ -71,7 +80,22 @@ public final class LogTableModel extends AbstractTableModel {
     /** Stops the background filter thread. Call when the tab closes. */
     public void dispose() {
         filterExecutor.shutdownNow();
+        closeIndexed();
     }
+
+    private void closeIndexed() {
+        if (indexed != null) indexed.close();
+        indexed = null;
+        indexedCount = 0;
+    }
+
+    /** The ordinal of {@code allEntries.get(0)}. */
+    private int listBase() {
+        return indexed != null ? indexedCount : trimmedCount;
+    }
+
+    /** True if this tab shows an indexed static file. */
+    public boolean isIndexed() { return indexed != null; }
 
     // ── Ordinals ─────────────────────────────────────────────────────────────
 
@@ -87,13 +111,14 @@ public final class LogTableModel extends AbstractTableModel {
 
     /** The entry with this ordinal, or null if it was dropped or doesn't exist yet. */
     public LogEntry entryAtOrdinal(int ordinal) {
-        int i = ordinal - trimmedCount;
+        if (indexed != null && ordinal >= 0 && ordinal < indexedCount) return indexed.get(ordinal);
+        int i = ordinal - listBase();
         return i >= 0 && i < allEntries.size() ? allEntries.get(i) : null;
     }
 
     /** The ordinal the next appended entry gets. */
     public int nextOrdinal() {
-        return trimmedCount + allEntries.size();
+        return listBase() + allEntries.size();
     }
 
     // ── Highlights ───────────────────────────────────────────────────────────
@@ -153,7 +178,11 @@ public final class LogTableModel extends AbstractTableModel {
 
     public void clear() {
         Runnable doClear = () -> {
+            // A filter run still going is for the old entries: drop its result.
+            if (filterFuture != null) filterFuture.cancel(true);
+            filterGeneration++;
             allEntries.clear();
+            closeIndexed();
             trimmedCount = 0;
             staticCount  = 0;
             highlights.clear();
@@ -167,11 +196,36 @@ public final class LogTableModel extends AbstractTableModel {
     }
 
     /**
+     * Makes this tab show an indexed static file. Call after {@link #clear()}, before the
+     * first {@link #appendBatch}; the model closes {@code entries} when it is cleared or
+     * disposed. Must be called on the EDT.
+     */
+    public void beginIndexedLoad(IndexedEntries entries) {
+        if (!allEntries.isEmpty() || indexed != null) throw new IllegalStateException("clear() first");
+        indexed = entries;
+        indexedCount = 0;
+    }
+
+    /**
      * Appends a batch read from a static file. Never trims: opening a file must not drop
-     * lines (D-7). Must be called on the EDT.
+     * lines (D-7). In an indexed load, {@code entries} are the ones just added to the
+     * index, in order; the model keeps only their count and reads them back when needed.
+     * Must be called on the EDT.
      */
     public void appendBatch(List<LogEntry> entries) {
-        addEntries(entries);
+        if (indexed != null) {
+            int ordinal = indexedCount;
+            indexedCount += entries.size();
+            discoverFields(entries);
+            int first = rows.size();
+            for (LogEntry e : entries) {
+                if (activeFilter.test(e)) rows.add(ordinal);
+                ordinal++;
+            }
+            if (rows.size() > first) fireTableRowsInserted(first, rows.size() - 1);
+        } else {
+            addEntries(entries);
+        }
         staticCount += entries.size();
     }
 
@@ -210,6 +264,7 @@ public final class LogTableModel extends AbstractTableModel {
      * exceeds {@link #entryCap()}. Must be called on the EDT.
      */
     private void trimToLimit() {
+        if (indexed != null) return;   // the index costs too little per entry to need it (D-16)
         int cap = entryCap();
         if (cap <= 0 || allEntries.size() <= cap) return;
         int toRemove = allEntries.size() - cap;
@@ -233,15 +288,6 @@ public final class LogTableModel extends AbstractTableModel {
     /** Total number of entries dropped from the front of this tab since it was opened. */
     public long getTrimmedCount() { return trimmedCount; }
 
-    /** Replaces all entries and reapplies the active filter. Must be called on the EDT. */
-    public void load(List<LogEntry> newEntries) {
-        allEntries.clear();
-        trimmedCount = 0;
-        highlights.clear();
-        allEntries.addAll(newEntries);
-        reapplyFilter();
-    }
-
     /** Installs a new filter and schedules an off-EDT recompute of visible rows. Must be called on the EDT. */
     public void applyFilter(Predicate<LogEntry> filter) {
         activeFilter = filter;
@@ -251,12 +297,21 @@ public final class LogTableModel extends AbstractTableModel {
     private void scheduleReapply() {
         if (filterFuture != null) filterFuture.cancel(true);
         List<LogEntry> snapshot = List.copyOf(allEntries);
-        int base = trimmedCount;
+        int base = listBase();
+        IndexedEntries indexedSnapshot = indexed;
+        int indexedRows = indexedCount;
         Predicate<LogEntry> filter = activeFilter;
         long generation = ++filterGeneration;
 
         filterFuture = filterExecutor.submit(() -> {
             IntList newRows = new IntList();
+            if (indexedSnapshot != null) {
+                // Reads the file in order; rows added after indexedRows are caught up below.
+                indexedSnapshot.scan(0, indexedRows, (row, e) -> {
+                    if (filter.test(e)) newRows.add(row);
+                }, () -> Thread.currentThread().isInterrupted());
+                if (Thread.currentThread().isInterrupted()) return;
+            }
             for (int i = 0; i < snapshot.size(); i++) {
                 if (Thread.currentThread().isInterrupted()) return;
                 if (filter.test(snapshot.get(i))) newRows.add(base + i);
@@ -266,22 +321,15 @@ public final class LogTableModel extends AbstractTableModel {
                 // drop entries trimmed meanwhile, and catch up any appended after the snapshot
                 newRows.removeFirst(newRows.countBelow(trimmedCount));
                 int end = nextOrdinal();
-                for (int ord = Math.max(base + snapshot.size(), trimmedCount); ord < end; ord++) {
-                    if (filter.test(allEntries.get(ord - trimmedCount))) newRows.add(ord);
+                int from = base + snapshot.size();
+                for (int ord = Math.max(from, trimmedCount); ord < end; ord++) {
+                    LogEntry e = entryAtOrdinal(ord);
+                    if (e != null && filter.test(e)) newRows.add(ord);
                 }
                 rows = newRows;
                 fireTableDataChanged();
             });
         });
-    }
-
-    private void reapplyFilter() {
-        IntList newRows = new IntList();
-        for (int i = 0; i < allEntries.size(); i++) {
-            if (activeFilter.test(allEntries.get(i))) newRows.add(trimmedCount + i);
-        }
-        rows = newRows;
-        fireTableDataChanged();
     }
 
     /** Returns the LogEntry at the given model row, or null if out of range. */
@@ -299,8 +347,10 @@ public final class LogTableModel extends AbstractTableModel {
         int ord = ordinalAt(modelRow);
         if (ord < 0) return List.of();
         List<LogEntry> result = new ArrayList<>();
-        for (int i = ord - trimmedCount + 1; i < allEntries.size(); i++) {
-            LogEntry next = allEntries.get(i);
+        int end = nextOrdinal();
+        for (int o = ord + 1; o < end; o++) {
+            LogEntry next = entryAtOrdinal(o);
+            if (next == null) break;
             boolean isContinuation = next.timestamp() == null
                     || next.level() == LogEntry.LogLevel.UNKNOWN;
             if (!isContinuation) break;
@@ -309,7 +359,7 @@ public final class LogTableModel extends AbstractTableModel {
         return result;
     }
 
-    public int getTotalCount() { return allEntries.size(); }
+    public int getTotalCount() { return (indexed != null ? indexedCount : 0) + allEntries.size(); }
 
     /** Call before streaming a file batch-load; defers field-discovery structure changes to {@link #endBatchLoad()}. */
     public void beginBatchLoad() {

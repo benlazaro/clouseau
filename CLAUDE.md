@@ -97,8 +97,9 @@ tags.
 - `LineParser` (core) — one line → `LogEntry` (chosen parser or per-line auto-detection, source timezone).
 - `LogFileReader` (core) — reads a static log, stopping early when memory runs low.
 - `FileFollower` (core) — follow loop for a local file: reads appends, handles rotation.
-- `LineScanner`, `EntryIndex` (core) — D-16 step 1: byte-offset line splitting and the compact
-  per-entry index for large static files. Tested, not used by the app yet.
+- `LineScanner`, `EntryIndex`, `IndexedEntries` (core) — D-16: byte-offset line splitting, the compact
+  per-entry index, and reading entries back from disk. Used for plain static files only
+  with `-Dclouseau.indexStaticFiles=true` until D-16 step 3.
 - `ClouseauPluginManager` (plugin) — `loadAll()` at startup, `refresh()` to hot-reload.
 - `MainFrame` (ui) — window, menus, tabs; holds the parser/formatter/highlighter lists.
 - `LogPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.

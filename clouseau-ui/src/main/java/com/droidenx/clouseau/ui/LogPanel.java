@@ -7,8 +7,11 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.AnnotationStore;
+import com.droidenx.clouseau.core.EntryIndex;
 import com.droidenx.clouseau.core.FileFollower;
+import com.droidenx.clouseau.core.IndexedEntries;
 import com.droidenx.clouseau.core.LineParser;
+import com.droidenx.clouseau.core.LineScanner;
 import com.droidenx.clouseau.core.LogFileReader;
 import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.MemoryGuard;
@@ -33,6 +36,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
@@ -84,6 +88,11 @@ public final class LogPanel extends JPanel {
      * file systems that send no notifications (some network drives).
      */
     private static final long FOLLOW_SAFETY_POLL_MS = 2_000;
+    /**
+     * Index plain static files instead of holding them in memory (D-16). Off unless
+     * {@code -Dclouseau.indexStaticFiles=true}, until the filters read the index directly.
+     */
+    static final boolean INDEX_STATIC_FILES = Boolean.getBoolean("clouseau.indexStaticFiles");
     private AnnotationStore  annotationStore   = AnnotationStore.inMemory();
     /** True once this tab has told the user its annotations couldn't be saved. */
     private boolean          annotationSaveWarned;
@@ -242,6 +251,20 @@ public final class LogPanel extends JPanel {
 
         final MemoryGuard memory = new MemoryGuard();
 
+        // D-16: a plain file can be indexed instead of held in memory. Opt-in until the
+        // filters read the index directly (D-16 step 3).
+        final EntryIndex index = INDEX_STATIC_FILES && entry == null && !LogReaders.isCompressed(file)
+                ? new EntryIndex() : null;
+        if (index != null) {
+            try {
+                logTableModel.beginIndexedLoad(
+                        IndexedEntries.open(file, index, new LineParser(parser, parsers, srcTz)));
+            } catch (IOException ex) {
+                log.warn("Can't open {} for indexing; it will be loaded into memory", file, ex);
+            }
+        }
+        final boolean indexed = logTableModel.isIndexed();
+
         SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
             /** Lines read before loading stopped for lack of memory, or -1 if it didn't. */
             volatile long stoppedAtLine = -1;
@@ -253,7 +276,9 @@ public final class LogPanel extends JPanel {
                 AnnotationStore annotations = AnnotationStore.load(annotationKey, AppDirs.annotationsDir());
                 AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
                 LineParser lineParser = new LineParser(parser, parsers, srcTz);
-                try (BufferedReader reader = LogReaders.open(file, entry)) {
+                if (indexed) {
+                    indexFile(lineParser, anchoring);
+                } else try (BufferedReader reader = LogReaders.open(file, entry)) {
                     LogFileReader.Result result = LogFileReader.read(reader, lineParser,
                             LogFileReader.DEFAULT_CHECK_INTERVAL, memory::isLow, this::isCancelled,
                             e -> {
@@ -269,6 +294,32 @@ public final class LogPanel extends JPanel {
                 if (anchoring != null) anchoring.finish();
                 loadedAnnotations = annotations;
                 return null;
+            }
+
+            /**
+             * Reads the file once into the index. Each entry is still published, so the
+             * table can filter it and the filter bar can learn its logger, but only the
+             * index keeps it.
+             */
+            private void indexFile(LineParser lineParser, AnnotationStore.Anchoring anchoring) throws IOException {
+                long[] count = {0};
+                boolean[] lowMemory = {false};
+                try (InputStream in = Files.newInputStream(file)) {
+                    LineScanner.scan(in, (offset, length, text) -> {
+                        LogEntry e = lineParser.parse(text);
+                        index.add(offset, length, e);
+                        if (anchoring != null) anchoring.accept(e.rawLine());
+                        publish(e);
+                        if (++count[0] % LogFileReader.DEFAULT_CHECK_INTERVAL == 0 && memory.isLow()) {
+                            lowMemory[0] = true;
+                        }
+                    }, () -> lowMemory[0] || isCancelled());
+                }
+                if (lowMemory[0]) {
+                    stoppedAtLine = count[0];
+                    log.warn("Low memory: stopped indexing {} after {} entries (max heap {} MiB)",
+                            file, stoppedAtLine, memory.maxMiB());
+                }
             }
 
             @Override

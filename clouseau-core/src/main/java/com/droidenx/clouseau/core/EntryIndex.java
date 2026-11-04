@@ -21,9 +21,13 @@ import java.util.Map;
  * A custom field stops being indexed once it has more than {@link #MAX_FIELD_VALUES}
  * distinct values; filtering on it then has to read text.
  * <p>
- * Columns grow in chunks, so no single array gets huge and appending stays cheap. Not
- * thread-safe: one thread appends, and other threads may read only rows below a size the
- * appending thread has handed them.
+ * Columns grow in chunks, so no single array gets huge and appending stays cheap.
+ * <p>
+ * <b>Threads:</b> one thread appends. Other threads may read the column getters
+ * ({@link #offset}, {@link #length}, {@link #timestamp}, {@link #level}, the ids) for rows
+ * below a size the appending thread handed them through a happens-before edge (for
+ * example {@code SwingWorker.publish}). The dictionaries and {@link #fieldNames} are for
+ * the appending thread only.
  */
 public final class EntryIndex {
 
@@ -177,26 +181,35 @@ public final class EntryIndex {
      * Each column is a list of chunks of 2^chunkBits values. Only the last chunk is ever
      * partly full; it starts small and doubles up to the chunk size, so a short log
      * doesn't allocate full chunks.
+     *
+     * A chunk is never resized in place: growing copies the chunk list, swaps in the
+     * bigger chunk, and publishes the new list through the volatile field. A reader sees
+     * either the list from before (whose chunks still hold every row it was handed) or a
+     * newer one, along with everything copied into it.
      */
 
     private static final int FIRST_CHUNK = 1024;
 
     private static final class LongColumn {
         private final int bits, mask;
-        private long[][] chunks = new long[0][];
+        private volatile long[][] chunks = new long[0][];
         private int size;
 
         LongColumn(int bits) { this.bits = bits; this.mask = (1 << bits) - 1; }
 
         void add(long v) {
             int c = size >>> bits, i = size & mask;
-            if (c == chunks.length) {
-                chunks = Arrays.copyOf(chunks, c + 1);
-                chunks[c] = new long[Math.min(FIRST_CHUNK, 1 << bits)];
-            } else if (i == chunks[c].length) {
-                chunks[c] = Arrays.copyOf(chunks[c], Math.min(i * 2, 1 << bits));
+            long[][] cs = chunks;
+            if (c == cs.length) {
+                cs = Arrays.copyOf(cs, c + 1);
+                cs[c] = new long[Math.min(FIRST_CHUNK, 1 << bits)];
+                chunks = cs;
+            } else if (i == cs[c].length) {
+                cs = cs.clone();
+                cs[c] = Arrays.copyOf(cs[c], Math.min(i * 2, 1 << bits));
+                chunks = cs;
             }
-            chunks[c][i] = v;
+            cs[c][i] = v;
             size++;
         }
 
@@ -214,20 +227,24 @@ public final class EntryIndex {
 
     private static final class IntColumn {
         private final int bits, mask;
-        private int[][] chunks = new int[0][];
+        private volatile int[][] chunks = new int[0][];
         private int size;
 
         IntColumn(int bits) { this.bits = bits; this.mask = (1 << bits) - 1; }
 
         void add(int v) {
             int c = size >>> bits, i = size & mask;
-            if (c == chunks.length) {
-                chunks = Arrays.copyOf(chunks, c + 1);
-                chunks[c] = new int[Math.min(FIRST_CHUNK, 1 << bits)];
-            } else if (i == chunks[c].length) {
-                chunks[c] = Arrays.copyOf(chunks[c], Math.min(i * 2, 1 << bits));
+            int[][] cs = chunks;
+            if (c == cs.length) {
+                cs = Arrays.copyOf(cs, c + 1);
+                cs[c] = new int[Math.min(FIRST_CHUNK, 1 << bits)];
+                chunks = cs;
+            } else if (i == cs[c].length) {
+                cs = cs.clone();
+                cs[c] = Arrays.copyOf(cs[c], Math.min(i * 2, 1 << bits));
+                chunks = cs;
             }
-            chunks[c][i] = v;
+            cs[c][i] = v;
             size++;
         }
 
@@ -249,20 +266,24 @@ public final class EntryIndex {
 
     private static final class ByteColumn {
         private final int bits, mask;
-        private byte[][] chunks = new byte[0][];
+        private volatile byte[][] chunks = new byte[0][];
         private int size;
 
         ByteColumn(int bits) { this.bits = bits; this.mask = (1 << bits) - 1; }
 
         void add(byte v) {
             int c = size >>> bits, i = size & mask;
-            if (c == chunks.length) {
-                chunks = Arrays.copyOf(chunks, c + 1);
-                chunks[c] = new byte[Math.min(FIRST_CHUNK, 1 << bits)];
-            } else if (i == chunks[c].length) {
-                chunks[c] = Arrays.copyOf(chunks[c], Math.min(i * 2, 1 << bits));
+            byte[][] cs = chunks;
+            if (c == cs.length) {
+                cs = Arrays.copyOf(cs, c + 1);
+                cs[c] = new byte[Math.min(FIRST_CHUNK, 1 << bits)];
+                chunks = cs;
+            } else if (i == cs[c].length) {
+                cs = cs.clone();
+                cs[c] = Arrays.copyOf(cs[c], Math.min(i * 2, 1 << bits));
+                chunks = cs;
             }
-            chunks[c][i] = v;
+            cs[c][i] = v;
             size++;
         }
 
