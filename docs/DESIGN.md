@@ -339,7 +339,8 @@ runtime needs no SVG library.
 ## 9. Decisions
 
 Short records of choices that shape the design. Status is **Adopted** (in the code),
-**Accepted** (agreed, not built yet), or **Superseded**.
+**Accepted** (agreed, not built yet), **Proposed** (written up, waiting for review), or
+**Superseded**.
 
 ### D-1 · Swing with FlatLaf · Adopted
 
@@ -389,7 +390,7 @@ timestamp, level, and logger per entry). Text is read from disk on demand for vi
 rows, the detail panel, and text filters. Compressed files would first be decompressed to
 a temporary file in the data folder. Live sessions keep the current in-memory model with
 its limit. Until this exists, a file that can't be fully loaded must produce a clear
-warning (UC-1). The details need a design pass before implementation.
+warning (UC-1). The detailed design is D-16.
 
 ### D-9 · Annotations anchored by line number and content · Adopted
 
@@ -506,6 +507,134 @@ on close), and saving them only in the data folder (private, so they can't be sh
 A highlight stores its palette slot, not an RGB value: themes define the palette, so a
 colleague with another theme sees the same slots in their own colors.
 
+### D-16 · How static files are indexed · Proposed
+
+The design for D-8, written to close G-5. Nothing here is built yet. The open questions
+at the end need an answer before work starts.
+
+**Why.** A loaded entry costs about 120 bytes of heap per line today (the D-12 benchmark:
+118 MB for 1M lines), so the default 2 GB heap stops somewhere under 17M lines. That is a
+few GB of log. An index keeps a few fixed-size numbers per entry and reads text from disk
+only when it's needed.
+
+**Scope.** Local static files and what follows them (UC-1, UC-2, UC-6 on a local file).
+SSH and plugin sources keep the in-memory model and its entry limit (D-7).
+
+**Pieces** (all in `clouseau-core` unless noted):
+
+- **`LineScanner`** reads the file as **bytes**, not characters, and reports each line's
+  byte offset and length. It splits on `\n` and drops a trailing `\r`; the newline byte
+  never occurs inside a multi-byte UTF-8 character, so this is safe. It skips a leading
+  BOM (offsets start after it) and skips blank lines, as `LogFileReader` does now. A
+  `BufferedReader` can't be used, because it hides byte positions.
+- **`EntryIndex`** holds one row per entry, in file order, as columns of primitives:
+
+  | Column | Type | Bytes |
+  |---|---|---|
+  | offset | `long` | 8 |
+  | length | `int` | 4 |
+  | timestamp (epoch millis, `Long.MIN_VALUE` if none) | `long` | 8 |
+  | level (`UNKNOWN` marks a continuation line) | `byte` | 1 |
+  | logger id | `int` | 4 |
+  | thread id | `int` | 4 |
+
+  That's 29 bytes per entry, about a quarter of today's cost. Loggers and threads are
+  stored once each in a dictionary, with ids in the columns. Custom fields are stored the
+  same way, one id column per field the parser declares, up to 1,000 distinct values
+  per field. A field with more values stops being indexed: the Fields filter doesn't
+  offer it, and filtering on it reads text (as the text filter does below).
+  Columns are kept in chunks of 1M rows, so no single array becomes huge and appending
+  is cheap.
+- **`IndexedEntries`** turns an index row back into a `LogEntry`: a positioned read of
+  `length` bytes at `offset` (one `FileChannel` per tab), UTF-8 decoding with malformed
+  input replaced, then `LineParser` on the line. A cache of the last 10,000 entries
+  covers scrolling, the detail panel and the renderers, which ask for the same rows many
+  times.
+- **`EntryStore`** (interface) is what `LogTableModel` (ui) reads entries through. It
+  has two implementations: the current list, used for live tabs, and `IndexedEntries`.
+  Rows stay a sorted list of ordinals, and an ordinal is still the entry's position in
+  the file.
+
+**Loading.** One pass: `LineScanner` → `LineParser` → `EntryIndex`. The parsed
+`LogEntry` is dropped after its columns are written. The table shows rows as chunks
+finish, as it does now. Logger names reach `FilterBar` as they are first seen. If the
+sidecar has annotations, the pass hashes each line and anchors them exactly as now
+(section 6.6). Entry numbers don't change, so annotations, highlights and the sidecar
+format (D-9, D-15) carry over unchanged. The `MemoryGuard` stop stays as a safety net
+for the index itself.
+
+**Compressed files.** A `.gz`, or a file inside a `.zip`, is decompressed during the same
+pass to `<data>/cache/<hash of path and entry>.log`, and the index points into that copy.
+Before starting, Clouseau checks the free space against the uncompressed size when it's
+known (a zip entry records it; a `.gz` doesn't reliably). If the disk fills mid-way, it
+stops with the same partial-load warning used today. The copy is deleted when the tab
+closes, and anything left in `cache/` is deleted at startup.
+
+**Filtering.** `FilterBar` produces two parts instead of one `Predicate<LogEntry>`:
+
+- an **index filter** over the columns (level, logger, thread, indexed fields, time
+  range). It needs no I/O, so it stays as fast as it is today.
+- an optional **text filter**. When it's set, the filter executor reads the rows the
+  index filter passed in file order, in large sequential reads (not one positioned read
+  per row), and tests the text the same way as today. It reports progress in the status
+  bar and can be cancelled. Find (`Ctrl+F`) uses the same scan.
+
+The generation counter and cancellation in section 6.1 are unchanged.
+
+**Continuation lines.** They are rows with level `UNKNOWN`, as today. The detail panel and
+find read the rows that follow an entry until the next row with a timestamp.
+
+**Following.** The tail worker already knows the byte position of every line it reads
+(`FileFollower`), so appended lines extend the index the same way the first pass does.
+They are never trimmed: the D-7 entry limit was there to protect the heap, and with an
+index an entry costs too little for that to matter.
+
+**Rotation.** Index rows point into the file, so what happens to older rows depends on
+how the file was rotated:
+
+- **Renamed** (logrotate's default, log4j/logback rolling): the tab keeps its open
+  channel on the old file, so older rows stay readable. On Windows this needs the channel
+  opened with delete sharing, or the writer can't rename the file. A channel from
+  `Files.newByteChannel` shares delete by default; `RandomAccessFile` doesn't, so it
+  must not be used. The new file is followed as new rows, as it is today.
+- **Truncated in place** (copytruncate): the old text is gone. Older rows keep what the
+  index holds (time, level, logger, thread). The message reads "Text no longer in the file
+  (rotated)", and the status bar says the file was rotated.
+
+**Size ceiling after this.** About 29 bytes of heap per entry plus dictionaries: about
+70M entries in the default 2 GB heap, roughly 10 to 15 GB of typical log. Open question 1
+removes that ceiling too.
+
+**Order of work** (each step ships and is tested on its own):
+
+1. `LineScanner` and `EntryIndex`, with tests against the current reader on the sample
+   logs (same entries, same entry numbers).
+2. `EntryStore` behind `LogTableModel`; static files read through `IndexedEntries`.
+3. The two-part filter, and the text scan with progress.
+4. Compressed files through `cache/`.
+5. Follow and rotation on the index.
+6. Update UC-1, close G-5, mark D-8 and D-16 Adopted.
+
+**Open questions for review:**
+
+1. **Heap or memory-mapped columns?** In the heap is simpler and enough for about 70M
+   entries. Writing the columns to a file in `cache/` and memory-mapping them removes
+   the ceiling, costs about 29 bytes of disk per entry, and needs cleanup like the
+   decompressed copies. *Recommendation:* heap first, with columns behind a small
+   interface so mapping can be added later without touching anything else.
+2. **Index every static file, or only big ones?** One path for every file is simpler to
+   test. But a text filter on a small file becomes a file scan instead of a list scan
+   (fast while the OS caches the file, slower than today on a network drive).
+   *Recommendation:* index every static file, and measure the text filter on the 1M-line
+   benchmark before step 3 ships.
+3. **Keep the index between runs?** Reopening a big file would be instant. But it needs
+   an invalidation rule (size, modified time, a hash of the first and last 64 KB) and
+   disk space. *Recommendation:* not now. The first pass is needed anyway to anchor
+   annotations.
+4. **Rows lost to copytruncate:** show them with the placeholder text as above, or drop
+   them from the tab? *Recommendation:* keep them, so annotations and highlights on them
+   aren't lost.
+
 ## 10. Planned features
 
 Accepted in the use cases, with no design decision needed beyond the above:
@@ -547,5 +676,5 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
+| **G-5** | Static files are held fully in memory (D-8 isn't built; its design, D-16, is waiting for review), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
 | **G-9** | Reading, parsing, following and annotation anchoring now live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`) and the detail pane in `DetailPanel`, but `LogPanel` is still about 1,650 lines of UI: table and renderers, context menus, find bar, highlight navigation and status bar. | Still long to review. Next splits: the find bar and the highlight navigation bar into their own classes. |
