@@ -22,8 +22,8 @@ as the code.
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
                     LogSource, LogFilter. No Swing, no implementation.
-clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, FileTail, Utf8Bom, MemoryGuard, LogIndex,
-                    ClouseauEventBus
+clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, FileTail, Utf8Bom,
+                    MemoryGuard
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 ```
@@ -94,9 +94,6 @@ tags.
   highlights, and the per-tab entry limit.
 - `FilterBar`, `AnnotationStore`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`,
   `AppDirs` (ui) — filters, annotation sidecars, parser editor, themes, settings, data folder.
-
-`LogIndex` and `ClouseauEventBus` exist but are effectively unused (G-1); don't build on
-them without resolving that gap.
 
 ## Coding conventions
 

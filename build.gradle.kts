@@ -7,7 +7,6 @@ buildscript {
 }
 
 val pf4jVersion      = "3.12.0"
-val guavaVersion     = "33.2.1-jre"
 val flatlafVersion   = "3.4.1"
 val migLayoutVersion = "11.3"
 val rstaVersion      = "3.4.0"
@@ -19,7 +18,6 @@ val slf4jVersion     = "2.0.13"
 
 // Expose versions on the root project so subprojects can read them via rootProject.extra["..."]
 extra["pf4jVersion"]      = pf4jVersion
-extra["guavaVersion"]     = guavaVersion
 extra["flatlafVersion"]   = flatlafVersion
 extra["migLayoutVersion"] = migLayoutVersion
 extra["rstaVersion"]      = rstaVersion
@@ -66,7 +64,6 @@ subprojects {
     tasks.withType<Test> { useJUnitPlatform() }
 
     extra["pf4jVersion"]      = pf4jVersion
-    extra["guavaVersion"]     = guavaVersion
     extra["flatlafVersion"]   = flatlafVersion
     extra["migLayoutVersion"] = migLayoutVersion
     extra["rstaVersion"]      = rstaVersion

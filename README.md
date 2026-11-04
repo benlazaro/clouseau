@@ -153,7 +153,7 @@ Default Logback console format. Two variants are supported:
 ```
 clouseau/
 ├── clouseau-api/       # Plugin contract — interfaces only (LogParser, LogFilter, LogSource)
-├── clouseau-core/      # Engine — LogEntry, LogIndex, ClouseauEventBus, built-in parsers
+├── clouseau-core/      # Engine — RegexLogParser, file reading and tailing (no Swing)
 ├── clouseau-plugin/    # PF4J plugin loader and lifecycle
 └── clouseau-ui/        # Swing UI — MainFrame, LogPanel, FilterBar, SettingsDialog
 ```
@@ -244,7 +244,6 @@ public class MyParser implements LogParser {
 | Look & feel | FlatLaf 3.4.1 + One Dark theme |
 | Layout | MigLayout 11.3 |
 | Log text rendering | RSyntaxTextArea 3.4.0 |
-| Event bus | Guava 33 AsyncEventBus |
 | Plugin system | PF4J 3.12.0 |
 | Build | Gradle 8.8 (Kotlin DSL), Java 21 |
 | Tests | JUnit 5, AssertJ, Mockito |

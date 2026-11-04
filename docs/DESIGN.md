@@ -40,7 +40,7 @@ clouseau-ui ─────────────┐   MainFrame, tabs, LogPan
    │               clouseau-plugin   ClouseauPluginManager (PF4J wrapper)
    │                     │
    ▼                     │
-clouseau-core ◀──────────┘   RegexLogParser, FileLogSource, LogIndex, event bus
+clouseau-core ◀──────────┘   RegexLogParser, FileLogSource, FileTail, MemoryGuard, Utf8Bom
    │
    ▼
 clouseau-api                 LogEntry, LogParser, LogSource, LogFormatter,
@@ -451,7 +451,6 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-1** | `LogIndex` and `ClouseauEventBus` are bypassed. `LogPanel` creates a `LogIndex` and clears it but never adds to it; entries go straight to `LogTableModel`. `LogTableModel` still subscribes to the global async bus, so if `LogIndex` ever posted events, **every open tab** would receive every other tab's entries. | Dead code with a hidden cross-tab bug waiting to trigger. Either remove both or make `LogIndex` the per-tab store with per-tab events. |
 | **G-2** | Plugin parsers are never used. `MainFrame` gets parsers only from `UserParsersLoader`; it never asks the plugin manager for `LogParser` extensions, though the Plugin Manager lists them. | Breaks UC-11 for parsers, the most important plugin type. |
 | **G-3** | `LogSource` and `LogFilter` are not `ExtensionPoint`s, and the UI constructs sources directly. `FileLogSource` (core) is unused; `SshLogSource` lives in `clouseau-ui`. | Plugins can't add sources (blocks D-11). Violates section 3, rule 2. |
 | **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |

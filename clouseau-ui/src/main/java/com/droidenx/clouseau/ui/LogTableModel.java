@@ -1,9 +1,6 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogEntry;
-import com.droidenx.clouseau.core.ClouseauEventBus;
-import com.droidenx.clouseau.core.LogIndex;
-import com.google.common.eventbus.Subscribe;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
@@ -23,8 +20,9 @@ import java.util.concurrent.Future;
 import java.util.function.Predicate;
 
 /**
- * Table model backed by LogIndex events.
- * Subscribes to the async event bus; all mutations are dispatched to the EDT.
+ * The entry store for one tab: every entry ({@code allEntries}), the rows that pass the
+ * active filter, row highlights, and the live-session entry cap. Loaders and tailers hand
+ * entries in on the EDT; filtering runs on a background executor.
  */
 public final class LogTableModel extends AbstractTableModel {
 
@@ -65,42 +63,9 @@ public final class LogTableModel extends AbstractTableModel {
     private Future<?>  filterFuture;
     private long       filterGeneration = 0;
 
-    public LogTableModel() {
-        ClouseauEventBus.registerAsync(this);
-    }
-
+    /** Stops the background filter thread. Call when the tab closes. */
     public void dispose() {
-        ClouseauEventBus.unregisterAsync(this);
         filterExecutor.shutdownNow();
-    }
-
-    @Subscribe
-    public void onEntryAdded(LogIndex.LogEntryAddedEvent event) {
-        LogEntry entry = event.entry();
-        SwingUtilities.invokeLater(() -> {
-            allEntries.add(entry);
-            discoverFields(List.of(entry));
-            if (activeFilter.test(entry)) {
-                int idx = rows.size();
-                rows.add(entry);
-                fireTableRowsInserted(idx, idx);
-            }
-        });
-    }
-
-    @Subscribe
-    public void onBatchAdded(LogIndex.LogBatchAddedEvent event) {
-        List<LogEntry> batch = List.copyOf(event.entries());
-        SwingUtilities.invokeLater(() -> {
-            allEntries.addAll(batch);
-            discoverFields(batch);
-            int first = rows.size();
-            List<LogEntry> matching = batch.stream().filter(activeFilter).toList();
-            if (!matching.isEmpty()) {
-                rows.addAll(matching);
-                fireTableRowsInserted(first, rows.size() - 1);
-            }
-        });
     }
 
     public Color getHighlight(LogEntry entry) {

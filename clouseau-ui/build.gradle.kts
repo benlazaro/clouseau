@@ -315,7 +315,7 @@ runtime {
     // java.prefs    — Preferences API
     // java.sql      — JDBC stubs pulled in transitively
     // java.xml      — XML (log4j2 config)
-    // jdk.unsupported — sun.misc.Unsafe (Guava, Gson)
+    // jdk.unsupported — sun.misc.Unsafe (Gson)
     // jdk.crypto.ec — TLS EC ciphers (HTTPS downloads, update checks)
     // jdk.zipfs     — ZipFileSystem (reading .zip log files)
     modules.set(listOf(
@@ -384,7 +384,6 @@ dependencies {
     implementation(project(":clouseau-core"))
     implementation(project(":clouseau-plugin"))
 
-    implementation("com.google.guava:guava:${rootProject.extra["guavaVersion"]}")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("org.apache.logging.log4j:log4j-core:2.23.0")
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.0")

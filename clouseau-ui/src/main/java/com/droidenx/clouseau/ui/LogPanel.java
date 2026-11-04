@@ -8,7 +8,6 @@ import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.FileTail;
 import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.Utf8Bom;
-import com.droidenx.clouseau.core.LogIndex;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
@@ -58,7 +57,7 @@ import java.util.stream.Stream;
 
 /**
  * Self-contained panel representing one open log file tab.
- * Owns its own LogIndex, LogTableModel, table and detail pane.
+ * Owns its own LogTableModel, table and detail pane.
  */
 @Slf4j
 public final class LogPanel extends JPanel {
@@ -66,7 +65,6 @@ public final class LogPanel extends JPanel {
     private final List<LogParser> parsers;
     private final List<LogFormatter> formatters;
     private final List<LogSyntaxHighlighter> syntaxHighlighters;
-    private final LogIndex        logIndex      = new LogIndex();
     private final LogTableModel   logTableModel = new LogTableModel();
     private final FilterBar       filterBar;
     private JTable logTable;
@@ -229,7 +227,6 @@ public final class LogPanel extends JPanel {
         if (old != null) old.cancel(true);
         loading = true;
         partialLoad = false;
-        logIndex.clear();
         logTableModel.clear();
         filterBar.clearLoggers();
         hiddenColumns.clear();
@@ -348,7 +345,6 @@ public final class LogPanel extends JPanel {
         cancelLoad();   // closes any prior SSH source, cancels in-flight workers
         partialLoad = false;
 
-        logIndex.clear();
         logTableModel.clear();
         filterBar.clearLoggers();
         hiddenColumns.clear();
@@ -615,7 +611,6 @@ public final class LogPanel extends JPanel {
         if (confirm != JOptionPane.YES_OPTION) return;
         stopTailing();
         try { tailPosition = currentFile != null ? Files.size(currentFile) : 0; } catch (IOException ignored) { tailPosition = 0; }
-        logIndex.clear();
         logTableModel.clear();
         showDetail(null, -1);
         clearSearchMatches();
