@@ -7,6 +7,7 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.AnnotationStore;
+import com.droidenx.clouseau.core.FileChangeWatcher;
 import com.droidenx.clouseau.core.FileTail;
 import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.Utf8Bom;
@@ -91,6 +92,11 @@ public final class LogPanel extends JPanel {
     private boolean partialLoad = false;
     /** Lines read between heap checks while loading a static file. */
     private static final int MEMORY_CHECK_INTERVAL = 10_000;
+    /**
+     * Follow mode reads as soon as the OS reports a change; this is only the backstop for
+     * file systems that send no notifications (some network drives).
+     */
+    private static final long FOLLOW_SAFETY_POLL_MS = 2_000;
     private final java.util.Set<String> disabledFormatters = new java.util.HashSet<>();
     private AnnotationStore  annotationStore   = AnnotationStore.inMemory();
     /** True once this tab has told the user its annotations couldn't be saved. */
@@ -489,6 +495,16 @@ public final class LogPanel extends JPanel {
         tailWorker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
+                try (FileChangeWatcher watcher = FileChangeWatcher.watch(currentFile)) {
+                    followUntilCancelled(watcher);
+                } catch (InterruptedException e) {
+                    // cancel(true) interrupts the wait: following stopped
+                }
+                return null;
+            }
+
+            /** Reads what was appended, then waits for the next change (D-3). */
+            private void followUntilCancelled(FileChangeWatcher watcher) throws InterruptedException {
                 while (!isCancelled()) {
                     try {
                         long currentSize = Files.size(currentFile);
@@ -512,9 +528,8 @@ public final class LogPanel extends JPanel {
                             });
                         }
                     } catch (IOException ignored) {}
-                    Thread.sleep(500);
+                    watcher.awaitChange(FOLLOW_SAFETY_POLL_MS);
                 }
-                return null;
             }
 
             @Override

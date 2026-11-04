@@ -40,8 +40,8 @@ clouseau-ui ─────────────┐   MainFrame, tabs, LogPan
    │               clouseau-plugin   ClouseauPluginManager (PF4J wrapper)
    │                     │
    ▼                     │
-clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, SshLogSource, SourceSettings,
-                             AnnotationStore, …
+clouseau-core ◀──────────┘   RegexLogParser, ParserList, FileTail, FileChangeWatcher,
+                             SshLogSource, SourceSettings, AnnotationStore, …
    │
    ▼
 clouseau-api                 LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
@@ -168,7 +168,7 @@ refresh; open tabs keep the list they were created with.
 |---|---|
 | **EDT** | All Swing access. Table model mutations (`appendBatch`, `append`, clearing, highlights). |
 | **Load worker** (`SwingWorker`, one per tab) | Read and parse the file; `publish` entries in chunks. |
-| **Tail worker** (`SwingWorker`, one per tab) | Read new lines while following. |
+| **Tail worker** (`SwingWorker`, one per tab) | Wait for the file to change, then read new lines while following. |
 | **Filter executor** (`clouseau-filter`, one per tab) | Re-run the active filter over all entries; a generation counter discards stale results. |
 | **Source worker** (`SwingWorker`, one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. |
 
@@ -205,13 +205,17 @@ refresh; open tabs keep the list they were created with.
 
 ### 6.3 Following a log (UC-6)
 
-- **Local files:** The tail worker checks the file size every 500 ms and reads new bytes
-  from the last position with `FileTail` (core). Like the initial load, it decodes UTF-8
-  with malformed input replaced, and skips a BOM when reading from offset 0. It only
-  consumes complete lines: a line still being written is held back until its newline
-  arrives, so it never becomes two entries. If the
-  file shrinks, Clouseau treats it as rotated and reads from the start; existing rows are
-  kept. Compressed files are never followed.
+- **Local files:** The tail worker waits on a `FileChangeWatcher` (core), which uses the
+  OS change notifications (`WatchService`) for the file's folder. When the file is written,
+  created or replaced, it reads the new bytes from the last position with `FileTail`
+  (core). If no notification comes within 2 s it reads anyway, as a backstop for file
+  systems that don't send them (some network drives); if the folder can't be watched at
+  all, that 2 s read is all there is. Stopping follow interrupts the wait.
+- Like the initial load, the tail decodes UTF-8 with malformed input replaced, and skips
+  a BOM when reading from offset 0. It only consumes complete lines: a line still being
+  written is held back until its newline arrives, so it never becomes two entries. If
+  the file shrinks, Clouseau treats it as rotated and reads from the start; existing rows
+  are kept. Compressed files are never followed.
 - **SSH:** `SshLogSource` runs `tail -n <N> -f -- '<path>'` on the server over sshj and
   receives lines as they're written. Nothing on the client polls. The path is
   single-quoted for a POSIX shell, so spaces and shell metacharacters are taken
@@ -341,12 +345,13 @@ second toolkit to bundle, and a web UI implies a server (a non-goal).
 PF4J provides plugin isolation, `@Extension` discovery, and runtime reloading. Plugins
 compile only against `clouseau-api`.
 
-### D-3 · Sources push lines · Adopted, partly built
+### D-3 · Sources push lines · Adopted
 
 `LogSource` hands lines to a consumer instead of being polled through a file abstraction
 like the Apache Commons VFS layer in OtrosLogViewer. Each source picks its own streaming
 model, such as a real server-side `tail -f` over sshj for SSH. This avoids polling and the
-unmaintained JSch dependency. Local follow still polls (see [G-4](#11-known-gaps)).
+unmaintained JSch dependency. Local follow is woken by the OS when the file changes, with a
+slow read as a backstop for file systems that send no notifications (section 6.3).
 
 ### D-4 · Parsers as data · Adopted
 
@@ -535,7 +540,6 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |
 | **G-5** | Static files are held fully in memory (D-8 isn't built), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
 | **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. The zip picker in UC-12 will close this. |
 | **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |

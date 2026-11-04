@@ -22,8 +22,9 @@ as the code.
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
                     LogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
-clouseau-core     ← UI-independent engine: RegexLogParser, FileTail, Utf8Bom, MemoryGuard,
-                    ParserList, SshLogSource, SshConfig, SourceSettings, AnnotationStore
+clouseau-core     ← UI-independent engine: RegexLogParser, FileTail, FileChangeWatcher, Utf8Bom,
+                    MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
+                    AnnotationStore
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -90,6 +91,7 @@ tags.
   from declared `SourceSetting`s, shown under File → Open Source by `SourceSettingsDialog`.
 - `RegexLogParser` (core) — the parser behind every JSON-defined format.
 - `FileTail` (core) — reads complete UTF-8 lines appended to a file, for follow mode.
+- `FileChangeWatcher` (core) — wakes follow mode when the OS reports the file changed.
 - `ClouseauPluginManager` (plugin) — `loadAll()` at startup, `refresh()` to hot-reload.
 - `MainFrame` (ui) — window, menus, tabs; holds the parser/formatter/highlighter lists.
 - `LogPanel` (ui) — one tab: loading, tailing, table, filters, detail panel, annotations.
