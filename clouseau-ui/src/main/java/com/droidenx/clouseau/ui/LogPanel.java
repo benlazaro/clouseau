@@ -704,18 +704,18 @@ public final class LogPanel extends JPanel {
 
     private JPanel buildStatusBar() {
         statusBarPathLabel = new JLabel(" ");
-        statusBarPathLabel.setForeground(UIManager.getColor("Button.foreground"));
+        ClouseauColors.themedForeground(statusBarPathLabel, () -> UIManager.getColor("Button.foreground"));
         statusBarPathLabel.setFont(statusBarPathLabel.getFont().deriveFont(12f));
         statusBarPathLabel.setBorder(BorderFactory.createEmptyBorder(6, 8, 8, 8));
 
         statusBarLabel = new JLabel(" ");
-        statusBarLabel.setForeground(UIManager.getColor("Button.foreground"));
+        ClouseauColors.themedForeground(statusBarLabel, () -> UIManager.getColor("Button.foreground"));
         statusBarLabel.setFont(statusBarLabel.getFont().deriveFont(12f));
         statusBarLabel.setHorizontalAlignment(SwingConstants.RIGHT);
         statusBarLabel.setBorder(BorderFactory.createEmptyBorder(6, 8, 8, 8));
 
         sourceTzLabel = new JLabel();
-        sourceTzLabel.setForeground(UIManager.getColor("Button.foreground"));
+        ClouseauColors.themedForeground(sourceTzLabel, () -> UIManager.getColor("Button.foreground"));
         sourceTzLabel.setFont(sourceTzLabel.getFont().deriveFont(12f));
         sourceTzLabel.setBorder(BorderFactory.createEmptyBorder(6, 0, 8, 0));
         sourceTzLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -789,17 +789,17 @@ public final class LogPanel extends JPanel {
 
     private JPanel buildLoadingPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(ClouseauColors.loadingBackground());
+        ClouseauColors.themedBackground(panel, ClouseauColors::loadingBackground);
 
         JProgressBar bar = new JProgressBar();
         bar.setIndeterminate(true);
         bar.setBorderPainted(false);
-        bar.setForeground(ClouseauColors.progressForeground());
-        bar.setBackground(ClouseauColors.progressBackground());
+        ClouseauColors.themedForeground(bar, ClouseauColors::progressForeground);
+        ClouseauColors.themedBackground(bar, ClouseauColors::progressBackground);
         bar.setPreferredSize(new Dimension(280, 4));
 
         JLabel label = new JLabel(Messages.get("loading.message"), SwingConstants.CENTER);
-        label.setForeground(ClouseauColors.dimForeground());
+        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
         label.setFont(label.getFont().deriveFont(13f));
 
         JPanel inner = new JPanel(new MigLayout("insets 0", "[280!]", "[]10[]"));
@@ -1027,7 +1027,7 @@ public final class LogPanel extends JPanel {
         tableScrollPane = new JScrollPane(logTable,
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        tableScrollPane.getViewport().setBackground(ClouseauColors.viewportBackground());
+        ClouseauColors.themedBackground(tableScrollPane.getViewport(), ClouseauColors::viewportBackground);
         tableScrollPane.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override public void componentResized(java.awt.event.ComponentEvent e) {
                 if (tableColumnsManaged) stretchMessageColumn();
@@ -1485,14 +1485,14 @@ public final class LogPanel extends JPanel {
         highlightNavBar.setVisible(false);
 
         JLabel label = new JLabel(Messages.get("highlight.nav.label"));
-        label.setForeground(ClouseauColors.dimForeground());
+        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
         label.setFont(label.getFont().deriveFont(12f));
 
         highlightNavSwatches = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
         highlightNavSwatches.setOpaque(false);
 
         highlightNavPosition = new JLabel("0 / 0");
-        highlightNavPosition.setForeground(ClouseauColors.dimForeground());
+        ClouseauColors.themedForeground(highlightNavPosition, ClouseauColors::dimForeground);
         highlightNavPosition.setFont(highlightNavPosition.getFont().deriveFont(12f));
 
         JButton prevBtn = makeNavArrowButton("\u25b2");
@@ -1639,7 +1639,7 @@ public final class LogPanel extends JPanel {
         bar.setVisible(false);
 
         JLabel label = new JLabel("Find:");
-        label.setForeground(ClouseauColors.dimForeground());
+        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
         label.setFont(label.getFont().deriveFont(12f));
 
         findField = new JTextField();
@@ -1679,7 +1679,7 @@ public final class LogPanel extends JPanel {
                 JComponent.WHEN_FOCUSED);
 
         findCounter = new JLabel();
-        findCounter.setForeground(ClouseauColors.dimForeground());
+        ClouseauColors.themedForeground(findCounter, ClouseauColors::dimForeground);
         findCounter.setFont(findCounter.getFont().deriveFont(11f));
         findCounter.setPreferredSize(new Dimension(80, findCounter.getPreferredSize().height));
 
@@ -1714,7 +1714,7 @@ public final class LogPanel extends JPanel {
         // Read in the background: on an indexed file, every visible row comes from disk.
         logTableModel.find(e -> entryMatchesQuery(e, lower), percent -> {
             if (percent < 0) return;
-            findCounter.setForeground(ClouseauColors.dimForeground());
+            ClouseauColors.themedForeground(findCounter, ClouseauColors::dimForeground);
             findCounter.setText(java.text.MessageFormat.format(Messages.get("find.searching"), percent));
         }, this::showSearchMatches);
     }
@@ -1736,7 +1736,7 @@ public final class LogPanel extends JPanel {
         searchMatchList      = Collections.unmodifiableList(list);
         searchMatchCursor    = -1;
         int n = list.size();
-        findCounter.setForeground(n == 0 ? ClouseauColors.statusError() : ClouseauColors.dimForeground());
+        ClouseauColors.themedForeground(findCounter, () -> n == 0 ? ClouseauColors.statusError() : ClouseauColors.dimForeground());
         findCounter.setText(n + (n == 1 ? " match" : " matches"));
         logTable.repaint();
         if (n > 0) navigateSearch(+1);

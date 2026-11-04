@@ -192,6 +192,52 @@ public final class ClouseauColors {
     public static int jsonBoolNullColor() { return colorToRgb("Clouseau.json.boolNull",0x66D9E8); }
     public static int jsonPunctColor()    { return colorToRgb("Clouseau.json.punct",   0x75715E); }
 
+    // ── Colors that follow theme switches ─────────────────────────────────────
+
+    private static final String THEMED_FOREGROUND = "Clouseau.themedForeground";
+    private static final String THEMED_BACKGROUND = "Clouseau.themedBackground";
+
+    /**
+     * Sets {@code c}'s foreground from {@code color} now, and again after every live theme
+     * switch.
+     *
+     * <p>A plain {@code setForeground(ClouseauColors.x())} doesn't survive a switch: theme
+     * colors are {@code UIResource}s, and the look and feel's {@code updateUI} replaces any
+     * {@code UIResource} color with its own default. Use this for components that outlive a
+     * theme switch (anything in a tab or the main window); a dialog built each time it opens
+     * can keep using {@code setForeground}. For a color that depends on state, give a
+     * supplier that reads the state, and call this again (or {@code setForeground}) when the
+     * state changes.
+     */
+    public static void themedForeground(JComponent c, java.util.function.Supplier<Color> color) {
+        c.putClientProperty(THEMED_FOREGROUND, color);
+        c.setForeground(color.get());
+    }
+
+    /** Like {@link #themedForeground}, for the background. */
+    public static void themedBackground(JComponent c, java.util.function.Supplier<Color> color) {
+        c.putClientProperty(THEMED_BACKGROUND, color);
+        c.setBackground(color.get());
+    }
+
+    /**
+     * Re-applies the colors set with {@link #themedForeground} and {@link #themedBackground}
+     * to {@code root} and everything inside it. {@link ThemeManager#updateUI()} calls this for
+     * every window after the look and feel has refreshed the components.
+     */
+    @SuppressWarnings("unchecked")
+    public static void reapplyThemed(Component root) {
+        if (root instanceof JComponent jc) {
+            if (jc.getClientProperty(THEMED_FOREGROUND) instanceof java.util.function.Supplier<?> fg)
+                jc.setForeground(((java.util.function.Supplier<Color>) fg).get());
+            if (jc.getClientProperty(THEMED_BACKGROUND) instanceof java.util.function.Supplier<?> bg)
+                jc.setBackground(((java.util.function.Supplier<Color>) bg).get());
+        }
+        if (root instanceof Container container) {
+            for (Component child : container.getComponents()) reapplyThemed(child);
+        }
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /** Tries the primary key, then the fallback key, then returns {@code Color.GRAY}. */

@@ -130,6 +130,9 @@ tags.
   `SwingWorker.process` or `SwingUtilities.invokeLater()`.
 - Logging: annotate classes with Lombok `@Slf4j` and use `log`. No `System.out`.
 - User-visible strings go in `messages.properties` and are read with `Messages.get(...)`.
+- Color long-lived components (anything in a tab or the main window) with
+  `ClouseauColors.themedForeground`/`themedBackground`, not `setForeground`, or the color
+  is lost on a live theme switch (DESIGN.md 6.8.1).
 - New persistent files go in the data folder (`AppDirs.dataDir()`); credentials only
   through `CredentialStore`.
 - Read text files as UTF-8 with malformed input replaced and a leading BOM skipped

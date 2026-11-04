@@ -108,6 +108,9 @@ public final class ThemeManager {
     /** Refreshes all open windows after a theme switch. Call on EDT only. */
     public static void updateUI() {
         FlatLaf.updateUI();
+        // updateUI resets UIResource colors to the look and feel's defaults; put back the
+        // ones components asked to keep (ClouseauColors.themedForeground/Background).
+        for (java.awt.Window w : java.awt.Window.getWindows()) ClouseauColors.reapplyThemed(w);
     }
 
     // ── Install / uninstall ───────────────────────────────────────────────────

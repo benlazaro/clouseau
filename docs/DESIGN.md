@@ -330,9 +330,31 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
 
 ### 6.8 Startup and single instance
 
-`SingleInstanceManager` binds a localhost socket. If another Clouseau is already running,
-a new launch forwards its file arguments to it and exits, so double-clicking several files
-opens tabs in one window.
+`SingleInstanceManager` binds a localhost socket (port 54823). If another Clouseau is
+already running, a new launch forwards its file arguments to it and exits, so
+double-clicking several files opens tabs in one window.
+
+- **Protocol:** one connection per launch, carrying every path as an absolute path (the
+  running instance has its own working directory), one per line in UTF-8, until the
+  connection closes. The listener queues up to 50 connections, so many launches at once
+  (selecting several files in Explorer and choosing "Open with") all get through.
+- **Early arrivals:** paths that arrive before the main window is shown wait in the same
+  list as macOS open-file events and open when it appears.
+- **No answer:** the sender retries for about a second. If the running instance still
+  doesn't accept the connection (it hangs, or another program holds the port), the new
+  launch shows an error naming the files that didn't open, instead of exiting silently.
+
+### 6.8.1 Colors across theme switches
+
+A live theme switch (`ThemeManager.updateUI`) calls FlatLaf's `updateUI`, which replaces
+every `UIResource` color on a component with the look and feel's default. Theme colors
+read from `UIManager` are `UIResource`s, so a component colored with a plain
+`setForeground(ClouseauColors.x())` loses its color at the first switch. Components that
+outlive a switch (anything in a tab or the main window) set colors with
+`ClouseauColors.themedForeground`/`themedBackground`, which take a supplier;
+`ThemeManager.updateUI` then calls `ClouseauColors.reapplyThemed` on every window. Dialogs
+built each time they open, cell renderers and styled text built per selection don't need
+it.
 
 ### 6.9 Tab switching shortcuts (UC-15)
 

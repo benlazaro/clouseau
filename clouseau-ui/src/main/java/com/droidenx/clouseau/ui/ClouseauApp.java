@@ -51,13 +51,22 @@ public final class ClouseauApp {
         if (splash != null) splash.setStatus("Starting...");
         boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePath ->
                 SwingUtilities.invokeLater(() -> {
-                    if (frameRef[0] != null) frameRef[0].openFile(Path.of(filePath));
+                    MainFrame frame = frameRef[0];
+                    if (frame != null && frame.isVisible()) frame.openFile(Path.of(filePath));
+                    else pendingOpens.add(Path.of(filePath));   // window not shown yet
                 }));
 
         if (!isPrimary) {
-            // Forward any CLI file args to the running instance, then exit.
+            // Forward any CLI file args to the running instance, then exit. Paths are made
+            // absolute here: the running instance has its own working directory.
             if (args.length > 0) {
-                for (String arg : args) SingleInstanceManager.sendToPrimary(arg);
+                List<String> paths = java.util.Arrays.stream(args)
+                        .map(a -> Path.of(a).toAbsolutePath().toString())
+                        .toList();
+                if (!SingleInstanceManager.sendToPrimary(paths)) {
+                    showNotDelivered(splash, paths);
+                    System.exit(1);
+                }
             }
             log.info("Delegated to existing instance — exiting.");
             System.exit(0);
@@ -85,6 +94,24 @@ public final class ClouseauApp {
                 show.run();
             }
         });
+    }
+
+    /** Tells the user that the running instance couldn't be reached, so the files didn't open. */
+    private static void showNotDelivered(SplashWindow splash, List<String> paths) {
+        String message = java.text.MessageFormat.format(Messages.get("app.instance.unreachable.message"),
+                String.valueOf(SingleInstanceManager.PORT), String.join("\n", paths));
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                if (splash != null) {
+                    splash.setVisible(false);
+                    splash.dispose();
+                }
+                JOptionPane.showMessageDialog(null, message,
+                        Messages.get("app.instance.unreachable.title"), JOptionPane.ERROR_MESSAGE);
+            });
+        } catch (Exception e) {
+            log.error("Could not show the unreachable-instance message", e);
+        }
     }
 
     /**

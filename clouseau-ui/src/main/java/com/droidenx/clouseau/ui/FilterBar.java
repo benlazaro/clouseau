@@ -84,12 +84,13 @@ final class FilterBar extends JPanel {
             btn.setFocusPainted(false);
             btn.setMargin(new Insets(2, 5, 2, 5));
             btn.setFont(btn.getFont().deriveFont(11f));
-            Color onColor  = ClouseauColors.levelColor(level);
-            Color offColor = ClouseauColors.offColor();
-            btn.setForeground(btn.isSelected() ? onColor : offColor);
+            // Read at each use, so the colors follow theme switches.
+            java.util.function.Supplier<Color> fg = () -> btn.isSelected()
+                    ? ClouseauColors.levelColor(level) : ClouseauColors.offColor();
+            ClouseauColors.themedForeground(btn, fg);
             btn.setToolTipText("Click to toggle · Alt+click to solo / restore all");
             btn.addItemListener(e -> {
-                btn.setForeground(btn.isSelected() ? onColor : offColor);
+                btn.setForeground(fg.get());
                 onChanged.run();
             });
             btn.addMouseListener(new MouseAdapter() {
@@ -299,9 +300,7 @@ final class FilterBar extends JPanel {
 
     private void soloLevel(LogLevel target, boolean restore) {
         levelButtons.forEach((lvl, btn) -> {
-            boolean on = restore ? lvl != LogLevel.UNKNOWN : lvl == target;
-            btn.setSelected(on);
-            btn.setForeground(on ? ClouseauColors.levelColor(lvl) : ClouseauColors.offColor());
+            btn.setSelected(restore ? lvl != LogLevel.UNKNOWN : lvl == target);   // item listener recolors
         });
         onChanged.run();
     }
@@ -550,13 +549,15 @@ final class FilterBar extends JPanel {
     }
 
     static void applyToggleStyle(JToggleButton btn) {
-        final Color naturalFg = btn.getForeground();
-        btn.addItemListener(e -> {
-            btn.setForeground(btn.isSelected() ? naturalFg : ClouseauColors.offColor());
-        });
-        if (!btn.isSelected()) {
-            btn.setForeground(ClouseauColors.offColor());
-        }
+        java.util.function.Supplier<Color> fg = () -> btn.isSelected()
+                ? UIManager.getColor("ToggleButton.foreground") : ClouseauColors.offColor();
+        ClouseauColors.themedForeground(btn, fg);
+        btn.addItemListener(e -> btn.setForeground(fg.get()));
+    }
+
+    /** The toggle for {@code level}; for tests. */
+    JToggleButton levelButton(LogLevel level) {
+        return levelButtons.get(level);
     }
 
     private void scheduleChange() {

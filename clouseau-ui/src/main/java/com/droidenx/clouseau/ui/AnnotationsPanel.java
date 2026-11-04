@@ -107,12 +107,12 @@ public final class AnnotationsPanel extends JPanel {
         JScrollPane scroll = new JScrollPane(annotationsTable,
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        scroll.getViewport().setBackground(ClouseauColors.viewportBackground());
+        ClouseauColors.themedBackground(scroll.getViewport(), ClouseauColors::viewportBackground);
         add(scroll, BorderLayout.CENTER);
 
         // Footer: empty-state label on the left, buttons on the right
         JLabel emptyLabel = new JLabel(Messages.get("annotations.panel.empty"));
-        emptyLabel.setForeground(ClouseauColors.dimForeground());
+        ClouseauColors.themedForeground(emptyLabel, ClouseauColors::dimForeground);
         emptyLabel.setFont(emptyLabel.getFont().deriveFont(11f));
 
         JButton deleteBtn = new JButton(Messages.get("annotations.panel.delete"));

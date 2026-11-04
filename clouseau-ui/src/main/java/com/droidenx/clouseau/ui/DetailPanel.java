@@ -77,8 +77,8 @@ final class DetailPanel extends JPanel {
             }
         };
         detailArea.setEditable(false);
-        detailArea.setBackground(ClouseauColors.detailBackground());
-        detailArea.setForeground(ClouseauColors.foreground());
+        ClouseauColors.themedBackground(detailArea, ClouseauColors::detailBackground);
+        ClouseauColors.themedForeground(detailArea, ClouseauColors::foreground);
         detailArea.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
         add(buildToolbar(), BorderLayout.NORTH);
@@ -194,7 +194,7 @@ final class DetailPanel extends JPanel {
 
     private static JLabel toolbarLabel(String text) {
         JLabel label = new JLabel(text);
-        label.setForeground(ClouseauColors.dimForeground());
+        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
         label.setFont(label.getFont().deriveFont(11f));
         return label;
     }
