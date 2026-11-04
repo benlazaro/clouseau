@@ -155,7 +155,8 @@ clouseau/
 ├── clouseau-api/       # Plugin contract — interfaces only (LogParser, LogFilter, LogSource)
 ├── clouseau-core/      # Engine — RegexLogParser, file reading and tailing (no Swing)
 ├── clouseau-plugin/    # PF4J plugin loader and lifecycle
-└── clouseau-ui/        # Swing UI — MainFrame, LogPanel, FilterBar, SettingsDialog
+├── clouseau-ui/        # Swing UI — MainFrame, LogPanel, FilterBar, SettingsDialog
+└── clouseau-example-plugin/  # Example plugin (logfmt parser) — a template for your own
 ```
 
 **Dependency rules:**
@@ -222,18 +223,41 @@ After installing a plugin the new extensions are immediately available — no re
 
 ## Writing a Plugin
 
-Implement `LogParser` (or `LogFilter` / `LogSource`) from `clouseau-api`, annotate with `@Extension`, package as a PF4J plugin JAR, and drop it in the plugins directory.
+A plugin adds a `LogParser`, `LogFormatter` or `LogSyntaxHighlighter` from `clouseau-api`.
+(Plugins can't add a `LogSource` or `LogFilter` yet.) For a format a regex can describe,
+you don't need a plugin: add it to `parsers.json` instead (see above).
+
+The quickest start is to copy **[`clouseau-example-plugin`](clouseau-example-plugin)**, a
+complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
+(`time=… level=info msg="…" key=value`). It shows everything a plugin needs:
+
+- **Dependencies:** `clouseau-api` and PF4J as `compileOnly` (the app provides both), plus
+  PF4J as an `annotationProcessor`, which writes `META-INF/extensions.idx` from your
+  `@Extension` classes.
+- **Manifest:** `Plugin-Id` and `Plugin-Version` (semantic version) in the JAR manifest.
+- **The extension:**
 
 ```java
 @Extension
-public class MyParser implements LogParser {
-    @Override public String getName() { return "My Format"; }
+public class LogfmtParser implements LogParser {
+    @Override public String getName() { return "logfmt (example plugin)"; }
 
+    // Called for every line during auto-detection, so keep it cheap.
     @Override public boolean canParse(String line) { /* sniff the line */ }
 
-    @Override public Optional<LogEntry> parse(String line) { /* parse it */ }
+    // Keys other than the standard ones go into fields(); each becomes a table column.
+    @Override public LogEntry parse(String line) { /* parse it */ }
 }
 ```
+
+Build the JAR with `./gradlew :clouseau-example-plugin:jar` (it lands in
+`clouseau-example-plugin/build/libs/`), drop it in the `plugins` folder of the
+[data directory](#data-directory), and restart or refresh in the Plugin Manager. New tabs
+use it right away.
+
+Plugin parsers come after the built-in and `parsers.json` parsers during auto-detection,
+and a plugin parser can't reuse a name that's already taken. Exceptions thrown by a plugin
+parser are logged and the line is shown as UNKNOWN, so a bug can't stop a file loading.
 
 ---
 

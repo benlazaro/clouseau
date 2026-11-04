@@ -8,3 +8,17 @@ dependencies {
     implementation(project(":clouseau-core"))
     implementation("org.pf4j:pf4j:${rootProject.extra["pf4jVersion"]}")
 }
+
+// The end-to-end test loads the example plugin's JAR through PF4J, as the app would.
+// It is passed in as a file, not put on the test classpath, so its classes come only
+// from the plugin class loader.
+val examplePlugin: Configuration by configurations.creating { isTransitive = false }
+
+dependencies {
+    examplePlugin(project(":clouseau-example-plugin"))
+}
+
+tasks.test {
+    inputs.files(examplePlugin)
+    doFirst { systemProperty("clouseau.examplePlugin.jar", examplePlugin.singleFile.absolutePath) }
+}

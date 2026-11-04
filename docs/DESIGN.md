@@ -63,6 +63,7 @@ A log flows through the system like this:
 | `clouseau-plugin` | Plugin loading and lifecycle (wraps PF4J). | `clouseau-core` |
 | `clouseau-ui` | The Swing application. | `clouseau-core`, `clouseau-plugin` |
 | Plugins | Third-party extensions. | `clouseau-api` only, as `compileOnly` |
+| `clouseau-example-plugin` | A complete plugin (a logfmt `LogParser`), as a template for plugin authors. Not shipped with the app. `clouseau-plugin`'s tests load its JAR through PF4J to check discovery end to end. | `clouseau-api` only, as `compileOnly` |
 
 **Rules:**
 

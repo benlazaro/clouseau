@@ -26,6 +26,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, File
                     MemoryGuard, ParserList
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
+clouseau-example-plugin ← example third-party plugin (logfmt LogParser); not shipped
 ```
 
 **Dependency rules (enforce these):**
@@ -33,7 +34,8 @@ clouseau-ui       ← the Swing application
 - `clouseau-core` depends only on `clouseau-api`.
 - `clouseau-plugin` depends only on `clouseau-core`.
 - `clouseau-ui` may depend on `clouseau-core` and `clouseau-plugin`.
-- Third-party plugins depend only on `clouseau-api`, as `compileOnly`.
+- Third-party plugins depend only on `clouseau-api`, as `compileOnly`. `clouseau-example-plugin`
+  follows the same rule; only `clouseau-plugin`'s tests use its JAR (as a file, never on the classpath).
 - Anything that doesn't need Swing belongs in `clouseau-core`, not `clouseau-ui`.
 
 There is no built-in parser plugin module: built-in parsers are regex definitions in
