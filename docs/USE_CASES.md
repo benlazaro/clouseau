@@ -366,7 +366,7 @@ becomes an `UNKNOWN` entry, and the `UNKNOWN` level toggle is off by default, so
 table looks empty. The parser editor is only reachable from the menu, and the sample
 must be typed or pasted in by hand.
 
-### UC-14 · Customize the app's appearance 🟡
+### UC-14 · Customize the app's appearance ✅
 
 **Actor:** Field engineer, Developer
 **Goal:** Make Clouseau comfortable to look at for hours, for example dark or light to
@@ -394,9 +394,11 @@ and logs stay just as readable in every theme.
 - **Settings stays in sync:** The theme can also be picked in Settings, and both places
   always show the same current theme.
 
-**Current behavior:** Themes can only be picked in Settings (with a live preview), and
-the theme manager is only reachable from there. There is no theme choice in the main
-window.
+**Current behavior:** View → Theme lists the built-in and installed themes, with the
+current one checked; picking one applies and saves it at once. The same submenu ends with
+Manage Themes…, which opens the theme manager. Settings still offers the theme dropdown
+(with a live preview, applied on OK); both read and save the same preference, so they
+always agree.
 
 ### UC-15 · Work with several logs in tabs 🟡
 

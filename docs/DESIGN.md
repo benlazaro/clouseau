@@ -730,12 +730,6 @@ Accepted in the use cases, with no design decision needed beyond the above:
   `FileTail`. "Create a parser for this file" opens `ParserEditorDialog` with those lines
   as samples; saving reloads the tab with the new parser. Large files need the same
   on-demand reading as D-8 rather than loading the whole text into one component.
-- **Theme menu (UC-14):** A new **View** menu in the main window with a **Theme**
-  submenu: one radio item per `ThemeManager.getAllThemes()` entry, then **Manage
-  themes…** (`ThemeManagerDialog`). Picking an item calls `ThemeManager.applyTheme` and
-  `updateUI`, and saves it with `AppPrefs.setTheme`, the same path the Settings dropdown
-  uses, so the two stay in sync. The submenu rebuilds its items each time it opens, so
-  newly installed themes appear.
 - **Tab switching shortcuts (UC-15):** Handled by a `KeyEventDispatcher` registered with
   the `KeyboardFocusManager` for the main window, not by ordinary key bindings, because
   two Swing behaviors would otherwise swallow the keys:

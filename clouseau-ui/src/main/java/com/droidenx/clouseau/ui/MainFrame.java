@@ -175,6 +175,20 @@ public final class MainFrame extends JFrame {
 
         menuBar.add(fileMenu);
 
+        JMenu viewMenu = new JMenu(Messages.get("menu.view"));
+        // Rebuilt each time it opens, so newly installed themes and a theme picked in
+        // Settings show up.
+        JMenu themeMenu = new JMenu(Messages.get("menu.view.theme"));
+        themeMenu.setMargin(new Insets(7, mh, 7, mh));
+        themeMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildThemeMenu(themeMenu); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        });
+        rebuildThemeMenu(themeMenu);
+        viewMenu.add(themeMenu);
+        menuBar.add(viewMenu);
+
         JMenu toolsMenu = new JMenu(Messages.get("menu.tools"));
         JMenuItem parsersItem = menuItem(Messages.get("menu.tools.parsers"));
         parsersItem.addActionListener(e ->
@@ -213,6 +227,33 @@ public final class MainFrame extends JFrame {
 
         menuBar.add(helpMenu);
         return menuBar;
+    }
+
+    /** One radio item per theme (the current one selected), then "Manage Themes…". */
+    private void rebuildThemeMenu(JMenu menu) {
+        menu.removeAll();
+        String current = AppPrefs.getTheme();
+        ButtonGroup group = new ButtonGroup();
+        for (ThemeManager.ThemeEntry theme : ThemeManager.getAllThemes()) {
+            JRadioButtonMenuItem item = new JRadioButtonMenuItem(theme.name(), theme.name().equals(current));
+            item.setMargin(new Insets(7, 0, 7, 0));
+            item.addActionListener(e -> selectTheme(theme.name()));
+            group.add(item);
+            menu.add(item);
+        }
+        menu.addSeparator();
+        JMenuItem manage = menuItem(Messages.get("menu.view.theme.manage"));
+        manage.addActionListener(e -> new ThemeManagerDialog(this).setVisible(true));
+        menu.add(manage);
+    }
+
+    /** Applies and saves a theme: the same steps as the Settings dropdown plus OK. */
+    private void selectTheme(String name) {
+        log.info("Switching theme to {}", name);
+        ThemeManager.applyTheme(name);
+        AppPrefs.setTheme(name);
+        // After the menu has closed, so the popup isn't repainted mid-switch.
+        SwingUtilities.invokeLater(ThemeManager::updateUI);
     }
 
     private void openShortcuts() {
