@@ -1,6 +1,6 @@
 # Clouseau Use Cases
 
-> **Status:** Draft · **Last updated:** 2026-11-02
+> **Status:** Draft · **Last updated:** 2026-11-03
 >
 > This document describes *what Clouseau is for*: who uses it, what they are trying to
 > accomplish, and what it deliberately does not do. It is the reference reviewers use to
@@ -79,7 +79,7 @@ user picks the Clouseau launcher manually, but the packages don't register file
 associations. Static files are subject to the per-tab entry limit (see UC-6), so
 the earliest lines of a very large file can be dropped without warning.
 
-### UC-2 · Open compressed logs directly ✅
+### UC-2 · Open compressed logs directly 🟡
 
 **Actor:** Field engineer, Developer
 **Goal:** Read a `.gz` or `.zip` attachment without extracting it first.
@@ -88,6 +88,12 @@ the earliest lines of a very large file can be dropped without warning.
 2. Clouseau decompresses it on the fly and continues as in UC-1.
 
 **Success:** No manual extraction step or temp files the user has to clean up.
+
+**Variation:** A `.zip` containing several logs lets the user choose which ones to open,
+and opens them as a merged view (UC-12).
+
+**Current behavior:** Only the first file in a `.zip` is read, with no indication that
+there are others.
 
 ### UC-3 · Spot errors and warnings at a glance ✅
 
@@ -226,6 +232,64 @@ releases that don't change that API.
 **Scope note:** Sources that read from log aggregators (Loki, CloudWatch, and similar)
 are welcome as plugins, and `LogSource` must make them possible. The core application
 does not ship them.
+
+### UC-12 · View related logs in one merged view ❌
+
+**Actor:** Developer, Field engineer
+**Goal:** Read several related logs as one timeline: the rolled files of one app
+(`app.log`, `app.log.1`, `app.log.2.gz`), or the logs of several services or servers
+involved in the same incident.
+
+1. User chooses the logs to merge in any of these ways:
+   - selecting several files in the open dialog;
+   - opening a file pattern or folder, such as `app.log*`;
+   - opening a `.zip` that contains several logs, and ticking the ones to include in a
+     picker that lists its files, with a filter box and a parser preview for each;
+   - dragging several files onto the window.
+2. Clouseau parses each file with its own parser (detected or chosen per file), so a
+   merged view can mix formats.
+3. Entries from all files are interleaved by timestamp into one table. Each file's
+   timestamps are read in that file's own source timezone.
+4. A **Source** column shows which file each entry came from.
+5. All filters, Find, highlighting, and the detail panel work across the merged view.
+6. Every file that is still being written is followed (UC-6). Files that don't grow,
+   such as rotated or compressed ones, simply stay as they are.
+
+**Success:** The user can follow one request or incident across files and services
+without switching tabs or lining up timestamps by hand.
+
+**Rules:**
+- **Shared columns:** Timestamp, level, logger, thread, and message line up for every
+  format. Format-specific fields (for example `traceId` or `pid`) each get a column;
+  cells stay empty for files without that field, and fields with the same name share
+  one column.
+- **Continuation lines** (such as stack traces) stay attached to their entry and are
+  never separated from it by lines from another file.
+- **Equal timestamps** keep each file's original line order.
+- **Files without timestamps** can't be placed on a shared timeline. Clouseau says so
+  and offers to open them in their own tab instead.
+- **Fixed file set:** A merged view follows the files it opened. It never adds files
+  that start matching the pattern later, because a newly rotated `app.log.1` would
+  repeat lines already shown.
+- **Annotations stay per file:** A note on an entry is saved with the file that entry
+  came from (UC-7). Exporting a merged view for review (UC-8) bundles every file with
+  its annotations.
+
+**Variation: correcting a wrong clock.** A file's clock can be off, by milliseconds on a
+server or by minutes or hours on a customer's device. The usual sign is effect before
+cause: a request received before it was sent, or a reply logged before its request,
+often visible through an ID that appears in both files.
+
+1. User sets a time offset on one file (for example, shift `device.log` by +3 min 12 s).
+2. That file's entries move to their corrected position in the merged view.
+3. The table shows corrected timestamps and marks the file as shifted. The detail panel
+   still shows the original line, so the correction is never mistaken for what the
+   file says.
+4. The offset is part of the review bundle (UC-8), so the developer sees the same
+   corrected timeline the field engineer did.
+
+The offset is applied after the file's source timezone: the timezone setting says how to
+read the timestamps, and the offset corrects a clock that is simply wrong.
 
 ---
 

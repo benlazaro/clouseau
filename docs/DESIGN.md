@@ -1,6 +1,6 @@
 # Clouseau Design
 
-> **Status:** Draft · **Last updated:** 2026-11-02
+> **Status:** Draft · **Last updated:** 2026-11-03
 >
 > This document describes *how* Clouseau works and *why* it is built that way. It
 > complements [`USE_CASES.md`](USE_CASES.md), which describes *what* Clouseau is for.
@@ -368,6 +368,32 @@ removed from startup (which already cut much of the class loading it speeds up).
 Revisit when Java 21 nears the end of its free updates, or if a Java 25 feature becomes
 compelling. Re-measure first.
 
+### D-13 · A tab shows one or more sources · Accepted
+
+To support merged views (UC-12), a tab holds a list of **sources** instead of one file.
+Each source has its own file (or zip entry), parser, source timezone, time offset, tail
+worker, and `AnnotationStore`. A single-file tab is just a tab with one source.
+
+- **Entry origin:** The table model records which source each entry came from, so the
+  Source column, annotations, and export can find it. This lives in the UI/core model,
+  not in `LogEntry`, so `clouseau-api` and plugins are unaffected.
+- **Merging:** Each source is read into groups of an entry plus its continuation lines.
+  The groups are merged by timestamp (a k-way merge), keeping each source's order for
+  equal timestamps.
+- **Live entries:** Followed sources can deliver entries older than the newest row from
+  another source, so live entries are inserted at their timestamp position, not
+  appended. The view keeps scrolling to the bottom only if the user is already there.
+- **Columns:** The standard `LogEntry` fields always line up. Custom columns are the
+  union of every source's `customFields()`, matched by name.
+- **Time offset:** Applied after the source timezone, to the timestamp used for sorting
+  and display. `rawLine` is never changed, so the detail panel shows what the file
+  actually says. Changing an offset re-sorts that source's entries into place.
+- **Review bundles:** A bundle exported from a merged view (D-10) contains every source
+  file and its annotations, and the manifest lists each file with its parser, source
+  timezone, and time offset, so the view opens the same way on the other end.
+- **Scale:** A merged view multiplies the data in one tab, so it relies on D-7 and D-8
+  even more than a single file does.
+
 ## 10. Planned features
 
 Accepted in the use cases, with no design decision needed beyond the above:
@@ -390,7 +416,7 @@ Remove an entry once it's fixed.
 | **G-3** | `LogSource` and `LogFilter` are not `ExtensionPoint`s, and the UI constructs sources directly. `FileLogSource` (core) is unused; `SshLogSource` lives in `clouseau-ui`. | Plugins can't add sources (blocks D-11). Violates section 3, rule 2. |
 | **G-4** | Local follow polls the file size every 500 ms instead of being notified of changes. | Up to half a second of latency and a little wasted work. Contradicts D-3. |
 | **G-5** | The entry limit applies to static files, and the default heap is 2 GB. | A large file silently loses its earliest lines. Contradicts D-7 and UC-1. |
-| **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. |
+| **G-6** | `.zip` files read only their first entry. | A zip containing several logs shows just one, with no indication. The zip picker in UC-12 will close this. |
 | **G-7** | `SshLogSource` builds the remote command by concatenating the path unquoted: `"tail ... -f " + remotePath`. | Paths with spaces fail; shell metacharacters in the path are executed by the remote shell. |
 | **G-8** | Annotations are keyed by content hash only, and saving fails silently if the log's folder is read-only. | Contradicts D-9 and UC-7. |
 | **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |
