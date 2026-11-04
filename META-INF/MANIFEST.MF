@@ -1,5 +1,0 @@
-Manifest-Version: 1.0
-Plugin-Id: builtin-parsers
-Plugin-Version: 0.1.0-SNAPSHOT
-Plugin-Class: com.clouseau.plugins.parsers.BuiltinParsersPlugin
-
