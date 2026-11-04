@@ -41,19 +41,35 @@ public final class LineScanner {
      * @return the number of bytes read, which is where a follow should resume
      */
     public static long scan(InputStream in, Sink sink, BooleanSupplier cancelled) throws IOException {
-        return scan(in, sink, cancelled, BUFFER_SIZE);
+        return scan(in, 0, sink, cancelled, BUFFER_SIZE);
+    }
+
+    /**
+     * Like {@link #scan(InputStream, Sink, BooleanSupplier)}, for a stream that starts
+     * {@code start} bytes into the file (following, D-16): offsets are counted from the
+     * start of the file, and a byte-order mark is skipped only when {@code start} is 0.
+     *
+     * @return the file position just past what was read
+     */
+    public static long scan(InputStream in, long start, Sink sink, BooleanSupplier cancelled) throws IOException {
+        return scan(in, start, sink, cancelled, BUFFER_SIZE);
     }
 
     static long scan(InputStream in, Sink sink, BooleanSupplier cancelled, int bufferSize) throws IOException {
+        return scan(in, 0, sink, cancelled, bufferSize);
+    }
+
+    private static long scan(InputStream in, long start, Sink sink, BooleanSupplier cancelled, int bufferSize)
+            throws IOException {
         byte[] buf = new byte[Math.max(bufferSize, Utf8Bom.LENGTH)];
         // Holds the start of a line that runs past the end of the buffer.
         byte[] carry = new byte[256];
         int carryLen = 0;
 
-        long base = 0;             // stream position of buf[0]
+        long base = start;         // stream position of buf[0]
         int n = in.readNBytes(buf, 0, buf.length);
-        int i = Utf8Bom.isBom(buf, Math.min(n, Utf8Bom.LENGTH)) ? Utf8Bom.LENGTH : 0;
-        long lineStart = i;
+        int i = start == 0 && Utf8Bom.isBom(buf, Math.min(n, Utf8Bom.LENGTH)) ? Utf8Bom.LENGTH : 0;
+        long lineStart = base + i;
         boolean skipLf = false;    // the last byte was \r; a \n right after it is the same ending
 
         while (n > 0) {

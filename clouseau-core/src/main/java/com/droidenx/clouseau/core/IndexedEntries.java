@@ -6,35 +6,48 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedByInterruptException;
+import java.nio.channels.AsynchronousFileChannel;
+import java.nio.channels.Channel;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntPredicate;
 
 /**
- * The entries of an indexed static file (D-16), read back from disk on demand: each row's
- * line is read at its {@link EntryIndex} offset and parsed again with the tab's
+ * The entries of an indexed file (D-16), read back from disk on demand: each row's line
+ * is read at its {@link EntryIndex} offset and parsed again with the tab's
  * {@link LineParser}, so the heap holds the index instead of the text.
  * <p>
- * The file is kept open with a {@link FileChannel} for {@link #get}, which on Windows lets the writer
- * still rename or delete it (log rotation). Positioned reads on it are safe from any
- * thread.
+ * <b>Rotation.</b> A followed file's rows are kept in <em>segments</em>, one per file the
+ * path has named, each with its own open channels. When the followed file is
+ * {@linkplain #rotated() rotated}, later rows go in a new segment on the file the path names
+ * now. A file renamed away stays open, so its rows stay readable; the channels are opened
+ * with {@link FileChannel#open} and {@link AsynchronousFileChannel#open}, which on Windows
+ * share delete access, so holding them never stops the writer from renaming the file. A
+ * file truncated in place has lost its text: its rows keep what the index holds (time,
+ * level, logger, thread, indexed fields) and a placeholder message.
  * <p>
  * <b>Threads:</b> {@link #get} keeps a cache and is for one thread (the EDT). {@link #scan}
- * is for one other thread at a time (the filter executor); it uses no cache and reads
+ * may run on other threads (the filter and find executors); it uses no cache and reads
  * the file in large sequential blocks. Both may only ask for rows below a size handed to
- * them by the thread that builds the index (see {@link EntryIndex}).
+ * them by the thread that builds the index (see {@link EntryIndex}). {@link #rotated} is
+ * called by that thread, before it adds the first row of the new file.
  */
 @Slf4j
 public final class IndexedEntries implements Closeable {
 
     /** Entries kept parsed for {@link #get}: enough for scrolling and the detail panel. */
     public static final int CACHE_SIZE = 10_000;
+    /** The message of a row whose text was lost to rotation, unless another is given. */
+    public static final String DEFAULT_ROTATED_TEXT = "Text no longer in the file (rotated)";
     private static final int SCAN_BLOCK = 1 << 20;
 
     /** Receives one entry of a {@link #scan}. */
@@ -43,23 +56,51 @@ public final class IndexedEntries implements Closeable {
         void row(int row, LogEntry entry);
     }
 
+    /** Rows from {@code firstRow} up to the next segment's, all in one file. */
+    private static final class Segment {
+        final int firstRow;
+        /** For {@link #get}; null if the file couldn't be opened. */
+        final FileChannel channel;
+        /**
+         * For {@link #scan}. Interrupting a thread inside {@code FileChannel.read} closes the
+         * channel, and the executors are cancelled by interrupts; a file renamed away can't
+         * be opened again by name. Interrupting a thread waiting for an asynchronous read
+         * leaves the channel open.
+         */
+        final AsynchronousFileChannel scanChannel;
+        /** Set once the file was truncated under these rows. */
+        volatile boolean lost;
+
+        Segment(int firstRow, FileChannel channel, AsynchronousFileChannel scanChannel) {
+            this.firstRow = firstRow;
+            this.channel = channel;
+            this.scanChannel = scanChannel;
+        }
+    }
+
     private final Path file;
     private final EntryIndex index;
     private final LineParser parser;
-    private final FileChannel channel;
+    private final String rotatedText;
+    /** Ascending by first row; replaced, never changed in place, when a segment is added. */
+    private volatile List<Segment> segments;
+    private volatile boolean closed;
     private final Map<Integer, LogEntry> cache = new LinkedHashMap<>(256, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Integer, LogEntry> eldest) {
             return size() > CACHE_SIZE;
         }
     };
+    /** The segments {@link #cache} was filled from; a rotation empties the cache. */
+    private List<Segment> cachedSegments;
     private volatile boolean readFailed;
 
-    private IndexedEntries(Path file, EntryIndex index, LineParser parser, FileChannel channel) {
+    private IndexedEntries(Path file, EntryIndex index, LineParser parser, String rotatedText, Segment first) {
         this.file = file;
         this.index = index;
         this.parser = parser;
-        this.channel = channel;
+        this.rotatedText = rotatedText;
+        this.segments = List.of(first);
     }
 
     /**
@@ -67,24 +108,111 @@ public final class IndexedEntries implements Closeable {
      * growing.
      */
     public static IndexedEntries open(Path file, EntryIndex index, LineParser parser) throws IOException {
-        return new IndexedEntries(file, index, parser, FileChannel.open(file, StandardOpenOption.READ));
+        return open(file, index, parser, DEFAULT_ROTATED_TEXT);
+    }
+
+    /**
+     * Like {@link #open(Path, EntryIndex, LineParser)}; rows whose text was lost to
+     * rotation get {@code rotatedText} as their message.
+     */
+    public static IndexedEntries open(Path file, EntryIndex index, LineParser parser, String rotatedText)
+            throws IOException {
+        return new IndexedEntries(file, index, parser, rotatedText, openSegment(0, file));
+    }
+
+    private static Segment openSegment(int firstRow, Path file) throws IOException {
+        FileChannel channel = FileChannel.open(file, StandardOpenOption.READ);
+        try {
+            return new Segment(firstRow, channel, AsynchronousFileChannel.open(file, StandardOpenOption.READ));
+        } catch (IOException | RuntimeException e) {
+            channel.close();
+            throw e;
+        }
     }
 
     public EntryIndex index() { return index; }
 
     /**
+     * The followed file was rotated: rows added from now on are in the file the path names
+     * now. If the rows so far lost their text (the file was truncated in place rather than
+     * renamed), they read from then on as the index columns and the placeholder message.
+     * Call on the thread that adds rows to the index, before adding the new file's first.
+     *
+     * @return true if older rows lost their text
+     */
+    public synchronized boolean rotated() {
+        if (closed) return false;
+        List<Segment> segs = segments;
+        Segment last = segs.get(segs.size() - 1);
+        int size = index.size();
+        boolean lost = false;
+        if (!last.lost && size > last.firstRow && last.channel != null) {
+            long end = index.offset(size - 1) + index.length(size - 1);
+            try {
+                lost = last.channel.size() < end;
+            } catch (IOException e) {
+                lost = true;
+            }
+            if (lost) {
+                last.lost = true;
+                log.info("{} was truncated: {} older rows keep only their index columns", file, size - last.firstRow);
+            }
+        }
+        Segment next;
+        try {
+            next = openSegment(size, file);
+        } catch (IOException e) {
+            log.warn("Can't open {} after rotation", file, e);
+            next = new Segment(size, null, null);
+        }
+        List<Segment> grown = new ArrayList<>(segs);
+        grown.add(next);
+        segments = List.copyOf(grown);
+        return lost;
+    }
+
+    private static Segment segmentOf(List<Segment> segs, int row) {
+        for (int i = segs.size() - 1; i > 0; i--) {
+            if (segs.get(i).firstRow <= row) return segs.get(i);
+        }
+        return segs.get(0);
+    }
+
+    /**
      * The entry at this row, or null if its text can't be read any more (the file was
-     * truncated or deleted). Logs the first failure only.
+     * truncated or deleted while not followed). Logs the first failure only.
      */
     public LogEntry get(int row) {
+        List<Segment> segs = segments;
+        if (segs != cachedSegments) {
+            cache.clear();
+            cachedSegments = segs;
+        }
         LogEntry e = cache.get(row);
         if (e != null) return e;
+        Segment seg = segmentOf(segs, row);
+        if (seg.lost) {
+            e = rotatedEntry(row);
+        } else {
+            String text = readLine(seg, row);
+            if (text == null) return null;
+            e = parser.parse(text);
+        }
+        cache.put(row, e);
+        return e;
+    }
+
+    private String readLine(Segment seg, int row) {
+        if (seg.channel == null) {
+            failed(null);
+            return null;
+        }
         int length = index.length(row);
         ByteBuffer buf = ByteBuffer.allocate(length);
         try {
             long pos = index.offset(row);
             while (buf.hasRemaining()) {
-                int n = channel.read(buf, pos + buf.position());
+                int n = seg.channel.read(buf, pos + buf.position());
                 if (n < 0) {
                     failed(null);
                     return null;
@@ -94,15 +222,31 @@ public final class IndexedEntries implements Closeable {
             failed(ex);
             return null;
         }
-        e = parser.parse(new String(buf.array(), 0, length, StandardCharsets.UTF_8));
-        cache.put(row, e);
-        return e;
+        return new String(buf.array(), 0, length, StandardCharsets.UTF_8);
+    }
+
+    /** What the index still knows about a row whose text is gone. */
+    private LogEntry rotatedEntry(int row) {
+        long ts = index.timestamp(row);
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (String name : index.fieldNames()) {
+            EntryIndex.Dictionary values = index.fieldValues(name);
+            if (values == null) continue;
+            String value = values.valueOf(index.fieldId(name, row));
+            if (value != null) fields.put(name, value);
+        }
+        return new LogEntry(
+                ts == EntryIndex.NO_TIMESTAMP ? null : Instant.ofEpochMilli(ts),
+                index.level(row),
+                index.loggers().valueOf(index.loggerId(row)),
+                index.threads().valueOf(index.threadId(row)),
+                rotatedText, rotatedText, Map.copyOf(fields));
     }
 
     /**
      * Reads rows {@code from} (inclusive) to {@code to} (exclusive) in order, in large
      * sequential reads, and hands each one to {@code sink}. Stops early if
-     * {@code cancelled} is true or the text can't be read.
+     * {@code cancelled} is true, the thread is interrupted, or the text can't be read.
      *
      * @return true if every row was read
      */
@@ -116,30 +260,40 @@ public final class IndexedEntries implements Closeable {
      * before that row would be read, so it may keep state (for example, progress).
      */
     public boolean scan(int from, int to, IntPredicate wanted, RowSink sink, BooleanSupplier cancelled) {
+        List<Segment> segs = segments;
         ByteBuffer block = ByteBuffer.allocate(SCAN_BLOCK);
+        Segment blockSeg = null;
         long blockStart = 0;
         int blockLen = 0;
-        // Its own channel: interrupting a thread inside FileChannel.read closes the channel,
-        // and the filter executor is cancelled by interrupts. The shared one must survive.
-        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
+        try {
             for (int row = from; row < to; row++) {
                 if (cancelled.getAsBoolean()) return false;
                 if (!wanted.test(row)) continue;
+                Segment seg = segmentOf(segs, row);
+                if (seg.lost) {
+                    sink.row(row, rotatedEntry(row));
+                    continue;
+                }
+                if (seg.scanChannel == null) {
+                    failed(null);
+                    return false;
+                }
                 long offset = index.offset(row);
                 int length = index.length(row);
                 String text;
                 if (length > SCAN_BLOCK) {          // a huge line: read it on its own
-                    byte[] bytes = readFully(channel, offset, length);
-                    if (bytes == null) return false;
-                    text = new String(bytes, StandardCharsets.UTF_8);
+                    ByteBuffer buf = ByteBuffer.allocate(length);
+                    if (fill(seg.scanChannel, buf, offset) < length) {
+                        failed(null);
+                        return false;
+                    }
+                    text = new String(buf.array(), StandardCharsets.UTF_8);
                 } else {
-                    if (offset < blockStart || offset + length > blockStart + blockLen) {
+                    if (seg != blockSeg || offset < blockStart || offset + length > blockStart + blockLen) {
                         block.clear();
+                        blockSeg = seg;
                         blockStart = offset;
-                        while (block.hasRemaining() && channel.read(block, blockStart + block.position()) >= 0) {
-                            // fill the block, or stop at the end of the file
-                        }
-                        blockLen = block.position();
+                        blockLen = fill(seg.scanChannel, block, blockStart);
                         if (length > blockLen) {
                             failed(null);
                             return false;
@@ -150,27 +304,37 @@ public final class IndexedEntries implements Closeable {
                 sink.row(row, parser.parse(text));
             }
             return true;
-        } catch (ClosedByInterruptException ex) {
-            return false;                           // cancelled mid-read
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();     // cancelled mid-read: the channel stays open
+            return false;
         } catch (IOException ex) {
             failed(ex);
             return false;
         }
     }
 
-    private byte[] readFully(FileChannel channel, long offset, int length) throws IOException {
-        ByteBuffer buf = ByteBuffer.allocate(length);
+    /**
+     * Reads into {@code buf} from {@code position} until it is full or the file ends.
+     *
+     * @return the bytes read
+     */
+    private static int fill(AsynchronousFileChannel channel, ByteBuffer buf, long position)
+            throws IOException, InterruptedException {
+        int start = buf.position();
         while (buf.hasRemaining()) {
-            if (channel.read(buf, offset + buf.position()) < 0) {
-                failed(null);
-                return null;
+            int n;
+            try {
+                n = channel.read(buf, position + buf.position() - start).get();
+            } catch (ExecutionException ex) {
+                throw ex.getCause() instanceof IOException io ? io : new IOException(ex.getCause());
             }
+            if (n < 0) break;
         }
-        return buf.array();
+        return buf.position() - start;
     }
 
     private void failed(IOException ex) {
-        if (readFailed) return;
+        if (readFailed || closed) return;   // a read cut short by close() is no failure
         readFailed = true;
         if (ex != null) log.warn("Can't read {} any more", file, ex);
         else log.warn("{} is shorter than its index: it was truncated or replaced", file);
@@ -180,7 +344,17 @@ public final class IndexedEntries implements Closeable {
     public boolean hasReadFailed() { return readFailed; }
 
     @Override
-    public void close() {
+    public synchronized void close() {
+        if (closed) return;
+        closed = true;
+        for (Segment seg : segments) {
+            close(seg.channel);
+            close(seg.scanChannel);
+        }
+    }
+
+    private void close(Channel channel) {
+        if (channel == null) return;
         try {
             channel.close();
         } catch (IOException ex) {

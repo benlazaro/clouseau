@@ -1,6 +1,6 @@
 # Clouseau Use Cases
 
-> **Status:** Draft · **Last updated:** 2026-11-03
+> **Status:** Draft · **Last updated:** 2026-11-04
 >
 > This document describes *what Clouseau is for*: who uses it, what they are trying to
 > accomplish, and what it deliberately does not do. It is the reference reviewers use to
@@ -79,8 +79,9 @@ are opened (and forwarded to an already-running instance), so "Open with" works 
 user picks the Clouseau launcher manually, but the packages don't register file
 associations. Static files are never trimmed by the entry limit. Every static file is
 indexed (D-16): the heap keeps about 29 bytes per line and text is read back from disk,
-so a 1M-line, 125 MB log uses under 50 MB of heap. Compressed files are indexed through
-an unpacked copy (UC-2). In the rare case the index itself fills the heap (tens of
+so a 1M-line, 125 MB log uses under 50 MB of heap. Lines followed after the file opens
+(UC-6) are indexed the same way, so they are never dropped either. Compressed files are
+indexed through an unpacked copy (UC-2). In the rare case the index itself fills the heap (tens of
 millions of lines), Clouseau stops reading, warns the user with the number of lines
 loaded and how to raise the memory limit, and marks the tab "partly loaded" in the
 status bar.
@@ -163,13 +164,19 @@ responsive (about 1.6 s for 1M lines). Times are compared to the millisecond.
 
 **Success:** It can be left running overnight without running out of memory.
 
-**Memory limit:** While following, each tab holds at most a configurable number of
-entries (default 200,000). The oldest entries are dropped when the limit is reached. This
-limit protects live sessions only; it never applies to opening a static file (UC-1).
-When following a file that was already larger than the limit, the tab keeps as many
-entries as it loaded, dropping one old entry per new one. On an indexed file (UC-1) the
-lines already in the file are never dropped; the lines followed since are held in memory
-and kept to the limit, oldest first, until following extends the index (D-16 step 5).
+**Rotation (local files):** If the file is renamed (logrotate's default, log4j and
+logback rolling), the existing rows stay readable from the old file and the new file is
+followed. If it is truncated in place (logrotate's `copytruncate`), the existing rows keep
+their time, level, logger and thread, their message reads "Text no longer in the file
+(rotated)", and the status bar says the file was rotated.
+
+**Memory limit:** A followed local file is indexed (UC-1, D-16), so its lines cost about
+29 bytes of heap each and are never dropped. SSH and plugin sources hold their entries
+in memory, at most a configurable number per tab (default 200,000); the oldest are
+dropped when the limit is reached. This limit protects live sessions only; it never
+applies to opening a static file (UC-1). If a local file couldn't be indexed and was
+loaded into memory instead, following it uses the same limit, and a tab that loaded more
+than the limit keeps as many entries as it loaded, dropping one old entry per new one.
 
 ### UC-7 · Annotate lines during an investigation ✅
 

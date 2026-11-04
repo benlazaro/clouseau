@@ -83,6 +83,13 @@ public final class LogPanel extends JPanel {
     private Path cacheCopy;
     private Optional<LogParser> currentParser = Optional.empty();
     private volatile long tailPosition = 0;
+    /**
+     * Held by the tail worker while it follows. A cancelled worker may still be finishing a
+     * read; the next one waits for it, so only one thread ever adds to the index.
+     */
+    private final java.util.concurrent.locks.ReentrantLock tailLock = new java.util.concurrent.locks.ReentrantLock();
+    /** True once the followed file was truncated in place, so older rows lost their text (D-16). */
+    private boolean rotatedTextLost = false;
     private boolean follow  = AppPrefs.isFollowByDefault();
     private boolean loading = false;
     /** True when the last static load stopped early because memory ran low (UC-1). */
@@ -245,6 +252,7 @@ public final class LogPanel extends JPanel {
         annotationStore = AnnotationStore.inMemory();
         annotationSaveWarned = false;
         partialLoad = false;
+        rotatedTextLost = false;
         logTableModel.clear();
         deleteCacheCopy();
         filterBar.clearLoggers();
@@ -267,8 +275,8 @@ public final class LogPanel extends JPanel {
         final EntryIndex index = new EntryIndex();
         if (rowSource != null) {
             try {
-                logTableModel.beginIndexedLoad(
-                        IndexedEntries.open(rowSource, index, new LineParser(parser, parsers, srcTz)));
+                logTableModel.beginIndexedLoad(IndexedEntries.open(rowSource, index,
+                        new LineParser(parser, parsers, srcTz), Messages.get("table.rotated.text")));
                 cacheCopy = copy;
             } catch (IOException ex) {
                 log.warn("Can't open {} for indexing; it will be loaded into memory", rowSource, ex);
@@ -284,6 +292,8 @@ public final class LogPanel extends JPanel {
             volatile boolean diskFull;
             /** Annotations read and anchored by the worker; handed to the tab in done(). */
             volatile AnnotationStore loadedAnnotations;
+            /** Bytes of a plain file the index covers, where following resumes; -1 if not indexed. */
+            volatile long indexedTo = -1;
 
             @Override
             protected Void doInBackground() throws Exception {
@@ -322,7 +332,7 @@ public final class LogPanel extends JPanel {
                         ? new CopyingInputStream(LogReaders.openBytes(file, entry), Files.newOutputStream(rowSource))
                         : Files.newInputStream(file);
                 try (InputStream in = source) {
-                    LineScanner.scan(in, (offset, length, text) -> {
+                    long read = LineScanner.scan(in, (offset, length, text) -> {
                         LogEntry e = lineParser.parse(text);
                         index.add(offset, length, e);
                         if (anchoring != null) anchoring.accept(e.rawLine());
@@ -331,6 +341,9 @@ public final class LogPanel extends JPanel {
                             lowMemory[0] = true;
                         }
                     }, () -> lowMemory[0] || isCancelled());
+                    // Follow from exactly where the index ends, not the size at the end of the
+                    // load: lines written in between would be skipped.
+                    if (!compressed) indexedTo = read;
                 }
                 if (source instanceof CopyingInputStream c && c.writeFailure() != null && !isCancelled()) {
                     diskFull = true;
@@ -381,7 +394,8 @@ public final class LogPanel extends JPanel {
                                 JOptionPane.WARNING_MESSAGE);
                         return;
                     }
-                    try { tailPosition = Files.size(currentFile); } catch (IOException ignored) {}
+                    if (indexedTo >= 0) tailPosition = indexedTo;
+                    else try { tailPosition = Files.size(currentFile); } catch (IOException ignored) {}
                     if (follow) startTailing();
                 } catch (Exception ex) {
                     log.error("Failed to load {}", file, ex);
@@ -517,25 +531,62 @@ public final class LogPanel extends JPanel {
         final Optional<LogParser> parser = currentParser;
         final Path file = currentFile;
         final ZoneId srcTz = this.sourceTimezone; // capture before worker starts
+        // D-16: on an indexed tab, followed lines extend the index and are never trimmed.
+        final IndexedEntries indexed = logTableModel.indexedEntries();
         tailWorker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
                 LineParser lineParser = new LineParser(parser, parsers, srcTz);
                 try {
-                    FileFollower.follow(file, tailPosition, pos -> tailPosition = pos,
-                            line -> publish(lineParser.parse(line)), this::isCancelled,
-                            FOLLOW_SAFETY_POLL_MS);
+                    tailLock.lockInterruptibly();
+                } catch (InterruptedException e) {
+                    return null;                    // cancelled while the last worker finished
+                }
+                try {
+                    if (isCancelled()) return null;
+                    FileFollower.follow(file, tailPosition, new FileFollower.Listener() {
+                        @Override
+                        public void line(long offset, int length, String text) {
+                            LogEntry e = lineParser.parse(text);
+                            if (indexed != null) indexed.index().add(offset, length, e);
+                            publish(e);
+                        }
+
+                        @Override
+                        public void rotated(FileFollower.Rotation how) {
+                            log.info("{} was rotated ({})", file, how);
+                            if (indexed != null && indexed.rotated()) {
+                                SwingUtilities.invokeLater(() -> {
+                                    if (logTableModel.indexedEntries() != indexed) return;   // cleared
+                                    rotatedTextLost = true;
+                                    logTable.repaint();
+                                    refreshDetail();
+                                    updateStatusBar();
+                                });
+                            }
+                        }
+
+                        @Override
+                        public void position(long position) {
+                            if (!isCancelled()) tailPosition = position;
+                        }
+                    }, this::isCancelled, FOLLOW_SAFETY_POLL_MS);
                 } catch (InterruptedException e) {
                     // cancel(true) interrupts the wait: following stopped
+                } finally {
+                    tailLock.unlock();
                 }
                 return null;
             }
 
             @Override
             protected void process(List<LogEntry> entries) {
-                if (isCancelled()) return;
+                // Rows already in the index must reach the model even after a cancel, or
+                // the model's count would fall behind the index for good.
+                if (isCancelled() && indexed == null) return;
+                if (indexed != null && logTableModel.indexedEntries() != indexed) return;  // cleared
                 filterBar.addBatch(entries);
-                logTableModel.appendLive(entries);
+                logTableModel.appendFollowed(entries);
             }
         };
         tailWorker.execute();
@@ -686,9 +737,20 @@ public final class LogPanel extends JPanel {
                 Messages.get("table.clear.confirm.title"),
                 JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
+        // A plain file stays indexed: what is followed from here on starts a new index.
+        boolean reindex = logTableModel.isIndexed() && cacheCopy == null && currentFile != null;
         stopTailing();
         try { tailPosition = currentFile != null ? Files.size(currentFile) : 0; } catch (IOException ignored) { tailPosition = 0; }
         logTableModel.clear();
+        rotatedTextLost = false;
+        if (reindex) {
+            try {
+                logTableModel.beginIndexedLoad(IndexedEntries.open(currentFile, new EntryIndex(),
+                        new LineParser(currentParser, parsers, sourceTimezone), Messages.get("table.rotated.text")));
+            } catch (IOException ex) {
+                log.warn("Can't open {} for indexing; followed lines will be held in memory", currentFile, ex);
+            }
+        }
         refreshDetail();
         clearSearchMatches();
         updateStatusBar();
@@ -710,6 +772,7 @@ public final class LogPanel extends JPanel {
                     : java.text.MessageFormat.format(Messages.get("status.lines.filtered"), visible, total);
         }
         if (partialLoad) text += Messages.get(partialDiskFull ? "status.partial.diskfull" : "status.partial");
+        if (rotatedTextLost) text += Messages.get("status.rotated");
         if (filterPercent >= 0) text += java.text.MessageFormat.format(Messages.get("status.filtering"), filterPercent);
         statusBarLabel.setText(text);
     }

@@ -1,72 +1,106 @@
 package com.droidenx.clouseau.core;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
  * Reads lines appended to a file since a known byte offset, for follow (tail) mode.
  *
- * <p>Bytes are decoded as UTF-8 with malformed input replaced, matching how files are read
- * on initial load. Only complete lines (terminated by {@code \n}) are consumed: a trailing
- * line still being written is left for the next read, so it never becomes two entries.
- * When reading from offset 0, a leading UTF-8 BOM is skipped (see {@link Utf8Bom}).
+ * <p>Lines are split by {@link LineScanner}, exactly as the first pass over the file splits
+ * them, so a followed line can extend the file's {@link EntryIndex} (D-16). Only complete
+ * lines are consumed: a trailing line still being written is left for the next read, so it
+ * never becomes two entries. Bytes are decoded as UTF-8 with malformed input replaced, and
+ * when reading from offset 0 a leading UTF-8 BOM is skipped (see {@link Utf8Bom}).
  */
 public final class FileTail {
+
+    private static final int BACKWARD_BLOCK = 8 * 1024;
 
     private FileTail() {}
 
     /**
      * Passes each complete, non-blank line written to {@code file} after byte offset
-     * {@code from} to {@code sink}, with any trailing {@code \r} removed.
+     * {@code from} to {@code sink}, without its line ending.
      *
      * @return the byte offset just past the last complete line, to pass as {@code from}
      *         on the next call; {@code from} itself if no complete line was available
      */
     public static long readAppendedLines(Path file, long from, Consumer<String> sink) throws IOException {
         try (SeekableByteChannel channel = Files.newByteChannel(file)) {
-            if (channel.size() <= from) return from;
-            channel.position(from);
-
-            InputStream in = new BufferedInputStream(Channels.newInputStream(channel));
-            long start = from;
-            if (from == 0) {
-                // Start of file (first read, or after rotation): step over a UTF-8 BOM.
-                in.mark(Utf8Bom.LENGTH);
-                byte[] head = in.readNBytes(Utf8Bom.LENGTH);
-                if (Utf8Bom.isBom(head, head.length)) start = Utf8Bom.LENGTH;
-                else in.reset();
-            }
-            ByteArrayOutputStream line = new ByteArrayOutputStream();
-            long offset = start;
-            long consumed = start;
-            int b;
-            while ((b = in.read()) != -1) {
-                offset++;
-                if (b == '\n') {
-                    emit(line, sink);
-                    line.reset();
-                    consumed = offset;
-                } else {
-                    line.write(b);
-                }
-            }
-            return consumed;
+            return readAppendedLines(channel, from, (offset, length, text) -> sink.accept(text), () -> false);
         }
     }
 
-    private static void emit(ByteArrayOutputStream bytes, Consumer<String> sink) {
-        // '\n' is a single byte that never occurs inside a multi-byte UTF-8 sequence,
-        // so splitting on it before decoding cannot cut a character in half.
-        String line = bytes.toString(StandardCharsets.UTF_8);
-        if (line.endsWith("\r")) line = line.substring(0, line.length() - 1);
-        if (!line.isBlank()) sink.accept(line);
+    /**
+     * Passes each complete, non-blank line in {@code channel} after byte offset {@code from}
+     * to {@code sink}, with its offset and length in bytes. Stops early if {@code cancelled}
+     * is true (checked after every line). Moves the channel's position.
+     *
+     * @return the byte offset just past the last line handed to {@code sink} (or skipped as
+     *         blank), to pass as {@code from} on the next call
+     */
+    public static long readAppendedLines(SeekableByteChannel channel, long from, LineScanner.Sink sink,
+                                         BooleanSupplier cancelled) throws IOException {
+        long end = endOfLastLine(channel, from);
+        if (end <= from) return from;
+        channel.position(from);
+        InputStream in = limited(Channels.newInputStream(channel), end - from);
+        return LineScanner.scan(in, from, sink, cancelled);
+    }
+
+    /**
+     * The position just past the last line ending ({@code \n} or {@code \r}) after
+     * {@code from}, or {@code from} if there is none. Cutting after a lone {@code \r} is
+     * safe: if a {@code \n} follows it later, that reads as a blank line and is skipped.
+     */
+    private static long endOfLastLine(SeekableByteChannel channel, long from) throws IOException {
+        long pos = channel.size();
+        ByteBuffer buf = ByteBuffer.allocate(BACKWARD_BLOCK);
+        while (pos > from) {
+            int len = (int) Math.min(BACKWARD_BLOCK, pos - from);
+            long blockStart = pos - len;
+            buf.clear().limit(len);
+            channel.position(blockStart);
+            while (buf.hasRemaining()) {
+                if (channel.read(buf) < 0) return from;     // shrank meanwhile: try again later
+            }
+            byte[] bytes = buf.array();
+            for (int k = len - 1; k >= 0; k--) {
+                if (bytes[k] == '\n' || bytes[k] == '\r') return blockStart + k + 1;
+            }
+            pos = blockStart;
+        }
+        return from;
+    }
+
+    /** {@code in}, ending after {@code limit} bytes. Doesn't close {@code in}. */
+    private static InputStream limited(InputStream in, long limit) {
+        return new InputStream() {
+            private long left = limit;
+
+            @Override
+            public int read() throws IOException {
+                if (left <= 0) return -1;
+                int b = in.read();
+                if (b >= 0) left--;
+                return b;
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                if (len == 0) return 0;
+                if (left <= 0) return -1;
+                int n = in.read(b, off, (int) Math.min(len, left));
+                if (n > 0) left -= n;
+                return n;
+            }
+        };
     }
 }

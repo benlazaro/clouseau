@@ -147,6 +147,44 @@ class IndexedLogTableModelTest {
     }
 
     @Test
+    void followedLinesAddedToTheIndexAreNeverTrimmed() throws Exception {
+        Path file = loadIndexed(lines(50), NO_PARSERS);
+
+        // What the tail worker does (D-16 step 5): add each line to the index, then hand it over.
+        onEdt(() -> {
+            IndexedEntries entries = model.indexedEntries();
+            long offset = Files.size(file);
+            StringBuilder appended = new StringBuilder();
+            List<LogEntry> followed = new ArrayList<>();
+            for (int i = 0; i < 25; i++) {
+                String text = "new " + i;
+                LogEntry e = NO_PARSERS.parse(text);
+                entries.index().add(offset, text.length(), e);
+                followed.add(e);
+                appended.append(text).append('\n');
+                offset += text.length() + 1;
+            }
+            Files.writeString(file, appended, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+            model.applyFilter(e -> !e.rawLine().endsWith("3"));
+            model.appendFollowed(followed);   // the limit is 10, but nothing goes
+        });
+        await(() -> model.getRowCount() == 45 + 22);
+
+        onEdt(() -> {
+            assertThat(model.getTotalCount()).isEqualTo(75);
+            assertThat(model.getTrimmedCount()).isZero();
+            assertThat(model.nextOrdinal()).isEqualTo(75);
+            assertThat(model.entryAtOrdinal(50).rawLine()).isEqualTo("new 0");
+            assertThat(model.entryAtOrdinal(74).rawLine()).isEqualTo("new 24");
+            assertThat(model.getRowCount()).isEqualTo(45 + 22);   // "new 3", "new 13" and "new 23" end in 3
+
+            model.applyFilter(e -> e.rawLine().startsWith("new 2"));   // read back from the file
+        });
+        await(() -> model.getRowCount() == 6);
+        onEdt(() -> assertThat(model.getEntry(5).rawLine()).isEqualTo("new 24"));
+    }
+
+    @Test
     void followedEntriesComeAfterTheIndexAndAreNotTrimmed() throws Exception {
         loadIndexed(lines(50));
 

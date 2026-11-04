@@ -1,6 +1,6 @@
 # Clouseau Design
 
-> **Status:** Draft · **Last updated:** 2026-11-03
+> **Status:** Draft · **Last updated:** 2026-11-04
 >
 > This document describes *how* Clouseau works and *why* it is built that way. It
 > complements [`USE_CASES.md`](USE_CASES.md), which describes *what* Clouseau is for.
@@ -169,7 +169,7 @@ refresh; open tabs keep the list they were created with.
 |---|---|
 | **EDT** | All Swing access. Table model mutations (`appendBatch`, `append`, clearing, highlights). |
 | **Load worker** (`SwingWorker`, one per tab) | Read and parse the file; `publish` entries in chunks. |
-| **Tail worker** (`SwingWorker`, one per tab) | Wait for the file to change, then read new lines while following. |
+| **Tail worker** (`SwingWorker`, one per tab) | Wait for the file to change, then read new lines while following; on an indexed tab, add them to the index. Holds the tab's tail lock, so a cancelled worker finishes before the next one starts. |
 | **Filter executor** (`clouseau-filter`, one per tab) | Re-run the active filter over all entries; a generation counter discards stale results. |
 | **Source worker** (`SwingWorker`, one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. |
 
@@ -219,14 +219,29 @@ refresh; open tabs keep the list they were created with.
 - **Local files:** The tail worker runs `FileFollower` (core), which waits on a `FileChangeWatcher` (core). It uses the
   OS change notifications (`WatchService`) for the file's folder. When the file is written,
   created or replaced, it reads the new bytes from the last position with `FileTail`
-  (core). If no notification comes within 2 s it reads anyway, as a backstop for file
-  systems that don't send them (some network drives); if the folder can't be watched at
-  all, that 2 s read is all there is. Stopping follow interrupts the wait.
-- Like the initial load, the tail decodes UTF-8 with malformed input replaced, and skips
-  a BOM when reading from offset 0. It only consumes complete lines: a line still being
-  written is held back until its newline arrives, so it never becomes two entries. If
-  the file shrinks, Clouseau treats it as rotated and reads from the start; existing rows
-  are kept. Compressed files are never followed.
+  (core), through a channel it holds open on the file. If no notification comes within
+  2 s it reads anyway, as a backstop for file systems that don't send them (some network
+  drives); if the folder can't be watched at all, that 2 s read is all there is.
+  Stopping follow interrupts the wait.
+- Lines are split by `LineScanner`, exactly as the first pass splits them, and decoded
+  as UTF-8 with malformed input replaced; a BOM is skipped when reading from offset 0.
+  The tail only consumes complete lines: a line still being written is held back until
+  its line ending arrives, so it never becomes two entries. Each line is reported with
+  its byte offset and length, so on an indexed tab (D-16) the tail worker adds it to the
+  `EntryIndex` and publishes the entry; `LogTableModel.appendFollowed` counts it in as an
+  indexed row. Following starts where the first pass ended. Compressed files are never
+  followed.
+- **Rotation:** `FileFollower` tells the two kinds apart with the channel it holds. If
+  the held file is shorter than the position, it was **truncated in place**
+  (copytruncate). If the path is smaller than what was read, or (where the platform has
+  file keys) names another file, it was **renamed** and a new file created: what was
+  still written to the old file is read first, then the new one is followed from its
+  start. Either way the tab keeps its rows. On an indexed tab, `IndexedEntries.rotated`
+  starts a new segment for the rows that follow; a renamed file stays open, so its rows
+  stay readable, and after a truncation the older rows read as their index columns with
+  the message "Text no longer in the file (rotated)", and the status bar says the file was
+  rotated. `IndexedEntries` decides whether text was lost from its own channel's size,
+  so a rename while follow was off isn't mistaken for a truncation.
 - **SSH:** `SshLogSource` runs `tail -n <N> -f -- '<path>'` on the server over sshj and
   receives lines as they're written. Nothing on the client polls. The path is
   single-quoted for a POSIX shell, so spaces and shell metacharacters are taken
@@ -243,15 +258,15 @@ refresh; open tabs keep the list they were created with.
   calls `open`, parses each line with `LineParser` (chosen parser or auto-detection), and appends
   live entries. Columns are sized after the first batch arrives, and again when a later
   line brings a new field. Closing the tab (or loading something else) calls `close()`.
-- **Memory bound:** Live entries (tail, SSH and plugin sources) go through `LogTableModel.appendLive`,
-  which keeps the tab at most at its cap and evicts the oldest entries, along with their
-  highlights. The cap is `max.entries.per.tab` (default 200,000, range
-  10,000–2,000,000), or the number of entries the static load added if that was larger,
-  so following a big file doesn't cut it to the limit all at once. `clear()` resets the
-  cap and the trimmed count. On an indexed tab, only the followed entries (after the
-  index) are counted and trimmed, to `max.entries.per.tab`; the dropped ones leave a gap
-  in the ordinals between the index and the list. This lasts until D-16 step 5 indexes
-  followed lines.
+- **Memory bound:** A followed file on an indexed tab is never trimmed (D-16). Live
+  entries held in memory (SSH and plugin sources, and following a file that couldn't be
+  indexed) go through `LogTableModel.appendLive`, which keeps the tab at most at its cap
+  and evicts the oldest entries, along with their highlights. The cap is
+  `max.entries.per.tab` (default 200,000, range 10,000–2,000,000), or the number of
+  entries the static load added if that was larger, so following a big file doesn't cut
+  it to the limit all at once. `clear()` resets the cap and the trimmed count. Clear
+  Table on an indexed tab starts a new, empty index on the same file, so what is followed
+  afterwards is still indexed.
 
 ### 6.4 Filtering (UC-4, UC-5)
 
@@ -389,17 +404,19 @@ sync, or backend. See the non-goals in the use cases.
 ### D-7 · The entry limit applies to live sessions only · Adopted
 
 The per-tab entry limit protects long follow sessions (UC-6). Opening a static file must
-never drop lines (UC-1). Static loads are never trimmed; live entries are, down to the
-larger of the limit and the static load's size (section 6.3). A file too big for the
-heap stops loading with a warning (section 6.2) until D-8 removes that ceiling.
+never drop lines (UC-1). Static loads are never trimmed, and neither is a followed file
+on an indexed tab (D-16). Live entries held in memory are, down to the larger of the
+limit and the static load's size (section 6.3). A file whose index fills the heap stops
+loading with a warning (section 6.2).
 
-### D-8 · Static files are indexed, not held in memory · Accepted (direction)
+### D-8 · Static files are indexed, not held in memory · Adopted
 
 To have no size ceiling, a static file is read once to build a compact index (byte offset,
 timestamp, level, and logger per entry). Text is read from disk on demand for visible
 rows, the detail panel, and text filters. Compressed files are first decompressed to
-a temporary file in the data folder. Live sessions keep the current in-memory model with
-its limit. Until this exists, a file that can't be fully loaded must produce a clear
+a temporary file in the data folder. A followed local file extends its index. SSH and
+plugin sources keep the in-memory model with its limit. A file that still can't be fully
+loaded (its index fills the heap, or its unpacked copy fills the disk) produces a clear
 warning (UC-1). The detailed design is D-16.
 
 ### D-9 · Annotations anchored by line number and content · Adopted
@@ -517,11 +534,12 @@ on close), and saving them only in the data folder (private, so they can't be sh
 A highlight stores its palette slot, not an RGB value: themes define the palette, so a
 colleague with another theme sees the same slots in their own colors.
 
-### D-16 · How static files are indexed · Accepted
+### D-16 · How static files are indexed · Adopted
 
-The design for D-8, written to close G-5. Accepted on 2026-11-04 with the recommended
-answer to each question at the end. Built so far: steps 1 to 4. Every static file is
-indexed, compressed ones through a decompressed copy.
+The design for D-8, written to close G-5 (now closed). Accepted on 2026-11-04 with the
+recommended answer to each question at the end, and built in the six steps below. Every
+static file is indexed, compressed ones through a decompressed copy, and a followed
+local file extends its index.
 
 **Measured after step 2** (a 1M-line, 125 MB log in the sample format; heap after a full
 GC, whole app): 478 MB without the index, **81 MB with it**.
@@ -571,22 +589,29 @@ SSH and plugin sources keep the in-memory model and its entry limit (D-7).
   Columns are kept in chunks of 1M rows, so no single array becomes huge and appending
   is cheap.
 - **`IndexedEntries`** turns an index row back into a `LogEntry`: a positioned read of
-  `length` bytes at `offset` (one `FileChannel` per tab), UTF-8 decoding with malformed
-  input replaced, then `LineParser` on the line. A cache of the last 10,000 entries
-  covers scrolling, the detail panel and the renderers, which ask for the same rows many
-  times; it is used on the EDT only. `scan` reads a range of rows in order, in 1 MB
-  sequential reads, for the filter executor. It opens its own channel each time,
-  because the executor is cancelled by interrupts, and interrupting a thread inside
-  `FileChannel.read` closes that channel.
+  `length` bytes at `offset` (a `FileChannel` held open for the tab), UTF-8 decoding with
+  malformed input replaced, then `LineParser` on the line. A cache of the last 10,000
+  entries covers scrolling, the detail panel and the renderers, which ask for the same
+  rows many times; it is used on the EDT only. `scan` reads a range of rows in order, in
+  1 MB sequential reads, for the filter and find executors. It reads through an
+  `AsynchronousFileChannel`, also held open: the executors are cancelled by interrupts,
+  and interrupting a thread inside `FileChannel.read` closes that channel, but
+  interrupting one that waits for an asynchronous read doesn't. (Opening a channel per
+  scan, as step 3 did, can't work after a rename, which leaves the old file without its
+  name.) Rows are kept in segments, one per file the followed path has named, each with
+  its own pair of channels (see Rotation).
 - **`LogTableModel`** (ui) holds an optional `IndexedEntries` in front of its in-memory
-  list: ordinals below the indexed count are read through it, and entries that arrive
-  later (following) go in the list after them. An indexed tab is never trimmed. Rows
+  list: ordinals below the indexed count are read through it. Followed lines are added
+  to the index (`appendFollowed`); the list after it stays empty on an indexed tab, which
+  is never trimmed. Rows
   stay a sorted list of ordinals, and an ordinal is still the entry's position in the
   file. (The design first called for an `EntryStore` interface with two
   implementations; one optional prefix turned out simpler, with the same effect.)
-- **Threads.** The load worker appends to the `EntryIndex` and publishes each entry; the
+- **Threads.** The load worker appends to the `EntryIndex` and publishes each entry, and
+  after it the tail worker does (one at a time: each holds the tab's tail lock); the
   model, the filter executor and Find only read rows they have been handed through
-  `publish`. Columns are published safely (each column's chunk list is a volatile field
+  `publish`. A new segment is published the same way (a volatile list, replaced) before
+  the first row in it. Columns are published safely (each column's chunk list is a volatile field
   that's replaced, never changed in place, when it grows). Dictionaries do the same with
   their value array and use a `ConcurrentHashMap` for lookups; a field that overflows is
   marked with a volatile flag rather than removed, so a reader never sees half of it.
@@ -659,25 +684,28 @@ in-memory tab is also slow), but the index makes it much slower.
 **Continuation lines.** They are rows with level `UNKNOWN`, as today. The detail panel and
 find read the rows that follow an entry until the next row with a timestamp.
 
-**Following.** The tail worker already knows the byte position of every line it reads
-(`FileFollower`), so appended lines extend the index the same way the first pass does.
-They are never trimmed: the D-7 entry limit was there to protect the heap, and with an
-index an entry costs too little for that to matter.
+**Following.** `FileFollower` reports every line it reads with its byte offset and
+length, split by `LineScanner` as in the first pass, so appended lines extend the index
+the same way the first pass does (section 6.3). Following resumes where the first pass
+ended. Followed rows are never trimmed: the D-7 entry limit was there to protect the
+heap, and with an index an entry costs too little for that to matter.
 
 **Rotation.** Index rows point into the file, so what happens to older rows depends on
-how the file was rotated:
+how the file was rotated. `FileFollower` reports which it saw (section 6.3);
+`IndexedEntries.rotated` starts a new segment for the rows that follow, on the file the
+path names now, and checks its own channel to decide whether older text was lost:
 
 - **Renamed** (logrotate's default, log4j/logback rolling): the tab keeps its open
-  channel on the old file, so older rows stay readable. On Windows this needs the channel
-  opened with delete sharing, or the writer can't rename the file. A channel from
-  `Files.newByteChannel` shares delete by default; `RandomAccessFile` doesn't, so it
-  must not be used. The new file is followed as new rows, as it is today. `scan`
-  currently opens the file again by name, which after a rename is the new file, so
-  step 5 must give it the old one (for example by keeping a second open channel that
-  only the filter executor uses, and reopening it if an interrupt closes it).
+  channels on the old file, so older rows stay readable. On Windows this needs the
+  channels opened with delete sharing, or the writer can't rename the file.
+  `FileChannel.open`, `Files.newByteChannel` and `AsynchronousFileChannel.open` share
+  delete by default; `RandomAccessFile` doesn't, so it must not be used. Lines written to
+  the old file before the rename are read before the new file. The new file is followed
+  as new rows.
 - **Truncated in place** (copytruncate): the old text is gone. Older rows keep what the
-  index holds (time, level, logger, thread). The message reads "Text no longer in the file
-  (rotated)", and the status bar says the file was rotated.
+  index holds (time, level, logger, thread, indexed fields). The message reads "Text no
+  longer in the file (rotated)", and the status bar says the file was rotated. The rows
+  are kept, so annotations and highlights on them aren't lost (question 4).
 
 **Size ceiling after this.** About 29 bytes of heap per entry plus dictionaries: about
 70M entries in the default 2 GB heap, roughly 10 to 15 GB of typical log. Open question 1
@@ -690,10 +718,11 @@ removes that ceiling too.
 2. ✅ `IndexedEntries` behind `LogTableModel`, at first behind a system property.
 3. ✅ The two-part filter, and the text scan with progress (Find included). Plain static
    files are indexed by default; the property is gone. Until step 5, followed lines on an
-   indexed tab are held in memory and trimmed to the entry limit (section 6.3).
+   indexed tab were held in memory and trimmed to the entry limit.
 4. ✅ Compressed files through `cache/`.
-5. Follow and rotation on the index.
-6. Update UC-1, close G-5, mark D-8 and D-16 Adopted.
+5. ✅ Follow and rotation on the index, with tests for appends, renaming and
+   copytruncate (`FollowIndexTest`).
+6. ✅ Update UC-1, close G-5, mark D-8 and D-16 Adopted.
 
 **Questions settled at review** (each took the recommendation):
 
@@ -756,5 +785,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-5** | Static files are indexed (D-16, steps 1 to 4 of 6 done), compressed ones through a decompressed copy in `cache/`. Followed lines on an indexed tab are still held in memory and trimmed to the entry limit until step 5. | A followed file keeps only the newest followed lines (200,000 by default) after what was in the file at load. Any static file, compressed or not, reaches the index's own ceiling (about 70M entries in the default 2 GB heap); a compressed one also needs its unpacked size free on the data folder's disk. |
-| **G-9** | Reading, parsing, following and annotation anchoring now live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`) and the detail pane in `DetailPanel`, but `LogPanel` is still about 1,650 lines of UI: table and renderers, context menus, find bar, highlight navigation and status bar. | Still long to review. Next splits: the find bar and the highlight navigation bar into their own classes. |
+| **G-9** | Reading, parsing, following and annotation anchoring now live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`) and the detail pane in `DetailPanel`, but `LogPanel` is still about 1,800 lines of UI: table and renderers, context menus, find bar, highlight navigation and status bar. | Still long to review. Next splits: the find bar and the highlight navigation bar into their own classes. |
