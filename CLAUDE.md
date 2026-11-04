@@ -1,75 +1,112 @@
 # Clouseau Log Viewer
 
-A modern, pluggable log viewer for software engineers — a clean-slate redesign of OtrosLogViewer.
+A modern, pluggable desktop log viewer for software engineers — a clean-slate redesign of
+OtrosLogViewer.
 
-## Architecture
+## Read these first
 
-Five Gradle modules with strict dependency rules:
+- **[docs/USE_CASES.md](docs/USE_CASES.md)** — what Clouseau is for: personas, use cases
+  (UC-1…) with their support status, quality goals, and non-goals.
+- **[docs/DESIGN.md](docs/DESIGN.md)** — how it works: modules, data model, extension
+  points, threading, persistence, decisions (D-1…), and known gaps (G-1…). The gaps list
+  is the technical roadmap.
+
+**Keep them current.** A change that adds or alters user-visible behavior updates the
+relevant use case (including its ✅/🟡/❌ status and "Current behavior" note). A change to
+a module boundary, extension point, threading rule, file format, or decision updates
+DESIGN.md. Fixing a gap removes or narrows its G-entry. Do this in the same commit or PR
+as the code.
+
+## Modules
 
 ```
-clouseau-api        ← plugin contract (interfaces only, no Swing, no internals)
-clouseau-core       ← engine: LogEntry, LogIndex, ClouseauEventBus
-plugin-runtime      ← PF4J plugin loader, lifecycle, hot-reload
-clouseau-ui         ← Swing MVP UI (FlatLaf, MigLayout, RSyntaxTextArea)
-plugins/
-  builtin-parsers   ← ships with app; depends only on clouseau-api
+clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
+                    LogSource, LogFilter. No Swing, no implementation.
+clouseau-core     ← UI-independent engine: RegexLogParser, FileLogSource, FileTail, LogIndex,
+                    ClouseauEventBus
+clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
+clouseau-ui       ← the Swing application
 ```
 
 **Dependency rules (enforce these):**
-- `clouseau-api` has zero internal dependencies
-- `clouseau-core` may only import `clouseau-api`
-- `plugin-runtime` may only import `clouseau-core`
-- `clouseau-ui` may import `clouseau-core` and `plugin-runtime`
-- Plugins may only import `clouseau-api` (compileOnly)
+- `clouseau-api` has no internal dependencies (PF4J `compileOnly` only, for `ExtensionPoint`).
+- `clouseau-core` depends only on `clouseau-api`.
+- `clouseau-plugin` depends only on `clouseau-core`.
+- `clouseau-ui` may depend on `clouseau-core` and `clouseau-plugin`.
+- Third-party plugins depend only on `clouseau-api`, as `compileOnly`.
+- Anything that doesn't need Swing belongs in `clouseau-core`, not `clouseau-ui`.
 
-## Tech Stack
+There is no built-in parser plugin module: built-in parsers are regex definitions in
+`clouseau-ui/src/main/resources/.../default-parsers.json`, loaded by `UserParsersLoader`
+(user parsers in `<data>/parsers.json` override them by name).
+
+## Tech stack
 
 | Concern | Library |
 |---|---|
-| Look & feel | FlatLaf 3.4.1 + One Dark theme |
-| Layout manager | MigLayout 11.3 |
-| Log text rendering | RSyntaxTextArea 3.4.0 |
-| Event bus | Guava 33 AsyncEventBus |
-| Plugin system | PF4J 3.12.0 |
-| Build | Gradle 8.8 (Kotlin DSL), Java 21 |
+| Look & feel | FlatLaf 3.4.1 (built-in Dark and Light themes, plus user `.properties` themes) |
+| Layout | MigLayout 11.3 |
+| Detail panel text | RSyntaxTextArea 3.4.0 |
+| Plugins | PF4J 3.12.0 |
+| SSH | sshj 0.38.0 |
+| JSON | Gson 2.11 |
+| Logging | SLF4J via Lombok `@Slf4j`, backed by Log4j 2 |
+| Build | Gradle 8.8 (Kotlin DSL), Java 21 toolchain |
 | Test | JUnit 5 + AssertJ + Mockito |
 
-## Key Classes
+## Building and running
 
-- `LogEntry` (api) — immutable record: timestamp, level, logger, thread, message, rawLine, fields
-- `LogParser` (api) — implement to support a new log format; annotate with `@Extension`
-- `LogFilter` (api) — implement to add custom filter types
-- `LogSource` (api) — implement to add new log sources (file tail, socket, k8s, etc.)
-- `LogIndex` (core) — thread-safe entry store; fires `LogEntryAddedEvent` / `LogBatchAddedEvent`
-- `ClouseauEventBus` (core) — SYNC bus for UI events, ASYNC bus for log ingestion
-- `ClouseauPluginManager` (runtime) — wraps PF4J; call `loadAll()` on startup, `refresh()` for hot-reload
-- `MainFrame` (ui) — top-level window: toolbar + log table + detail panel via MigLayout
+Gradle 8.8 can't run on JDK 25, so point `JAVA_HOME` at a JDK 17 or 21 (Temurin 21 is
+the project's JDK) before running `./gradlew`.
 
-## What's Built
+```bash
+./gradlew test                                   # all tests
+./gradlew :clouseau-ui:run --args="C:/path/to/file.log"   # run from source; use forward slashes
+./gradlew :clouseau-ui:shadowJar                 # fat jar (the "edge" build)
+./gradlew :clouseau-ui:distZipImage -PappVersion=0.1.1    # release zip with bundled JRE
+```
 
-- [x] All Gradle module structure and build files
-- [x] Plugin API interfaces (LogParser, LogFilter, LogSource, LogEntry)
-- [x] LogIndex with thread-safe storage and event firing
-- [x] ClouseauEventBus (sync + async)
-- [x] ClouseauPluginManager (PF4J wrapper)
-- [x] MainFrame skeleton (toolbar, table, detail panel)
-- [x] ClouseauApp entry point with FlatLaf bootstrap
-- [x] BuiltinParsersPlugin entry point
+- `distZipImage` and `jpackage` are skipped for `-SNAPSHOT` versions, so pass a release
+  version to build them locally.
+- Only one Clouseau runs at a time (localhost port 54823). A second launch forwards its
+  files to the running instance and exits, so close any running Clouseau before testing a
+  new build.
+- Running from source stores data in `./data/` under the working directory; see
+  `AppDirs` for the release locations.
+- `samples/sample.log` and `samples/gen_log.ps1` provide test logs.
 
-## What Needs Building Next (priority order)
+CI (`.github/workflows`): **Edge** runs tests and publishes `clouseau-edge.jar` on every
+push to `main`; **Release** runs tests and publishes a portable zip per platform on `v*`
+tags.
 
-1. **LogTableModel** — `AbstractTableModel` subscribed to `LogIndex` events; updates table on EDT
-2. **Log4jPatternParser** — first real `LogParser` implementation in `builtin-parsers`
-3. **JsonLogParser** — second parser for structured JSON logs
-4. **FileTailSource** — `LogSource` that tails a file (like `tail -f`)
-5. **Wire startup** — connect `ClouseauPluginManager` → parsers → `LogIndex` → table in `MainFrame`
-6. **LevelFilter** — basic `LogFilter` for filtering by log level
-7. **RSyntaxTextArea detail panel** — replace the plain JTextArea with syntax-highlighted viewer
+## Key classes
 
-## Coding Conventions
+- `LogEntry` (api) — immutable record: timestamp, level, logger, thread, message, rawLine,
+  fields. Lines no parser accepts become `UNKNOWN` entries (continuation lines).
+- `LogParser` / `LogFormatter` / `LogSyntaxHighlighter` (api) — PF4J extension points.
+- `LogSource` / `LogFilter` (api) — not discoverable from plugins yet (G-3).
+- `RegexLogParser` (core) — the parser behind every JSON-defined format.
+- `FileTail` (core) — reads complete UTF-8 lines appended to a file, for follow mode.
+- `ClouseauPluginManager` (plugin) — `loadAll()` at startup, `refresh()` to hot-reload.
+- `MainFrame` (ui) — window, menus, tabs; holds the parser/formatter/highlighter lists.
+- `LogPanel` (ui) — one tab: loading, tailing, table, filters, detail panel, annotations.
+- `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row
+  highlights, and the per-tab entry limit.
+- `FilterBar`, `AnnotationStore`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`,
+  `AppDirs` (ui) — filters, annotation sidecars, parser editor, themes, settings, data folder.
 
-- Java records for immutable data classes
-- All event types are records nested inside their owning class
-- EDT discipline: only touch Swing components on the Event Dispatch Thread
-- Use `SwingUtilities.invokeLater()` when posting results from async event handlers back to UI
-- No `System.out` — use `java.util.logging` for now (can swap later)
+`LogIndex` and `ClouseauEventBus` exist but are effectively unused (G-1); don't build on
+them without resolving that gap.
+
+## Coding conventions
+
+- Java records for immutable data; event types are records nested in their owning class.
+- EDT discipline: only touch Swing components on the Event Dispatch Thread. Run I/O,
+  parsing and filtering off the EDT, cancellably, and hand results back with
+  `SwingWorker.process` or `SwingUtilities.invokeLater()`.
+- Logging: annotate classes with Lombok `@Slf4j` and use `log`. No `System.out`.
+- User-visible strings go in `messages.properties` and are read with `Messages.get(...)`.
+- New persistent files go in the data folder (`AppDirs.dataDir()`); credentials only
+  through `CredentialStore`.
+- Read text files as UTF-8 with malformed input replaced (see `LogPanel.openReader` and
+  `FileTail`).

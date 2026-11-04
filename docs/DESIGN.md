@@ -445,4 +445,3 @@ Remove an entry once it's fixed.
 | **G-8** | Annotations are keyed by content hash only, and saving fails silently if the log's folder is read-only. | Contradicts D-9 and UC-7. |
 | **G-9** | `LogPanel` is about 2,000 lines and mixes UI with reading, parsing, tailing, and annotation logic. | Hard to test and review; much of it belongs in `clouseau-core` (section 3, rule 2). |
 | **G-10** | Row highlights live only in memory. | They're lost when the tab closes and can't be shared. Whether they should be persisted or bundled like annotations is undecided. |
-| **G-11** | `CLAUDE.md` is out of date: it lists a `builtin-parsers` module and a `plugin-runtime` module that don't exist under those names, says to use `java.util.logging` (the code uses SLF4J with Log4j 2), and its build list is long finished. | Misleads contributors and AI assistants. |
