@@ -72,6 +72,9 @@ public final class MainFrame extends JFrame {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) { openSettings(); }
         });
 
+        // Dropped files open like "Open with": auto-detect, one tab per file (UC-1).
+        FileDropHandler.install(this, files -> files.forEach(this::openFile));
+
         // Tab switching (UC-15): a dispatcher, not key bindings; see TabShortcuts.
         KeyEventDispatcher tabShortcuts = new TabShortcuts(this, tabbedPane);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(tabShortcuts);

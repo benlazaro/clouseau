@@ -329,6 +329,21 @@ consumes only the shortcuts it handles (a `Ctrl+digit` past the last tab is left
 Plain `Tab` and `Shift+Tab` still move focus. The index arithmetic is a static method,
 unit-tested without a display.
 
+### 6.10 Dropping files on the window (UC-1)
+
+Swing delivers a drop to the deepest component under the cursor that has a drop target,
+and every component with a `TransferHandler` has one: the log table, text fields and the
+detail text area get one from their UI, and those reject a file list. So
+`FileDropHandler.install` puts a handler on the frame (for empty areas such as the
+welcome screen and tab strip) and wraps the existing handler of every component in the
+window. It also wraps components added later, through one AWT container listener, which
+covers new tabs and components rebuilt by a theme switch. A wrapped handler opens a
+dropped file list and passes everything else (text drops, copy, paste, dragging out) to
+the original. It hides the drop location, so a drop doesn't move the table's selection.
+Dropped files open as `openFile(Path)` does for "Open with": auto-detected parser, one tab
+per file, a picker for a zip with several logs. Folders are skipped, and files are opened
+after the drop completes, so a dialog never holds up the drag source.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:
@@ -736,8 +751,6 @@ removes that ceiling too.
 
 Accepted in the use cases, with no design decision needed beyond the above:
 
-- **Drag-and-drop:** A `TransferHandler` on the main window that opens dropped files
-  through the same path as `File → Open`.
 - **File associations:** Register `.log` (and optionally `.gz`/`.zip`) with the
   jpackage-based packages, so "Open with" and double-click work without manual setup.
   The single-instance manager already routes the file to the running window.

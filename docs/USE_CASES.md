@@ -74,7 +74,9 @@ without manual configuration for common formats (Log4j, Logback/Spring Boot, JSO
 - *Export bundle:* Opening a review bundle (UC-8) loads the log together with its
   annotations.
 
-**Current behavior:** Drag-and-drop is not implemented. Files passed on the command line
+**Current behavior:** Files dragged onto the window open anywhere they're dropped (table,
+detail panel, filter bar, tab strip or welcome screen), each in its own tab with the
+parser auto-detected, as with "Open with"; folders are ignored. Files passed on the command line
 are opened (and forwarded to an already-running instance), so "Open with" works if the
 user picks the Clouseau launcher manually, but the packages don't register file
 associations. Static files are never trimmed by the entry limit. Every static file is
