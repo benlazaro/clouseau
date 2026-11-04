@@ -507,10 +507,10 @@ on close), and saving them only in the data folder (private, so they can't be sh
 A highlight stores its palette slot, not an RGB value: themes define the palette, so a
 colleague with another theme sees the same slots in their own colors.
 
-### D-16 · How static files are indexed · Proposed
+### D-16 · How static files are indexed · Accepted
 
-The design for D-8, written to close G-5. Nothing here is built yet. The open questions
-at the end need an answer before work starts.
+The design for D-8, written to close G-5. Accepted on 2026-11-04 with the recommended
+answer to each question at the end. Built so far: step 1 (`LineScanner`, `EntryIndex`).
 
 **Why.** A loaded entry costs about 120 bytes of heap per line today (the D-12 benchmark:
 118 MB for 1M lines), so the default 2 GB heap stops somewhere under 17M lines. That is a
@@ -615,7 +615,7 @@ removes that ceiling too.
 5. Follow and rotation on the index.
 6. Update UC-1, close G-5, mark D-8 and D-16 Adopted.
 
-**Open questions for review:**
+**Questions settled at review** (each took the recommendation):
 
 1. **Heap or memory-mapped columns?** In the heap is simpler and enough for about 70M
    entries. Writing the columns to a file in `cache/` and memory-mapping them removes
@@ -676,5 +676,5 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-5** | Static files are held fully in memory (D-8 isn't built; its design, D-16, is waiting for review), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
+| **G-5** | Static files are held fully in memory (D-8 isn't built; its design, D-16, is accepted and step 1 of 6 is done), and the default heap is 2 GB. | A file bigger than the heap allows loads only partly. The user is warned and can raise `-Xmx`, but the tail of the file isn't viewable. Falls short of UC-1's "however large the file is". |
 | **G-9** | Reading, parsing, following and annotation anchoring now live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`) and the detail pane in `DetailPanel`, but `LogPanel` is still about 1,650 lines of UI: table and renderers, context menus, find bar, highlight navigation and status bar. | Still long to review. Next splits: the find bar and the highlight navigation bar into their own classes. |
