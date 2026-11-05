@@ -29,12 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
-import javax.swing.border.Border;
 import javax.swing.event.TableModelEvent;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.JTableHeader;
-import javax.swing.table.TableCellRenderer;
-import javax.swing.table.TableColumn;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
@@ -48,7 +43,6 @@ import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -68,13 +62,10 @@ public final class LogPanel extends JPanel {
     private final FilterBar       filterBar;
     private JTable logTable;
     private DetailPanel detailPanel;
-    private boolean tableColumnsManaged = false;
-    private int fittedColumnsWidth = 0;
-    /** model-column-index → hidden TableColumn, in insertion order for restore positioning */
-    private final Map<Integer, TableColumn> hiddenColumns = new LinkedHashMap<>();
-    /** Name of the layout most recently applied via applyColumnLayout; null if none or modified since. */
-    private String activeLayoutName = null;
-    private JScrollPane tableScrollPane;
+    /** The table, its columns and layouts (G-9). */
+    private LogTableView tableView;
+    /** The rows' right-click menu (G-9). */
+    private RowMenu rowMenu;
     private volatile SwingWorker<?, ?> currentWorker;
     private volatile SwingWorker<Void, LogEntry> tailWorker;
     /** The live source streaming into this tab (SSH or a plugin), or null. */
@@ -186,7 +177,7 @@ public final class LogPanel extends JPanel {
 
         logTableModel.addTableModelListener(e -> {
             if (follow && !loading && e.getType() == TableModelEvent.INSERT)
-                SwingUtilities.invokeLater(this::scrollToBottom);
+                SwingUtilities.invokeLater(tableView::scrollToBottom);
             updateStatusBar();
         });
 
@@ -227,15 +218,6 @@ public final class LogPanel extends JPanel {
         } else {
             stopTailing();
         }
-    }
-
-    private void scrollToTop() {
-        if (logTable.getRowCount() > 0) logTable.scrollRectToVisible(logTable.getCellRect(0, 0, true));
-    }
-
-    private void scrollToBottom() {
-        int last = logTable.getRowCount() - 1;
-        if (last >= 0) logTable.scrollRectToVisible(logTable.getCellRect(last, 0, true));
     }
 
     // ── File loading ─────────────────────────────────────────────────────────
@@ -317,8 +299,7 @@ public final class LogPanel extends JPanel {
         logTableModel.clear();
         deleteCacheCopy();
         filterBar.clearLoggers();
-        hiddenColumns.clear();
-        activeLayoutName = null;
+        tableView.resetColumns();
         logTableModel.setCustomFields(parser.map(com.droidenx.clouseau.api.LogParser::customFields).orElse(List.of()));
         logTableModel.beginBatchLoad();
 
@@ -434,8 +415,8 @@ public final class LogPanel extends JPanel {
                     }
                     if (loadedAnnotations != null) annotationStore = loadedAnnotations;
                     applySavedHighlights();
-                    autoResizeColumns();
-                    applyDefaultLayoutIfSet();
+                    tableView.autoResizeColumns();
+                    tableView.applyDefaultLayoutIfSet();
                     logTable.repaint();
                     if (stoppedAtLine >= 0) {
                         // Partial content: following would append after a gap, so don't.
@@ -521,8 +502,8 @@ public final class LogPanel extends JPanel {
             if (logTableModel.getRowCount() == 0) return;
             logTableModel.removeTableModelListener(once[0]);
             SwingUtilities.invokeLater(() -> {
-                autoResizeColumns();
-                applyDefaultLayoutIfSet();
+                tableView.autoResizeColumns();
+                tableView.applyDefaultLayoutIfSet();
             });
         };
         logTableModel.addTableModelListener(once[0]);
@@ -552,8 +533,7 @@ public final class LogPanel extends JPanel {
         logTableModel.clear();
         deleteCacheCopy();
         filterBar.clearLoggers();
-        hiddenColumns.clear();
-        activeLayoutName = null;
+        tableView.resetColumns();
         logTableModel.setCustomFields(List.of());
         ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
 
@@ -759,8 +739,7 @@ public final class LogPanel extends JPanel {
 
         logTableModel.clear();
         filterBar.clearLoggers();
-        hiddenColumns.clear();
-        activeLayoutName = null;
+        tableView.resetColumns();
         logTableModel.setCustomFields(parser.map(com.droidenx.clouseau.api.LogParser::customFields).orElse(List.of()));
         logTableModel.beginBatchLoad();
 
@@ -792,13 +771,13 @@ public final class LogPanel extends JPanel {
                     firstBatch = false;
                     logTableModel.endBatchLoad();
                     ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
-                    applyDefaultLayoutIfSet();
-                    autoResizeColumns();
+                    tableView.applyDefaultLayoutIfSet();
+                    tableView.autoResizeColumns();
                 } else if (logTableModel.getColumnCount() != columnsBefore) {
-                    autoResizeColumns();   // a later line brought a new field column
+                    tableView.autoResizeColumns();   // a later line brought a new field column
                 }
                 filterBar.addBatch(chunk);
-                if (follow) scrollToBottom();
+                if (follow) tableView.scrollToBottom();
             }
 
             @Override
@@ -953,7 +932,7 @@ public final class LogPanel extends JPanel {
                     if (!follow) logTable.scrollRectToVisible(logTable.getCellRect(v, 0, true));
                 }
             }
-            if (follow) scrollToBottom();
+            if (follow) tableView.scrollToBottom();
             refreshDetail();
         };
         if (done) restore.run();
@@ -1026,29 +1005,10 @@ public final class LogPanel extends JPanel {
                 MergeOrder after = built.extend(view.inputs(view.rowCounts(), offsets));
                 view.setOrder(after, offsets);
                 showReordered(before, after, 0);
-                fitSourceColumn(view);
+                tableView.widenColumnToFit(Messages.get("table.col.source"), sourceLabels(view));
                 logTable.repaint();
             }
         }.execute();
-    }
-
-    /** Widens the Source column to fit labels such as {@code db.log (+3s)} after an offset change. */
-    private void fitSourceColumn(MergedEntries view) {
-        String header = Messages.get("table.col.source");
-        for (int col = 0; col < logTable.getColumnCount(); col++) {
-            if (!header.equals(logTable.getColumnName(col))) continue;
-            FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
-            int needed = 0;
-            for (int s = 0; s < view.sourceCount(); s++) needed = Math.max(needed, fm.stringWidth(view.sourceLabel(s)));
-            needed += 16;
-            javax.swing.table.TableColumn c = logTable.getColumnModel().getColumn(col);
-            if (needed <= c.getWidth()) return;
-            fittedColumnsWidth += needed - c.getWidth();
-            c.setPreferredWidth(needed);
-            c.setWidth(needed);
-            stretchMessageColumn();
-            return;
-        }
     }
 
     /** Asks for the source timezone of one file of a merged tab, saves it, and reloads. */
@@ -1358,614 +1318,58 @@ public final class LogPanel extends JPanel {
     // ── Log table ────────────────────────────────────────────────────────────
 
     private JScrollPane buildLogTable() {
-        logTable = new JTable(logTableModel) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
+        tableView = new LogTableView(logTableModel, new LogTableView.Host() {
+            @Override public Notes notes() { return annotationStore; }
 
-            @Override
-            public boolean getScrollableTracksViewportWidth() {
-                // During a column resize drag, release the viewport constraint so the column
-                // can grow freely and the horizontal scrollbar appears immediately.
-                if (getTableHeader().getResizingColumn() != null) return false;
-                // Otherwise fill the viewport when columns are narrower; scroll when wider.
-                return getParent() == null || getPreferredSize().width < getParent().getWidth();
-            }
-        };
-        logTable.setBackground(ClouseauColors.tableBackground());
-        logTable.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_HOME, InputEvent.CTRL_DOWN_MASK), "scrollToTop");
-        logTable.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_END, InputEvent.CTRL_DOWN_MASK), "scrollToBottom");
-        logTable.getActionMap().put("scrollToTop",    new AbstractAction() {
-            public void actionPerformed(java.awt.event.ActionEvent e) { scrollToTop(); }
-        });
-        logTable.getActionMap().put("scrollToBottom", new AbstractAction() {
-            public void actionPerformed(java.awt.event.ActionEvent e) { scrollToBottom(); }
-        });
-        logTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        logTable.setRowSorter(new javax.swing.table.TableRowSorter<>(logTableModel));
-        logTable.getColumnModel().getColumn(0).setPreferredWidth(50);
-        logTable.getColumnModel().getColumn(1).setPreferredWidth(180);
-        logTable.getColumnModel().getColumn(2).setPreferredWidth(60);
-        logTable.getColumnModel().getColumn(3).setPreferredWidth(120);
-        logTable.getColumnModel().getColumn(4).setPreferredWidth(200);
-
-        Border cellPad = BorderFactory.createEmptyBorder(0, 8, 0, 8);
-        DefaultTableCellRenderer levelRenderer = new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(
-                    JTable t, Object v, boolean sel, boolean foc, int r, int c) {
-                super.getTableCellRendererComponent(t, v, sel, foc, r, c);
-                int rowModel = logTable.convertRowIndexToModel(r);
-                LogEntry entry = logTableModel.getEntry(rowModel);
-                Color hl = logTableModel.getHighlight(rowModel);
-                boolean hlSel = hl != null && sel;
-
-                // Background
-                boolean isSearchMatch = findBar != null && findBar.isMatch(logTable.convertRowIndexToModel(r));
-                if (hl != null) {
-                    setBackground(sel ? blend(hl, t.getSelectionBackground(), 0.55f) : hl);
-                } else if (sel) {
-                    setBackground(ClouseauColors.selectionBackground());
-                } else if (isSearchMatch) {
-                    setBackground(ClouseauColors.searchMatchBackground());
-                } else {
-                    setBackground(t.getBackground());
-                }
-
-                // Ring border on any selected row
-                if (sel) {
-                    Color ring = hl != null ? hl.brighter().brighter() : ClouseauColors.selectionBackground().brighter();
-                    int lastCol = t.getColumnCount() - 1;
-                    setBorder(BorderFactory.createCompoundBorder(
-                            BorderFactory.createMatteBorder(2, c == 0 ? 2 : 0, 2, c == lastCol ? 2 : 0, ring),
-                            cellPad));
-                } else {
-                    setBorder(cellPad);
-                }
-
-                // Foreground + font
-                int modelCol = t.convertColumnIndexToModel(c);
-                if (sel && hl == null) {
-                    setForeground(Color.BLACK);
-                } else if (!sel) {
-                    if (modelCol == 2 || modelCol == 5) {                  // Level + Message columns
-                        LogEntry.LogLevel level = entry != null ? entry.level() : null;
-                        setForeground(ClouseauColors.levelColor(level));
-                    } else {
-                        setForeground(t.getForeground());
-                    }
-                }
-                boolean isLevel = modelCol == 2;
-                setFont(getFont().deriveFont(sel || isLevel ? Font.BOLD : Font.PLAIN));
-
-                // Annotation indicator in the # column
-                if (modelCol == 0 && annotationStore.has(logTableModel.ordinalAt(rowModel))) {
-                    setText("\u270e " + getText());
-                    if (!sel) setForeground(ClouseauColors.annotationIndicatorColor());
-                }
-
-                return this;
-            }
-        };
-        levelRenderer.setHorizontalAlignment(SwingConstants.LEFT);
-        logTable.setDefaultRenderer(String.class,  levelRenderer);
-        logTable.setDefaultRenderer(Integer.class, levelRenderer);
-
-        JTableHeader header = logTable.getTableHeader();
-        TableCellRenderer origHeaderRenderer = header.getDefaultRenderer();
-        header.setDefaultRenderer((table, value, isSelected, hasFocus, row, column) -> {
-            Component c = origHeaderRenderer.getTableCellRendererComponent(
-                    table, value, isSelected, hasFocus, row, column);
-            if (c instanceof JLabel label) {
-                Border existing = label.getBorder();
-                label.setBorder(existing != null
-                        ? BorderFactory.createCompoundBorder(existing, cellPad)
-                        : cellPad);
-            }
-            return c;
-        });
-
-        header.addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e)  { maybeShowColumnMenu(e); }
-            @Override public void mouseReleased(MouseEvent e) { maybeShowColumnMenu(e); }
-            private void maybeShowColumnMenu(MouseEvent e) {
-                if (!e.isPopupTrigger()) return;
-                JPopupMenu menu = new JPopupMenu();
-
-                // ── Layouts section ──────────────────────────────────────────
-                menu.add(menuSectionLabel(Messages.get("table.columns.layout.section")));
-                menu.addSeparator();
-
-                List<AppPrefs.ColumnLayout> layouts = AppPrefs.getColumnLayouts();
-                String defaultName = AppPrefs.getDefaultColumnLayout();
-                if (layouts.isEmpty()) {
-                    JMenuItem none = new JMenuItem(Messages.get("table.columns.layout.none"));
-                    none.setEnabled(false);
-                    menu.add(none);
-                } else {
-                    for (AppPrefs.ColumnLayout layout : layouts) {
-                        boolean isDefault = layout.name().equals(defaultName);
-                        boolean isActive  = layout.name().equals(activeLayoutName);
-                        String prefix = (isDefault ? "\u2605" : " ") + (isActive ? "\u2713 " : "  ");
-                        JMenuItem applyItem = new JMenuItem(prefix + layout.name());
-                        applyItem.addActionListener(ev ->
-                            SwingUtilities.invokeLater(() -> applyColumnLayout(layout)));
-                        menu.add(applyItem);
-                    }
-                }
-                menu.addSeparator();
-                JMenuItem showAllItem = new JMenuItem(Messages.get("table.columns.layout.show.all"));
-                showAllItem.setEnabled(!hiddenColumns.isEmpty());
-                showAllItem.addActionListener(ev -> SwingUtilities.invokeLater(LogPanel.this::showAllColumns));
-                menu.add(showAllItem);
-                menu.addSeparator();
-                JMenuItem saveItem = new JMenuItem(Messages.get("table.columns.layout.save"));
-                saveItem.addActionListener(ev -> saveCurrentLayout());
-                menu.add(saveItem);
-                JMenuItem manageItem = new JMenuItem(Messages.get("table.columns.layout.manage"));
-                manageItem.setEnabled(!layouts.isEmpty());
-                manageItem.addActionListener(ev ->
-                    new ColumnLayoutManagerDialog(SwingUtilities.getWindowAncestor(logTable))
-                            .setVisible(true));
-                menu.add(manageItem);
-
-                // ── Columns section ──────────────────────────────────────────
-                menu.addSeparator();
-                menu.add(menuSectionLabel(Messages.get("table.columns.menu.title")));
-                menu.addSeparator();
-
-                int totalCols = logTableModel.getColumnCount();
-                for (int modelIdx = 0; modelIdx < totalCols; modelIdx++) {
-                    String name = logTableModel.getColumnName(modelIdx);
-                    boolean visible = !hiddenColumns.containsKey(modelIdx);
-                    JCheckBoxMenuItem item = new JCheckBoxMenuItem(name, visible);
-                    final int idx = modelIdx;
-                    item.addActionListener(ev ->
-                        SwingUtilities.invokeLater(() -> {
-                            if (visible) hideColumn(idx);
-                            else         showColumn(idx);
-                        }));
-                    menu.add(item);
-                }
-                menu.show(header, e.getX(), e.getY());
+            @Override public boolean isFindMatch(int modelRow) {
+                return findBar != null && findBar.isMatch(modelRow);
             }
 
-            private JLabel menuSectionLabel(String text) {
-                JLabel lbl = new JLabel(text);
-                lbl.setBorder(BorderFactory.createEmptyBorder(3, 6, 1, 6));
-                lbl.setForeground(ClouseauColors.dimForeground());
-                lbl.setFont(lbl.getFont().deriveFont(Font.BOLD, 11f));
-                return lbl;
+            @Override public void showRowMenu(List<Integer> modelRows, int x, int y) {
+                rowMenu.show(modelRows, x, y);
             }
         });
+        logTable = tableView.table();
+        rowMenu = new RowMenu(logTableModel, logTable, new RowMenu.Host() {
+            @Override public Notes notes() { return annotationStore; }
+            @Override public void notesSaved(boolean saved) { warnIfAnnotationsNotSaved(saved); }
 
-        Font headerFont = header.getFont();
-        for (int i = 0; i < logTable.getColumnCount(); i++) {
-            JLabel measure = new JLabel(logTable.getColumnName(i));
-            measure.setFont(headerFont);
-            int minW = measure.getPreferredSize().width + 40;
-            logTable.getColumnModel().getColumn(i).setMinWidth(minW);
-        }
-        logTable.setShowHorizontalLines(true);
-        logTable.setShowVerticalLines(false);
-        logTable.setGridColor(ClouseauColors.separatorColor());
-        logTable.setRowHeight(AppPrefs.getRowHeight());
-        logTable.addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e)  { maybeShowTableMenu(e); }
-            @Override public void mouseReleased(MouseEvent e) { maybeShowTableMenu(e); }
-            private void maybeShowTableMenu(MouseEvent e) {
-                if (!e.isPopupTrigger()) return;
-                int viewRow = logTable.rowAtPoint(e.getPoint());
-                List<Integer> modelRows = new ArrayList<>();
-                if (viewRow >= 0) {
-                    if (!logTable.isRowSelected(viewRow)) logTable.setRowSelectionInterval(viewRow, viewRow);
-                    for (int vr : logTable.getSelectedRows()) {
-                        int mr = logTable.convertRowIndexToModel(vr);
-                        if (logTableModel.getEntry(mr) != null) modelRows.add(mr);
-                    }
-                }
-                showHighlightMenu(modelRows, e.getX(), e.getY());
+            @Override public void highlightsChanged() {
+                refreshDetail();
+                highlightNavBar.refresh();
             }
+
+            @Override public void notesChanged() {
+                logTable.repaint();
+                refreshDetail();
+                if (annotationsPanel != null && annotationsDialog != null && annotationsDialog.isVisible())
+                    annotationsPanel.refresh();
+            }
+
+            @Override public MergedEntries mergedView() { return LogPanel.this.mergedView(); }
+            @Override public void showTimeOffsetDialog(int source) { LogPanel.this.showTimeOffsetDialog(source); }
+
+            @Override public void showSourceTimezoneDialog(int source) {
+                LogPanel.this.showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(LogPanel.this), source);
+            }
+
+            @Override public void showParserDialog(int source) {
+                LogPanel.this.showParserDialog(SwingUtilities.getWindowAncestor(LogPanel.this), source);
+            }
+
+            @Override public void showAnnotationsDialog() { LogPanel.this.showAnnotationsDialog(); }
+            @Override public boolean canReload() { return currentFile != null; }
+            @Override public void reload() { LogPanel.this.reload(); }
+            @Override public void clearTable() { LogPanel.this.clearTable(); }
         });
-
-        tableScrollPane = new JScrollPane(logTable,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        ClouseauColors.themedBackground(tableScrollPane.getViewport(), ClouseauColors::viewportBackground);
-        tableScrollPane.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override public void componentResized(java.awt.event.ComponentEvent e) {
-                if (tableColumnsManaged) stretchMessageColumn();
-            }
-        });
-        return tableScrollPane;
+        return tableView.scrollPane();
     }
 
-    /** Model column index of the Message column — always stretched to fill remaining width. */
-    private static final int MESSAGE_MODEL_COL = 5;
-
-    private void autoResizeColumns() {
-        int totalFitted = 0;
-        int sampleSize = Math.min(logTable.getRowCount(), 50);
-
-        for (int col = 0; col < logTable.getColumnCount(); col++) {
-            if (logTable.getColumnModel().getColumn(col).getModelIndex() == MESSAGE_MODEL_COL) continue;
-            int maxWidth = 0;
-            TableCellRenderer hr = logTable.getColumnModel().getColumn(col).getHeaderRenderer();
-            if (hr == null) hr = logTable.getTableHeader().getDefaultRenderer();
-            Component hc = hr.getTableCellRendererComponent(
-                    logTable, logTable.getColumnName(col), false, false, -1, col);
-            maxWidth = Math.max(maxWidth, hc.getPreferredSize().width);
-            for (int row = 0; row < sampleSize; row++) {
-                Component rc = logTable.prepareRenderer(logTable.getCellRenderer(row, col), row, col);
-                maxWidth = Math.max(maxWidth, rc.getPreferredSize().width);
-            }
-            if (logTable.getColumnModel().getColumn(col).getModelIndex() == 0) {
-                // Room for the note marker on any row, not just the sampled ones.
-                FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
-                maxWidth = Math.max(maxWidth, fm.stringWidth("✎ " + logTable.getRowCount()) + 16);
-            }
-            maxWidth += 8;
-            logTable.getColumnModel().getColumn(col).setPreferredWidth(maxWidth);
-            logTable.getColumnModel().getColumn(col).setWidth(maxWidth);
-            totalFitted += maxWidth;
-        }
-
-        fittedColumnsWidth = totalFitted;
-        tableColumnsManaged = true;
-        stretchMessageColumn();
-        logTable.repaint();
-        logTable.getTableHeader().repaint();
-    }
-
-    private void stretchMessageColumn() {
-        // Find the Message column by model index; fall back to the last visible column if hidden.
-        int msgViewCol = -1;
-        for (int i = 0; i < logTable.getColumnCount(); i++) {
-            if (logTable.getColumnModel().getColumn(i).getModelIndex() == MESSAGE_MODEL_COL) {
-                msgViewCol = i;
-                break;
-            }
-        }
-        if (msgViewCol < 0) {
-            if (logTable.getColumnCount() == 0) return;
-            msgViewCol = logTable.getColumnCount() - 1;
-        }
-        int margins = logTable.getColumnModel().getColumnMargin() * logTable.getColumnCount();
-        int viewportWidth = (tableScrollPane != null) ? tableScrollPane.getViewport().getWidth() : logTable.getWidth();
-        int msgWidth = Math.max(viewportWidth - fittedColumnsWidth - margins, 150);
-        logTable.getColumnModel().getColumn(msgViewCol).setPreferredWidth(msgWidth);
-        logTable.getColumnModel().getColumn(msgViewCol).setWidth(msgWidth);
-    }
-
-    // ── Column visibility ─────────────────────────────────────────────────────
-
-    private void hideColumn(int modelIndex) {
-        if (logTable.getColumnCount() <= 1) return; // always keep at least one column visible
-        javax.swing.table.TableColumnModel cm = logTable.getColumnModel();
-        for (int i = 0; i < cm.getColumnCount(); i++) {
-            TableColumn col = cm.getColumn(i);
-            if (col.getModelIndex() == modelIndex) {
-                hiddenColumns.put(modelIndex, col);
-                cm.removeColumn(col);
-                activeLayoutName = null;
-                recalcFittedColumnsWidth();
-                return;
-            }
-        }
-    }
-
-    private void showColumn(int modelIndex) {
-        TableColumn col = hiddenColumns.remove(modelIndex);
-        if (col == null) return;
-        javax.swing.table.TableColumnModel cm = logTable.getColumnModel();
-        cm.addColumn(col);
-        // Reposition: place after the last visible column whose model index is smaller
-        int targetViewIndex = 0;
-        for (int i = 0; i < cm.getColumnCount() - 1; i++) {
-            if (cm.getColumn(i).getModelIndex() < modelIndex) targetViewIndex = i + 1;
-        }
-        cm.moveColumn(cm.getColumnCount() - 1, targetViewIndex);
-        activeLayoutName = null;
-        recalcFittedColumnsWidth();
-    }
-
-    /** Recomputes {@code fittedColumnsWidth} from current visible column widths and stretches Message. */
-    private void recalcFittedColumnsWidth() {
-        if (!tableColumnsManaged) return;
-        int total = 0;
-        for (int i = 0; i < logTable.getColumnCount(); i++) {
-            if (logTable.getColumnModel().getColumn(i).getModelIndex() != MESSAGE_MODEL_COL)
-                total += logTable.getColumnModel().getColumn(i).getWidth();
-        }
-        fittedColumnsWidth = total;
-        stretchMessageColumn();
-    }
-
-    // ── Column layouts ────────────────────────────────────────────────────────
-
-    /** Snapshots the current column order, visibility and widths into a named layout. */
-    AppPrefs.ColumnLayout captureLayout(String name) {
-        List<AppPrefs.ColumnLayout.ColumnEntry> entries = new ArrayList<>();
-        for (int vi = 0; vi < logTable.getColumnCount(); vi++) {
-            TableColumn col = logTable.getColumnModel().getColumn(vi);
-            entries.add(new AppPrefs.ColumnLayout.ColumnEntry(col.getModelIndex(), true, col.getWidth()));
-        }
-        hiddenColumns.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(e -> entries.add(
-                        new AppPrefs.ColumnLayout.ColumnEntry(e.getKey(), false, e.getValue().getWidth())));
-        return new AppPrefs.ColumnLayout(name, entries);
-    }
-
-    /** Applies a saved layout: visibility, order and widths. Safe to call on any file (unknown model indices are skipped). */
-    void applyColumnLayout(AppPrefs.ColumnLayout layout) {
-        int modelCount = logTableModel.getColumnCount();
-
-        // 1. Make all currently-hidden columns visible again
-        new ArrayList<>(hiddenColumns.keySet()).forEach(mi -> {
-            TableColumn col = hiddenColumns.remove(mi);
-            logTable.getColumnModel().addColumn(col);
-        });
-
-        // 2. Hide columns the layout marks as hidden (skip indices outside current model)
-        for (AppPrefs.ColumnLayout.ColumnEntry entry : layout.columns()) {
-            if (!entry.visible() && entry.modelIndex() < modelCount) {
-                javax.swing.table.TableColumnModel cm = logTable.getColumnModel();
-                for (int vi = 0; vi < cm.getColumnCount(); vi++) {
-                    TableColumn col = cm.getColumn(vi);
-                    if (col.getModelIndex() == entry.modelIndex()) {
-                        hiddenColumns.put(entry.modelIndex(), col);
-                        cm.removeColumn(col);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 3. Reorder visible columns to match layout order
-        List<Integer> desired = layout.columns().stream()
-                .filter(e -> e.visible() && e.modelIndex() < modelCount)
-                .map(AppPrefs.ColumnLayout.ColumnEntry::modelIndex)
-                .toList();
-
-        for (int targetView = 0; targetView < desired.size() && targetView < logTable.getColumnCount(); targetView++) {
-            int desiredModel = desired.get(targetView);
-            for (int vi = targetView; vi < logTable.getColumnCount(); vi++) {
-                if (logTable.getColumnModel().getColumn(vi).getModelIndex() == desiredModel) {
-                    if (vi != targetView) logTable.getColumnModel().moveColumn(vi, targetView);
-                    break;
-                }
-            }
-        }
-
-        // 4. Apply widths
-        Map<Integer, Integer> widthByModel = new LinkedHashMap<>();
-        layout.columns().forEach(e -> widthByModel.put(e.modelIndex(), e.width()));
-
-        for (int vi = 0; vi < logTable.getColumnCount(); vi++) {
-            TableColumn col = logTable.getColumnModel().getColumn(vi);
-            Integer w = widthByModel.get(col.getModelIndex());
-            if (w != null) { col.setPreferredWidth(w); col.setWidth(w); }
-        }
-        hiddenColumns.forEach((mi, col) -> {
-            Integer w = widthByModel.get(mi);
-            if (w != null) col.setPreferredWidth(w);
-        });
-
-        tableColumnsManaged = true;
-        activeLayoutName = layout.name();
-        recalcFittedColumnsWidth();
-    }
-
-    private void showAllColumns() {
-        new ArrayList<>(hiddenColumns.keySet()).forEach(mi -> {
-            TableColumn col = hiddenColumns.remove(mi);
-            logTable.getColumnModel().addColumn(col);
-            // Reposition: place after the last visible column whose model index is smaller
-            javax.swing.table.TableColumnModel cm = logTable.getColumnModel();
-            int targetViewIndex = 0;
-            for (int i = 0; i < cm.getColumnCount() - 1; i++) {
-                if (cm.getColumn(i).getModelIndex() < mi) targetViewIndex = i + 1;
-            }
-            cm.moveColumn(cm.getColumnCount() - 1, targetViewIndex);
-        });
-        activeLayoutName = null;
-        recalcFittedColumnsWidth();
-    }
-
-    private void applyDefaultLayoutIfSet() {
-        String defaultName = AppPrefs.getDefaultColumnLayout();
-        if (defaultName == null) return;
-        AppPrefs.getColumnLayouts().stream()
-                .filter(l -> l.name().equals(defaultName))
-                .findFirst()
-                .ifPresent(this::applyColumnLayout);
-    }
-
-    void saveCurrentLayout() {
-        String name = (String) JOptionPane.showInputDialog(
-                SwingUtilities.getWindowAncestor(this),
-                Messages.get("table.columns.layout.save.message"),
-                Messages.get("table.columns.layout.save.title"),
-                JOptionPane.PLAIN_MESSAGE, null, null, "");
-        if (name == null || name.isBlank()) return;
-        name = name.trim();
-
-        List<AppPrefs.ColumnLayout> layouts = new ArrayList<>(AppPrefs.getColumnLayouts());
-        final String finalName = name;
-        if (layouts.stream().anyMatch(l -> l.name().equals(finalName))) {
-            int confirm = JOptionPane.showConfirmDialog(
-                    SwingUtilities.getWindowAncestor(this),
-                    java.text.MessageFormat.format(Messages.get("table.columns.layout.overwrite.message"), finalName),
-                    Messages.get("table.columns.layout.overwrite.title"),
-                    JOptionPane.YES_NO_OPTION);
-            if (confirm != JOptionPane.YES_OPTION) return;
-            layouts.removeIf(l -> l.name().equals(finalName));
-        }
-        layouts.add(captureLayout(finalName));
-        AppPrefs.saveColumnLayouts(layouts);
-    }
-
-    // ── Highlight menu ────────────────────────────────────────────────────────
-
-    private void showHighlightMenu(List<Integer> entries, int x, int y) {
-        boolean anyHighlighted = entries.stream().anyMatch(r -> logTableModel.getHighlight(r) != null);
-
-        JPopupMenu menu = new JPopupMenu();
-
-        if (!entries.isEmpty()) {
-            JPanel swatches = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
-            swatches.setOpaque(false);
-            Color[] palette = ClouseauColors.highlightColors();
-            for (int slotIndex = 0; slotIndex < palette.length; slotIndex++) {
-                final Color color = palette[slotIndex];
-                final int slot = slotIndex;
-                boolean allMatch = entries.stream().allMatch(r -> color.equals(logTableModel.getHighlight(r)));
-                JButton swatch = new JButton() {
-                    @Override protected void paintComponent(Graphics g) {
-                        Graphics2D g2 = (Graphics2D) g.create();
-                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                        g2.setColor(color);
-                        g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
-                        if (allMatch) {
-                            g2.setColor(Color.WHITE);
-                            g2.setStroke(new BasicStroke(2f));
-                            g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 5, 5);
-                        }
-                        g2.dispose();
-                    }
-                };
-                swatch.setPreferredSize(new Dimension(22, 22));
-                swatch.setBorderPainted(false);
-                swatch.setContentAreaFilled(false);
-                swatch.setFocusPainted(false);
-                swatch.addActionListener(e -> {
-                    setHighlights(entries, color, slot);
-                    menu.setVisible(false);
-                    refreshDetailAfterHighlight();
-                });
-                swatches.add(swatch);
-            }
-            menu.add(swatches);
-            menu.addSeparator();
-
-            final boolean hasHL = logTableModel.hasHighlights();
-
-            JMenuItem clearItem = new JMenuItem(Messages.get("highlight.clear"));
-            if (anyHighlighted) {
-                clearItem.addActionListener(e -> {
-                    setHighlights(entries, null, null);
-                    refreshDetailAfterHighlight();
-                });
-            } else {
-                clearItem.putClientProperty("FlatLaf.style", "disabledForeground: " + colorToHex(ClouseauColors.borderColor()));
-                clearItem.setEnabled(false);
-            }
-            menu.add(clearItem);
-
-            JMenuItem clearAllItem = new JMenuItem(Messages.get("highlight.clear.all"));
-            if (hasHL) {
-                clearAllItem.addActionListener(e -> {
-                    if (AppPrefs.isHighlightClearAllConfirm()) {
-                        int confirm = JOptionPane.showConfirmDialog(
-                                SwingUtilities.getWindowAncestor(this),
-                                Messages.get("highlight.clear.all.confirm.message"),
-                                Messages.get("highlight.clear.all.confirm.title"),
-                                JOptionPane.YES_NO_OPTION);
-                        if (confirm != JOptionPane.YES_OPTION) return;
-                    }
-                    logTableModel.clearAllHighlights();
-                    warnIfAnnotationsNotSaved(annotationStore.clearHighlights());
-                    refreshDetailAfterHighlight();
-                });
-            } else {
-                clearAllItem.putClientProperty("FlatLaf.style", "disabledForeground: " + colorToHex(ClouseauColors.borderColor()));
-                clearAllItem.setEnabled(false);
-            }
-            menu.add(clearAllItem);
-
-            menu.addSeparator();
-        }
-
-        // ── Annotation section ────────────────────────────────────────────────
-        if (entries.size() == 1) {
-            int targetRow = entries.get(0);
-            int ordinal = logTableModel.ordinalAt(targetRow);
-            LogEntry annotationTarget = logTableModel.getEntry(targetRow);
-            AnnotationStore.Annotation existing = annotationStore.at(ordinal);
-
-            JMenuItem addEditItem = new JMenuItem(
-                    existing != null ? Messages.get("annotation.edit") : Messages.get("annotation.add"));
-            addEditItem.addActionListener(e -> showAnnotationDialog(annotationTarget, ordinal, existing));
-            menu.add(addEditItem);
-
-            JMenuItem removeItem = new JMenuItem(Messages.get("annotation.remove"));
-            removeItem.setEnabled(existing != null);
-            if (existing != null) {
-                removeItem.addActionListener(e -> {
-                    warnIfAnnotationsNotSaved(annotationStore.remove(ordinal));
-                    logTable.repaint();
-                    refreshDetail();
-                });
-            }
-            menu.add(removeItem);
-            menu.addSeparator();
-        }
-
-        // ── The row's file, on a merged tab (D-17) ───────────────────────────────
-        MergedEntries merged = mergedView();
-        if (entries.size() == 1 && merged != null) {
-            int ordinal = logTableModel.ordinalAt(entries.get(0));
-            if (ordinal >= 0 && ordinal < merged.size()) {
-                int source = merged.sourceOf(ordinal);
-                String name = merged.sourceName(source);
-                JMenuItem offsetItem = new JMenuItem(java.text.MessageFormat.format(
-                        Messages.get("merge.offset.menu"), name));
-                offsetItem.addActionListener(e -> showTimeOffsetDialog(source));
-                menu.add(offsetItem);
-                JMenuItem zoneItem = new JMenuItem(java.text.MessageFormat.format(
-                        Messages.get("merge.timezone.menu"), name));
-                zoneItem.addActionListener(e -> showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(this), source));
-                menu.add(zoneItem);
-                JMenuItem parserItem = new JMenuItem(java.text.MessageFormat.format(
-                        Messages.get("merge.parser.menu"), name));
-                parserItem.addActionListener(e -> showParserDialog(SwingUtilities.getWindowAncestor(this), source));
-                menu.add(parserItem);
-                menu.addSeparator();
-            }
-        }
-
-        JMenuItem viewAllItem = new JMenuItem(Messages.get("annotations.view.all"));
-        viewAllItem.setEnabled(annotationStore.size() > 0);
-        viewAllItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,
-                InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
-        viewAllItem.addActionListener(e -> showAnnotationsDialog());
-        menu.add(viewAllItem);
-
-        menu.addSeparator();
-
-        JMenuItem reloadFileItem = new JMenuItem(Messages.get("table.context.reload.file"));
-        reloadFileItem.setEnabled(currentFile != null);
-        reloadFileItem.addActionListener(e -> reload());
-        menu.add(reloadFileItem);
-
-        JMenuItem clearTableItem = new JMenuItem(Messages.get("table.clear"));
-        clearTableItem.addActionListener(e -> clearTable());
-        menu.add(clearTableItem);
-
-        menu.show(logTable, x, y);
-    }
-
-    /** Highlights model rows (null clears them) and saves them with the annotations (D-15). */
-    private void setHighlights(List<Integer> modelRows, Color color, Integer slot) {
-        Map<Integer, String> rawLines = new java.util.LinkedHashMap<>();
-        for (int r : modelRows) {
-            LogEntry entry = logTableModel.getEntry(r);
-            if (entry == null) continue;
-            logTableModel.setHighlight(r, color);
-            rawLines.put(logTableModel.ordinalAt(r), entry.rawLine());
-        }
-        warnIfAnnotationsNotSaved(annotationStore.setHighlights(rawLines, slot));
+    /** A merged view's Source column labels, with their offset marks. */
+    private static List<String> sourceLabels(MergedEntries view) {
+        List<String> labels = new ArrayList<>();
+        for (int s = 0; s < view.sourceCount(); s++) labels.add(view.sourceLabel(s));
+        return labels;
     }
 
     /** Shows the highlights saved with the file on the rows they attached to. */
@@ -1975,37 +1379,6 @@ public final class LogPanel extends JPanel {
             if (slot >= 0 && slot < palette.length) logTableModel.setHighlightAtOrdinal(ord, palette[slot]);
         });
         highlightNavBar.refresh();
-    }
-
-    private void refreshDetailAfterHighlight() {
-        refreshDetail();
-        highlightNavBar.refresh();
-    }
-
-    private void showAnnotationDialog(LogEntry entry, int ordinal, AnnotationStore.Annotation existing) {
-        if (entry == null || ordinal < 0) return;
-        AnnotationDialog dlg = new AnnotationDialog(SwingUtilities.getWindowAncestor(this), existing);
-        dlg.setVisible(true);
-        if (!dlg.isConfirmed()) return;
-        String note   = dlg.getNote();
-        String author = dlg.getAuthor();
-        if (note.isEmpty()) {
-            warnIfAnnotationsNotSaved(annotationStore.remove(ordinal));
-        } else {
-            String ts      = entry.timestamp() != null ? entry.timestamp().toString() : "";
-            String preview = entry.message()   != null
-                    ? entry.message().substring(0, Math.min(80, entry.message().length()))
-                    : entry.rawLine() != null
-                    ? entry.rawLine().substring(0, Math.min(80, entry.rawLine().length()))
-                    : "";
-            warnIfAnnotationsNotSaved(annotationStore.put(ordinal, new AnnotationStore.Annotation(
-                    AnnotationStore.hashOf(entry.rawLine()), null, ts, preview, note, author,
-                    java.time.Instant.now().toString())));
-        }
-        logTable.repaint();
-        refreshDetail();
-        if (annotationsPanel != null && annotationsDialog != null && annotationsDialog.isVisible())
-            annotationsPanel.refresh();
     }
 
     /**
@@ -2043,24 +1416,6 @@ public final class LogPanel extends JPanel {
         annotationsDialog.setVisible(true);
         annotationsDialog.toFront();
     }
-
-    // ── Level color palette ───────────────────────────────────────────────────
-    // Colors are read from UIManager via ClouseauColors at paint time.
-
-    private static String colorToHex(Color c) {
-        return String.format("#%06X", c.getRGB() & 0xFFFFFF);
-    }
-
-    private static Color blend(Color a, Color b, float t) {
-        return new Color(
-                (int)(a.getRed()   * t + b.getRed()   * (1 - t)),
-                (int)(a.getGreen() * t + b.getGreen() * (1 - t)),
-                (int)(a.getBlue()  * t + b.getBlue()  * (1 - t))
-        );
-    }
-
-    // ── Highlight palette ─────────────────────────────────────────────────────
-    // Colors are read from UIManager via ClouseauColors.highlightColors() at use time.
 
     // ── Detail panel ─────────────────────────────────────────────────────────
 

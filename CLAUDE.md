@@ -116,6 +116,8 @@ tags.
 - `ClouseauPluginManager` (plugin) — `loadAll()` at startup, `refresh()` to hot-reload.
 - `MainFrame` (ui) — window, menus, tabs; holds the parser/formatter/highlighter lists.
 - `LogPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.
+- `LogTableView`, `RowMenu` (ui) — G-9: a tab's table (renderer, header menu, column sizing,
+  visibility and saved layouts) and its rows' right-click menu (highlights, notes, merged-file items).
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.

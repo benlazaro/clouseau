@@ -33,7 +33,8 @@ quality goals. The ones that shape the design most:
 ## 2. System overview
 
 ```
-clouseau-ui ─────────────┐   MainFrame, tabs, LogPanel, LogTableModel, FilterBar,
+clouseau-ui ─────────────┐   MainFrame, tabs, LogPanel, LogTableView, RowMenu,
+   │                     │   LogTableModel, FilterBar,
    │                     │   DetailPanel, annotations, dialogs, SSH source,
    │                     │   parser loader, settings, themes
    │                     ▼
@@ -1236,4 +1237,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-9** | Reading, parsing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`); the detail pane, find bar and highlight navigation bar are their own classes (`DetailPanel`, `FindBar`, `HighlightNavBar`). `LogPanel` is about 2,000 lines (merged views, D-17, added loading, re-ordering, offsets and timezones; their tail workers are `MergedTailer`): loading and follow wiring, the table with its renderers and header menu, column visibility and saved layouts, the highlight and annotation context menu, and the status bar. | Still long to review. Next splits: the table with its renderers, column visibility and layouts into one class (about 450 lines), and the row context menu (highlights and notes, about 220 lines) into another. |
+| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes. `LogPanel` is still about 1,450 lines: the load and follow wiring for single files, merged views and live sources, the merged files' offset, timezone and parser dialogs, plain-text mode, and the status bar. | Reviewable, but still the biggest UI class. Next split if it grows: a merged tab's per-file settings (offsets, timezones and parsers, with their dialogs; about 200 lines). |
