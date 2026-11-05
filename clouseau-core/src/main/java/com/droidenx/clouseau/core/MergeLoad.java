@@ -75,9 +75,16 @@ public final class MergeLoad {
      * @param copies    unpacked copies of compressed files, for the caller to delete with the view
      * @param stopped   true if loading stopped for low memory or a full disk; nothing is merged then
      * @param diskFull  why it stopped: the disk filled while unpacking
+     * @param notes     each merged file's notes and highlights, anchored to its entries
+     * @param ends      per merged file, the byte position following resumes from (-1: compressed)
      */
     public record Result(MergedEntries entries, List<File> mergeable, List<String> fields,
-                         List<Skipped> skipped, List<Path> copies, boolean stopped, boolean diskFull) {}
+                         List<Skipped> skipped, List<Path> copies, boolean stopped, boolean diskFull,
+                         List<AnnotationStore> notes, List<Long> ends) {
+        Result(List<File> mergeable, List<Skipped> skipped, boolean stopped, boolean diskFull) {
+            this(null, mergeable, List.of(), skipped, List.of(), stopped, diskFull, List.of(), List.of());
+        }
+    }
 
     /**
      * Receives every entry as it is indexed, on the indexing threads: the caller can learn
@@ -95,11 +102,13 @@ public final class MergeLoad {
      * @param zone        the source timezone every file is read in, or null for the system's
      * @param cacheDir    where compressed files are unpacked
      * @param rotatedText the message of a row whose text was lost to rotation
+     * @param notesDir    where notes go when a log's own folder can't be written; null keeps
+     *                    every file's notes in memory only
      * @param lowMemory   checked every 10,000 lines; true stops the load
      * @param cancelled   checked often; true stops the load and returns null
      */
     public static Result run(List<File> files, Optional<LogParser> parser, List<LogParser> parsers, ZoneId zone,
-                             Path cacheDir, String rotatedText, BooleanSupplier lowMemory,
+                             Path cacheDir, String rotatedText, Path notesDir, BooleanSupplier lowMemory,
                              BooleanSupplier cancelled, Sink sink) throws IOException, InterruptedException {
         // 1. Which files can go on the timeline.
         List<File> mergeable = new ArrayList<>();
@@ -112,7 +121,7 @@ public final class MergeLoad {
         }
         List<Path> copies = new ArrayList<>();
         if (mergeable.size() < 2) {
-            return new Result(null, mergeable, List.of(), skipped, copies, false, false);
+            return new Result(mergeable, skipped, false, false);
         }
 
         // 2. Unpacked copies for compressed files.
@@ -130,7 +139,7 @@ public final class MergeLoad {
         }
         if (mergeable.size() < 2) {
             copies.forEach(LogCache::delete);
-            return new Result(null, mergeable, List.of(), skipped, List.of(), false, false);
+            return new Result(mergeable, skipped, false, false);
         }
 
         // 3. Index every file at once.
@@ -143,21 +152,29 @@ public final class MergeLoad {
             t.setDaemon(true);
             return t;
         });
-        List<Future<EntryIndex>> futures = new ArrayList<>();
+        List<Future<Indexed>> futures = new ArrayList<>();
         try {
             for (File f : mergeable) {
                 Path copy = copyOf.get(f);
-                futures.add(pool.submit(() -> index(f, copy, parser, parsers, zone, lowMemory, halt, stop, diskFull, sink)));
+                futures.add(pool.submit(() -> index(f, copy, parser, parsers, zone, notesDir, lowMemory, halt,
+                        stop, diskFull, sink)));
             }
             List<EntryIndex> indexes = new ArrayList<>();
-            for (Future<EntryIndex> fu : futures) indexes.add(fu.get());
+            List<AnnotationStore> notes = new ArrayList<>();
+            List<Long> ends = new ArrayList<>();
+            for (Future<Indexed> fu : futures) {
+                Indexed ix = fu.get();
+                indexes.add(ix.index());
+                notes.add(ix.notes());
+                ends.add(ix.end());
+            }
             if (cancelled.getAsBoolean()) {
                 copies.forEach(LogCache::delete);
                 return null;
             }
             if (stop.get()) {
                 copies.forEach(LogCache::delete);
-                return new Result(null, mergeable, List.of(), skipped, List.of(), true, diskFull.get());
+                return new Result(mergeable, skipped, true, diskFull.get());
             }
 
             // 4. Open each for reading back, and merge.
@@ -188,7 +205,7 @@ public final class MergeLoad {
             }
             parser.ifPresent(p -> fields.addAll(p.customFields()));
             return new Result(new MergedEntries(sources, order), mergeable, List.copyOf(fields), skipped,
-                    copies, false, false);
+                    copies, false, false, notes, ends);
         } catch (InterruptedException e) {
             copies.forEach(LogCache::delete);
             throw e;
@@ -229,19 +246,28 @@ public final class MergeLoad {
         }
     }
 
-    private static EntryIndex index(File f, Path copy, Optional<LogParser> parser, List<LogParser> parsers,
-                                    ZoneId zone, BooleanSupplier lowMemory, BooleanSupplier halt,
-                                    AtomicBoolean stop, AtomicBoolean diskFull, Sink sink) throws IOException {
+    /** One file, indexed: its notes anchored to its entries, and where following resumes (-1: compressed). */
+    private record Indexed(EntryIndex index, AnnotationStore notes, long end) {}
+
+    private static Indexed index(File f, Path copy, Optional<LogParser> parser, List<LogParser> parsers,
+                                 ZoneId zone, Path notesDir, BooleanSupplier lowMemory, BooleanSupplier halt,
+                                 AtomicBoolean stop, AtomicBoolean diskFull, Sink sink) throws IOException {
         EntryIndex index = new EntryIndex();
         LineParser lineParser = new LineParser(parser, parsers, zone);
+        // Each file's notes, read and anchored as a single-file tab does (section 6.6).
+        AnnotationStore notes = notesDir == null ? AnnotationStore.inMemory()
+                : ReviewBundle.loadAnnotations(f.path(), f.entry(), f.key(), notesDir);
+        AnnotationStore.Anchoring anchoring = notes.startAnchoring();
         long[] count = {0};
         InputStream source = copy != null
                 ? new CopyingInputStream(LogReaders.openBytes(f.path(), f.entry()), Files.newOutputStream(copy))
                 : Files.newInputStream(f.path());
+        long end;
         try (InputStream in = source) {
-            LineScanner.scan(in, (offset, length, text) -> {
+            end = LineScanner.scan(in, (offset, length, text) -> {
                 LogEntry e = lineParser.parse(text);
                 index.add(offset, length, e);
+                if (anchoring != null) anchoring.accept(e.rawLine());
                 sink.entry(e);
                 if (++count[0] % LogFileReader.DEFAULT_CHECK_INTERVAL == 0 && lowMemory.getAsBoolean()) {
                     log.warn("Low memory: stopped the merged load at {} lines of {}", count[0], f);
@@ -254,7 +280,8 @@ public final class MergeLoad {
             diskFull.set(true);
             stop.set(true);
         }
-        return index;
+        if (anchoring != null) anchoring.finish();
+        return new Indexed(index, notes, copy != null ? -1 : end);
     }
 
     /**

@@ -47,7 +47,7 @@ import java.util.function.BiConsumer;
  * store is handed to the UI, use it from that thread only.
  */
 @Slf4j
-public final class AnnotationStore {
+public final class AnnotationStore implements Notes {
 
     /** Something anchored to an entry. */
     private interface Anchored {
@@ -272,11 +272,14 @@ public final class AnnotationStore {
 
     // ── Notes (UI thread) ────────────────────────────────────────────────────
 
+    @Override
     public Annotation at(int ordinal) { return byOrdinal.get(ordinal); }
 
+    @Override
     public boolean has(int ordinal) { return byOrdinal.containsKey(ordinal); }
 
     /** Attached annotations in entry order. */
+    @Override
     public List<Placed> placed() {
         List<Placed> result = new ArrayList<>(byOrdinal.size());
         byOrdinal.forEach((ord, a) -> result.add(new Placed(ord, a)));
@@ -284,9 +287,11 @@ public final class AnnotationStore {
     }
 
     /** Annotations that match no entry in the file as it is now. */
+    @Override
     public List<Annotation> orphans() { return List.copyOf(orphans); }
 
     /** Number of notes, attached or not. */
+    @Override
     public int size() { return byOrdinal.size() + orphans.size(); }
 
     /**
@@ -295,17 +300,20 @@ public final class AnnotationStore {
      *
      * @return false if the store couldn't be saved anywhere
      */
+    @Override
     public boolean put(int ordinal, Annotation annotation) {
         byOrdinal.put(ordinal, annotation.atLine(ordinal + 1));
         return save();
     }
 
     /** Removes the annotation on the entry at {@code ordinal}, if any, then saves. */
+    @Override
     public boolean remove(int ordinal) {
         return byOrdinal.remove(ordinal) == null || save();
     }
 
     /** Removes an orphan annotation, then saves. */
+    @Override
     public boolean removeOrphan(Annotation annotation) {
         return !orphans.remove(annotation) || save();
     }
@@ -313,6 +321,7 @@ public final class AnnotationStore {
     // ── Highlights (UI thread) ───────────────────────────────────────────────
 
     /** Attached highlights: entry ordinal → palette slot, in entry order. */
+    @Override
     public Map<Integer, Integer> highlights() {
         Map<Integer, Integer> result = new LinkedHashMap<>();
         highlights.forEach((ord, h) -> result.put(ord, h.color()));
@@ -325,6 +334,7 @@ public final class AnnotationStore {
      *
      * @param rawLines the raw line of each entry, used for the content anchor
      */
+    @Override
     public boolean setHighlights(Map<Integer, String> rawLines, Integer slot) {
         rawLines.forEach((ord, raw) -> {
             if (slot == null) highlights.remove(ord);
@@ -334,6 +344,7 @@ public final class AnnotationStore {
     }
 
     /** Removes every highlight, including orphans, then saves. */
+    @Override
     public boolean clearHighlights() {
         if (highlights.isEmpty() && orphanHighlights.isEmpty()) return true;
         highlights.clear();
@@ -344,6 +355,7 @@ public final class AnnotationStore {
     // ── Saving ───────────────────────────────────────────────────────────────
 
     /** Where the store is (or will be) saved, or null for in-memory stores. */
+    @Override
     public Path getSavePath() { return savePath; }
 
     /** True when the store is saved in the data folder, not next to the log. */

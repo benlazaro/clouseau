@@ -19,6 +19,8 @@ import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.LogSniffer;
 import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.MergeLoad;
+import com.droidenx.clouseau.core.MergedNotes;
+import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
@@ -106,7 +108,8 @@ public final class LogPanel extends JPanel {
     private static final long FOLLOW_SAFETY_POLL_MS = 2_000;
     /** The running filter's progress while it reads text from the file, or -1. */
     private int filterPercent = -1;
-    private AnnotationStore  annotationStore   = AnnotationStore.inMemory();
+    /** One file's {@link AnnotationStore}, or a merged view's {@link MergedNotes} (D-17). */
+    private Notes            annotationStore   = AnnotationStore.inMemory();
     /** True once this tab has told the user its annotations couldn't be saved. */
     private boolean          annotationSaveWarned;
     private JDialog          annotationsDialog;
@@ -238,7 +241,9 @@ public final class LogPanel extends JPanel {
      * The tab's annotations and highlights in the sidecar format, for a review bundle
      * (D-10), or null while the file is still loading (its notes aren't read yet).
      */
-    public String annotationsJson() { return loading ? null : annotationStore.toJson(); }
+    public String annotationsJson() {
+        return loading || !(annotationStore instanceof AnnotationStore s) ? null : s.toJson();
+    }
 
     public void load(Path file, Optional<LogParser> parser) {
         load(file, null, parser, () -> {});
@@ -531,7 +536,7 @@ public final class LogPanel extends JPanel {
             @Override
             protected MergeLoad.Result doInBackground() throws Exception {
                 return MergeLoad.run(files, parser, tabParsers, srcTz, AppDirs.cacheDir(),
-                        Messages.get("table.rotated.text"), memory::isLow, this::isCancelled, this::publish);
+                        Messages.get("table.rotated.text"), AppDirs.annotationsDir(), memory::isLow, this::isCancelled, this::publish);
             }
 
             @Override
@@ -587,6 +592,9 @@ public final class LogPanel extends JPanel {
                 for (int i = 0; i < r.entries().sourceCount(); i++) names.add(r.entries().sourceName(i));
                 filterBar.setSources(names);
                 logTableModel.beginMergedLoad(r.entries(), r.entries().size(), r.fields());
+                // Each file's notes stay in its own store, saved next to that file (D-17).
+                annotationStore = new MergedNotes(r.notes(), names, r.entries().order());
+                applySavedHighlights();
                 sizeColumnsWhenRowsArrive();
                 logTableModel.applyFilter(filterBar.buildFilter());
                 logTable.repaint();

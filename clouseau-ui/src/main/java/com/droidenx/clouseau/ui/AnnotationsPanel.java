@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.core.AnnotationStore;
+import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
@@ -35,7 +36,7 @@ public final class AnnotationsPanel extends JPanel {
         "annotations.col.date"
     };
 
-    private final Supplier<AnnotationStore> storeSupplier;
+    private final Supplier<Notes> storeSupplier;
     private final LogTableModel             logTableModel;
     private final JTable                    logTable;
     private final Runnable                  onDismiss;
@@ -50,7 +51,7 @@ public final class AnnotationsPanel extends JPanel {
      */
     private final List<Object> rowKeys = new ArrayList<>();
 
-    public AnnotationsPanel(Supplier<AnnotationStore> storeSupplier,
+    public AnnotationsPanel(Supplier<Notes> storeSupplier,
                             LogTableModel logTableModel,
                             JTable logTable,
                             Runnable onDismiss,
@@ -149,18 +150,18 @@ public final class AnnotationsPanel extends JPanel {
      * come last.
      */
     public void refresh() {
-        AnnotationStore store = storeSupplier.get();
+        Notes store = storeSupplier.get();
         panelModel.setRowCount(0);
         rowKeys.clear();
 
         for (AnnotationStore.Placed p : store.placed()) {
             int modelRow = logTableModel.rowOfOrdinal(p.ordinal());
             rowKeys.add(p.ordinal());
-            panelModel.addRow(row(modelRow >= 0 ? modelRow + 1 : null, p.annotation()));
+            panelModel.addRow(row(modelRow >= 0 ? modelRow + 1 : null, p.annotation(), store.sourceName(p.ordinal())));
         }
         for (AnnotationStore.Annotation a : store.orphans()) {
             rowKeys.add(a);
-            panelModel.addRow(row(null, a));
+            panelModel.addRow(row(null, a, store.orphanSource(a)));
         }
 
         applyColumnWidths();
@@ -174,9 +175,11 @@ public final class AnnotationsPanel extends JPanel {
         return names;
     }
 
-    private static Object[] row(Integer lineNumber, AnnotationStore.Annotation a) {
+    /** {@code source} is the file a merged view's note belongs to, shown before the line; null for one file. */
+    private static Object[] row(Integer lineNumber, AnnotationStore.Annotation a, String source) {
         String preview = a.logPreview() != null
                 ? a.logPreview().substring(0, Math.min(80, a.logPreview().length())) : "";
+        if (source != null) preview = "[" + source + "] " + preview;
         String note    = a.note()       != null ? a.note().replace('\n', ' ') : "";
         String author  = a.author()     != null ? a.author() : "";
         String date    = a.createdAt()  != null
@@ -215,7 +218,7 @@ public final class AnnotationsPanel extends JPanel {
             if (dontAsk.isSelected()) AppPrefs.setAnnotationDeleteConfirm(false);
             if (result != JOptionPane.YES_OPTION) return;
         }
-        AnnotationStore store = storeSupplier.get();
+        Notes store = storeSupplier.get();
         boolean saved = rowKeys.get(sel) instanceof Integer ordinal
                 ? store.remove(ordinal)
                 : store.removeOrphan((AnnotationStore.Annotation) rowKeys.get(sel));

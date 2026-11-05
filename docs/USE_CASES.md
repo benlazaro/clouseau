@@ -354,12 +354,13 @@ files" changes it later. A merged view interleaves the files by timestamp, keeps
 traces with their entry, keeps each file's order for equal timestamps, and shows a
 **Source** column; plain and `.gz` files can be mixed. Fields with the same name share
 one column. Filters, Find and the detail panel work across all files, and the filter
-bar's **Sources** button hides whole files. Files no parser recognizes, or whose lines
+bar's **Sources** button hides whole files. Notes and highlights are saved with the file
+each entry came from, so they show again when that file is opened alone, and the
+annotations panel names each note's file. Files no parser recognizes, or whose lines
 have no timestamps, are listed and offered in their own tabs. Not yet: following
 (files are read once), per-file parsers and timezones (every file uses the tab's),
-time offsets, notes and highlights saved with each file (they last only while the tab
-is open), merging files picked from a zip, file patterns, and exporting a merged view
-for review.
+time offsets, merging files picked from a zip, file patterns, and exporting a merged
+view for review.
 
 ### UC-13 · Read a file no parser recognizes ✅
 

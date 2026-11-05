@@ -48,7 +48,7 @@ class MergeLoadTest {
 
     private MergeLoad.Result run(List<MergeLoad.File> files, AtomicInteger seen) throws Exception {
         Path cache = Files.createDirectories(dir.resolve("cache"));
-        return MergeLoad.run(files, Optional.empty(), List.of(PARSER, NO_TIME), null, cache, "rotated",
+        return MergeLoad.run(files, Optional.empty(), List.of(PARSER, NO_TIME), null, cache, "rotated", null,
                 () -> false, () -> false, e -> seen.incrementAndGet());
     }
 
@@ -120,7 +120,7 @@ class MergeLoadTest {
         MergeLoad.File a = plain("a.log", sb.toString());
         MergeLoad.File b = plain("b.log", sb.toString());
         Path cache = Files.createDirectories(dir.resolve("cache"));
-        MergeLoad.Result r = MergeLoad.run(List.of(a, b), Optional.empty(), List.of(PARSER), null, cache, "rotated",
+        MergeLoad.Result r = MergeLoad.run(List.of(a, b), Optional.empty(), List.of(PARSER), null, cache, "rotated", null,
                 () -> true, () -> false, (LogEntry e) -> {});
         assertThat(r.stopped()).isTrue();
         assertThat(r.entries()).isNull();

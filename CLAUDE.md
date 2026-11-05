@@ -25,7 +25,7 @@ clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyn
 clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogReaders, LogFileReader,
                     FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
-                    AnnotationStore, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
+                    AnnotationStore, Notes, MergedNotes, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
@@ -127,6 +127,8 @@ tags.
   highlights, and the per-tab entry limit.
 - `AnnotationStore` (core) — annotations for one file, anchored by entry number and content
   hash (D-9); saved next to the log, or in `<data>/annotations/` if that fails.
+- `Notes`, `MergedNotes` (core) — the notes interface a tab uses; `MergedNotes` keeps a
+  merged view's notes in each file's own `AnnotationStore` (D-17 step 4).
 - `ReviewBundle` (core) — D-10: writes and recognizes the review bundle `.zip` (manifest, log,
   annotations); `ReviewExporter` (ui) is `File → Export for Review…`.
 - `FilterBar`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`, `AppDirs` (ui) — filters,

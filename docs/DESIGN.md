@@ -1098,10 +1098,18 @@ as a reusable "workspace".
    - **Not yet (later steps):** single-file tabs keep their own loader (`LogPanel.load`);
      only the model reads both through `EntryRows`. Every file uses the tab's parser
      choice (chosen, or per-line detection) and its one source timezone (per-file in
-     step 6). A merged tab doesn't follow (step 5), keeps notes and highlights in memory
-     (step 4), and can't be exported for review (step 7). A compressed file that can't be
+     step 6). A merged tab doesn't follow (step 5) and can't be exported for review
+     (step 7). A compressed file that can't be
      unpacked is left out rather than loaded into memory.
-4. Annotations and highlights per source, keyed by identity.
+4. ✅ Annotations and highlights per source, keyed by identity. As built: `Notes` (core)
+   is what `LogPanel`, the annotations panel and the highlight menus use; one file's
+   `AnnotationStore` implements it, and `MergedNotes` puts one store per source behind
+   it, mapping merged ordinals to each store's own entry numbers through `MergeOrder`
+   (`setOrder` takes a new order, for steps 5 and 6). `MergeLoad` loads and anchors each
+   file's store on that file's indexing thread, so notes and highlights are saved in
+   the file's own `.annotations` sidecar (or `annotations/`) and show again when the
+   file is opened alone. The annotations panel prefixes each preview with `[file]`.
+   `MergedNotesTest`.
 5. Following: hold-back, late entries, per-source rotation.
 6. Time offsets: dialog, Sources menu, re-merge, the detail panel line.
 7. Zip picker merge, file patterns, Open Merged…, review bundle version 2.
