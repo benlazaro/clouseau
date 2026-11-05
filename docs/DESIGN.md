@@ -670,6 +670,8 @@ worker, and `AnnotationStore`. A single-file tab is just a tab with one source.
 - **Scale:** A merged view multiplies the data in one tab, so it relies on D-7 and D-8
   even more than a single file does.
 
+The detailed design is D-17.
+
 ### D-14 · Plugin sources declare their settings; no plugin filters · Adopted
 
 A `LogSource` needs settings for each connection (a URL, a query, a token), but PF4J
@@ -908,6 +910,191 @@ removes that ceiling too.
 4. **Rows lost to copytruncate:** show them with the placeholder text as above, or drop
    them from the tab? *Recommendation:* keep them, so annotations and highlights on them
    aren't lost.
+
+### D-17 · How merged views work · Accepted
+
+The design for D-13 and UC-12. Accepted on 2026-11-04 with the recommended answer to
+each question at the end, and built in the eight steps below.
+
+**Scope.** A merged view combines **local files**: plain files, `.gz` files and zip
+entries, each indexed as in D-16. SSH and plugin sources stay one per tab. Merging them
+would mean merging in-memory entries with an entry limit, a second path that's worth
+building only when someone asks for it. A file that falls back to in-memory loading
+(no room for its unpacked copy) can still be part of a merge, through the same
+interface as an indexed one (see *Rows*).
+
+**Sources.** A tab holds a list of `MergeSource`s (ui). Each has its path (and zip
+entry), parser (chosen, or detected from its own sample), source timezone, time offset,
+`IndexedEntries`, `AnnotationStore`, cache copy, and tail worker. A single-file tab is
+a tab with one source, so there is one code path. Every source's lines are parsed by
+its own `LineParser`, so formats can be mixed.
+
+**Identity and position.** Today an ordinal is both an entry's position in the table
+and its identity: the key for highlights and annotations, and its entry number in the
+file. A merged view separates the two:
+
+- **Position:** the merged ordinal, 0 to *N*−1 in timeline order. `rows` stays a
+  sorted list of merged ordinals, so filtering, Find and row/ordinal mapping work as
+  now.
+- **Identity:** `(source, row)`, the source's index in the tab and the entry's row in
+  that source's index. It never changes. Highlights in the model are keyed by it, and
+  each source's `AnnotationStore` keeps its own entry numbers (D-9), so the sidecar
+  format doesn't change.
+
+**Merge order** (`MergeOrder`, core). Two arrays, in chunks as in `EntryIndex`:
+
+- merged ordinal → source (`byte`) and source row (`int`): 5 bytes per entry;
+- per source, source row → merged ordinal (`int`): 4 bytes per entry.
+
+With the 29 bytes of D-16 that's 38 bytes per entry, so the default 2 GB heap still
+holds about 50M entries across all of a tab's sources. With one source neither array
+exists: position equals row, and a single-file tab costs exactly what it does now.
+
+It's built by a k-way merge over **groups**: an entry and the continuation lines after
+it. Only the index's timestamp and level columns are read, with no file I/O. A group's
+key is its first row's timestamp plus that source's offset. Lines before a source's
+first timestamp take that first timestamp, so they stay at the start of their file.
+Equal keys are ordered by source (the order the files were listed), then row, which
+keeps each file's own order (UC-12 rule). A group is never split, so continuation lines
+stay with their entry. A merge of 1M entries across a few files should take well under
+a second; it runs on the filter executor, with progress, and is swapped in on the EDT.
+
+**Rows.** `LogTableModel` reads through a small interface, `EntryRows` (core), instead
+of holding `IndexedEntries` directly: `count`, `get(ordinal)`, `isContinuation`,
+`timestamp`, `testIndex(filter, ordinal)`, `needsText(filter)` and `scan`.
+`IndexedEntries` is the one-source implementation (identity map). `MergedEntries` is the
+merged one, built from the sources' `IndexedEntries` and a `MergeOrder`. D-16's step 2
+chose a plain prefix over this interface; a second implementation is what makes the
+interface pay off now.
+
+- `get` maps the ordinal to `(source, row)` and reads from that source's file.
+- `testIndex` tests against that source's `EntryIndex`. Logger, thread and field ids
+  are per index, so `CombinedFilter` resolves names to ids once for each index it sees.
+  The time filter compares the corrected time (timestamp plus offset), the time the
+  table shows.
+- `scan` (text filters and Find) reads **each source in file order**, one after the
+  other, so reads stay sequential, and returns merged ordinals. The filter executor
+  sorts them before swapping them in. Find's continuation-line rule (a matching
+  continuation marks its entry) works per source, because a group is contiguous in
+  both orders.
+
+**Columns.** The standard columns line up for every format. A **Source** column is
+shown when the tab has more than one source, holding the file name (or `zip!entry`),
+with a mark such as `device.log (+3m 12s)` when the source has an offset. Custom fields
+are the union of the sources' `customFields()`, matched by name; a source without a
+field has an empty cell. The Source column is also a filter: the filter bar gains a
+Sources list, like Loggers, for hiding whole files.
+
+**Opening a merged view.**
+
+- **Several files** chosen in the open dialog, or dropped on the window, ask once:
+  "Open 3 files in one merged view, or each in its own tab?" The answer can be
+  remembered (Settings). Today they always open in separate tabs.
+- **File → Open Merged…** opens the file dialog, preselected for merging.
+- **Zip picker:** with several entries ticked, a "Merge into one view" checkbox.
+- **A pattern** typed in the dialog's file name field (`app.log*`) is expanded in its
+  folder, sorted by name, and opened as a merged view. The file set is fixed once
+  opened (UC-12 rule).
+- **Sniffing:** each file is sniffed first (`LogSniffer`, as in 6.11). A file no parser
+  recognizes, or whose sample has no timestamps, can't go on the timeline. Clouseau
+  lists them ("2 files have no timestamps") and offers to open them in their own tabs;
+  the rest are merged. One file left is just a normal tab.
+- **Loading:** the sources are indexed **in parallel**, one load worker each (they're
+  separate files). The table stays empty with a progress bar until all are indexed,
+  then shows the merge. Showing rows while files load would mean re-merging and moving
+  rows as each file arrives.
+
+**Following.** Each source that can be followed (not compressed) has its own tail
+worker, as now. Followed sources deliver lines at about the same wall time, but not in
+order: one file can be written a second later than another, or its writer can buffer.
+
+- **Hold back:** followed entries are put into a queue on the EDT and released when
+  every followed source has delivered something at least as new, or after **1 s**,
+  whichever comes first. Released entries are appended in key order. That covers
+  ordinary write delays without moving rows.
+- **Late entries:** an entry older than the last row already shown (a clock skew larger
+  than the hold-back, or a writer that flushed late) triggers a **re-merge** of the
+  tail of the order, debounced to one per second. Only rows after the late entry's
+  position move. The selection and scroll position follow their entry, by identity.
+- **Rotation** is per source, as in D-16; a renamed source keeps its old rows and
+  continues in a new segment. New files that start matching a pattern are never added.
+- **Scrolling:** the view keeps scrolling to the bottom only if the user is already
+  there (D-13).
+
+**Time offset.** Right-click a row or the Source cell → **Set Time Offset for
+device.log…** (a dialog for ± hours, minutes, seconds and milliseconds), also in a
+**Sources** menu that lists the tab's files. Setting it re-merges (the whole order,
+since every entry of that source moves), keeps the selection by identity, and updates
+the Source mark. The table and time filter use the corrected time; the detail panel
+shows the original line and adds "Shifted +3m 12s; written as 10:02:04.120". The
+source timezone stays per source and is applied first, as UC-12 says.
+
+**Annotations and highlights.** Each source has its own store, loaded and anchored by
+its own load worker exactly as now (6.6), and saved next to its own file. The
+annotations panel lists all of them, with the source's name. Highlights are stored per
+source too (D-15). The model maps between identity and position through `MergeOrder`.
+
+**Review bundles.** Exporting a merged view writes every source's file and its notes.
+`formatVersion` 2 adds a `sources` list; the version 1 fields stay and describe the
+first source, so an older Clouseau opens the bundle as that one file (with its notes)
+rather than failing:
+
+```json
+{
+  "format": "clouseau-review-bundle",
+  "formatVersion": 2,
+  "log": "app.log", "annotations": "annotations.json", "originalFileName": "app.log",
+  "sources": [
+    { "log": "app.log", "annotations": "annotations.json",
+      "parser": "Logback", "timezone": "Europe/Berlin", "offsetMillis": 0 },
+    { "log": "device.log", "annotations": "device.log.annotations.json",
+      "parser": "Android logcat", "timezone": "UTC", "offsetMillis": 192000 }
+  ]
+}
+```
+
+A parser the reviewer doesn't have falls back to auto-detection; the timezone and
+offset come from the bundle, so the timeline matches.
+
+**Not covered:** sorting by a column header (D-16) is no slower here than on one big
+file; merging sources from different machines over SSH; saving a merged view's file set
+as a reusable "workspace".
+
+**Order of work** (each step ships and is tested on its own):
+
+1. ✅ `MergeOrder` (core): groups, ties, leading lines, offsets, appending;
+   `MergeOrderTest`. `EntryIndex` is its `Timeline`. **Measured:** 1M entries in four
+   files (one row in five a continuation line), both interleaved and as four rotated
+   files that don't overlap: the test's three merges and their setup take 0.2 s in all.
+   The arrays cost 9 bytes per entry, as estimated.
+2. `EntryRows` with `IndexedEntries` as its one-source implementation, behind
+   `LogTableModel`; no change in behavior (the existing tests must pass unchanged).
+3. `MergedEntries`, and a static merged tab from the open dialog and drops: the prompt,
+   sniffing and the no-timestamp offer, parallel loading, the Source column and filter,
+   union columns, filters and Find across sources.
+4. Annotations and highlights per source, keyed by identity.
+5. Following: hold-back, late entries, per-source rotation.
+6. Time offsets: dialog, Sources menu, re-merge, the detail panel line.
+7. Zip picker merge, file patterns, Open Merged…, review bundle version 2.
+8. Update UC-12 (✅), mark D-13 and D-17 Adopted.
+
+**Questions settled at review** (each took the recommendation):
+
+1. **Several files chosen: ask, or always merge?** Asking costs a click every time, and
+   always merging changes what multi-select does today. *Recommendation:* ask, with
+   "Remember my choice".
+2. **Show rows while loading?** Waiting for every file is simpler and nothing moves; the
+   cost is a blank table for the few seconds of a big load. *Recommendation:* wait, with
+   one progress bar for all sources.
+3. **Late followed entries: re-merge, or append where they arrive?** Appending is
+   simpler and nothing ever moves, but a late line then sits in the wrong place, which
+   breaks the point of a merged view. *Recommendation:* re-merge the tail, with the
+   1 s hold-back so it's rare.
+4. **Single-file tabs on the same path?** One path (a tab with one source) means the
+   merged code is exercised by every tab, but the refactor touches all of
+   `LogPanel`'s loading. *Recommendation:* one path, with step 2 as a pure refactor so
+   any regression shows up before merging exists.
+5. **Live sources (SSH, plugins) in a merge:** *Recommendation:* not now, as in *Scope*.
 
 ## 10. Planned features
 

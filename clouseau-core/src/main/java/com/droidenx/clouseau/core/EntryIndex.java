@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * through a happens-before edge (for example {@code SwingWorker.publish}); an id read
  * from such a row always resolves. What they see beyond that size may be partial.
  */
-public final class EntryIndex {
+public final class EntryIndex implements MergeOrder.Timeline {
 
     /** The timestamp of an entry that has none (continuation lines). */
     public static final long NO_TIMESTAMP = Long.MIN_VALUE;
