@@ -149,4 +149,33 @@ class MergeLoadTest {
             assertThat(m.offsetMillis(2)).isEqualTo(2_000);
         }
     }
+
+    @Test
+    void aFileCanHaveItsOwnParser() throws Exception {
+        LogParser pipes = new RegexLogParser("pipes",
+                Pattern.compile("(?<timestamp>\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d)\\|(?<level>[A-Z]+)\\|(?<device>\\w+)\\|(?<message>.*)"),
+                "yyyy-MM-dd HH:mm:ss");
+        MergeLoad.File app = plain("app.log", "2026-11-04 10:00:01 INFO app starts\n2026-11-04 10:00:03 INFO app ends\n");
+        MergeLoad.File dev = plain("device.log", "2026-11-04 10:00:02|INFO|phone|device wakes\n");
+        Path cache = Files.createDirectories(dir.resolve("cache"));
+
+        // The tab's parser alone doesn't recognize device.log: it's left out.
+        MergeLoad.Result without = MergeLoad.run(List.of(app, dev), Optional.of(PARSER), List.of(PARSER, pipes),
+                f -> MergeLoad.PerFile.DEFAULT, cache, "rotated", null, () -> false, () -> false, e -> {});
+        assertThat(without.entries()).isNull();
+        assertThat(without.skipped()).containsExactly(new MergeLoad.Skipped(dev, MergeLoad.Skip.UNRECOGNIZED));
+
+        // With its own parser it's merged, and that parser's fields are columns.
+        java.util.Map<MergeLoad.File, MergeLoad.PerFile> setup = java.util.Map.of(
+                app, MergeLoad.PerFile.DEFAULT, dev, new MergeLoad.PerFile(null, 0, pipes));
+        MergeLoad.Result r = MergeLoad.run(List.of(app, dev), Optional.of(PARSER), List.of(PARSER, pipes),
+                setup::get, cache, "rotated", null, () -> false, () -> false, e -> {});
+        try (MergedEntries m = r.entries()) {
+            List<String> lines = new ArrayList<>();
+            for (int i = 0; i < m.size(); i++) lines.add(m.get(i).message());
+            assertThat(lines).containsExactly("app starts", "device wakes", "app ends");
+            assertThat(m.get(1).fields()).containsEntry("device", "phone");
+            assertThat(r.fields()).contains("device");
+        }
+    }
 }

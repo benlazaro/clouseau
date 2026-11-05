@@ -217,6 +217,35 @@ class MergedViewTest {
     }
 
     @Test
+    void aFileReadWithItsOwnParserIsMergedAndExportedWithIt() throws Exception {
+        LogParser pipes = new RegexLogParser("pipes",
+                Pattern.compile("(?<timestamp>\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d)\\|(?<level>[A-Z]+)\\|(?<message>.*)"),
+                "yyyy-MM-dd HH:mm:ss");
+        MergeLoad.File app = write("app.log", """
+                2026-11-04 10:00:01 INFO app 1
+                2026-11-04 10:00:03 INFO app 3
+                """);
+        MergeLoad.File dev = write("device.log", "2026-11-04 10:00:02|INFO|device 2\n");
+        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER, pipes), List.of(), List.of()));
+        try {
+            onEdt(() -> {
+                panel.setFollow(false);
+                panel.presetMerged(java.util.Map.of(dev, new MergeLoad.PerFile(null, 0, pipes)));
+                // The tab's parser doesn't recognize device.log; its own parser does.
+                panel.loadMerged(List.of(app, dev), Optional.of(PARSER), new Listener());
+                return null;
+            });
+            LogTableModel model = (LogTableModel) panel.getLogTable().getModel();
+            await(() -> model.getRowCount() == 3);
+            assertThat(messages(model)).containsExactly("app 1", "device 2", "app 3");
+            assertThat(onEdt(panel::reviewParts)).extracting(com.droidenx.clouseau.core.ReviewBundle.Part::parser)
+                    .containsExactly("test", "pipes");
+        } finally {
+            onEdt(() -> { panel.dispose(); return null; });
+        }
+    }
+
+    @Test
     void oneMergeableFileIsHandedBackToOpenOnItsOwn() throws Exception {
         MergeLoad.File app = write("app.log", "2026-11-04 10:00:01 INFO app starts\n");
         MergeLoad.File notes = write("notes.txt", "no format here\n");

@@ -46,7 +46,8 @@ final class MergedTailer {
     private final List<Path> paths;
     /** Per source, the byte position following resumes from; -1 if it isn't followed. */
     private final long[] positions;
-    private final Optional<LogParser> parser;
+    /** Per source, the parser its lines are read with (empty: per-line detection). */
+    private final List<Optional<LogParser>> fileParsers;
     private final List<LogParser> parsers;
     /** Per source, the timezone its lines are read in (null: the system's). */
     private final List<ZoneId> zones;
@@ -61,15 +62,16 @@ final class MergedTailer {
 
     /**
      * {@code ends} has, per source, where its index ends (-1: not followed); {@code paths}
-     * the files the sources read, and {@code zones} their source timezones.
+     * the files the sources read, {@code zones} their source timezones and {@code fileParsers}
+     * their parsers.
      */
     MergedTailer(MergedEntries view, List<Path> paths, List<Long> ends, List<ZoneId> zones,
-                 Optional<LogParser> parser, List<LogParser> parsers, Host host) {
+                 List<Optional<LogParser>> fileParsers, List<LogParser> parsers, Host host) {
         this.view = view;
         this.paths = List.copyOf(paths);
         this.positions = new long[ends.size()];
         for (int s = 0; s < positions.length; s++) positions[s] = ends.get(s);
-        this.parser = parser;
+        this.fileParsers = List.copyOf(fileParsers);
         this.parsers = parsers;
         this.zones = new ArrayList<>(zones);
         this.host = host;
@@ -113,7 +115,7 @@ final class MergedTailer {
         return new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
-                LineParser lineParser = new LineParser(parser, parsers, zones.get(source));
+                LineParser lineParser = new LineParser(fileParsers.get(source), parsers, zones.get(source));
                 try {
                     locks[source].lockInterruptibly();
                 } catch (InterruptedException e) {

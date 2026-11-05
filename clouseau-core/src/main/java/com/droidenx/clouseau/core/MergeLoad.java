@@ -39,15 +39,25 @@ public final class MergeLoad {
 
     private MergeLoad() {}
 
-    /** One file to merge: a plain or {@code .gz} file, or {@code entry} of the zip {@code path}. */
     /**
-     * How one file of the merge is read: its source timezone (null for the system's) and
-     * the time offset added to its timestamps to correct a wrong clock (D-17).
+     * How one file of the merge is read: its source timezone (null for the system's), the
+     * time offset added to its timestamps to correct a wrong clock, and the parser chosen
+     * for that file alone (null: the tab's choice) (D-17, G-10).
      */
-    public record PerFile(ZoneId zone, long offsetMillis) {
-        public static final PerFile DEFAULT = new PerFile(null, 0);
+    public record PerFile(ZoneId zone, long offsetMillis, LogParser parser) {
+        public static final PerFile DEFAULT = new PerFile(null, 0, null);
+
+        public PerFile(ZoneId zone, long offsetMillis) {
+            this(zone, offsetMillis, null);
+        }
+
+        /** The parser this file is read with: its own, else {@code tabChoice} (empty: per-line detection). */
+        public Optional<LogParser> parserOr(Optional<LogParser> tabChoice) {
+            return parser != null ? Optional.of(parser) : tabChoice;
+        }
     }
 
+    /** One file to merge: a plain or {@code .gz} file, or {@code entry} of the zip {@code path}. */
     public record File(Path path, String entry) {
         public File {
             path = path.toAbsolutePath();
@@ -107,8 +117,8 @@ public final class MergeLoad {
     /**
      * Loads {@code files}.
      *
-     * @param parser      the parser every file is read with, or empty for per-line detection
-     * @param setup       each file's source timezone (null for the system's) and time offset
+     * @param parser      the parser a file is read with unless its {@link PerFile} names one; empty for per-line detection
+     * @param setup       each file's source timezone (null for the system's), time offset and own parser
      * @param cacheDir    where compressed files are unpacked
      * @param rotatedText the message of a row whose text was lost to rotation
      * @param notesDir    where notes go when a log's own folder can't be written; null keeps
@@ -124,7 +134,7 @@ public final class MergeLoad {
         List<Skipped> skipped = new ArrayList<>();
         for (File f : files) {
             if (cancelled.getAsBoolean()) return null;
-            Skip reason = check(f, parser, parsers, setup.apply(f).zone());
+            Skip reason = check(f, setup.apply(f).parserOr(parser), parsers, setup.apply(f).zone());
             if (reason == null) mergeable.add(f);
             else skipped.add(new Skipped(f, reason));
         }
@@ -165,7 +175,7 @@ public final class MergeLoad {
         try {
             for (File f : mergeable) {
                 Path copy = copyOf.get(f);
-                futures.add(pool.submit(() -> index(f, copy, parser, parsers, setup.apply(f).zone(), notesDir, lowMemory, halt,
+                futures.add(pool.submit(() -> index(f, copy, setup.apply(f).parserOr(parser), parsers, setup.apply(f).zone(), notesDir, lowMemory, halt,
                         stop, diskFull, sink)));
             }
             List<EntryIndex> indexes = new ArrayList<>();
@@ -198,10 +208,11 @@ public final class MergeLoad {
                     EntryIndex index = indexes.get(i);
                     Path rows = copyOf.getOrDefault(f, f.path());
                     sources.add(new MergedEntries.Source(names.get(i), IndexedEntries.open(rows, index,
-                            new LineParser(parser, parsers, setup.apply(f).zone()), rotatedText)));
+                            new LineParser(setup.apply(f).parserOr(parser), parsers, setup.apply(f).zone()), rotatedText)));
                     offsets[i] = setup.apply(f).offsetMillis();
                     inputs.add(new MergeOrder.Input(index, index.size(), offsets[i]));
                     fields.addAll(index.fieldNames());
+                    setup.apply(f).parserOr(parser).ifPresent(p -> fields.addAll(p.customFields()));
                 }
             } catch (IOException e) {
                 sources.forEach(s -> s.entries().close());
@@ -214,7 +225,6 @@ public final class MergeLoad {
                 copies.forEach(LogCache::delete);
                 return null;
             }
-            parser.ifPresent(p -> fields.addAll(p.customFields()));
             return new Result(new MergedEntries(sources, order, offsets), mergeable, List.copyOf(fields), skipped,
                     copies, false, false, notes, ends);
         } catch (InterruptedException e) {

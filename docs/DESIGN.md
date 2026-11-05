@@ -654,7 +654,7 @@ compelling. Re-measure first.
 To support merged views (UC-12), a tab holds a list of **sources** instead of one file.
 Each source has its own file (or zip entry), parser, source timezone, time offset, tail
 worker, and `AnnotationStore`. A single-file tab is just a tab with one source.
-Built as D-17 describes; two parts differ, see G-10 and G-11.
+Built as D-17 describes; one part differs, see G-11.
 
 - **Entry origin:** The table model records which source each entry came from, so the
   Source column, annotations, and export can find it. This lives in the UI/core model,
@@ -922,7 +922,8 @@ removes that ceiling too.
 
 The design for D-13 and UC-12. Accepted on 2026-11-04 with the recommended answer to
 each question at the end, and built in the eight steps below (all done on 2026-11-04).
-What was built differently is noted in each step; what is left is G-10 and G-11.
+What was built differently is noted in each step; what is left is G-11 (G-10, a parser per
+file, was built afterwards; see step 6).
 
 **Scope.** A merged view combines **local files**: plain files, `.gz` files and zip
 entries, each indexed as in D-16. SSH and plugin sources stay one per tab. Merging them
@@ -1061,7 +1062,8 @@ rather than failing:
 }
 ```
 
-A parser the reviewer doesn't have falls back to auto-detection; the timezone and
+A parser the reviewer doesn't have falls back to the tab's choice (auto-detection unless
+the open dialog chose one); the timezone and
 offset come from the bundle, so the timeline matches.
 
 **Not covered:** sorting by a column header (D-16) is no slower here than on one big
@@ -1165,8 +1167,13 @@ as a reusable "workspace".
      Timezone for app.log…"; the tab's context menu has a **Sources** submenu listing
      every file with both. The detail panel adds "Shifted: +3m 12s; written as …".
    - `TimeOffsetTest`, `MergedEntriesTest`, `MergeLoadTest`, `MergedViewTest`.
-   - **Not covered:** choosing a parser per file. Each file uses the tab's choice; with
-     per-line detection (the default) every file is read in its own format already.
+   - **Parser per file** (added later, closing G-10): right-click a row → "Set Parser for
+     app.log…" (also in the **Sources** submenu) reads that file with one parser, or with
+     "Same as the tab". It's `MergeLoad.PerFile.parser`, used for the file's sniff, index,
+     reading back and following (`MergedTailer` takes one parser per file); the tab keeps
+     it across reloads, not saved. A parser that doesn't recognize the file's first lines
+     is refused, since the file would be left out of the merge. `MergeLoadTest`,
+     `MergedViewTest`.
 7. ✅ Zip picker merge, file patterns, Open Merged…, review bundle version 2. As built:
    - The zip picker has "Merge into one view" (on unless the "When opening several
      files" setting is Separate Tabs), enabled once two files are ticked.
@@ -1179,10 +1186,11 @@ as a reusable "workspace".
      `annotations.json`, the others `<log>.annotations.json`. `ReviewExporter` exports a
      merged tab through it (`LogPanel.reviewParts`). Opening a version 2 bundle opens a
      merged view of its logs with their timezones and offsets
-     (`LogPanel.presetMerged`); a timezone changed there stays in that tab. Parsers are
-     detected again rather than taken from the bundle.
+     (`LogPanel.presetMerged`); a timezone changed there stays in that tab. Each file's
+     parser is taken from the bundle by name (G-10); one this Clouseau doesn't have falls
+     back to the tab's choice.
    - `FilePatternTest`, `ReviewBundleTest`, `MergedViewTest`.
-8. ✅ Update UC-12 (✅), mark D-13 and D-17 Adopted; G-10 and G-11 record what was
+8. ✅ Update UC-12 (✅), mark D-13 and D-17 Adopted; G-10 (since closed) and G-11 record what was
    left out.
 
 **Questions settled at review** (each took the recommendation):
@@ -1216,5 +1224,4 @@ Remove an entry once it's fixed.
 | ID | Gap | Impact |
 |---|---|---|
 | **G-9** | Reading, parsing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`); the detail pane, find bar and highlight navigation bar are their own classes (`DetailPanel`, `FindBar`, `HighlightNavBar`). `LogPanel` is about 2,000 lines (merged views, D-17, added loading, re-ordering, offsets and timezones; their tail workers are `MergedTailer`): loading and follow wiring, the table with its renderers and header menu, column visibility and saved layouts, the highlight and annotation context menu, and the status bar. | Still long to review. Next splits: the table with its renderers, column visibility and layouts into one class (about 450 lines), and the row context menu (highlights and notes, about 220 lines) into another. |
-| **G-10** | A merged view (D-17) reads every file with the tab's parser choice: one chosen parser, or per-line detection. A parser can't be chosen per file, and a review bundle's per-file parser names are recorded but not used when it opens. | With detection (the default) each file is read in its own format, so it rarely matters. A file a chosen parser doesn't recognize is left out of the merge and offered in its own tab. |
 | **G-11** | Single-file tabs still load and follow through their own code in `LogPanel` (`load`, `startTailing`); only the table model reads both kinds of tab through `EntryRows`. D-17's question 4 chose one path for both. | Two loading and following paths to keep in step. Joining them would also shrink `LogPanel` (G-9). |

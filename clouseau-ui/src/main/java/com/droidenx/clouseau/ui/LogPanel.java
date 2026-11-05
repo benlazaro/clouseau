@@ -92,6 +92,8 @@ public final class LogPanel extends JPanel {
     private List<Path> mergedCopies = List.of();
     /** Time offsets the user set on a merged tab's files; kept across reloads (D-17). */
     private final Map<MergeLoad.File, Long> mergedOffsets = new HashMap<>();
+    /** Parsers chosen for single files of a merged tab (G-10); kept across reloads. Others use the tab's. */
+    private final Map<MergeLoad.File, LogParser> mergedParsers = new HashMap<>();
     /** Source timezones a review bundle gave a merged tab's files; they win over saved ones. */
     private final Map<MergeLoad.File, ZoneId> mergedZones = new HashMap<>();
     /** Counts offset changes, so only the last one's re-merge is shown. */
@@ -259,12 +261,13 @@ public final class LogPanel extends JPanel {
 
     /**
      * Sets how a merged load reads its files before {@link #loadMerged}: per file, a
-     * timezone (if not null) and a time offset, as a review bundle gives them (D-17).
+     * timezone (if not null), a time offset and a parser (if not null), as a review bundle gives them (D-17).
      */
     public void presetMerged(Map<MergeLoad.File, MergeLoad.PerFile> setup) {
         setup.forEach((f, p) -> {
             if (p.zone() != null) mergedZones.put(f, p.zone());
             if (p.offsetMillis() != 0) mergedOffsets.put(f, p.offsetMillis());
+            if (p.parser() != null) mergedParsers.put(f, p.parser());
         });
     }
 
@@ -275,10 +278,10 @@ public final class LogPanel extends JPanel {
     public List<ReviewBundle.Part> reviewParts() {
         MergedEntries view = mergedView();
         if (loading || view == null || !(annotationStore instanceof MergedNotes notes)) return null;
-        String parserName = currentParser.map(LogParser::getName).orElse(null);
         List<ReviewBundle.Part> parts = new ArrayList<>();
         for (int s = 0; s < view.sourceCount(); s++) {
             MergeLoad.File f = mergedFiles.get(s);
+            String parserName = parserOf(f).map(LogParser::getName).orElse(null);
             parts.add(new ReviewBundle.Part(f.path(), f.entry(), notes.stores().get(s).toJson(), parserName,
                     zoneOf(f).getId(), view.offsetMillis(s)));
         }
@@ -571,9 +574,11 @@ public final class LogPanel extends JPanel {
         logTableModel.setCustomFields(List.of());
         ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
 
-        // Each file is read in its own source timezone and placed with its own offset.
+        // Each file is read in its own source timezone (and parser, if it has one) and placed with its own offset.
         final Map<MergeLoad.File, MergeLoad.PerFile> setup = new HashMap<>();
-        for (MergeLoad.File f : files) setup.put(f, new MergeLoad.PerFile(zoneOf(f), mergedOffsets.getOrDefault(f, 0L)));
+        for (MergeLoad.File f : files) {
+            setup.put(f, new MergeLoad.PerFile(zoneOf(f), mergedOffsets.getOrDefault(f, 0L), mergedParsers.get(f)));
+        }
         final MemoryGuard memory = new MemoryGuard();
         final List<LogParser> tabParsers = parsers;
         SwingWorker<MergeLoad.Result, LogEntry> worker = new SwingWorker<>() {
@@ -643,7 +648,8 @@ public final class LogPanel extends JPanel {
                 mergedTailer = new MergedTailer(r.entries(),
                         mergedFiles.stream().map(MergeLoad.File::path).toList(), r.ends(),
                         mergedFiles.stream().map(f -> setup.get(f).zone()).toList(),
-                        parser, tabParsers, mergedHost(r.entries()));
+                        mergedFiles.stream().map(f -> setup.get(f).parserOr(parser)).toList(),
+                        tabParsers, mergedHost(r.entries()));
                 if (follow) mergedTailer.start();
                 sizeColumnsWhenRowsArrive();
                 logTableModel.applyFilter(filterBar.buildFilter());
@@ -1101,6 +1107,67 @@ public final class LogPanel extends JPanel {
         if (mergedZones.containsKey(f)) mergedZones.put(f, sel.zone());   // from a bundle: this tab only
         else AppPrefs.setSourceTimezone(f.path(), sel.zone());
         updateSourceTimezoneLabel();
+        reload();
+    }
+
+    /** The parser a merged file is read with: its own, else the tab's (empty: per-line detection). */
+    private Optional<LogParser> parserOf(MergeLoad.File f) {
+        LogParser own = mergedParsers.get(f);
+        return own != null ? Optional.of(own) : currentParser;
+    }
+
+    /**
+     * Asks which parser one file of a merged tab is read with (G-10), and reloads. A parser
+     * that doesn't recognize the file's first lines is refused: the file would be left out.
+     */
+    public void showParserDialog(Component parent, int source) {
+        if (mergedFiles == null || source < 0 || source >= mergedFiles.size()) return;
+        MergeLoad.File f = mergedFiles.get(source);
+        String name = mergedSourceNames().get(source);
+        String tabChoice = currentParser.map(LogParser::getName).orElse(Messages.get("filechooser.parser.autodetect"));
+        JComboBox<Object> combo = new JComboBox<>();
+        String same = java.text.MessageFormat.format(Messages.get("merge.parser.tab"), tabChoice);
+        combo.addItem(same);
+        parsers.forEach(combo::addItem);
+        combo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                return super.getListCellRendererComponent(list, value instanceof LogParser p ? p.getName() : value,
+                        index, isSelected, cellHasFocus);
+            }
+        });
+        LogParser own = mergedParsers.get(f);
+        combo.setSelectedItem(own != null ? own : same);
+        JLabel note = new JLabel(Messages.get("merge.parser.note"));
+        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
+        Object[] message = { new JLabel(Messages.get("merge.parser.label")), combo, note };
+        int res = JOptionPane.showConfirmDialog(parent, message,
+                java.text.MessageFormat.format(Messages.get("merge.parser.title"), name),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (res != JOptionPane.OK_OPTION) return;
+        LogParser chosen = combo.getSelectedItem() instanceof LogParser p ? p : null;
+        if (chosen == own) return;
+        if (chosen != null) {
+            boolean recognized;
+            try {
+                recognized = LogSniffer.detect(LogSniffer.read(f.path(), f.entry()).lines(),
+                        Optional.of(chosen), parsers).isPresent();
+            } catch (IOException e) {
+                log.warn("Can't read the first lines of {}", f, e);
+                recognized = false;
+            }
+            if (!recognized) {
+                JOptionPane.showMessageDialog(parent, java.text.MessageFormat.format(
+                                Messages.get("merge.parser.unrecognized"), chosen.getName(), name),
+                        java.text.MessageFormat.format(Messages.get("merge.parser.title"), name),
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            mergedParsers.put(f, chosen);
+        } else {
+            mergedParsers.remove(f);
+        }
         reload();
     }
 
@@ -1897,6 +1964,10 @@ public final class LogPanel extends JPanel {
                         Messages.get("merge.timezone.menu"), name));
                 zoneItem.addActionListener(e -> showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(this), source));
                 menu.add(zoneItem);
+                JMenuItem parserItem = new JMenuItem(java.text.MessageFormat.format(
+                        Messages.get("merge.parser.menu"), name));
+                parserItem.addActionListener(e -> showParserDialog(SwingUtilities.getWindowAncestor(this), source));
+                menu.add(parserItem);
                 menu.addSeparator();
             }
         }

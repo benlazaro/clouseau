@@ -367,11 +367,12 @@ from the row's right-click menu or the tab's **Sources** menu). A file's clock c
 corrected with **Set Time Offset for …**: its entries move to their corrected place,
 the Source column shows the offset (`db.log (+3m 12s)`), the time filter uses the
 corrected time, and the detail panel says what the file wrote. Every file uses the
-tab's parser choice (G-10); with automatic detection each is read in its own format. Files
+tab's parser choice unless **Set Parser for …** gives it its own (a parser that doesn't
+recognize the file is refused); with automatic detection each is read in its own format. Files
 picked in the zip picker merge with "Merge into one view"; **File → Open Merged…**
 merges without asking, and a pattern such as `app.log*` typed in the open dialog opens
 every matching file in that folder, merged. A merged view exports for review as one
-bundle with every file, its notes, timezone and offset, and opens again as the same
+bundle with every file, its notes, timezone, offset and parser, and opens again as the same
 merged view.
 
 ### UC-13 · Read a file no parser recognizes ✅

@@ -454,7 +454,8 @@ public final class MainFrame extends JFrame {
 
     /**
      * Opens a version 2 review bundle (D-17): its logs in one merged view, each with the
-     * timezone and offset it was exported with. Parsers are detected again.
+     * timezone, offset and parser it was exported with. A parser this Clouseau doesn't have
+     * falls back to the tab's choice (G-10).
      */
     private void openMergedBundle(Path zip, ReviewBundle.Manifest bundle, Optional<LogParser> parser) {
         List<MergeLoad.File> files = new ArrayList<>();
@@ -468,7 +469,12 @@ public final class MainFrame extends JFrame {
             } catch (java.time.DateTimeException e) {
                 log.warn("Review bundle {} names an unknown timezone {}", zip.getFileName(), s.timezone());
             }
-            setup.put(f, new MergeLoad.PerFile(zone, s.offsetMillis()));
+            LogParser own = s.parser() == null ? null
+                    : parsers.stream().filter(p -> s.parser().equals(p.getName())).findFirst().orElse(null);
+            if (s.parser() != null && own == null) {
+                log.info("Review bundle {} names a parser this Clouseau doesn't have, {}", zip.getFileName(), s.parser());
+            }
+            setup.put(f, new MergeLoad.PerFile(zone, s.offsetMillis(), own));
         }
         openMerged(files, parser, setup);
     }
@@ -798,6 +804,10 @@ public final class MainFrame extends JFrame {
                         Messages.get("merge.timezone.menu"), sources.get(s)));
                 zone.addActionListener(ev -> panel.showSourceTimezoneDialog(this, source));
                 fileMenu.add(zone);
+                JMenuItem parser = new JMenuItem(java.text.MessageFormat.format(
+                        Messages.get("merge.parser.menu"), sources.get(s)));
+                parser.addActionListener(ev -> panel.showParserDialog(this, source));
+                fileMenu.add(parser);
                 sourcesMenu.add(fileMenu);
             }
             menu.add(sourcesMenu);
