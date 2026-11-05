@@ -311,7 +311,9 @@ final class LogTableView {
                     logTable, logTable.getColumnName(col), false, false, -1, col);
             maxWidth = Math.max(maxWidth, hc.getPreferredSize().width);
             for (int row = 0; row < sampleSize; row++) {
-                Component rc = logTable.prepareRenderer(logTable.getCellRenderer(row, col), row, col);
+                // Measured as if selected: bold, with the selection ring, its widest look.
+                Component rc = logTable.getCellRenderer(row, col).getTableCellRendererComponent(
+                        logTable, logTable.getValueAt(row, col), true, false, row, col);
                 maxWidth = Math.max(maxWidth, rc.getPreferredSize().width);
             }
             if (logTable.getColumnModel().getColumn(col).getModelIndex() == 0) {
@@ -531,7 +533,9 @@ final class LogTableView {
             FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
             int needed = 0;
             for (String label : labels) needed = Math.max(needed, fm.stringWidth(label));
-            needed += 16;
+            // Cell padding (8 + 8), the selection ring on the last column (2), the grid
+            // line, and the same slack autoResizeColumns adds (8).
+            needed += 16 + 2 + logTable.getIntercellSpacing().width + 8;
             TableColumn c = logTable.getColumnModel().getColumn(col);
             if (needed <= c.getWidth()) return;
             fittedColumnsWidth += needed - c.getWidth();

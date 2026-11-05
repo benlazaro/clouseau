@@ -503,6 +503,9 @@ public final class LogPanel extends JPanel {
             logTableModel.removeTableModelListener(once[0]);
             SwingUtilities.invokeLater(() -> {
                 tableView.autoResizeColumns();
+                // Every file's name, not just those in the sampled rows.
+                MergedEntries view = mergedView();
+                if (view != null) tableView.widenColumnToFit(Messages.get("table.col.source"), sourceLabels(view));
                 tableView.applyDefaultLayoutIfSet();
             });
         };
@@ -1018,9 +1021,9 @@ public final class LogPanel extends JPanel {
         JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(zoneOf(f));
         JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
         note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
-        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note };
-        int res = JOptionPane.showConfirmDialog(parent, message,
-                java.text.MessageFormat.format(Messages.get("merge.timezone.title"), mergedSourceNames().get(source)),
+        String title = java.text.MessageFormat.format(Messages.get("merge.timezone.title"), mergedSourceNames().get(source));
+        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note, titleSpacer(title) };
+        int res = JOptionPane.showConfirmDialog(parent, message, title,
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (res != JOptionPane.OK_OPTION) return;
         SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
@@ -1029,6 +1032,16 @@ public final class LogPanel extends JPanel {
         else AppPrefs.setSourceTimezone(f.path(), sel.zone());
         updateSourceTimezoneLabel();
         reload();
+    }
+
+    /**
+     * An invisible strut that keeps a small dialog wide enough to show its whole title, which
+     * names a file and can be long. The extra room is for the window's icon and close button.
+     */
+    private static Component titleSpacer(String title) {
+        Font font = UIManager.getFont("TitlePane.font");
+        if (font == null) font = UIManager.getFont("Label.font");
+        return Box.createHorizontalStrut(new JLabel().getFontMetrics(font).stringWidth(title) + 80);
     }
 
     /** The parser a merged file is read with: its own, else the tab's (empty: per-line detection). */
@@ -1062,9 +1075,9 @@ public final class LogPanel extends JPanel {
         combo.setSelectedItem(own != null ? own : same);
         JLabel note = new JLabel(Messages.get("merge.parser.note"));
         note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
-        Object[] message = { new JLabel(Messages.get("merge.parser.label")), combo, note };
-        int res = JOptionPane.showConfirmDialog(parent, message,
-                java.text.MessageFormat.format(Messages.get("merge.parser.title"), name),
+        String title = java.text.MessageFormat.format(Messages.get("merge.parser.title"), name);
+        Object[] message = { new JLabel(Messages.get("merge.parser.label")), combo, note, titleSpacer(title) };
+        int res = JOptionPane.showConfirmDialog(parent, message, title,
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (res != JOptionPane.OK_OPTION) return;
         LogParser chosen = combo.getSelectedItem() instanceof LogParser p ? p : null;
@@ -1081,8 +1094,7 @@ public final class LogPanel extends JPanel {
             if (!recognized) {
                 JOptionPane.showMessageDialog(parent, java.text.MessageFormat.format(
                                 Messages.get("merge.parser.unrecognized"), chosen.getName(), name),
-                        java.text.MessageFormat.format(Messages.get("merge.parser.title"), name),
-                        JOptionPane.WARNING_MESSAGE);
+                        title, JOptionPane.WARNING_MESSAGE);
                 return;
             }
             mergedParsers.put(f, chosen);
