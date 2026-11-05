@@ -23,6 +23,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Loads several files into one merged view (D-17): checks each one's first lines, indexes
@@ -39,6 +40,14 @@ public final class MergeLoad {
     private MergeLoad() {}
 
     /** One file to merge: a plain or {@code .gz} file, or {@code entry} of the zip {@code path}. */
+    /**
+     * How one file of the merge is read: its source timezone (null for the system's) and
+     * the time offset added to its timestamps to correct a wrong clock (D-17).
+     */
+    public record PerFile(ZoneId zone, long offsetMillis) {
+        public static final PerFile DEFAULT = new PerFile(null, 0);
+    }
+
     public record File(Path path, String entry) {
         public File {
             path = path.toAbsolutePath();
@@ -99,7 +108,7 @@ public final class MergeLoad {
      * Loads {@code files}.
      *
      * @param parser      the parser every file is read with, or empty for per-line detection
-     * @param zone        the source timezone every file is read in, or null for the system's
+     * @param setup       each file's source timezone (null for the system's) and time offset
      * @param cacheDir    where compressed files are unpacked
      * @param rotatedText the message of a row whose text was lost to rotation
      * @param notesDir    where notes go when a log's own folder can't be written; null keeps
@@ -107,15 +116,15 @@ public final class MergeLoad {
      * @param lowMemory   checked every 10,000 lines; true stops the load
      * @param cancelled   checked often; true stops the load and returns null
      */
-    public static Result run(List<File> files, Optional<LogParser> parser, List<LogParser> parsers, ZoneId zone,
-                             Path cacheDir, String rotatedText, Path notesDir, BooleanSupplier lowMemory,
+    public static Result run(List<File> files, Optional<LogParser> parser, List<LogParser> parsers,
+                             Function<File, PerFile> setup, Path cacheDir, String rotatedText, Path notesDir, BooleanSupplier lowMemory,
                              BooleanSupplier cancelled, Sink sink) throws IOException, InterruptedException {
         // 1. Which files can go on the timeline.
         List<File> mergeable = new ArrayList<>();
         List<Skipped> skipped = new ArrayList<>();
         for (File f : files) {
             if (cancelled.getAsBoolean()) return null;
-            Skip reason = check(f, parser, parsers, zone);
+            Skip reason = check(f, parser, parsers, setup.apply(f).zone());
             if (reason == null) mergeable.add(f);
             else skipped.add(new Skipped(f, reason));
         }
@@ -156,7 +165,7 @@ public final class MergeLoad {
         try {
             for (File f : mergeable) {
                 Path copy = copyOf.get(f);
-                futures.add(pool.submit(() -> index(f, copy, parser, parsers, zone, notesDir, lowMemory, halt,
+                futures.add(pool.submit(() -> index(f, copy, parser, parsers, setup.apply(f).zone(), notesDir, lowMemory, halt,
                         stop, diskFull, sink)));
             }
             List<EntryIndex> indexes = new ArrayList<>();
@@ -181,6 +190,7 @@ public final class MergeLoad {
             List<String> names = names(mergeable);
             List<MergedEntries.Source> sources = new ArrayList<>();
             List<MergeOrder.Input> inputs = new ArrayList<>();
+            long[] offsets = new long[mergeable.size()];
             Set<String> fields = new LinkedHashSet<>();
             try {
                 for (int i = 0; i < mergeable.size(); i++) {
@@ -188,8 +198,9 @@ public final class MergeLoad {
                     EntryIndex index = indexes.get(i);
                     Path rows = copyOf.getOrDefault(f, f.path());
                     sources.add(new MergedEntries.Source(names.get(i), IndexedEntries.open(rows, index,
-                            new LineParser(parser, parsers, zone), rotatedText)));
-                    inputs.add(new MergeOrder.Input(index, index.size(), 0));
+                            new LineParser(parser, parsers, setup.apply(f).zone()), rotatedText)));
+                    offsets[i] = setup.apply(f).offsetMillis();
+                    inputs.add(new MergeOrder.Input(index, index.size(), offsets[i]));
                     fields.addAll(index.fieldNames());
                 }
             } catch (IOException e) {
@@ -204,7 +215,7 @@ public final class MergeLoad {
                 return null;
             }
             parser.ifPresent(p -> fields.addAll(p.customFields()));
-            return new Result(new MergedEntries(sources, order), mergeable, List.copyOf(fields), skipped,
+            return new Result(new MergedEntries(sources, order, offsets), mergeable, List.copyOf(fields), skipped,
                     copies, false, false, notes, ends);
         } catch (InterruptedException e) {
             copies.forEach(LogCache::delete);

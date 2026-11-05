@@ -30,6 +30,9 @@ public interface EntryRows extends Closeable {
     /** A short name for a source, such as its file name; null for a single file. */
     default String sourceName(int source) { return null; }
 
+    /** What the Source column shows for a source: its name, and any mark such as a time offset. */
+    default String sourceLabel(int source) { return sourceName(source); }
+
     /** The index part of {@code filter} for one ordinal (D-16): no I/O. */
     boolean testIndex(EntryFilter filter, int ordinal);
 

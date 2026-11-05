@@ -48,7 +48,8 @@ final class MergedTailer {
     private final long[] positions;
     private final Optional<LogParser> parser;
     private final List<LogParser> parsers;
-    private final ZoneId sourceTimezone;
+    /** Per source, the timezone its lines are read in (null: the system's). */
+    private final List<ZoneId> zones;
     private final Host host;
     private final MergedFollow follow;
     /** Rows of each source handed over by its workers so far. */
@@ -60,17 +61,17 @@ final class MergedTailer {
 
     /**
      * {@code ends} has, per source, where its index ends (-1: not followed); {@code paths}
-     * the files the sources read.
+     * the files the sources read, and {@code zones} their source timezones.
      */
-    MergedTailer(MergedEntries view, List<Path> paths, List<Long> ends, Optional<LogParser> parser,
-                 List<LogParser> parsers, ZoneId sourceTimezone, Host host) {
+    MergedTailer(MergedEntries view, List<Path> paths, List<Long> ends, List<ZoneId> zones,
+                 Optional<LogParser> parser, List<LogParser> parsers, Host host) {
         this.view = view;
         this.paths = List.copyOf(paths);
         this.positions = new long[ends.size()];
         for (int s = 0; s < positions.length; s++) positions[s] = ends.get(s);
         this.parser = parser;
         this.parsers = parsers;
-        this.sourceTimezone = sourceTimezone;
+        this.zones = new ArrayList<>(zones);
         this.host = host;
         this.follow = new MergedFollow(view);
         this.counts = new int[positions.length];
@@ -112,7 +113,7 @@ final class MergedTailer {
         return new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
-                LineParser lineParser = new LineParser(parser, parsers, sourceTimezone);
+                LineParser lineParser = new LineParser(parser, parsers, zones.get(source));
                 try {
                     locks[source].lockInterruptibly();
                 } catch (InterruptedException e) {

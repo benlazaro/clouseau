@@ -40,9 +40,11 @@ final class DetailPanel extends JPanel {
      * @param annotation    the entry's note, or null
      * @param continuations the lines after the entry that no parser accepted (stack traces,
      *                      wrapped lines), folded into the message
+     * @param shiftMillis   the time offset of the entry's file in a merged view (D-17), already
+     *                      added to its timestamp; 0 if none
      */
     record Content(LogEntry entry, Color highlight, AnnotationStore.Annotation annotation,
-                   List<LogEntry> continuations) {}
+                   List<LogEntry> continuations, long shiftMillis) {}
 
     private final List<LogFormatter> formatters;
     private final List<LogSyntaxHighlighter> syntaxHighlighters;
@@ -309,6 +311,14 @@ final class DetailPanel extends JPanel {
         }
 
         appendField(doc, key, val,      Messages.get("table.col.timestamp"), ts);
+        if (content.shiftMillis() != 0 && entry.timestamp() != null) {
+            // The table shows the corrected time; say what the file itself wrote.
+            SimpleAttributeSet dim = new SimpleAttributeSet(val);
+            StyleConstants.setForeground(dim, ClouseauColors.dimForeground());
+            appendField(doc, key, dim, Messages.get("detail.shifted.label"), java.text.MessageFormat.format(
+                    Messages.get("detail.shifted"), com.droidenx.clouseau.core.TimeOffset.format(content.shiftMillis()),
+                    tsFmt.format(entry.timestamp().minusMillis(content.shiftMillis()))));
+        }
         appendField(doc, key, levelVal, Messages.get("table.col.level"),     level);
         appendField(doc, key, val,      Messages.get("table.col.thread"),    thread);
         appendField(doc, key, val,      Messages.get("table.col.logger"),    logger);

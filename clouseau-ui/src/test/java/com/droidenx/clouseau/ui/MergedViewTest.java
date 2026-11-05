@@ -145,6 +145,37 @@ class MergedViewTest {
     }
 
     @Test
+    void aTimeOffsetMovesTheFileAndKeepsTheSelection() throws Exception {
+        MergeLoad.File app = write("app.log", """
+                2026-11-04 10:00:01 INFO app 1
+                2026-11-04 10:00:03 INFO app 3
+                2026-11-04 10:00:05 INFO app 5
+                """);
+        MergeLoad.File db = write("db.log", "2026-11-04 10:00:02 INFO db 2\n");
+        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        try {
+            onEdt(() -> {
+                panel.setFollow(false);
+                panel.loadMerged(List.of(app, db), Optional.empty(), new Listener());
+                return null;
+            });
+            LogTableModel model = (LogTableModel) panel.getLogTable().getModel();
+            await(() -> model.getRowCount() == 4);
+            assertThat(messages(model)).containsExactly("app 1", "db 2", "app 3", "app 5");
+            onEdt(() -> { panel.getLogTable().setRowSelectionInterval(1, 1); return null; });
+
+            onEdt(() -> { panel.applyTimeOffset(1, 2_500); return null; });   // db 2 is really 10:00:04.5
+            await(() -> "db 2".equals(model.getEntry(2).message()));
+            assertThat(messages(model)).containsExactly("app 1", "app 3", "db 2", "app 5");
+            assertThat(onEdt(() -> panel.getLogTable().getSelectedRow())).isEqualTo(2);
+            assertThat(onEdt(() -> model.getValueAt(2, 6))).isEqualTo("db.log (+2.500s)");
+            assertThat(onEdt(() -> model.getEntry(2).rawLine())).startsWith("2026-11-04 10:00:02");
+        } finally {
+            onEdt(() -> { panel.dispose(); return null; });
+        }
+    }
+
+    @Test
     void oneMergeableFileIsHandedBackToOpenOnItsOwn() throws Exception {
         MergeLoad.File app = write("app.log", "2026-11-04 10:00:01 INFO app starts\n");
         MergeLoad.File notes = write("notes.txt", "no format here\n");

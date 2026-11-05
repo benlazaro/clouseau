@@ -49,6 +49,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +90,10 @@ public final class LogPanel extends JPanel {
     private List<MergeLoad.File> mergedFiles;
     /** Unpacked copies of a merged view's compressed files, deleted with the view. */
     private List<Path> mergedCopies = List.of();
+    /** Time offsets the user set on a merged tab's files; kept across reloads (D-17). */
+    private final Map<MergeLoad.File, Long> mergedOffsets = new HashMap<>();
+    /** Counts offset changes, so only the last one's re-merge is shown. */
+    private long offsetChanges;
     /** Follows a merged tab's files (D-17 step 5); null on other tabs. */
     private MergedTailer mergedTailer;
     private Optional<LogParser> currentParser = Optional.empty();
@@ -536,13 +541,15 @@ public final class LogPanel extends JPanel {
         logTableModel.setCustomFields(List.of());
         ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
 
-        final ZoneId srcTz = this.sourceTimezone;
+        // Each file is read in its own source timezone and placed with its own offset.
+        final Map<MergeLoad.File, MergeLoad.PerFile> setup = new HashMap<>();
+        for (MergeLoad.File f : files) setup.put(f, new MergeLoad.PerFile(zoneOf(f), mergedOffsets.getOrDefault(f, 0L)));
         final MemoryGuard memory = new MemoryGuard();
         final List<LogParser> tabParsers = parsers;
         SwingWorker<MergeLoad.Result, LogEntry> worker = new SwingWorker<>() {
             @Override
             protected MergeLoad.Result doInBackground() throws Exception {
-                return MergeLoad.run(files, parser, tabParsers, srcTz, AppDirs.cacheDir(),
+                return MergeLoad.run(files, parser, tabParsers, setup::get, AppDirs.cacheDir(),
                         Messages.get("table.rotated.text"), AppDirs.annotationsDir(), memory::isLow, this::isCancelled, this::publish);
             }
 
@@ -595,6 +602,7 @@ public final class LogPanel extends JPanel {
                 mergedFiles = r.mergeable();    // a reload doesn't check the skipped ones again
                 showMergedPath(mergedFiles);
                 listener.merged(mergedFiles);
+                updateSourceTimezoneLabel();
                 List<String> names = new ArrayList<>();
                 for (int i = 0; i < r.entries().sourceCount(); i++) names.add(r.entries().sourceName(i));
                 filterBar.setSources(names);
@@ -604,7 +612,8 @@ public final class LogPanel extends JPanel {
                 applySavedHighlights();
                 mergedTailer = new MergedTailer(r.entries(),
                         mergedFiles.stream().map(MergeLoad.File::path).toList(), r.ends(),
-                        parser, tabParsers, srcTz, mergedHost(r.entries()));
+                        mergedFiles.stream().map(f -> setup.get(f).zone()).toList(),
+                        parser, tabParsers, mergedHost(r.entries()));
                 if (follow) mergedTailer.start();
                 sizeColumnsWhenRowsArrive();
                 logTableModel.applyFilter(filterBar.buildFilter());
@@ -924,18 +933,122 @@ public final class LogPanel extends JPanel {
             logTableModel.appendFollowed(added);
             return;
         }
+        showReordered(before, after, p.from());
+    }
+
+    /**
+     * Shows a merged tab whose order changed from {@code from} on ({@code before} still holds
+     * the old one): re-filters, and keeps highlights, notes and the selection on their entries.
+     */
+    private void showReordered(MergeOrder before, MergeOrder after, int from) {
         java.util.function.IntUnaryOperator moved = o -> after.ordinalOf(before.source(o), before.row(o));
         int viewRow = logTable.getSelectedRow();
         int selected = viewRow >= 0 ? logTableModel.ordinalAt(logTable.convertRowIndexToModel(viewRow)) : -1;
-        logTableModel.reorderTail(p.from(), moved, after.size());
+        boolean done = logTableModel.reorderTail(from, moved, after.size());
         if (annotationStore instanceof MergedNotes notes) notes.setOrder(after);
         findBar.clearMatches();
-        if (selected >= 0) {
-            int row = logTableModel.rowOfOrdinal(selected >= p.from() ? moved.applyAsInt(selected) : selected);
-            int v = row >= 0 ? logTable.convertRowIndexToView(row) : -1;
-            if (v >= 0) logTable.setRowSelectionInterval(v, v);
-        }
-        if (follow) scrollToBottom();
+        Runnable restore = () -> {
+            if (selected >= 0) {
+                int row = logTableModel.rowOfOrdinal(selected >= from ? moved.applyAsInt(selected) : selected);
+                int v = row >= 0 ? logTable.convertRowIndexToView(row) : -1;
+                if (v >= 0) {
+                    logTable.setRowSelectionInterval(v, v);
+                    if (!follow) logTable.scrollRectToVisible(logTable.getCellRect(v, 0, true));
+                }
+            }
+            if (follow) scrollToBottom();
+            refreshDetail();
+        };
+        if (done) restore.run();
+        else logTableModel.whenFiltered(restore);
+    }
+
+    // ── Merged files: time offsets and timezones (D-17 step 6) ────────────────
+
+    /** The merged view this tab shows, or null. */
+    private MergedEntries mergedView() {
+        return logTableModel.entryRows() instanceof MergedEntries m ? m : null;
+    }
+
+    /** The names of a merged tab's files, as the Source column shows them; empty on other tabs. */
+    public List<String> mergedSourceNames() {
+        MergedEntries view = mergedView();
+        if (view == null) return List.of();
+        List<String> names = new ArrayList<>();
+        for (int s = 0; s < view.sourceCount(); s++) names.add(view.sourceName(s));
+        return names;
+    }
+
+    /** The source timezone a merged file is read in: its own saved one, or the tab's. */
+    private ZoneId zoneOf(MergeLoad.File f) {
+        ZoneId saved = AppPrefs.getSourceTimezone(f.path());
+        return saved != null ? saved : sourceTimezone;
+    }
+
+    /** Asks for a new time offset for one file of a merged tab, then re-merges. */
+    public void showTimeOffsetDialog(int source) {
+        MergedEntries view = mergedView();
+        if (view == null || source < 0 || source >= view.sourceCount()) return;
+        Long millis = TimeOffsetDialog.ask(SwingUtilities.getWindowAncestor(this),
+                view.sourceName(source), view.offsetMillis(source));
+        if (millis != null) applyTimeOffset(source, millis);
+    }
+
+    /**
+     * Sets one merged file's time offset and re-merges the whole order in the background;
+     * the rows followed meanwhile are placed too before the new order is shown.
+     */
+    void applyTimeOffset(int source, long millis) {
+        MergedEntries view = mergedView();
+        if (view == null) return;
+        mergedOffsets.put(mergedFiles.get(source), millis);
+        long[] offsets = new long[view.sourceCount()];
+        for (int s = 0; s < offsets.length; s++) offsets[s] = mergedOffsets.getOrDefault(mergedFiles.get(s), 0L);
+        int[] counts = view.rowCounts();
+        long change = ++offsetChanges;
+        new SwingWorker<MergeOrder, Void>() {
+            @Override
+            protected MergeOrder doInBackground() {
+                return MergeOrder.build(view.inputs(counts, offsets), this::isCancelled, n -> {});
+            }
+
+            @Override
+            protected void done() {
+                if (change != offsetChanges || mergedView() != view) return;
+                MergeOrder built;
+                try {
+                    built = get();
+                } catch (Exception ex) {
+                    log.error("Re-merging {} failed", view, ex);
+                    return;
+                }
+                if (built == null) return;
+                MergeOrder before = view.order();
+                MergeOrder after = built.extend(view.inputs(view.rowCounts(), offsets));
+                view.setOrder(after, offsets);
+                showReordered(before, after, 0);
+                logTable.repaint();
+            }
+        }.execute();
+    }
+
+    /** Asks for the source timezone of one file of a merged tab, saves it, and reloads. */
+    public void showSourceTimezoneDialog(Component parent, int source) {
+        if (mergedFiles == null || source < 0 || source >= mergedFiles.size()) return;
+        MergeLoad.File f = mergedFiles.get(source);
+        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(zoneOf(f));
+        JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
+        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
+        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note };
+        int res = JOptionPane.showConfirmDialog(parent, message,
+                java.text.MessageFormat.format(Messages.get("merge.timezone.title"), mergedSourceNames().get(source)),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (res != JOptionPane.OK_OPTION) return;
+        SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
+        if (sel == null) return;
+        AppPrefs.setSourceTimezone(f.path(), sel.zone());
+        updateSourceTimezoneLabel();
+        reload();
     }
 
     public void dispose() {
@@ -1002,6 +1115,7 @@ public final class LogPanel extends JPanel {
     public void applySourceTimezone(ZoneId zone) {
         this.sourceTimezone = zone;
         if (currentFile != null) AppPrefs.setSourceTimezone(currentFile, zone);
+        else if (mergedFiles != null) mergedFiles.forEach(f -> AppPrefs.setSourceTimezone(f.path(), zone));
         updateSourceTimezoneLabel();
         reload();
     }
@@ -1025,6 +1139,9 @@ public final class LogPanel extends JPanel {
     private void updateSourceTimezoneLabel() {
         if (sourceTzLabel == null) return;
         String id = sourceTimezone.getId();
+        if (mergedFiles != null && mergedFiles.stream().map(this::zoneOf).distinct().count() > 1) {
+            id = Messages.get("merge.timezone.perfile");     // a merged tab whose files differ
+        }
         sourceTzLabel.setText("[src: " + id + "]  ");
         boolean isSystem = sourceTimezone.equals(ZoneId.systemDefault());
         sourceTzLabel.setToolTipText(isSystem
@@ -1709,6 +1826,25 @@ public final class LogPanel extends JPanel {
             menu.addSeparator();
         }
 
+        // ── The row's file, on a merged tab (D-17) ───────────────────────────────
+        MergedEntries merged = mergedView();
+        if (entries.size() == 1 && merged != null) {
+            int ordinal = logTableModel.ordinalAt(entries.get(0));
+            if (ordinal >= 0 && ordinal < merged.size()) {
+                int source = merged.sourceOf(ordinal);
+                String name = merged.sourceName(source);
+                JMenuItem offsetItem = new JMenuItem(java.text.MessageFormat.format(
+                        Messages.get("merge.offset.menu"), name));
+                offsetItem.addActionListener(e -> showTimeOffsetDialog(source));
+                menu.add(offsetItem);
+                JMenuItem zoneItem = new JMenuItem(java.text.MessageFormat.format(
+                        Messages.get("merge.timezone.menu"), name));
+                zoneItem.addActionListener(e -> showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(this), source));
+                menu.add(zoneItem);
+                menu.addSeparator();
+            }
+        }
+
         JMenuItem viewAllItem = new JMenuItem(Messages.get("annotations.view.all"));
         viewAllItem.setEnabled(annotationStore.size() > 0);
         viewAllItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,
@@ -1844,9 +1980,12 @@ public final class LogPanel extends JPanel {
         int modelRow = viewRow >= 0 ? logTable.convertRowIndexToModel(viewRow) : -1;
         LogEntry entry = modelRow >= 0 ? logTableModel.getEntry(modelRow) : null;
         if (entry == null) return null;
+        int ordinal = logTableModel.ordinalAt(modelRow);
+        MergedEntries merged = mergedView();
+        long shift = merged != null && ordinal >= 0 && ordinal < merged.size()
+                ? merged.offsetMillis(merged.sourceOf(ordinal)) : 0;
         return new DetailPanel.Content(entry, logTableModel.getHighlight(modelRow),
-                annotationStore.at(logTableModel.ordinalAt(modelRow)),
-                logTableModel.getContinuationLines(modelRow));
+                annotationStore.at(ordinal), logTableModel.getContinuationLines(modelRow), shift);
     }
 
     private void refreshDetail() {

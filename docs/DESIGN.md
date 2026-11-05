@@ -1097,9 +1097,9 @@ as a reusable "workspace".
      `MergedEntries.testIndex` checks it before the index columns.
    - **Not yet (later steps):** single-file tabs keep their own loader (`LogPanel.load`);
      only the model reads both through `EntryRows`. Every file uses the tab's parser
-     choice (chosen, or per-line detection) and its one source timezone (per-file in
-     step 6). A merged tab can't be exported for review (step 7). A compressed file
-     that can't be unpacked is left out rather than loaded into memory.
+     choice (chosen, or per-line detection). A merged tab can't be exported for review
+     (step 7). A compressed file that can't be unpacked is left out rather than loaded
+     into memory.
 4. ✅ Annotations and highlights per source, keyed by identity. As built: `Notes` (core)
    is what `LogPanel`, the annotations panel and the highlight menus use; one file's
    `AnnotationStore` implements it, and `MergedNotes` puts one store per source behind
@@ -1135,7 +1135,31 @@ as a reusable "workspace".
      order as one merge), `MergedFollowTest`, `MergedViewTest`.
    - **Not yet:** single-file tabs still follow through their own worker; joining them
      to this path (question 4) is left for when per-file settings (step 6) land.
-6. Time offsets: dialog, Sources menu, re-merge, the detail panel line.
+6. ✅ Time offsets: dialog, Sources menu, re-merge, the detail panel line. As built:
+   - **Per-file setup:** `MergeLoad.run` takes a `PerFile` (source timezone and offset)
+     for each file. A file's timezone is its own saved one (`source.timezones` in
+     `settings.json`, as for a single file), else the tab's; the tab's "Set Source
+     Timezone…" sets it for every file, and the status bar shows "per file" when they
+     differ. Changing a file's timezone saves it and reloads the tab. Offsets are kept
+     by the tab across reloads, not saved (the review bundle carries them, step 7).
+   - **Offsets** live in `MergedEntries`, swapped together with the order. `get` and
+     `scan` return entries with the corrected timestamp (the raw line is untouched), and
+     `testIndex` passes the offset to `EntryFilter.testIndex(index, row, offset)`, so
+     `CombinedFilter`'s time range compares the corrected time. `sourceLabel` adds the
+     mark, `device.log (+3m 12s)` (`TimeOffset.format`).
+   - **Setting one** (`TimeOffsetDialog`: sign, hours, minutes, seconds, milliseconds,
+     or "No Offset") rebuilds the whole order in the background; on the EDT, rows
+     followed meanwhile are placed with `extend` before the new order is swapped in,
+     so nothing is lost or counted twice. Only the latest change is shown.
+     `LogTableModel.reorderTail(0, …)` re-filters: on the EDT for up to 100K rows from
+     the index alone (2K if the filter needs text), otherwise in the background, with
+     the selection restored once rows are in (`whenFiltered`).
+   - **Where:** right-click a row → "Set Time Offset for app.log…" and "Set Source
+     Timezone for app.log…"; the tab's context menu has a **Sources** submenu listing
+     every file with both. The detail panel adds "Shifted: +3m 12s; written as …".
+   - `TimeOffsetTest`, `MergedEntriesTest`, `MergeLoadTest`, `MergedViewTest`.
+   - **Not covered:** choosing a parser per file. Each file uses the tab's choice; with
+     per-line detection (the default) every file is read in its own format already.
 7. Zip picker merge, file patterns, Open Merged…, review bundle version 2.
 8. Update UC-12 (✅), mark D-13 and D-17 Adopted.
 

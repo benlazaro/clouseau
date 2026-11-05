@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -106,6 +107,33 @@ class MergedEntriesTest {
             }, () -> false);
             assertThat(complete).isTrue();
             assertThat(visited).containsExactly("|", "2:app fails", "|", "1:db ready", "5:db slow");
+        }
+    }
+
+    @Test
+    void anOffsetMovesAFileAndShowsTheCorrectedTime() throws IOException {
+        try (MergedEntries plain = merge()) {
+            long[] offsets = {0, 3_000};                     // db.log's clock is 3 s behind
+            MergeOrder order = MergeOrder.build(plain.inputs(plain.rowCounts(), offsets));
+            MergedEntries m = new MergedEntries(plain.sources(), order, offsets);
+            assertThat(messages(m)).containsExactly(
+                    "2026-11-04 10:00:01 INFO app starts",
+                    "2026-11-04 10:00:03 ERROR app fails",
+                    "at com.acme.App.run",
+                    "at com.acme.App.main",
+                    "2026-11-04 10:00:05 INFO app retries",
+                    "2026-11-04 10:00:02 INFO db ready",       // the raw line stays as written
+                    "2026-11-04 10:00:04 WARN db slow");
+            Instant written = m.sources().get(1).entries().get(0).timestamp();
+            assertThat(m.get(5).timestamp()).isEqualTo(written.plusMillis(3_000));
+            assertThat(m.sourceLabel(1)).isEqualTo("db.log (+3s)");
+            assertThat(m.sourceLabel(0)).isEqualTo("app.log");
+
+            // The time filter compares the corrected time: db ready is now 10:00:05.
+            Instant from = written.plusMillis(2_500);
+            CombinedFilter later = new CombinedFilter(null, Set.of(), false, Map.of(), from, null, null);
+            assertThat(m.testIndex(later, 5)).isTrue();
+            assertThat(plain.testIndex(later, 1)).isFalse();  // the same row, unshifted
         }
     }
 }

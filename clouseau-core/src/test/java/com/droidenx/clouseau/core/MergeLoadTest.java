@@ -48,7 +48,7 @@ class MergeLoadTest {
 
     private MergeLoad.Result run(List<MergeLoad.File> files, AtomicInteger seen) throws Exception {
         Path cache = Files.createDirectories(dir.resolve("cache"));
-        return MergeLoad.run(files, Optional.empty(), List.of(PARSER, NO_TIME), null, cache, "rotated", null,
+        return MergeLoad.run(files, Optional.empty(), List.of(PARSER, NO_TIME), f -> MergeLoad.PerFile.DEFAULT, cache, "rotated", null,
                 () -> false, () -> false, e -> seen.incrementAndGet());
     }
 
@@ -120,9 +120,33 @@ class MergeLoadTest {
         MergeLoad.File a = plain("a.log", sb.toString());
         MergeLoad.File b = plain("b.log", sb.toString());
         Path cache = Files.createDirectories(dir.resolve("cache"));
-        MergeLoad.Result r = MergeLoad.run(List.of(a, b), Optional.empty(), List.of(PARSER), null, cache, "rotated", null,
+        MergeLoad.Result r = MergeLoad.run(List.of(a, b), Optional.empty(), List.of(PARSER), f -> MergeLoad.PerFile.DEFAULT, cache, "rotated", null,
                 () -> true, () -> false, (LogEntry e) -> {});
         assertThat(r.stopped()).isTrue();
         assertThat(r.entries()).isNull();
+    }
+
+    @Test
+    void eachFileHasItsOwnTimezoneAndOffset() throws Exception {
+        MergeLoad.File a = plain("a.log", """
+                2026-11-04 10:00:01 INFO a 1
+                2026-11-04 10:00:03 INFO a 3
+                2026-11-04 11:00:00 INFO a 11
+                """);
+        MergeLoad.File b = plain("b.log", "2026-11-04 10:00:02 INFO b 2, an hour behind UTC\n");
+        MergeLoad.File c = plain("c.log", "2026-11-04 10:00:02 INFO c 2, clock 2 s slow\n");
+        java.util.Map<MergeLoad.File, MergeLoad.PerFile> setup = java.util.Map.of(
+                a, new MergeLoad.PerFile(java.time.ZoneOffset.UTC, 0),
+                b, new MergeLoad.PerFile(java.time.ZoneOffset.ofHours(-1), 0),
+                c, new MergeLoad.PerFile(java.time.ZoneOffset.UTC, 2_000));
+        Path cache = Files.createDirectories(dir.resolve("cache"));
+        MergeLoad.Result r = MergeLoad.run(List.of(a, b, c), Optional.empty(), List.of(PARSER), setup::get, cache,
+                "rotated", null, () -> false, () -> false, e -> {});
+        try (MergedEntries m = r.entries()) {
+            List<String> lines = new ArrayList<>();
+            for (int i = 0; i < m.size(); i++) lines.add(m.get(i).message());
+            assertThat(lines).containsExactly("a 1", "a 3", "c 2, clock 2 s slow", "a 11", "b 2, an hour behind UTC");
+            assertThat(m.offsetMillis(2)).isEqualTo(2_000);
+        }
     }
 }

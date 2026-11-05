@@ -361,9 +361,14 @@ have no timestamps, are listed and offered in their own tabs. With Follow on, ev
 plain file is followed (compressed ones stay as they are): new lines are held back for
 up to a second so files written a moment apart still land in time order, and a line
 that arrives later than that moves to its place, with the selection, highlights and
-notes staying on their entries. Not yet: per-file parsers and timezones (every file
-uses the tab's), time offsets, merging files picked from a zip, file patterns, and
-exporting a merged view for review.
+notes staying on their entries. Each file is read in its own source timezone (set it
+from the row's right-click menu or the tab's **Sources** menu). A file's clock can be
+corrected with **Set Time Offset for …**: its entries move to their corrected place,
+the Source column shows the offset (`db.log (+3m 12s)`), the time filter uses the
+corrected time, and the detail panel says what the file wrote. Every file uses the
+tab's parser choice; with automatic detection each is read in its own format. Not
+yet: merging files picked from a zip, file patterns, and exporting a merged view
+(with its offsets) for review.
 
 ### UC-13 · Read a file no parser recognizes ✅
 

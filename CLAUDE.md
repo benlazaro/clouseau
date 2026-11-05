@@ -28,7 +28,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     AnnotationStore, Notes, MergedNotes, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
-                    MergedFollow
+                    MergedFollow, TimeOffset
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -125,6 +125,7 @@ tags.
   (one `IndexedEntries` or a `MergedEntries`), `MergeLoad` checks, indexes and merges the
   files in the background; `LogPanel.loadMerged` shows them. `MergedFollow` (core) and
   `MergedTailer` (ui) follow its files: hold-back, late rows, re-merge (D-17 step 5).
+  `TimeOffsetDialog` (ui) and `TimeOffset` (core) correct a file's clock (step 6).
 - `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row
   highlights, and the per-tab entry limit.
 - `AnnotationStore` (core) — annotations for one file, anchored by entry number and content

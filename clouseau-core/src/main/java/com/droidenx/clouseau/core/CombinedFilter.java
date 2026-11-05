@@ -93,6 +93,11 @@ public final class CombinedFilter implements EntryFilter {
 
     @Override
     public boolean testIndex(EntryIndex index, int row) {
+        return testIndex(index, row, 0);
+    }
+
+    @Override
+    public boolean testIndex(EntryIndex index, int row, long offsetMillis) {
         if (noLoggers) return false;
         if (levels != null) {
             LogLevel level = index.level(row);
@@ -103,7 +108,7 @@ public final class CombinedFilter implements EntryFilter {
             if (logger != null && excludedLoggers.contains(logger)) return false;
         }
         long ts = index.timestamp(row);
-        if (ts != EntryIndex.NO_TIMESTAMP && !inRange(ts)) return false;
+        if (ts != EntryIndex.NO_TIMESTAMP && !inRange(ts + offsetMillis)) return false;
         for (Map.Entry<String, Set<String>> f : excludedFieldValues.entrySet()) {
             String name = f.getKey();
             if (index.hasTooManyValues(name)) continue;       // decided from text

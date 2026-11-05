@@ -89,6 +89,10 @@ public final class LogTableModel extends AbstractTableModel {
     private IntConsumer filterProgress = p -> {};
     /** Rows indexed during a text-filter run that are read on the EDT at the end, not in another run. */
     private static final int EDT_CATCH_UP_ROWS = 2_000;
+    /** Rows a re-merged tail may re-filter on the EDT from the index columns alone. */
+    private static final int EDT_REORDER_ROWS = 100_000;
+    /** Run once the next filter run has installed its rows ({@link #whenFiltered}). */
+    private final List<Runnable> afterFilter = new ArrayList<>();
 
     private final ExecutorService findExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "clouseau-find");
@@ -206,6 +210,7 @@ public final class LogTableModel extends AbstractTableModel {
             filterProgress.accept(-1);
             cancelFind();
             allEntries.clear();
+            afterFilter.clear();
             closeIndexed();
             trimmedCount = 0;
             staticCount  = 0;
@@ -275,9 +280,11 @@ public final class LogTableModel extends AbstractTableModel {
      * A followed merged view re-merged its tail (D-17): ordinals from {@code from} on show
      * other rows now, and the view holds {@code count} entries. {@code moved} maps an old
      * ordinal at or after {@code from} to the new ordinal of the same entry, so highlights
-     * stay on their entry. Must be called on the EDT; the caller restores the selection.
+     * stay on their entry. Returns true if the rows are filtered already, false if that runs
+     * in the background (see {@link #whenFiltered}). Must be called on the EDT; the caller
+     * restores the selection.
      */
-    public void reorderTail(int from, java.util.function.IntUnaryOperator moved, int count) {
+    public boolean reorderTail(int from, java.util.function.IntUnaryOperator moved, int count) {
         Map<Integer, Color> movedHighlights = new HashMap<>();
         int oldCount = indexedCount;
         highlights.entrySet().removeIf(e -> {
@@ -290,16 +297,23 @@ public final class LogTableModel extends AbstractTableModel {
         indexedCount = count;
         rows.removeRange(rows.countBelow(from), rows.size());
         boolean filtering = filterFuture != null && !filterFuture.isDone();
-        if (filtering || (count - from > EDT_CATCH_UP_ROWS && indexed.needsText(activeFilter))) {
-            // A run still going saw the old order; a long tail that needs text is read off the EDT.
+        int onEdt = indexed.needsText(activeFilter) ? EDT_CATCH_UP_ROWS : EDT_REORDER_ROWS;
+        if (filtering || count - from > onEdt) {
+            // A run still going saw the old order; a long tail is filtered off the EDT.
             fireTableDataChanged();
             scheduleReapply();
-            return;
+            return false;
         }
         for (int ord = from; ord < count; ord++) {
             if (passesOnEdt(activeFilter, ord)) rows.add(ord);
         }
         fireTableDataChanged();
+        return true;
+    }
+
+    /** Runs {@code r} on the EDT once the next filter run has installed its rows. Must be called on the EDT. */
+    public void whenFiltered(Runnable r) {
+        afterFilter.add(r);
     }
 
     /** The indexed file's entries, or null if this tab isn't one indexed file. Must be called on the EDT. */
@@ -453,6 +467,9 @@ public final class LogTableModel extends AbstractTableModel {
                 }
                 rows = newRows;
                 fireTableDataChanged();
+                List<Runnable> waiting = List.copyOf(afterFilter);
+                afterFilter.clear();
+                waiting.forEach(Runnable::run);
             });
         });
     }
@@ -746,7 +763,7 @@ public final class LogTableModel extends AbstractTableModel {
         };
         String field = customFields.get(col - FIXED_COLUMNS);
         if (SOURCE_COLUMN.equals(field)) {
-            String name = indexed != null ? indexed.sourceName(indexed.sourceOf(ordinalAt(row))) : null;
+            String name = indexed != null ? indexed.sourceLabel(indexed.sourceOf(ordinalAt(row))) : null;
             return name != null ? name : "";
         }
         Map<String, String> fields = e.fields();

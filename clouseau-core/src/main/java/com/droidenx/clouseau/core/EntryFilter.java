@@ -27,6 +27,12 @@ public interface EntryFilter extends Predicate<LogEntry> {
     /** False if the row can't pass, from the index columns alone. Must be safe on any thread. */
     default boolean testIndex(EntryIndex index, int row) { return true; }
 
+    /**
+     * {@link #testIndex} for a row of a merged source whose timestamps are shifted by
+     * {@code offsetMillis} (D-17): a time range is compared with the corrected time.
+     */
+    default boolean testIndex(EntryIndex index, int row, long offsetMillis) { return testIndex(index, row); }
+
     /** True if rows that pass {@link #testIndex} must still be read and given to {@link #test}. */
     default boolean needsText(EntryIndex index) { return true; }
 

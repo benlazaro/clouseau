@@ -727,6 +727,27 @@ public final class MainFrame extends JFrame {
         tzAllItem.addActionListener(ev -> showSourceTimezoneAllTabsDialog(panel.getSourceTimezone()));
         menu.add(tzAllItem);
 
+        // A merged tab lists its files, each with its own offset and timezone (D-17).
+        List<String> sources = panel.mergedSourceNames();
+        if (!sources.isEmpty()) {
+            menu.addSeparator();
+            JMenu sourcesMenu = new JMenu(Messages.get("merge.sources.menu"));
+            for (int s = 0; s < sources.size(); s++) {
+                final int source = s;
+                JMenu fileMenu = new JMenu(sources.get(s));
+                JMenuItem offset = new JMenuItem(java.text.MessageFormat.format(
+                        Messages.get("merge.offset.menu"), sources.get(s)));
+                offset.addActionListener(ev -> panel.showTimeOffsetDialog(source));
+                fileMenu.add(offset);
+                JMenuItem zone = new JMenuItem(java.text.MessageFormat.format(
+                        Messages.get("merge.timezone.menu"), sources.get(s)));
+                zone.addActionListener(ev -> panel.showSourceTimezoneDialog(this, source));
+                fileMenu.add(zone);
+                sourcesMenu.add(fileMenu);
+            }
+            menu.add(sourcesMenu);
+        }
+
         menu.show((Component) e.getSource(), e.getX(), e.getY());
     }
 
