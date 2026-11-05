@@ -176,6 +176,47 @@ class MergedViewTest {
     }
 
     @Test
+    void aMergedReviewBundleOpensWithItsOffsets() throws Exception {
+        MergeLoad.File app = write("app.log", """
+                2026-11-04 10:00:01 INFO app 1
+                2026-11-04 10:00:03 INFO app 3
+                """);
+        MergeLoad.File db = write("db.log", "2026-11-04 10:00:02 INFO db 2\n");
+        Path bundle = dir.resolve("review.zip");
+        String noNotes = com.droidenx.clouseau.core.AnnotationStore.inMemory().toJson();
+        com.droidenx.clouseau.core.ReviewBundle.writeMerged(List.of(
+                new com.droidenx.clouseau.core.ReviewBundle.Part(app.path(), null, noNotes, null, "UTC", 0),
+                new com.droidenx.clouseau.core.ReviewBundle.Part(db.path(), null, noNotes, null, "UTC", 2_000)),
+                "test", bundle);
+
+        var manifest = com.droidenx.clouseau.core.ReviewBundle.read(bundle).orElseThrow();
+        java.util.Map<MergeLoad.File, MergeLoad.PerFile> setup = new java.util.HashMap<>();
+        List<MergeLoad.File> files = new ArrayList<>();
+        for (var s : manifest.sources()) {
+            MergeLoad.File f = new MergeLoad.File(bundle, s.log());
+            files.add(f);
+            setup.put(f, new MergeLoad.PerFile(java.time.ZoneId.of(s.timezone()), s.offsetMillis()));
+        }
+        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        try {
+            onEdt(() -> {
+                panel.setFollow(false);
+                panel.presetMerged(setup);
+                panel.loadMerged(files, Optional.empty(), new Listener());
+                return null;
+            });
+            LogTableModel model = (LogTableModel) panel.getLogTable().getModel();
+            await(() -> model.getRowCount() == 3);
+            assertThat(messages(model)).containsExactly("app 1", "app 3", "db 2");   // db 2 is 10:00:04
+            assertThat(onEdt(() -> model.getValueAt(2, 6))).isEqualTo("db.log (+2s)");
+            assertThat(onEdt(panel::reviewParts)).extracting(com.droidenx.clouseau.core.ReviewBundle.Part::offsetMillis)
+                    .containsExactly(0L, 2_000L);
+        } finally {
+            onEdt(() -> { panel.dispose(); return null; });
+        }
+    }
+
+    @Test
     void oneMergeableFileIsHandedBackToOpenOnItsOwn() throws Exception {
         MergeLoad.File app = write("app.log", "2026-11-04 10:00:01 INFO app starts\n");
         MergeLoad.File notes = write("notes.txt", "no format here\n");

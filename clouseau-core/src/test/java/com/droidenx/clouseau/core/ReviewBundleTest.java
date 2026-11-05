@@ -406,4 +406,78 @@ class ReviewBundleTest {
 
         assertThat(store.size()).isZero();
     }
+
+    // ── Merged views (version 2, D-17) ───────────────────────────────────────
+
+    @Test
+    void mergedBundleHoldsEveryLogAndOpensAsItsFirstInAnOlderClouseau() throws IOException {
+        Path app = plainLog();
+        Path other = Files.createDirectories(dir.resolve("server2")).resolve("app.log");
+        Files.writeString(other, TEXT, StandardCharsets.UTF_8);
+        Path db = gzLog();
+        AnnotationStore appNotes = annotate(app, fallback());
+        AnnotationStore otherNotes = AnnotationStore.inMemory();
+        otherNotes.put(0, note(LINES[0], "on server 2", "reviewer"));
+        Path bundle = dir.resolve("out").resolve("app-review.zip");
+
+        ReviewBundle.writeMerged(List.of(
+                new ReviewBundle.Part(app, null, appNotes.toJson(), "Logback", "Europe/Berlin", 0),
+                new ReviewBundle.Part(other, null, otherNotes.toJson(), null, "UTC", 192_000),
+                new ReviewBundle.Part(db, null, AnnotationStore.inMemory().toJson(), null, null, -5)),
+                "1.2.3", bundle);
+
+        assertThat(ZipLogs.list(bundle)).extracting(ZipLogs.Entry::name).containsExactly("manifest.json",
+                "app.log", "annotations.json", "2-app.log", "2-app.log.annotations.json",
+                "app.log.gz", "app.log.gz.annotations.json");
+        JsonObject raw = JsonParser.parseString(
+                new String(entryBytes(bundle, "manifest.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+        assertThat(raw.get("formatVersion").getAsInt()).isEqualTo(2);
+        // The version 1 fields describe the first log.
+        assertThat(raw.get("log").getAsString()).isEqualTo("app.log");
+        assertThat(raw.get("annotations").getAsString()).isEqualTo("annotations.json");
+        assertThat(entryBytes(bundle, "app.log.gz")).isEqualTo(Files.readAllBytes(db));
+
+        ReviewBundle.Manifest m = ReviewBundle.read(bundle).orElseThrow();
+        assertThat(m.isMerged()).isTrue();
+        assertThat(m.sources()).containsExactly(
+                new ReviewBundle.Source("app.log", "annotations.json", "app.log", "Logback", "Europe/Berlin", 0),
+                new ReviewBundle.Source("2-app.log", "2-app.log.annotations.json", "app.log", null, "UTC", 192_000),
+                new ReviewBundle.Source("app.log.gz", "app.log.gz.annotations.json", "app.log.gz", null, null, -5));
+
+        // Each log's notes come from its own entry.
+        AnnotationStore second = ReviewBundle.loadAnnotations(bundle, "2-app.log",
+                ZipLogs.entryKey(bundle, "2-app.log"), fallback());
+        AnnotationStore.Anchoring anchoring = second.startAnchoring();
+        for (String line : readLines(bundle, "2-app.log")) anchoring.accept(line);
+        anchoring.finish();
+        assertThat(second.at(0).note()).isEqualTo("on server 2");
+        assertThat(openBundle(bundle).at(1).note()).isEqualTo("first retry");
+    }
+
+    @Test
+    void aBundleOfOneLogStaysVersionOne() throws IOException {
+        Path bundle = dir.resolve("one.zip");
+        ReviewBundle.write(plainLog(), null, AnnotationStore.inMemory().toJson(), "1", bundle);
+        ReviewBundle.Manifest m = ReviewBundle.read(bundle).orElseThrow();
+        assertThat(m.formatVersion()).isEqualTo(1);
+        assertThat(m.sources()).isEmpty();
+        assertThat(m.isMerged()).isFalse();
+    }
+
+    @Test
+    void aSourceNamingAMissingLogOpensTheFirstLogOnly() throws IOException {
+        Path zip = dir.resolve("broken.zip");
+        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zip))) {
+            zos.putNextEntry(new ZipEntry("manifest.json"));
+            zos.write(("{\"format\": \"clouseau-review-bundle\", \"formatVersion\": 2, \"log\": \"app.log\","
+                    + " \"sources\": [{\"log\": \"app.log\"}, {\"log\": \"gone.log\"}]}").getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("app.log"));
+            zos.write(TEXT.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+        ReviewBundle.Manifest m = ReviewBundle.read(zip).orElseThrow();
+        assertThat(m.log()).isEqualTo("app.log");
+        assertThat(m.isMerged()).isFalse();
+    }
 }

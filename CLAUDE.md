@@ -28,7 +28,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     AnnotationStore, Notes, MergedNotes, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
-                    MergedFollow, TimeOffset
+                    MergedFollow, TimeOffset, FilePattern
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -133,7 +133,8 @@ tags.
 - `Notes`, `MergedNotes` (core) — the notes interface a tab uses; `MergedNotes` keeps a
   merged view's notes in each file's own `AnnotationStore` (D-17 step 4).
 - `ReviewBundle` (core) — D-10: writes and recognizes the review bundle `.zip` (manifest, log,
-  annotations); `ReviewExporter` (ui) is `File → Export for Review…`.
+  annotations; version 2 holds every file of a merged view, D-17); `ReviewExporter` (ui) is
+  `File → Export for Review…`. `FilePattern` (core) expands `app.log*` for Open Merged.
 - `FilterBar`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`, `AppDirs` (ui) — filters,
   parser editor, themes, settings, data folder.
 

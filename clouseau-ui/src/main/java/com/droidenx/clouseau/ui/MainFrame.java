@@ -25,7 +25,9 @@ import java.nio.file.Path;
 import java.text.MessageFormat;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -87,7 +89,7 @@ public final class MainFrame extends JFrame {
         });
     }
 
-    // ── Extension list management ─────────────────────────────────────────────
+    // ââ Extension list management âââââââââââââââââââââââââââââââââââââââââââââ
 
     /**
      * Rebuilds the parser list: JSON-defined parsers (built-in and {@code parsers.json})
@@ -126,7 +128,7 @@ public final class MainFrame extends JFrame {
                 syntaxHighlighters.stream().map(LogSyntaxHighlighter::getName).toList());
     }
 
-    // ── Menu bar ─────────────────────────────────────────────────────────────
+    // ââ Menu bar âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
     private JMenuBar buildMenuBar() {
         JMenuBar menuBar = new JMenuBar();
@@ -139,6 +141,10 @@ public final class MainFrame extends JFrame {
                 java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         openItem.addActionListener(e -> openFile());
         fileMenu.add(openItem);
+
+        JMenuItem openMergedItem = menuItem(Messages.get("menu.file.open.merged"));
+        openMergedItem.addActionListener(e -> openFile(true));
+        fileMenu.add(openMergedItem);
 
         recentMenu = new JMenu(Messages.get("menu.file.recent"));
         Insets menuDefaults = UIManager.getInsets("Menu.margin");
@@ -174,7 +180,7 @@ public final class MainFrame extends JFrame {
 
         fileMenu.addSeparator();
 
-        // KeyStroke.getKeyStroke(char, int) casts char to int → ',' (44) == VK_COMMA,
+        // KeyStroke.getKeyStroke(char, int) casts char to int â ',' (44) == VK_COMMA,
         // so getKeyText renders "Comma". The string form with "typed" creates a true
         // char-based stroke (keyCode=0, keyChar=',') that renders the literal character.
         // The actual Ctrl+, binding lives in the root-pane InputMap in the constructor.
@@ -247,7 +253,7 @@ public final class MainFrame extends JFrame {
         return menuBar;
     }
 
-    /** One radio item per theme (the current one selected), then "Manage Themes…". */
+    /** One radio item per theme (the current one selected), then "Manage Themesâ¦". */
     private void rebuildThemeMenu(JMenu menu) {
         menu.removeAll();
         String current = AppPrefs.getTheme();
@@ -277,7 +283,7 @@ public final class MainFrame extends JFrame {
     private void openShortcuts() {
         JDialog dialog = new JDialog(this, Messages.get("shortcuts.title"), true);
 
-        // Single unified grid — all rows share the same two columns so descriptions
+        // Single unified grid â all rows share the same two columns so descriptions
         // and badges stay perfectly aligned across every section.
         JPanel grid = new JPanel(new MigLayout(
                 "insets 24, wrap 2, gapy 10, gapx 40",
@@ -381,10 +387,15 @@ public final class MainFrame extends JFrame {
         }
     }
 
-    // ── File opening ──────────────────────────────────────────────────────────
+    // ââ File opening ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
     private void openFile() {
-        new FileChooserDialog(this, parsers, lastParserIndex).showDialog().ifPresent(r -> {
+        openFile(false);
+    }
+
+    /** The open dialog; {@code merged}: File → Open Merged…, which merges without asking. */
+    private void openFile(boolean merged) {
+        new FileChooserDialog(this, parsers, lastParserIndex, merged).showDialog().ifPresent(r -> {
             lastParserIndex = r.parserIndex();
             ZoneId srcTz = r.sourceTimezone();
             for (Path file : r.files()) {
@@ -395,7 +406,7 @@ public final class MainFrame extends JFrame {
                     AppPrefs.setSourceTimezone(file.toAbsolutePath(), srcTz);
                 }
             }
-            openFiles(r.files(), r.parser());
+            openFiles(r.files(), r.parser(), r.merge());
         });
     }
 
@@ -404,13 +415,18 @@ public final class MainFrame extends JFrame {
      * own tab, as the user chooses (D-17, UC-12).
      */
     private void openFiles(List<Path> files, Optional<LogParser> parser) {
+        openFiles(files, parser, false);
+    }
+
+    /** {@code merge}: open two or more files in one merged view without asking. */
+    private void openFiles(List<Path> files, Optional<LogParser> parser, boolean merge) {
         List<Path> logs = new ArrayList<>();
         for (Path f : files) {
             if (f.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".zip")) openFile(f, parser);
             else logs.add(f);
         }
         if (logs.size() >= 2) {
-            AppPrefs.MultiOpen how = chooseMultiOpen(logs.size());
+            AppPrefs.MultiOpen how = merge ? AppPrefs.MultiOpen.MERGE : chooseMultiOpen(logs.size());
             if (how == null) return;
             if (how == AppPrefs.MultiOpen.MERGE) {
                 openMerged(logs.stream().map(p -> new MergeLoad.File(p, null)).toList(), parser);
@@ -436,8 +452,35 @@ public final class MainFrame extends JFrame {
         return how;
     }
 
+    /**
+     * Opens a version 2 review bundle (D-17): its logs in one merged view, each with the
+     * timezone and offset it was exported with. Parsers are detected again.
+     */
+    private void openMergedBundle(Path zip, ReviewBundle.Manifest bundle, Optional<LogParser> parser) {
+        List<MergeLoad.File> files = new ArrayList<>();
+        Map<MergeLoad.File, MergeLoad.PerFile> setup = new HashMap<>();
+        for (ReviewBundle.Source s : bundle.sources()) {
+            MergeLoad.File f = new MergeLoad.File(zip, s.log());
+            files.add(f);
+            ZoneId zone = null;
+            try {
+                if (s.timezone() != null) zone = ZoneId.of(s.timezone());
+            } catch (java.time.DateTimeException e) {
+                log.warn("Review bundle {} names an unknown timezone {}", zip.getFileName(), s.timezone());
+            }
+            setup.put(f, new MergeLoad.PerFile(zone, s.offsetMillis()));
+        }
+        openMerged(files, parser, setup);
+    }
+
     /** Opens {@code files} in one merged view (D-17). */
     private void openMerged(List<MergeLoad.File> files, Optional<LogParser> parser) {
+        openMerged(files, parser, Map.of());
+    }
+
+    /** Opens {@code files} in one merged view (D-17), with the given per-file setup where there is one. */
+    private void openMerged(List<MergeLoad.File> files, Optional<LogParser> parser,
+                            Map<MergeLoad.File, MergeLoad.PerFile> setup) {
         files.forEach(f -> AppPrefs.addRecentFile(f.path()));
         refreshRecentMenu();
         LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
@@ -445,6 +488,7 @@ public final class MainFrame extends JFrame {
         if (savedTz != null) panel.setSourceTimezone(savedTz);
         String title = MessageFormat.format(Messages.get("merge.tab.title"), files.get(0).fileName(), files.size() - 1);
         addLogTab(title, null, panel);
+        panel.presetMerged(setup);
         panel.setCloseAction(() -> removeTab(panel));
         panel.loadMerged(files, parser, new LogPanel.MergeListener() {
             @Override public void skipped(List<MergeLoad.Skipped> skipped) { offerSkipped(skipped, parser); }
@@ -477,7 +521,7 @@ public final class MainFrame extends JFrame {
     private void offerSkipped(List<MergeLoad.Skipped> skipped, Optional<LogParser> parser) {
         StringBuilder list = new StringBuilder();
         for (MergeLoad.Skipped s : skipped) {
-            list.append("\n  • ").append(s.file().fileName()).append(" — ")
+            list.append("\n  â¢ ").append(s.file().fileName()).append(" â ")
                 .append(Messages.get("merge.skipped." + s.reason().name().toLowerCase(java.util.Locale.ROOT)));
         }
         int answer = JOptionPane.showConfirmDialog(this,
@@ -545,13 +589,24 @@ public final class MainFrame extends JFrame {
         }
         // A review bundle (D-10) opens its log directly; its annotations load with it.
         Optional<ReviewBundle.Manifest> bundle = ReviewBundle.read(zip);
+        if (bundle.isPresent() && bundle.get().isMerged()) {
+            openMergedBundle(zip, bundle.get(), parser);
+            return;
+        }
         if (bundle.isPresent()) {
             openLog(zip, bundle.get().log(), parser);
             return;
         }
-        List<ZipLogs.Entry> chosen = entries.size() == 1
-                ? entries
-                : new ZipPickerDialog(this, zip.getFileName().toString(), entries).showDialog();
+        if (entries.size() == 1) {
+            openLog(zip, entries.get(0).name(), parser);
+            return;
+        }
+        ZipPickerDialog picker = new ZipPickerDialog(this, zip.getFileName().toString(), entries);
+        List<ZipLogs.Entry> chosen = picker.showDialog();
+        if (picker.merge()) {
+            openMerged(chosen.stream().map(e -> new MergeLoad.File(zip, e.name())).toList(), parser);
+            return;
+        }
         for (ZipLogs.Entry entry : chosen) openLog(zip, entry.name(), parser);
     }
 
@@ -621,7 +676,7 @@ public final class MainFrame extends JFrame {
                 log.warn("Source plugin {} failed in getName()", provider.getClass().getName(), e);
                 continue;
             }
-            JMenuItem item = menuItem(name + "…");
+            JMenuItem item = menuItem(name + "â¦");
             item.addActionListener(e -> openSource(provider, name));
             menu.add(item);
         }
@@ -647,7 +702,7 @@ public final class MainFrame extends JFrame {
         });
     }
 
-    // ── Tab management ────────────────────────────────────────────────────────
+    // ââ Tab management ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
     private void addLogTab(String title, Path file, LogPanel panel) {
         tabbedPane.addTab(null, panel);
@@ -663,7 +718,7 @@ public final class MainFrame extends JFrame {
 
         JLabel label = new JLabel(title);
 
-        JButton close = new JButton("\u00d7"); // ×
+        JButton close = new JButton("\u00d7"); // Ã
         close.setPreferredSize(new Dimension(18, 18));
         close.setFocusable(false);
         close.setBorderPainted(false);
@@ -837,7 +892,7 @@ public final class MainFrame extends JFrame {
         return c instanceof LogPanel lp ? lp : null;
     }
 
-    // ── Welcome panel ─────────────────────────────────────────────────────────
+    // ââ Welcome panel âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
     private JPanel buildWelcomePanel() {
         JPanel outer = new JPanel(new GridBagLayout());

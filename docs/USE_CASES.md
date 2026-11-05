@@ -1,6 +1,6 @@
 # Clouseau Use Cases
 
-> **Status:** Draft · **Last updated:** 2026-11-04
+> **Status:** Draft Â· **Last updated:** 2026-11-04
 >
 > This document describes *what Clouseau is for*: who uses it, what they are trying to
 > accomplish, and what it deliberately does not do. It is the reference reviewers use to
@@ -39,7 +39,7 @@ exactly where the field left off.
 | Email | Attachments, often compressed | Saved to disk, then opened as a local file |
 | Local development | Plain files written by the running app, still growing | Opened directly, optionally followed live |
 | Remote hosts | Files on a server reachable over SSH | Streamed via SSH (`tail -f`) |
-| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Open Source (UC-11) |
+| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File â Open Source (UC-11) |
 
 Logs from tickets and email are **local files the user has already saved**. Opening them
 should be as easy as possible (drag-and-drop, "Open with"), but Clouseau does not fetch
@@ -49,14 +49,14 @@ them from ticketing or mail systems itself.
 
 ## 4. Use cases
 
-Each use case lists its current support status: ✅ supported · 🟡 partial · ❌ not yet.
+Each use case lists its current support status: â supported Â· ð¡ partial Â· â not yet.
 
-### UC-1 · Open a log file 🟡
+### UC-1 Â· Open a log file ð¡
 
 **Actor:** Field engineer, Developer
 **Goal:** View a log someone sent me, or one my app just wrote.
 
-1. User opens a file with `File → Open` (`Ctrl+O`), by dragging it onto the window, or
+1. User opens a file with `File â Open` (`Ctrl+O`), by dragging it onto the window, or
    by choosing Clouseau from the operating system's "Open with" menu.
 2. Clouseau detects the log format from the first lines and shows a parser preview.
 3. User accepts, or picks a different parser.
@@ -90,7 +90,7 @@ millions of lines), Clouseau stops reading, warns the user with the number of li
 loaded and how to raise the memory limit, and marks the tab "partly loaded" in the
 status bar.
 
-### UC-2 · Open compressed logs directly ✅
+### UC-2 Â· Open compressed logs directly â
 
 **Actor:** Field engineer, Developer
 **Goal:** Read a `.gz` or `.zip` attachment without extracting it first.
@@ -114,7 +114,7 @@ marks the tab "partly loaded (disk full)". If a zip records a size the disk can'
 the file is loaded into memory instead, as before. A `.gz` inside a zip is unpacked
 too. A zip that is a review bundle (UC-9) opens its log directly.
 
-### UC-3 · Spot errors and warnings at a glance ✅
+### UC-3 Â· Spot errors and warnings at a glance â
 
 **Actor:** Field engineer, Developer
 **Goal:** Find the problems in a wall of text without reading every line.
@@ -128,7 +128,7 @@ too. A zip that is a review bundle (UC-9) opens its log directly.
 
 **Success:** A user can find the first ERROR in a log much faster than in a text editor.
 
-### UC-4 · Focus on specific loggers ✅
+### UC-4 Â· Focus on specific loggers â
 
 **Actor:** Developer, Field engineer
 **Goal:** See only the lines from the components I care about.
@@ -139,7 +139,7 @@ too. A zip that is a review bundle (UC-9) opens its log directly.
 
 **Success:** Noise from unrelated components disappears without regex knowledge.
 
-### UC-5 · Narrow down by level, time, and text ✅
+### UC-5 Â· Narrow down by level, time, and text â
 
 **Actor:** Developer, Field engineer
 **Goal:** Zero in on the window and kind of events around an incident.
@@ -157,7 +157,7 @@ Find read the text of the rows the other filters keep, in the background: the st
 shows "filtering n%" and the Find counter "Searching n%", and the window stays
 responsive (about 1.6 s for 1M lines). Times are compared to the millisecond.
 
-### UC-6 · Follow a live log for a long time ✅
+### UC-6 Â· Follow a live log for a long time â
 
 **Actor:** Developer
 **Goal:** Watch a running application's log, locally or on a remote host, for hours.
@@ -183,7 +183,7 @@ applies to opening a static file (UC-1). If a local file couldn't be indexed and
 loaded into memory instead, following it uses the same limit, and a tab that loaded more
 than the limit keeps as many entries as it loaded, dropping one old entry per new one.
 
-### UC-7 · Annotate lines during an investigation ✅
+### UC-7 Â· Annotate lines during an investigation â
 
 **Actor:** Field engineer
 **Goal:** Record what I noticed, right where I noticed it.
@@ -204,28 +204,29 @@ line.
 (common in retry loops) share one annotation. If the log's folder is read-only, the
 annotations cannot be saved.
 
-### UC-8 · Hand off a log with annotations ✅
+### UC-8 Â· Hand off a log with annotations â
 
-**Actor:** Field engineer → Developer
+**Actor:** Field engineer â Developer
 **Goal:** Send my findings to the dev team so they don't have to rediscover them.
 
 1. Field engineer finishes annotating (UC-7).
-2. Field engineer chooses `File → Export for review…`.
+2. Field engineer chooses `File â Export for reviewâ¦`.
 3. Clouseau writes a single `.zip` bundle containing the original log (still compressed
    if it was) and its annotations.
 4. Field engineer attaches the bundle to a ticket or email.
 
 **Success:** Sending takes one action and one file, and nothing gets lost along the way.
 
-**Current behavior:** `File → Export for Review…` asks where to save, suggesting
+**Current behavior:** `File â Export for Reviewâ¦` asks where to save, suggesting
 `<log>-review.zip` next to the log, and writes the bundle in the background (D-10). The
 bundle holds the log byte-for-byte (a `.gz` stays a `.gz`; a file opened from a zip is
 copied out of it), every annotation and highlight of the tab, including ones that no
 longer match a line, and a manifest. A tab opened from a bundle can be exported again,
-with the reviewer's notes added. SSH and plugin-source tabs can't be exported, and a
-file can't be exported while it is still loading.
+with the reviewer's notes added. A merged view (UC-12) exports all its files in one
+bundle, with each file's notes, timezone and time offset. SSH and plugin-source tabs
+can't be exported, and a file can't be exported while it is still loading.
 
-### UC-9 · Review a handed-off log ✅
+### UC-9 Â· Review a handed-off log â
 
 **Actor:** Developer
 **Goal:** Pick up where the field engineer left off.
@@ -238,7 +239,7 @@ file can't be exported while it is still loading.
 **Success:** The developer sees exactly what the field engineer flagged, on the right
 lines, and knows who flagged it.
 
-**Current behavior:** A bundle opens like any `.zip` (File → Open, Open Recent, the
+**Current behavior:** A bundle opens like any `.zip` (File â Open, Open Recent, the
 command line or "Open with"): Clouseau recognizes it by its manifest, opens its log in
 one tab without asking which file, and attaches each annotation and highlight to its
 line (D-9), with its author. Notes the developer adds are saved next to the bundle in
@@ -246,7 +247,7 @@ line (D-9), with its author. Notes the developer adds are saved next to the bund
 what loads, so the received bundle stays as it was sent. A `.zip` without a Clouseau
 manifest still opens as an ordinary compressed log (UC-2).
 
-### UC-10 · Define a parser for a new format ✅
+### UC-10 Â· Define a parser for a new format â
 
 **Actor:** Developer, Field engineer
 **Goal:** Teach Clouseau a log format it doesn't know, so those logs get columns,
@@ -264,7 +265,7 @@ colors, and filters.
 pre-filled with a new parser and the file's first non-blank line as the sample. Saving
 the parser reopens the file with it.
 
-### UC-11 · Extend Clouseau with plugins ✅
+### UC-11 Â· Extend Clouseau with plugins â
 
 **Actor:** Plugin author, Developer
 **Goal:** Add a parser, formatter, syntax highlighter, or log source that Clouseau doesn't
@@ -274,7 +275,7 @@ ship with.
 2. User installs it by dropping the JAR in the plugins folder, or from a plugin repository
    (Nexus or Maven Central) in the Plugin Manager.
 3. The new capability is available without restarting.
-4. For a log source, the user picks it under **File → Open Source**, fills in the form
+4. For a log source, the user picks it under **File â Open Source**, fills in the form
    Clouseau builds from the settings the plugin declares, and the lines stream into a new
    tab.
 
@@ -289,7 +290,7 @@ logfmt parser and a demo live source.
 **Scope note:** Sources that read from log aggregators (Loki, CloudWatch, and similar)
 are welcome as plugins. The core application does not ship them.
 
-### UC-12 · View related logs in one merged view 🟡
+### UC-12 Â· View related logs in one merged view ð¡
 
 **Actor:** Developer, Field engineer
 **Goal:** Read several related logs as one timeline: the rolled files of one app
@@ -349,7 +350,7 @@ read the timestamps, and the offset corrects a clock that is simply wrong.
 
 **Current behavior:** Choosing several files in the open dialog, dropping them, or
 passing them on the command line asks whether to open them in one merged view or in
-separate tabs; "Remember my choice" sets this, and Settings → "When opening several
+separate tabs; "Remember my choice" sets this, and Settings â "When opening several
 files" changes it later. A merged view interleaves the files by timestamp, keeps stack
 traces with their entry, keeps each file's order for equal timestamps, and shows a
 **Source** column; plain and `.gz` files can be mixed. Fields with the same name share
@@ -363,14 +364,17 @@ up to a second so files written a moment apart still land in time order, and a l
 that arrives later than that moves to its place, with the selection, highlights and
 notes staying on their entries. Each file is read in its own source timezone (set it
 from the row's right-click menu or the tab's **Sources** menu). A file's clock can be
-corrected with **Set Time Offset for …**: its entries move to their corrected place,
+corrected with **Set Time Offset for â¦**: its entries move to their corrected place,
 the Source column shows the offset (`db.log (+3m 12s)`), the time filter uses the
 corrected time, and the detail panel says what the file wrote. Every file uses the
-tab's parser choice; with automatic detection each is read in its own format. Not
-yet: merging files picked from a zip, file patterns, and exporting a merged view
-(with its offsets) for review.
+tab's parser choice; with automatic detection each is read in its own format. Files
+picked in the zip picker merge with "Merge into one view"; **File → Open Merged…**
+merges without asking, and a pattern such as `app.log*` typed in the open dialog opens
+every matching file in that folder, merged. A merged view exports for review as one
+bundle with every file, its notes, timezone and offset, and opens again as the same
+merged view.
 
-### UC-13 · Read a file no parser recognizes ✅
+### UC-13 Â· Read a file no parser recognizes â
 
 **Actor:** Field engineer, Developer
 **Goal:** Read any log, even one in a format Clouseau doesn't know yet, without
@@ -410,12 +414,12 @@ ones, tabs shown as spaces, Find (`Ctrl+F`), copy (the selected lines' text only
 Follow toggle in the banner. A rotated file is reloaded from the start. The open dialog
 keeps Open enabled and says in amber that the file will open as plain text. A file that
 looks binary (more than 5% control or undecodable characters) asks first, and closes its
-tab if declined. **Create a Parser…** opens the parser editor on a new parser, with the
+tab if declined. **Create a Parserâ¦** opens the parser editor on a new parser, with the
 file's first non-blank line as the sample. After saving, the tab switches to the table
 if a parser now recognizes the file, and otherwise says it still doesn't. A compressed
 file in plain text isn't followed.
 
-### UC-14 · Customize the app's appearance ✅
+### UC-14 Â· Customize the app's appearance â
 
 **Actor:** Field engineer, Developer
 **Goal:** Make Clouseau comfortable to look at for hours, for example dark or light to
@@ -443,13 +447,13 @@ and logs stay just as readable in every theme.
 - **Settings stays in sync:** The theme can also be picked in Settings, and both places
   always show the same current theme.
 
-**Current behavior:** View → Theme lists the built-in and installed themes, with the
+**Current behavior:** View â Theme lists the built-in and installed themes, with the
 current one checked; picking one applies and saves it at once. The same submenu ends with
-Manage Themes…, which opens the theme manager. Settings still offers the theme dropdown
+Manage Themesâ¦, which opens the theme manager. Settings still offers the theme dropdown
 (with a live preview, applied on OK); both read and save the same preference, so they
 always agree.
 
-### UC-15 · Work with several logs in tabs ✅
+### UC-15 Â· Work with several logs in tabs â
 
 **Actor:** Developer, Field engineer
 **Goal:** Keep several logs open at once and move between them easily, for example the
@@ -477,10 +481,10 @@ opening the same file twice.
 - **Tabs are independent:** Each tab keeps its own filters, follow mode, highlights,
   column layout, and source timezone.
 - **Shortcuts work anywhere in the window,** whether focus is in the table, the detail
-  panel, or a filter field, and they're listed in Help → Keyboard Shortcuts.
+  panel, or a filter field, and they're listed in Help â Keyboard Shortcuts.
 
 **Current behavior:** All of the above works, including the keyboard shortcuts, which
-apply wherever focus is in the main window (not in dialogs) and are listed in Help →
+apply wherever focus is in the main window (not in dialogs) and are listed in Help â
 Keyboard Shortcuts. `Ctrl+1` to `Ctrl+8` past the last open tab do nothing. The
 shortcuts use `Ctrl` on every platform, including macOS.
 

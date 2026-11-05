@@ -1,6 +1,6 @@
 # Clouseau Design
 
-> **Status:** Draft · **Last updated:** 2026-11-04
+> **Status:** Draft Â· **Last updated:** 2026-11-04
 >
 > This document describes *how* Clouseau works and *why* it is built that way. It
 > complements [`USE_CASES.md`](USE_CASES.md), which describes *what* Clouseau is for.
@@ -33,28 +33,28 @@ quality goals. The ones that shape the design most:
 ## 2. System overview
 
 ```
-clouseau-ui ─────────────┐   MainFrame, tabs, LogPanel, LogTableModel, FilterBar,
-   │                     │   DetailPanel, annotations, dialogs, SSH source,
-   │                     │   parser loader, settings, themes
-   │                     ▼
-   │               clouseau-plugin   ClouseauPluginManager (PF4J wrapper)
-   │                     │
-   ▼                     │
-clouseau-core ◀──────────┘   RegexLogParser, ParserList, LineParser, LogReaders,
+clouseau-ui ââââââââââââââ   MainFrame, tabs, LogPanel, LogTableModel, FilterBar,
+   â                     â   DetailPanel, annotations, dialogs, SSH source,
+   â                     â   parser loader, settings, themes
+   â                     â¼
+   â               clouseau-plugin   ClouseauPluginManager (PF4J wrapper)
+   â                     â
+   â¼                     â
+clouseau-core ââââââââââââ   RegexLogParser, ParserList, LineParser, LogReaders,
                              LogFileReader, FileFollower, FileTail, FileChangeWatcher,
-                             SshLogSource, SourceSettings, AnnotationStore, ZipLogs, …
-   │
-   ▼
+                             SshLogSource, SourceSettings, AnnotationStore, ZipLogs, â¦
+   â
+   â¼
 clouseau-api                 LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
-   ▲                         LogSource, LogSourceProvider, SourceSetting
-   │ compileOnly
+   â²                         LogSource, LogSourceProvider, SourceSetting
+   â compileOnly
 third-party plugins
 ```
 
 A log flows through the system like this:
 
-**source** (file, `.gz`/`.zip`, SSH) → **lines** → **parser** → **`LogEntry`** →
-**table model** (store, filter, highlight) → **table and detail panel** (format, highlight)
+**source** (file, `.gz`/`.zip`, SSH) â **lines** â **parser** â **`LogEntry`** â
+**table model** (store, filter, highlight) â **table and detail panel** (format, highlight)
 
 ## 3. Modules and dependency rules
 
@@ -114,7 +114,7 @@ tab.
 | `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the JSON-defined parsers (section 5.1) | `RegexLogParser`, configured from JSON |
 | `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
 | `LogSyntaxHighlighter` | Color spans in the detail panel | Yes | `JsonSyntaxHighlighter` |
-| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File → Open Source (section 6.3) | None; SSH has its own dialog and creates `SshLogSource` directly |
+| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File â Open Source (section 6.3) | None; SSH has its own dialog and creates `SshLogSource` directly |
 
 **Contract notes:**
 
@@ -187,7 +187,7 @@ refresh; open tabs keep the list they were created with.
 0. **Zips:** `MainFrame` lists a `.zip`'s files with `ZipLogs` (core; names read as
    UTF-8, else CP437). One file opens directly; for several, `ZipPickerDialog` lets the
    user tick files (filter box, Select all), and each opens in its own tab as
-   `load(zip, entry, …)`. The tab keys its annotations to `ZipLogs.entryKey`,
+   `load(zip, entry, â¦)`. The tab keys its annotations to `ZipLogs.entryKey`,
    `<zip>!<entry>` next to the zip. A zip that `ReviewBundle.read` recognizes as a
    review bundle (D-10) skips the picker and opens the log the manifest names. A zip
    entry ending in `.gz` is unpacked as well.
@@ -248,7 +248,7 @@ refresh; open tabs keep the list they were created with.
   receives lines as they're written. Nothing on the client polls. The path is
   single-quoted for a POSIX shell, so spaces and shell metacharacters are taken
   literally; a leading `~/` is left unquoted so it still expands to the remote home.
-- **Plugin sources (D-14):** **File → Open Source** lists every `LogSourceProvider`,
+- **Plugin sources (D-14):** **File â Open Source** lists every `LogSourceProvider`,
   rebuilt each time the menu opens. Choosing one opens `SourceSettingsDialog`, a form
   with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`
   (core) trims values, drops empty optional ones, and checks required values, numbers
@@ -264,7 +264,7 @@ refresh; open tabs keep the list they were created with.
   entries held in memory (SSH and plugin sources, and following a file that couldn't be
   indexed) go through `LogTableModel.appendLive`, which keeps the tab at most at its cap
   and evicts the oldest entries, along with their highlights. The cap is
-  `max.entries.per.tab` (default 200,000, range 10,000–2,000,000), or the number of
+  `max.entries.per.tab` (default 200,000, range 10,000â2,000,000), or the number of
   entries the static load added if that was larger, so following a big file doesn't cut
   it to the limit all at once. `clear()` resets the cap and the trimmed count. Clear
   Table on an indexed tab starts a new, empty index on the same file, so what is followed
@@ -309,7 +309,7 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   exist, the newer one is read. If neither can be written, the tab warns once and keeps
   the notes in memory.
 - **Highlights (D-15):** stored in the same sidecar under `highlights`, each with the
-  same two anchors and a palette slot (0–7) rather than an RGB color. After a load, the
+  same two anchors and a palette slot (0â7) rather than an RGB color. After a load, the
   attached ones are applied to the model; every highlight change saves the store.
 - **Review bundles (D-10):** the load worker reads the store with
   `ReviewBundle.loadAnnotations`, which, for a bundle's log with no sidecar saved yet,
@@ -404,14 +404,14 @@ after the drop completes, so a dialog never holds up the drag source.
   `LineScanner.scanAllLines`, which unlike `scan` keeps blank lines so numbers match the
   file. A compressed log is unpacked to the tab's cache copy during the same pass, as in
   D-16, and isn't followed.
-- **Following:** `FileFollower.follow(…, keepBlank = true)` feeds `TextLines.add`. With
+- **Following:** `FileFollower.follow(â¦, keepBlank = true)` feeds `TextLines.add`. With
   blank lines kept, `FileTail` skips the `\n` of a `\r\n` split across two reads, so it
   isn't counted as an empty line. On rotation the view reloads the file from the start,
   since its offsets point into the old content.
-- **UI:** `PlainTextView` (ui) holds the banner (Create a Parser…, Follow), its own
+- **UI:** `PlainTextView` (ui) holds the banner (Create a Parserâ¦, Follow), its own
   `FindBar` searching through `TextLines.scan` on a background thread, and a two-column
   table (line number, text) whose copy action copies only the text. The filter bar, the
-  table's find bar and the highlight bar are hidden. **Create a Parser…** calls the hook
+  table's find bar and the highlight bar are hidden. **Create a Parserâ¦** calls the hook
   `MainFrame` sets, which opens `ParserEditorDialog` with the samples. On save,
   `LogPanel.retryWithParsers` reloads with auto-detection if a parser now recognizes the
   sample, and otherwise updates the banner.
@@ -452,16 +452,16 @@ JSON, written by `AnnotationStore`:
 {
   "version": 2,
   "annotations": [
-    { "lineHash": "3f2a…16 hex", "line": 42, "logTimestamp": "…", "logPreview": "…",
-      "note": "…", "author": "…", "createdAt": "…" }
+    { "lineHash": "3f2aâ¦16 hex", "line": 42, "logTimestamp": "â¦", "logPreview": "â¦",
+      "note": "â¦", "author": "â¦", "createdAt": "â¦" }
   ],
-  "highlights": [ { "lineHash": "…", "line": 57, "color": 3 } ]
+  "highlights": [ { "lineHash": "â¦", "line": 57, "color": 3 } ]
 }
 ```
 
 `line` is the 1-based entry number and may be missing (version 1 sidecars); `lineHash`
 is required (D-9). `highlights` is omitted when there are none; `color` is a palette slot
-0–7 (D-15). Orphans are written like attached ones.
+0â7 (D-15). Orphans are written like attached ones.
 
 **Review bundle** (`*.zip`, D-10). A zip (entry names in UTF-8) with, at its root:
 
@@ -488,8 +488,13 @@ parses, has `format` equal to `clouseau-review-bundle`, and the entry named by `
 (else `originalFileName`) exists. Anything else is an ordinary zip. Unknown fields are
 ignored, `annotations` defaults to `annotations.json`, and a newer `formatVersion` is
 opened anyway (with a log warning), so new fields must stay optional. A later version
-can add entries (for example, the extra files of a merged view, D-13) but must keep
-these meanings.
+can add entries but must keep these meanings.
+
+**Version 2** (D-17) bundles a merged view: a `sources` list gives each log's entry, its
+annotations entry, original name, parser, timezone and offset, and the version 1 fields
+describe the first log, so an older Clouseau opens the bundle as that log with its notes.
+A bundle of one log is still written as version 1. If a source names an entry the zip
+doesn't hold, the bundle opens as its first log only.
 
 ## 8. Packaging
 
@@ -511,18 +516,18 @@ Short records of choices that shape the design. Status is **Adopted** (in the co
 **Accepted** (agreed, not built yet), **Proposed** (written up, waiting for review), or
 **Superseded**.
 
-### D-1 · Swing with FlatLaf · Adopted
+### D-1 Â· Swing with FlatLaf Â· Adopted
 
 A desktop UI that needs no server and runs anywhere Java does. FlatLaf, MigLayout, and
 RSyntaxTextArea give it a modern look. JavaFX and web UIs were rejected: JavaFX adds a
 second toolkit to bundle, and a web UI implies a server (a non-goal).
 
-### D-2 · PF4J for plugins · Adopted
+### D-2 Â· PF4J for plugins Â· Adopted
 
 PF4J provides plugin isolation, `@Extension` discovery, and runtime reloading. Plugins
 compile only against `clouseau-api`.
 
-### D-3 · Sources push lines · Adopted
+### D-3 Â· Sources push lines Â· Adopted
 
 `LogSource` hands lines to a consumer instead of being polled through a file abstraction
 like the Apache Commons VFS layer in OtrosLogViewer. Each source picks its own streaming
@@ -530,22 +535,22 @@ model, such as a real server-side `tail -f` over sshj for SSH. This avoids polli
 unmaintained JSch dependency. Local follow is woken by the OS when the file changes, with a
 slow read as a backstop for file systems that send no notifications (section 6.3).
 
-### D-4 · Parsers as data · Adopted
+### D-4 Â· Parsers as data Â· Adopted
 
 Regex-based parsers are JSON configuration, not code, so users can add formats without
 writing a plugin (section 5.1).
 
-### D-5 · Annotations in a sidecar file · Adopted
+### D-5 Â· Annotations in a sidecar file Â· Adopted
 
 Annotations are stored as JSON next to the log, never inside it. The original log is never
 modified.
 
-### D-6 · Collaboration through files, not a server · Adopted
+### D-6 Â· Collaboration through files, not a server Â· Adopted
 
 Sharing findings means sending files (the log plus annotations). There is no account,
 sync, or backend. See the non-goals in the use cases.
 
-### D-7 · The entry limit applies to live sessions only · Adopted
+### D-7 Â· The entry limit applies to live sessions only Â· Adopted
 
 The per-tab entry limit protects long follow sessions (UC-6). Opening a static file must
 never drop lines (UC-1). Static loads are never trimmed, and neither is a followed file
@@ -553,7 +558,7 @@ on an indexed tab (D-16). Live entries held in memory are, down to the larger of
 limit and the static load's size (section 6.3). A file whose index fills the heap stops
 loading with a warning (section 6.2).
 
-### D-8 · Static files are indexed, not held in memory · Adopted
+### D-8 Â· Static files are indexed, not held in memory Â· Adopted
 
 To have no size ceiling, a static file is read once to build a compact index (byte offset,
 timestamp, level, and logger per entry). Text is read from disk on demand for visible
@@ -563,7 +568,7 @@ plugin sources keep the in-memory model with its limit. A file that still can't 
 loaded (its index fills the heap, or its unpacked copy fills the disk) produces a clear
 warning (UC-1). The detailed design is D-16.
 
-### D-9 · Annotations anchored by line number and content · Adopted
+### D-9 Â· Annotations anchored by line number and content Â· Adopted
 
 Each annotation stores both its line number and its line's content hash. On load, it
 attaches to the line at that number if the hash matches there; otherwise it falls back to
@@ -579,9 +584,9 @@ aren't counted. It is stable for an unchanged file, which is all the anchor need
 lines are inserted above a group of identical lines, a note can move to a different one
 of them; the content still matches, so this is accepted. Details in section 6.6.
 
-### D-10 · Review bundle · Adopted
+### D-10 Â· Review bundle Â· Adopted
 
-`File → Export for review…` (UC-8) writes one `.zip` containing:
+`File â Export for reviewâ¦` (UC-8) writes one `.zip` containing:
 
 ```
 manifest.json          format version, Clouseau version, original file name, export date
@@ -614,12 +619,12 @@ action.
   name. Reading a bundle's `.gz` uses the compressed-file path (`LogReaders` unpacks a
   `.gz` zip entry, `LogCache` holds the copy), like any other zipped log.
 
-### D-11 · Aggregator sources are plugins · Adopted
+### D-11 Â· Aggregator sources are plugins Â· Adopted
 
 Readers for Loki, CloudWatch, and similar services are welcome, but only as plugins.
 Plugins provide them through `LogSourceProvider` (D-14).
 
-### D-12 · Java 21 · Adopted
+### D-12 Â· Java 21 Â· Adopted
 
 The whole project, including `clouseau-api`, targets Java 21, and the release zips bundle
 a Java 21 runtime. Plugin authors and contributors need JDK 21 or later.
@@ -644,7 +649,7 @@ removed from startup (which already cut much of the class loading it speeds up).
 Revisit when Java 21 nears the end of its free updates, or if a Java 25 feature becomes
 compelling. Re-measure first.
 
-### D-13 · A tab shows one or more sources · Accepted
+### D-13 Â· A tab shows one or more sources Â· Accepted
 
 To support merged views (UC-12), a tab holds a list of **sources** instead of one file.
 Each source has its own file (or zip entry), parser, source timezone, time offset, tail
@@ -672,7 +677,7 @@ worker, and `AnnotationStore`. A single-file tab is just a tab with one source.
 
 The detailed design is D-17.
 
-### D-14 · Plugin sources declare their settings; no plugin filters · Adopted
+### D-14 Â· Plugin sources declare their settings; no plugin filters Â· Adopted
 
 A `LogSource` needs settings for each connection (a URL, a query, a token), but PF4J
 creates one instance of each extension, with no arguments. So the extension point is a
@@ -682,7 +687,7 @@ factory, `LogSourceProvider`, and the source itself stays a plain interface.
   draws one generic form for all providers. This keeps Swing out of `clouseau-api`
   (section 3, rule 3), makes every source look and behave the same, and lets Clouseau
   own validation and credential storage. Rejected: a single location string such as
-  `loki://…` (awkward for several values and secrets, and each plugin invents a syntax),
+  `loki://â¦` (awkward for several values and secrets, and each plugin invents a syntax),
   and letting plugins show their own dialog (puts Swing in the API).
 - **`LogFilter` was removed from `clouseau-api`.** It was never discoverable, so no
   plugin could have used it, and no use case asks for plugin filters. It can come back
@@ -691,7 +696,7 @@ factory, `LogSourceProvider`, and the source itself stays a plain interface.
   it keeps its own form, but it streams through the same `LogPanel.loadSource` path.
   `SshLogSource` lives in `clouseau-core`.
 
-### D-15 · Highlights are saved with annotations · Adopted
+### D-15 Â· Highlights are saved with annotations Â· Adopted
 
 Row highlights are part of an investigation, like notes, so they're saved in the same
 sidecar and anchored the same way (D-9). They come back when the file is reopened and go
@@ -701,7 +706,7 @@ on close), and saving them only in the data folder (private, so they can't be sh
 A highlight stores its palette slot, not an RGB value: themes define the palette, so a
 colleague with another theme sees the same slots in their own colors.
 
-### D-16 · How static files are indexed · Adopted
+### D-16 Â· How static files are indexed Â· Adopted
 
 The design for D-8, written to close G-5 (now closed). Accepted on 2026-11-04 with the
 recommended answer to each question at the end, and built in the six steps below. Every
@@ -787,7 +792,7 @@ SSH and plugin sources keep the in-memory model and its entry limit (D-7).
   `UNKNOWN`, so filters treat it the same way on the index as on the entry (it always
   shows).
 
-**Loading.** One pass: `LineScanner` → `LineParser` → `EntryIndex`. The parsed
+**Loading.** One pass: `LineScanner` â `LineParser` â `EntryIndex`. The parsed
 `LogEntry` is dropped after its columns are written. The table shows rows as chunks
 finish, as it does now. Logger names reach `FilterBar` as they are first seen. If the
 sidecar has annotations, the pass hashes each line and anchors them exactly as now
@@ -881,16 +886,16 @@ removes that ceiling too.
 
 **Order of work** (each step ships and is tested on its own):
 
-1. ✅ `LineScanner` and `EntryIndex`, with tests against the current reader on the sample
+1. â `LineScanner` and `EntryIndex`, with tests against the current reader on the sample
    logs (same entries, same entry numbers).
-2. ✅ `IndexedEntries` behind `LogTableModel`, at first behind a system property.
-3. ✅ The two-part filter, and the text scan with progress (Find included). Plain static
+2. â `IndexedEntries` behind `LogTableModel`, at first behind a system property.
+3. â The two-part filter, and the text scan with progress (Find included). Plain static
    files are indexed by default; the property is gone. Until step 5, followed lines on an
    indexed tab were held in memory and trimmed to the entry limit.
-4. ✅ Compressed files through `cache/`.
-5. ✅ Follow and rotation on the index, with tests for appends, renaming and
+4. â Compressed files through `cache/`.
+5. â Follow and rotation on the index, with tests for appends, renaming and
    copytruncate (`FollowIndexTest`).
-6. ✅ Update UC-1, close G-5, mark D-8 and D-16 Adopted.
+6. â Update UC-1, close G-5, mark D-8 and D-16 Adopted.
 
 **Questions settled at review** (each took the recommendation):
 
@@ -912,7 +917,7 @@ removes that ceiling too.
    them from the tab? *Recommendation:* keep them, so annotations and highlights on them
    aren't lost.
 
-### D-17 · How merged views work · Accepted
+### D-17 Â· How merged views work Â· Accepted
 
 The design for D-13 and UC-12. Accepted on 2026-11-04 with the recommended answer to
 each question at the end, and built in the eight steps below.
@@ -934,7 +939,7 @@ its own `LineParser`, so formats can be mixed.
 and its identity: the key for highlights and annotations, and its entry number in the
 file. A merged view separates the two:
 
-- **Position:** the merged ordinal, 0 to *N*−1 in timeline order. `rows` stays a
+- **Position:** the merged ordinal, 0 to *N*â1 in timeline order. `rows` stays a
   sorted list of merged ordinals, so filtering, Find and row/ordinal mapping work as
   now.
 - **Identity:** `(source, row)`, the source's index in the tab and the entry's row in
@@ -944,8 +949,8 @@ file. A merged view separates the two:
 
 **Merge order** (`MergeOrder`, core). Two arrays, in chunks as in `EntryIndex`:
 
-- merged ordinal → source (`byte`) and source row (`int`): 5 bytes per entry;
-- per source, source row → merged ordinal (`int`): 4 bytes per entry.
+- merged ordinal â source (`byte`) and source row (`int`): 5 bytes per entry;
+- per source, source row â merged ordinal (`int`): 4 bytes per entry.
 
 With the 29 bytes of D-16 that's 38 bytes per entry, so the default 2 GB heap still
 holds about 50M entries across all of a tab's sources. With one source neither array
@@ -991,7 +996,7 @@ Sources list, like Loggers, for hiding whole files.
 - **Several files** chosen in the open dialog, or dropped on the window, ask once:
   "Open 3 files in one merged view, or each in its own tab?" The answer can be
   remembered (Settings). Today they always open in separate tabs.
-- **File → Open Merged…** opens the file dialog, preselected for merging.
+- **File â Open Mergedâ¦** opens the file dialog, preselected for merging.
 - **Zip picker:** with several entries ticked, a "Merge into one view" checkbox.
 - **A pattern** typed in the dialog's file name field (`app.log*`) is expanded in its
   folder, sorted by name, and opened as a merged view. The file set is fixed once
@@ -1022,8 +1027,8 @@ order: one file can be written a second later than another, or its writer can bu
 - **Scrolling:** the view keeps scrolling to the bottom only if the user is already
   there (D-13).
 
-**Time offset.** Right-click a row or the Source cell → **Set Time Offset for
-device.log…** (a dialog for ± hours, minutes, seconds and milliseconds), also in a
+**Time offset.** Right-click a row or the Source cell â **Set Time Offset for
+device.logâ¦** (a dialog for Â± hours, minutes, seconds and milliseconds), also in a
 **Sources** menu that lists the tab's files. Setting it re-merges (the whole order,
 since every entry of that source moves), keeps the selection by identity, and updates
 the Source mark. The table and time filter use the corrected time; the detail panel
@@ -1063,17 +1068,17 @@ as a reusable "workspace".
 
 **Order of work** (each step ships and is tested on its own):
 
-1. ✅ `MergeOrder` (core): groups, ties, leading lines, offsets, appending;
+1. â `MergeOrder` (core): groups, ties, leading lines, offsets, appending;
    `MergeOrderTest`. `EntryIndex` is its `Timeline`. **Measured:** 1M entries in four
    files (one row in five a continuation line), both interleaved and as four rotated
    files that don't overlap: the test's three merges and their setup take 0.2 s in all.
    The arrays cost 9 bytes per entry, as estimated.
-2. ✅ `EntryRows` with `IndexedEntries` as its one-source implementation, behind
+2. â `EntryRows` with `IndexedEntries` as its one-source implementation, behind
    `LogTableModel`; no change in behavior (the existing tests pass unchanged). `scan`
    takes a `Visitor` and reports ordinals in **runs** (one per source): the filter
    executor sorts what several runs found, and Find starts its continuation tracking
    again at each run. `EntryRowsRunsTest` checks both with a fake two-run source.
-3. ✅ `MergedEntries`, and a static merged tab from the open dialog and drops: the prompt,
+3. â `MergedEntries`, and a static merged tab from the open dialog and drops: the prompt,
    sniffing and the no-timestamp offer, parallel loading, the Source column and filter,
    union columns, filters and Find across sources. As built:
    - `MergeLoad` (core) does the background work: `LogSniffer` on each file (a file is
@@ -1088,7 +1093,7 @@ as a reusable "workspace".
      closes and the one file opens normally), and which files the view shows (the tab
      title, `app.log +2`). A reload merges only those.
    - **Opening:** several files from the open dialog, dropped, or given on the command
-     line ask "merged view or separate tabs?", with "Remember my choice"; Settings →
+     line ask "merged view or separate tabs?", with "Remember my choice"; Settings â
      "When opening several files" (`open.several` in `settings.json`) changes it later.
      Zips open as before.
    - **Source column and filter:** the Source column is the first custom column, keyed
@@ -1100,7 +1105,7 @@ as a reusable "workspace".
      choice (chosen, or per-line detection). A merged tab can't be exported for review
      (step 7). A compressed file that can't be unpacked is left out rather than loaded
      into memory.
-4. ✅ Annotations and highlights per source, keyed by identity. As built: `Notes` (core)
+4. â Annotations and highlights per source, keyed by identity. As built: `Notes` (core)
    is what `LogPanel`, the annotations panel and the highlight menus use; one file's
    `AnnotationStore` implements it, and `MergedNotes` puts one store per source behind
    it, mapping merged ordinals to each store's own entry numbers through `MergeOrder`
@@ -1109,7 +1114,7 @@ as a reusable "workspace".
    the file's own `.annotations` sidecar (or `annotations/`) and show again when the
    file is opened alone. The annotations panel prefixes each preview with `[file]`.
    `MergedNotesTest`.
-5. ✅ Following: hold-back, late entries, per-source rotation. As built:
+5. â Following: hold-back, late entries, per-source rotation. As built:
    - `MergeLoad` returns where each plain file's index ends; `MergedTailer` (ui) runs a
      `FileFollower` from there for each of them (compressed files aren't followed), adding
      lines to that file's index as a single-file tab does, so rotation is per source.
@@ -1135,11 +1140,11 @@ as a reusable "workspace".
      order as one merge), `MergedFollowTest`, `MergedViewTest`.
    - **Not yet:** single-file tabs still follow through their own worker; joining them
      to this path (question 4) is left for when per-file settings (step 6) land.
-6. ✅ Time offsets: dialog, Sources menu, re-merge, the detail panel line. As built:
+6. â Time offsets: dialog, Sources menu, re-merge, the detail panel line. As built:
    - **Per-file setup:** `MergeLoad.run` takes a `PerFile` (source timezone and offset)
      for each file. A file's timezone is its own saved one (`source.timezones` in
      `settings.json`, as for a single file), else the tab's; the tab's "Set Source
-     Timezone…" sets it for every file, and the status bar shows "per file" when they
+     Timezoneâ¦" sets it for every file, and the status bar shows "per file" when they
      differ. Changing a file's timezone saves it and reloads the tab. Offsets are kept
      by the tab across reloads, not saved (the review bundle carries them, step 7).
    - **Offsets** live in `MergedEntries`, swapped together with the order. `get` and
@@ -1151,17 +1156,31 @@ as a reusable "workspace".
      or "No Offset") rebuilds the whole order in the background; on the EDT, rows
      followed meanwhile are placed with `extend` before the new order is swapped in,
      so nothing is lost or counted twice. Only the latest change is shown.
-     `LogTableModel.reorderTail(0, …)` re-filters: on the EDT for up to 100K rows from
+     `LogTableModel.reorderTail(0, â¦)` re-filters: on the EDT for up to 100K rows from
      the index alone (2K if the filter needs text), otherwise in the background, with
      the selection restored once rows are in (`whenFiltered`).
-   - **Where:** right-click a row → "Set Time Offset for app.log…" and "Set Source
-     Timezone for app.log…"; the tab's context menu has a **Sources** submenu listing
-     every file with both. The detail panel adds "Shifted: +3m 12s; written as …".
+   - **Where:** right-click a row â "Set Time Offset for app.logâ¦" and "Set Source
+     Timezone for app.logâ¦"; the tab's context menu has a **Sources** submenu listing
+     every file with both. The detail panel adds "Shifted: +3m 12s; written as â¦".
    - `TimeOffsetTest`, `MergedEntriesTest`, `MergeLoadTest`, `MergedViewTest`.
    - **Not covered:** choosing a parser per file. Each file uses the tab's choice; with
      per-line detection (the default) every file is read in its own format already.
-7. Zip picker merge, file patterns, Open Merged…, review bundle version 2.
-8. Update UC-12 (✅), mark D-13 and D-17 Adopted.
+7. ✅ Zip picker merge, file patterns, Open Merged…, review bundle version 2. As built:
+   - The zip picker has "Merge into one view" (on unless the "When opening several
+     files" setting is Separate Tabs), enabled once two files are ticked.
+   - **File → Open Merged…** opens the dialog in merged mode: what is chosen opens merged
+     without asking. A pattern typed in the file name field (`app.log*`, `*` and `?` in
+     one folder) is expanded by `FilePattern`, sorted by name, and opened merged; the
+     set is fixed.
+   - `ReviewBundle.writeMerged` writes version 2 (section 7, review bundle): log entries keep their
+     names, with `2-app.log` for a name used twice; the first log's notes are
+     `annotations.json`, the others `<log>.annotations.json`. `ReviewExporter` exports a
+     merged tab through it (`LogPanel.reviewParts`). Opening a version 2 bundle opens a
+     merged view of its logs with their timezones and offsets
+     (`LogPanel.presetMerged`); a timezone changed there stays in that tab. Parsers are
+     detected again rather than taken from the bundle.
+   - `FilePatternTest`, `ReviewBundleTest`, `MergedViewTest`.
+8. Update UC-12 (â), mark D-13 and D-17 Adopted.
 
 **Questions settled at review** (each took the recommendation):
 

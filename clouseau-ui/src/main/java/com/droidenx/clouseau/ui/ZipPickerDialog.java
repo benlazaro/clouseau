@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Lets the user choose which files of a multi-file {@code .zip} to open (G-6). Each chosen
- * file opens in its own tab. A filter box narrows the list; "Select all" ticks or unticks
+ * Lets the user choose which files of a multi-file {@code .zip} to open (G-6). The chosen
+ * files open each in its own tab, or in one merged view (D-17). A filter box narrows the list; "Select all" ticks or unticks
  * every file the filter shows.
  */
 final class ZipPickerDialog extends JDialog {
@@ -30,6 +30,10 @@ final class ZipPickerDialog extends JDialog {
     private final JTextField filterField = new JTextField(24);
     private final JCheckBox selectAll = new JCheckBox(Messages.get("zip.picker.select.all"));
     private final JButton openButton = new JButton();
+    /** With two or more files ticked: open them in one merged view (D-17). */
+    private final JCheckBox mergeBox = new JCheckBox(Messages.get("zip.picker.merge"),
+            AppPrefs.getMultiOpen() != AppPrefs.MultiOpen.SEPARATE);
+    private boolean merge;
     private List<ZipLogs.Entry> result = List.of();
     private boolean updatingSelectAll;
 
@@ -55,6 +59,11 @@ final class ZipPickerDialog extends JDialog {
     List<ZipLogs.Entry> showDialog() {
         setVisible(true);
         return result;
+    }
+
+    /** True if the chosen files (two or more) are to open in one merged view. */
+    boolean merge() {
+        return merge;
     }
 
     private JPanel buildContent() {
@@ -108,11 +117,13 @@ final class ZipPickerDialog extends JDialog {
             List<ZipLogs.Entry> chosen = new ArrayList<>();
             for (int i = 0; i < entries.size(); i++) if (ticked[i]) chosen.add(entries.get(i));
             result = chosen;
+            merge = chosen.size() > 1 && mergeBox.isSelected();
             dispose();
         });
         JButton cancel = new JButton(Messages.get("zip.picker.cancel"));
         cancel.addActionListener(e -> dispose());
-        p.add(openButton, "split 2, right, tag ok");
+        p.add(mergeBox, "split 3, pushx");
+        p.add(openButton, "tag ok");
         p.add(cancel, "tag cancel");
         return p;
     }
@@ -145,6 +156,7 @@ final class ZipPickerDialog extends JDialog {
                 ? MessageFormat.format(Messages.get("zip.picker.open.count"), count)
                 : Messages.get("zip.picker.open"));
         openButton.setEnabled(count > 0);
+        mergeBox.setEnabled(count > 1);
     }
 
     static String formatSize(long bytes) {

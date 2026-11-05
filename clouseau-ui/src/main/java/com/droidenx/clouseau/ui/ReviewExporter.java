@@ -9,6 +9,7 @@ import java.awt.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.MessageFormat;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -24,8 +25,7 @@ final class ReviewExporter {
     static void export(Component parent, LogPanel panel) {
         String title = Messages.get("export.review.title");
         if (panel != null && panel.isMerged()) {
-            JOptionPane.showMessageDialog(parent, Messages.get("export.review.merged"), title,
-                    JOptionPane.INFORMATION_MESSAGE);
+            exportMerged(parent, panel, title);
             return;
         }
         if (panel == null || panel.getFile() == null) {
@@ -47,12 +47,36 @@ final class ReviewExporter {
         Path dest = chooseDestination(parent, file, logName);
         if (dest == null) return;
 
+        run(parent, title, logName, dest, () -> ReviewBundle.write(file, entry, annotations, AppPrefs.getAppVersion(), dest));
+    }
+
+    /**
+     * Exports a merged tab (D-17): every file with its notes, timezone and offset, in a
+     * version 2 bundle named after the first file.
+     */
+    private static void exportMerged(Component parent, LogPanel panel, String title) {
+        List<ReviewBundle.Part> parts = panel.reviewParts();
+        if (parts == null) {
+            JOptionPane.showMessageDialog(parent, Messages.get("export.review.loading"), title,
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        ReviewBundle.Part first = parts.get(0);
+        String logName = ReviewBundle.logName(first.file(), first.entry());
+        Path dest = chooseDestination(parent, first.file(), logName);
+        if (dest == null) return;
+        String what = MessageFormat.format(Messages.get("export.review.merged.what"), logName, parts.size() - 1);
+        run(parent, title, what, dest, () -> ReviewBundle.writeMerged(parts, AppPrefs.getAppVersion(), dest));
+    }
+
+    /** Writes a bundle in the background and reports the result. */
+    private static void run(Component parent, String title, String logName, Path dest, Write write) {
         Cursor cursor = parent.getCursor();
         parent.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
         new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
-                ReviewBundle.write(file, entry, annotations, AppPrefs.getAppVersion(), dest);
+                write.run();
                 return null;
             }
 
@@ -73,6 +97,10 @@ final class ReviewExporter {
                 }
             }
         }.execute();
+    }
+
+    private interface Write {
+        void run() throws Exception;
     }
 
     /** Asks for the bundle's path, suggesting {@code <log>-review.zip} next to the log. */

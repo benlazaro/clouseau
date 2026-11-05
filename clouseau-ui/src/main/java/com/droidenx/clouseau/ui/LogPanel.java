@@ -92,6 +92,8 @@ public final class LogPanel extends JPanel {
     private List<Path> mergedCopies = List.of();
     /** Time offsets the user set on a merged tab's files; kept across reloads (D-17). */
     private final Map<MergeLoad.File, Long> mergedOffsets = new HashMap<>();
+    /** Source timezones a review bundle gave a merged tab's files; they win over saved ones. */
+    private final Map<MergeLoad.File, ZoneId> mergedZones = new HashMap<>();
     /** Counts offset changes, so only the last one's re-merge is shown. */
     private long offsetChanges;
     /** Follows a merged tab's files (D-17 step 5); null on other tabs. */
@@ -253,6 +255,34 @@ public final class LogPanel extends JPanel {
      */
     public String annotationsJson() {
         return loading || !(annotationStore instanceof AnnotationStore s) ? null : s.toJson();
+    }
+
+    /**
+     * Sets how a merged load reads its files before {@link #loadMerged}: per file, a
+     * timezone (if not null) and a time offset, as a review bundle gives them (D-17).
+     */
+    public void presetMerged(Map<MergeLoad.File, MergeLoad.PerFile> setup) {
+        setup.forEach((f, p) -> {
+            if (p.zone() != null) mergedZones.put(f, p.zone());
+            if (p.offsetMillis() != 0) mergedOffsets.put(f, p.offsetMillis());
+        });
+    }
+
+    /**
+     * A merged tab's files as a review bundle takes them (D-17): each file, its notes and
+     * how it is read; null if this isn't a merged tab or it is still loading.
+     */
+    public List<ReviewBundle.Part> reviewParts() {
+        MergedEntries view = mergedView();
+        if (loading || view == null || !(annotationStore instanceof MergedNotes notes)) return null;
+        String parserName = currentParser.map(LogParser::getName).orElse(null);
+        List<ReviewBundle.Part> parts = new ArrayList<>();
+        for (int s = 0; s < view.sourceCount(); s++) {
+            MergeLoad.File f = mergedFiles.get(s);
+            parts.add(new ReviewBundle.Part(f.path(), f.entry(), notes.stores().get(s).toJson(), parserName,
+                    zoneOf(f).getId(), view.offsetMillis(s)));
+        }
+        return parts;
     }
 
     public void load(Path file, Optional<LogParser> parser) {
@@ -981,6 +1011,8 @@ public final class LogPanel extends JPanel {
 
     /** The source timezone a merged file is read in: its own saved one, or the tab's. */
     private ZoneId zoneOf(MergeLoad.File f) {
+        ZoneId preset = mergedZones.get(f);
+        if (preset != null) return preset;
         ZoneId saved = AppPrefs.getSourceTimezone(f.path());
         return saved != null ? saved : sourceTimezone;
     }
@@ -1046,7 +1078,8 @@ public final class LogPanel extends JPanel {
         if (res != JOptionPane.OK_OPTION) return;
         SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
         if (sel == null) return;
-        AppPrefs.setSourceTimezone(f.path(), sel.zone());
+        if (mergedZones.containsKey(f)) mergedZones.put(f, sel.zone());   // from a bundle: this tab only
+        else AppPrefs.setSourceTimezone(f.path(), sel.zone());
         updateSourceTimezoneLabel();
         reload();
     }
@@ -1115,7 +1148,10 @@ public final class LogPanel extends JPanel {
     public void applySourceTimezone(ZoneId zone) {
         this.sourceTimezone = zone;
         if (currentFile != null) AppPrefs.setSourceTimezone(currentFile, zone);
-        else if (mergedFiles != null) mergedFiles.forEach(f -> AppPrefs.setSourceTimezone(f.path(), zone));
+        else if (mergedFiles != null) {
+            mergedZones.clear();
+            mergedFiles.forEach(f -> AppPrefs.setSourceTimezone(f.path(), zone));
+        }
         updateSourceTimezoneLabel();
         reload();
     }

@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.core.FilePattern;
 import com.droidenx.clouseau.core.LogSniffer;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -32,7 +34,9 @@ import java.util.stream.Stream;
 @Slf4j
 final class FileChooserDialog extends JDialog {
 
-    record Result(List<Path> files, Optional<LogParser> parser, int parserIndex, ZoneId sourceTimezone) {}
+    /** {@code merge}: open the files in one merged view without asking (Open Merged, or a pattern). */
+    record Result(List<Path> files, Optional<LogParser> parser, int parserIndex, ZoneId sourceTimezone,
+                  boolean merge) {}
     private record PreviewResult(String previewText, String statusText, Color statusColor, boolean canOpen) {}
 
     private final List<LogParser> parsers;
@@ -42,11 +46,18 @@ final class FileChooserDialog extends JDialog {
     private ZoneId selectedSourceTimezone = ZoneId.systemDefault();
     private JButton openBtn;
     private Result result;
+    private final boolean merged;
     private volatile SwingWorker<PreviewResult, Void> pendingWorker;
     private javax.swing.Timer debounceTimer;
 
     FileChooserDialog(Frame owner, List<LogParser> parsers, int initialParserIndex) {
-        super(owner, Messages.get("filechooser.title"), true);
+        this(owner, parsers, initialParserIndex, false);
+    }
+
+    /** {@code merged}: File → Open Merged…, whose files always open in one merged view (D-17). */
+    FileChooserDialog(Frame owner, List<LogParser> parsers, int initialParserIndex, boolean merged) {
+        super(owner, Messages.get(merged ? "filechooser.title.merged" : "filechooser.title"), true);
+        this.merged = merged;
         this.parsers = parsers;
         this.selectedParserIndex = initialParserIndex;
 
@@ -106,24 +117,41 @@ final class FileChooserDialog extends JDialog {
 
     private void doApprove() {
         File[] allSelected = chooser.getSelectedFiles();
+        File single = chooser.getSelectedFile();
+        boolean pattern = false;
         List<Path> files;
-        if (allSelected != null && allSelected.length > 0) {
+        if (single != null && FilePattern.isPattern(single.getName())) {
+            // A pattern typed in the file name field (app.log*) opens what it matches, merged.
+            File dir = single.getParentFile() != null ? single.getParentFile() : chooser.getCurrentDirectory();
+            try {
+                files = FilePattern.expand(dir.toPath(), single.getName());
+            } catch (java.io.IOException | RuntimeException ex) {
+                log.warn("Could not expand {} in {}", single.getName(), dir, ex);
+                files = List.of();
+            }
+            if (files.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        MessageFormat.format(Messages.get("filechooser.pattern.none"), single.getName()),
+                        Messages.get("filechooser.title"), JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            pattern = true;
+        } else if (allSelected != null && allSelected.length > 0) {
             files = Arrays.stream(allSelected).filter(File::isFile).map(File::toPath).toList();
         } else {
-            File f = chooser.getSelectedFile();
-            if (f == null || !f.isFile()) return;
-            files = List.of(f.toPath());
+            if (single == null || !single.isFile()) return;
+            files = List.of(single.toPath());
         }
         if (files.isEmpty()) return;
         Optional<LogParser> chosen = selectedParserIndex == 0
                 ? Optional.empty()
                 : Optional.of(parsers.get(selectedParserIndex - 1));
-        result = new Result(files, chosen, selectedParserIndex, selectedSourceTimezone);
+        result = new Result(files, chosen, selectedParserIndex, selectedSourceTimezone, merged || pattern);
         AppPrefs.setLastOpenDir(chooser.getCurrentDirectory());
         dispose();
     }
 
-    // ── Favorites sidebar ─────────────────────────────────────────────────────
+    // ââ Favorites sidebar âââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
     private JPanel buildFavoritesPanel() {
         JList<Path> list = new JList<>(favoritesModel);
@@ -230,7 +258,7 @@ final class FileChooserDialog extends JDialog {
         AppPrefs.saveFavorites(list);
     }
 
-    // ── Parser accessory + preview ────────────────────────────────────────────
+    // ââ Parser accessory + preview ââââââââââââââââââââââââââââââââââââââââââââ
 
     private JPanel buildParserAccessory() {
         String[] items = Stream.concat(
@@ -423,7 +451,7 @@ final class FileChooserDialog extends JDialog {
         return panel;
     }
 
-    // ── Button bar ────────────────────────────────────────────────────────────
+    // ââ Button bar ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
     private JPanel buildButtonBar() {
         JButton cancelBtn = new JButton(Messages.get("filechooser.button.cancel"));

@@ -17,7 +17,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.Optional;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
@@ -47,8 +51,10 @@ public final class ReviewBundle {
     public static final String ANNOTATIONS = "annotations.json";
     /** The manifest's {@code format} value that marks a Clouseau review bundle. */
     public static final String FORMAT = "clouseau-review-bundle";
-    /** The format version this class writes. */
-    public static final int FORMAT_VERSION = 1;
+    /** The newest format version this class knows. A bundle of one log is still written as 1. */
+    public static final int FORMAT_VERSION = 2;
+    /** The version of a bundle of one log: what every Clouseau can open. */
+    public static final int ONE_LOG_VERSION = 1;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -62,9 +68,36 @@ public final class ReviewBundle {
      * @param log              the zip entry holding the log (normally {@code originalFileName})
      * @param annotations      the zip entry holding the annotations
      * @param exportedAt       when the bundle was written, ISO-8601 UTC
+     * @param sources          version 2: every log of a merged view, the first being the one
+     *                         the fields above describe (so an older Clouseau opens it alone);
+     *                         empty for a bundle of one log
      */
     public record Manifest(String format, int formatVersion, String clouseauVersion,
-                           String originalFileName, String log, String annotations, String exportedAt) {}
+                           String originalFileName, String log, String annotations, String exportedAt,
+                           List<Source> sources) {
+        /** True if the bundle holds a merged view of several logs (version 2). */
+        public boolean isMerged() { return sources != null && sources.size() > 1; }
+    }
+
+    /**
+     * One log of a merged bundle (D-17).
+     *
+     * @param log              its zip entry
+     * @param annotations      the zip entry holding its annotations
+     * @param originalFileName its name where it was exported from
+     * @param parser           the parser it was read with, or null for automatic detection
+     * @param timezone         its source timezone id, or null for the system's
+     * @param offsetMillis     its time offset (D-17)
+     */
+    public record Source(String log, String annotations, String originalFileName, String parser,
+                         String timezone, long offsetMillis) {}
+
+    /**
+     * One log to bundle with others, as {@link #writeMerged} takes it: the file (or its zip
+     * {@code entry}), its annotations as {@link AnnotationStore#toJson()}, and how it was read.
+     */
+    public record Part(Path file, String entry, String annotationsJson, String parser,
+                       String timezone, long offsetMillis) {}
 
     private ReviewBundle() {}
 
@@ -99,8 +132,8 @@ public final class ReviewBundle {
         // The log keeps its name unless that would clash with the bundle's own entries.
         String logEntry = original.equalsIgnoreCase(MANIFEST) || original.equalsIgnoreCase(ANNOTATIONS)
                 ? "log-" + original : original;
-        Manifest manifest = new Manifest(FORMAT, FORMAT_VERSION, clouseauVersion, original,
-                logEntry, ANNOTATIONS, Instant.now().toString());
+        Manifest manifest = new Manifest(FORMAT, ONE_LOG_VERSION, clouseauVersion, original,
+                logEntry, ANNOTATIONS, Instant.now().toString(), null);
 
         Path dir = target.getParent();
         Files.createDirectories(dir);
@@ -129,6 +162,73 @@ public final class ReviewBundle {
             throw e;
         }
         log.info("Exported {} for review to {}", original, target);
+        return manifest;
+    }
+
+    /**
+     * Writes a version 2 bundle of a merged view (D-17): every part's log and annotations,
+     * with how each was read. The version 1 fields describe the first part, so an older
+     * Clouseau opens the bundle as that one log, with its notes. Log entries keep their
+     * file names; a name used twice gets a number ({@code 2-app.log}). Written through a
+     * temp file, as {@link #write}. Does I/O: call off the UI thread.
+     *
+     * @throws IOException if a log can't be read, or {@code dest} can't be written or is
+     *                     one of the logs
+     */
+    public static Manifest writeMerged(List<Part> parts, String clouseauVersion, Path dest) throws IOException {
+        if (parts.size() < 2) throw new IllegalArgumentException("a merged bundle needs two logs");
+        Path target = dest.toAbsolutePath().normalize();
+        for (Part p : parts) {
+            if (target.equals(p.file().toAbsolutePath().normalize())) {
+                throw new IOException("Can't export " + p.file().getFileName() + " over itself");
+            }
+        }
+        Set<String> used = new HashSet<>(List.of(MANIFEST.toLowerCase(Locale.ROOT), ANNOTATIONS.toLowerCase(Locale.ROOT)));
+        List<Source> sources = new ArrayList<>();
+        for (int i = 0; i < parts.size(); i++) {
+            Part p = parts.get(i);
+            String original = logName(p.file(), p.entry());
+            String logEntry = original;
+            for (int n = 2; used.contains(logEntry.toLowerCase(Locale.ROOT)); n++) logEntry = n + "-" + original;
+            used.add(logEntry.toLowerCase(Locale.ROOT));
+            String notes = i == 0 ? ANNOTATIONS : logEntry + ".annotations.json";
+            used.add(notes.toLowerCase(Locale.ROOT));
+            sources.add(new Source(logEntry, notes, original, p.parser(), p.timezone(), p.offsetMillis()));
+        }
+        Source first = sources.get(0);
+        Manifest manifest = new Manifest(FORMAT, FORMAT_VERSION, clouseauVersion, first.originalFileName(),
+                first.log(), first.annotations(), Instant.now().toString(), sources);
+
+        Path dir = target.getParent();
+        Files.createDirectories(dir);
+        Path tmp = Files.createTempFile(dir, target.getFileName().toString(), ".tmp");
+        try {
+            try (OutputStream out = Files.newOutputStream(tmp);
+                 ZipOutputStream zip = new ZipOutputStream(out, StandardCharsets.UTF_8)) {
+                putText(zip, MANIFEST, GSON.toJson(manifest));
+                for (int i = 0; i < parts.size(); i++) {
+                    Part p = parts.get(i);
+                    Source s = sources.get(i);
+                    if (s.log().toLowerCase(Locale.ROOT).endsWith(".gz")) zip.setLevel(Deflater.NO_COMPRESSION);
+                    zip.putNextEntry(new ZipEntry(s.log()));
+                    try (InputStream in = p.entry() == null ? Files.newInputStream(p.file()) : ZipLogs.open(p.file(), p.entry())) {
+                        in.transferTo(zip);
+                    }
+                    zip.closeEntry();
+                    zip.setLevel(Deflater.DEFAULT_COMPRESSION);
+                    putText(zip, s.annotations(), p.annotationsJson());
+                }
+            }
+            try {
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException | RuntimeException e) {
+            Files.deleteIfExists(tmp);
+            throw e;
+        }
+        log.info("Exported a merged view of {} logs for review to {}", parts.size(), target);
         return manifest;
     }
 
@@ -168,11 +268,40 @@ public final class ReviewBundle {
             String annotations = m.annotations() != null ? m.annotations() : ANNOTATIONS;
             return Optional.of(new Manifest(m.format(), m.formatVersion(), m.clouseauVersion(),
                     m.originalFileName() != null ? m.originalFileName() : logEntry,
-                    logEntry, annotations, m.exportedAt()));
+                    logEntry, annotations, m.exportedAt(), sources(zip, m)));
         } catch (Exception e) {
             log.debug("{} is not a review bundle: {}", zip.getFileName(), e.toString());
             return Optional.empty();
         }
+    }
+
+    /**
+     * A version 2 manifest's sources, with defaults for missing fields; empty if it has none,
+     * or if one names a log the zip doesn't hold (the bundle then opens as its first log).
+     */
+    private static List<Source> sources(Path zip, Manifest m) throws IOException {
+        if (m.sources() == null || m.sources().isEmpty()) return List.of();
+        Set<String> names = new HashSet<>();
+        for (ZipLogs.Entry e : ZipLogs.list(zip)) names.add(e.name());
+        List<Source> out = new ArrayList<>();
+        for (Source s : m.sources()) {
+            if (s == null || s.log() == null || !names.contains(s.log())) {
+                log.warn("{} lists a log it doesn't hold ({}); opening its first log only",
+                        zip.getFileName(), s != null ? s.log() : null);
+                return List.of();
+            }
+            out.add(new Source(s.log(), s.annotations(), s.originalFileName() != null ? s.originalFileName() : s.log(),
+                    s.parser(), s.timezone(), s.offsetMillis()));
+        }
+        return List.copyOf(out);
+    }
+
+    /** The zip entry holding the annotations of the bundle's log {@code entry}, or null. */
+    private static String annotationsOf(Manifest m, String entry) {
+        for (Source s : m.sources()) {
+            if (entry.equals(s.log())) return s.annotations();
+        }
+        return entry.equals(m.log()) ? m.annotations() : null;
     }
 
     /** True if {@code zip} is a review bundle. */
@@ -195,12 +324,13 @@ public final class ReviewBundle {
         AnnotationStore store = AnnotationStore.load(key, fallbackDir);
         if (entry == null || store.hasSavedFile()) return store;
         Optional<Manifest> manifest = read(file);
-        if (manifest.isEmpty() || !entry.equals(manifest.get().log())) return store;
-        try (Reader r = new InputStreamReader(ZipLogs.open(file, manifest.get().annotations()),
-                StandardCharsets.UTF_8)) {
+        if (manifest.isEmpty()) return store;
+        String annotations = annotationsOf(manifest.get(), entry);
+        if (annotations == null) return store;
+        try (Reader r = new InputStreamReader(ZipLogs.open(file, annotations), StandardCharsets.UTF_8)) {
             store.seed(r);
         } catch (IOException e) {
-            log.warn("Review bundle {} has no readable {}", file.getFileName(), manifest.get().annotations(), e);
+            log.warn("Review bundle {} has no readable {}", file.getFileName(), annotations, e);
         }
         return store;
     }
