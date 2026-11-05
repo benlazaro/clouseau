@@ -230,7 +230,7 @@ public final class MainFrame extends JFrame {
         JMenuItem docsItem = menuItem(Messages.get("menu.help.docs"));
         docsItem.addActionListener(e -> {
             try {
-                Desktop.getDesktop().browse(new java.net.URI("https://github.com/benlazaro/clouseau#readme"));
+                Desktop.getDesktop().browse(new java.net.URI("https://benlazaro.github.io/clouseau/guide/"));
             } catch (Exception ex) {
                 log.warn("Could not open documentation URL", ex);
             }

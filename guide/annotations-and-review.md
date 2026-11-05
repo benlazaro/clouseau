@@ -1,0 +1,69 @@
+---
+title: Notes and review bundles
+parent: User Guide
+nav_order: 4
+---
+
+# Notes and review bundles
+{: .no_toc }
+
+Notes record what you found, right on the line where you found it. A review bundle hands
+the log and your notes to someone else in one file.
+
+1. TOC
+{:toc}
+
+## Adding notes
+
+1. Right-click a row and choose **Add Note…**.
+2. Type the note. **Author** starts as your user name; change it if you like.
+3. Click **OK**.
+
+Rows with a note show **✎** in the `#` column, and the note appears at the top of the
+detail panel when the row is selected. Right-click the row again to **Edit Note…** or
+**Remove Note**.
+
+Each note stays on the line it was written on, even when the same text appears on many
+lines (as in retry loops), and follows that line if lines are added above it.
+
+## Seeing all notes
+
+**View All Notes…** in the row menu (`Ctrl+Shift+N`) opens the **Annotations** window: every
+note with its line, author and date. Click a note to jump to its line. In a
+[merged view](merged-views.md), each note names its file.
+
+## Where notes are saved
+
+Notes and [highlights](reading-and-filtering.md#highlights) are saved automatically, in a
+file next to the log named after it: `app.log` gets `app.log.annotations`. Anyone who opens
+the same log with that file beside it sees the same notes.
+
+If the log's folder is read-only, notes go to the `annotations` folder of the
+[data folder](settings.md#the-data-folder) instead. If even that fails, Clouseau says so and
+keeps the notes until you close the tab.
+
+## Exporting for review
+
+**File → Export for Review…** writes a single `.zip` you can attach to a ticket or an email.
+Clouseau suggests `<log>-review.zip` next to the log.
+
+The bundle holds:
+
+- the log exactly as it is (a `.gz` stays a `.gz`; a file opened from a zip is copied out
+  of it);
+- every note and highlight in the tab;
+- for a [merged view](merged-views.md), every file, with each file's notes, timezone, time
+  offset and parser.
+
+SSH and plugin-source tabs can't be exported, and a file can't be exported while it's
+still loading.
+
+## Opening a review bundle
+
+Open the bundle like any other file (**File → Open**, drag and drop, or double-click).
+Clouseau recognizes it, opens its log (or its merged view) without asking which file, and
+puts each note and highlight on its line, with the author's name.
+
+Notes you add while reviewing are saved next to the bundle, never inside it, so the bundle
+stays exactly as it was sent. You can export it again to send it back with your notes
+added.

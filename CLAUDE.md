@@ -18,10 +18,15 @@ DESIGN.md. Fixing a gap removes or narrows its G-entry. Do this in the same comm
 as the code.
 
 **Keep the GitHub Pages site current too.** The site (https://benlazaro.github.io/clouseau/)
-is `README.md`, built by GitHub Pages (Jekyll, from the root of `main`) on every push to
-`main`. A new feature, or a change to how one works, updates the README's Features,
-Usage or Screenshots sections in the same commit, written for users rather than
-developers. Screenshots live in `docs/screenshots/`.
+is built by GitHub Pages (Jekyll, Just the Docs theme, from the root of `main`) on every
+push to `main`; `_config.yml` sets it up. Its home page is `README.md` and its user guide is
+`guide/*.md`, one page per topic (`guide/developers.md` is for plugin authors and
+contributors). Everything else, including `docs/*.md` and this file, is excluded from the
+site. A new feature, or a change to how one works, updates the guide page that covers it
+(and the README's Features list if it's a headline feature) in the same commit, written
+for users rather than developers. Screenshots live in `docs/screenshots/`; guide pages link
+them as `../docs/screenshots/<name>.png` so they work on the site and on GitHub. Help →
+Documentation opens the guide.
 
 ## Modules
 

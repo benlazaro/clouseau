@@ -1,0 +1,68 @@
+# GitHub Pages site: https://benlazaro.github.io/clouseau/
+# Built by GitHub Pages (Jekyll) from the root of main. The home page is README.md and
+# the user guide is guide/*.md; everything else in the repository is excluded below.
+
+title: Clouseau Log Viewer
+description: A modern, pluggable desktop log viewer for software engineers.
+url: https://benlazaro.github.io
+baseurl: /clouseau
+
+remote_theme: just-the-docs/just-the-docs@v0.12.0
+plugins:
+  - jekyll-remote-theme
+
+color_scheme: dark
+search_enabled: true
+heading_anchors: true
+back_to_top: true
+back_to_top_text: "Back to top"
+
+aux_links:
+  "Download":
+    - "https://github.com/benlazaro/clouseau/releases"
+  "GitHub":
+    - "https://github.com/benlazaro/clouseau"
+aux_links_new_tab: true
+
+footer_content: "Clouseau is MIT-licensed. <a href=\"https://github.com/benlazaro/clouseau/issues\">Report an issue</a>."
+
+gh_edit_link: true
+gh_edit_link_text: "Edit this page on GitHub"
+gh_edit_repository: "https://github.com/benlazaro/clouseau"
+gh_edit_branch: "main"
+gh_edit_view_mode: "tree"
+
+# README.md is the home page. Its settings live here, so the README itself has no front
+# matter (GitHub would show it as a table at the top of the repository page).
+defaults:
+  - scope:
+      path: "README.md"
+    values:
+      title: Home
+      nav_order: 1
+      permalink: /
+
+# Only the home page and the user guide are published. Developer documents (docs/*.md,
+# CLAUDE.md, CONTRIBUTING.md) stay readable on GitHub but aren't part of the site.
+exclude:
+  - CLAUDE.md
+  - CONTRIBUTING.md
+  - docs/DESIGN.md
+  - docs/USE_CASES.md
+  - build/
+  - gradle/
+  - packaging/
+  - samples/
+  - data/
+  - clouseau-api/
+  - clouseau-core/
+  - clouseau-plugin/
+  - clouseau-ui/
+  - clouseau-example-plugin/
+  - gradlew
+  - gradlew.bat
+  - "*.gradle.kts"
+  - gradle.properties
+  - Gemfile
+  - Gemfile.lock
+  - vendor/

@@ -1,0 +1,96 @@
+---
+title: Opening files
+parent: User Guide
+nav_order: 1
+---
+
+# Opening files
+{: .no_toc }
+
+1. TOC
+{:toc}
+
+## Ways to open a file
+
+- **File → Open** (`Ctrl+O`) opens the file dialog.
+- **Drag** one or more files onto the window: the table, the detail panel, the tab strip
+  or the welcome screen. Folders are ignored.
+- **File → Open Recent** lists the files you opened last (how many is set in
+  [Settings](settings.md)).
+- **"Open with"** from your file manager. The Windows, macOS and Linux installers
+  associate `.log` files with Clouseau, so double-clicking one opens it. The portable zip
+  doesn't register anything, so with it you pick the Clouseau launcher by hand.
+- **The command line**: pass one or more file paths to the launcher.
+
+Only one Clouseau runs at a time. Opening a file while it's running sends the file to the
+window that's already open, so you never get two copies.
+
+Each file opens in its own tab. Opening a file that's already open switches to its tab.
+
+## The open dialog
+
+![Open file dialog](../docs/screenshots/open-dialog.png)
+
+- **Favorites** on the left: click **+** to pin the current folder, **−** to remove one.
+- **Parser** on the right: leave it on **Auto-detect**, or pick a format. The status line
+  under it says which parser recognizes the selected file, and the **Preview** shows its
+  first lines.
+- If no parser recognizes the file, the status says so in amber and **Open** still works:
+  the file opens as [plain text](#files-no-parser-recognizes).
+- Select several files to open them together, either in tabs or as one
+  [merged view](merged-views.md).
+- Type a pattern such as `app.log*` in **File Name** to open every matching file in that
+  folder as one merged view.
+
+## Compressed files
+
+`.gz` and `.zip` files open directly, without extracting them first.
+
+- A `.zip` with one file opens that file.
+- A `.zip` with several files shows a picker: tick the files to open (there's a filter box
+  and **Select all**). Tick **Merge into one view** to open them as a
+  [merged view](merged-views.md); otherwise each opens in its own tab.
+- A `.zip` that is a [review bundle](annotations-and-review.md#opening-a-review-bundle)
+  opens its log, with its notes, without asking.
+
+Clouseau unpacks a compressed file to a temporary copy in the `cache` folder of the
+[data folder](settings.md#the-data-folder) while it reads it. You never need to clean it
+up: the copy is deleted when you close the tab. If the disk fills up while unpacking,
+Clouseau stops, says so, and marks the tab "partly loaded (disk full)".
+
+## Large files
+
+Every file is indexed rather than held in memory: Clouseau keeps about 29 bytes per line
+and reads the text back from disk when it's shown. A 1-million-line, 125 MB log uses under
+50 MB of memory, and no line of a file you open is ever dropped.
+
+In the rare case that even the index fills the memory (tens of millions of lines),
+Clouseau stops reading, tells you how many lines it loaded, and marks the tab "partly
+loaded (low memory)". See [Memory](settings.md#memory) to raise the limit.
+
+## Files no parser recognizes
+
+![A file shown as plain text](../docs/screenshots/plain-text.png)
+
+If no parser recognizes the first 50 lines of a file, it opens anyway, as read-only plain
+text: every line with its line number, Find (`Ctrl+F`), copy, and **Follow** for a file
+that's still growing.
+
+Click **Create a Parser…** in the banner to open the [parser editor](parsers.md) with a new
+parser and the file's first line as a sample. When you save a parser that recognizes the
+file, the tab switches to the normal table.
+
+If a file looks binary rather than text, Clouseau asks before showing it.
+
+## Tabs
+
+- `Ctrl+Tab` / `Ctrl+Shift+Tab`, or `Ctrl+PageDown` / `Ctrl+PageUp`, go to the next or
+  previous tab.
+- `Ctrl+1` to `Ctrl+8` jump to that tab, and `Ctrl+9` to the last one.
+- Drag a tab to move it.
+- `Ctrl+W` or the tab's **×** closes it. Clouseau asks first, unless you tick "Don't ask
+  again" (you can turn the question back on in [Settings](settings.md)).
+- Right-click a tab to set its [source timezone](reading-and-filtering.md#timezones), or
+  the same timezone for every tab.
+
+Each tab keeps its own filters, follow mode, highlights and column layout.
