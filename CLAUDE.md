@@ -17,6 +17,12 @@ a module boundary, extension point, threading rule, file format, or decision upd
 DESIGN.md. Fixing a gap removes or narrows its G-entry. Do this in the same commit or PR
 as the code.
 
+**Keep the GitHub Pages site current too.** The site (https://benlazaro.github.io/clouseau/)
+is `README.md`, built by GitHub Pages (Jekyll, from the root of `main`) on every push to
+`main`. A new feature, or a change to how one works, updates the README's Features,
+Usage or Screenshots sections in the same commit, written for users rather than
+developers. Screenshots live in `docs/screenshots/`.
+
 ## Modules
 
 ```
