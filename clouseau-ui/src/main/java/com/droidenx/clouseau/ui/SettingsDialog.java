@@ -13,6 +13,9 @@ import java.time.ZoneId;
  */
 final class SettingsDialog extends JDialog {
 
+    /** One width for every spinner, wide enough for "2,000,000" plus the arrows. */
+    private static final String SPINNER = "w 120!";
+
     private final LogPanel logPanel;
     private final Runnable onApply;
 
@@ -74,17 +77,20 @@ final class SettingsDialog extends JDialog {
             }
         });
 
-        JPanel content = new JPanel(new MigLayout("insets 16, wrap 2, gapy 6", "[grow,fill][120px!]"));
+        // The field column sizes to its widest control (the timezone combo), so nothing
+        // overflows the dialog's right edge; the same insets pad every side.
+        // Spinners keep one fixed width, left-aligned in that column; combos fill it.
+        JPanel content = new JPanel(new MigLayout("insets 20, wrap 2, gapy 6", "[]24[grow]"));
 
         // ── Table section ────────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.table")), "span 2, gaptop 0, gapbottom 4");
         content.add(new JLabel(Messages.get("settings.row.height")));
-        content.add(rowHeightSpinner);
+        content.add(rowHeightSpinner, SPINNER);
 
         // ── Detail panel section ─────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.detail")), "span 2, gaptop 12, gapbottom 4");
         content.add(new JLabel(Messages.get("settings.detail.font.size")));
-        content.add(detailFontSizeSpinner);
+        content.add(detailFontSizeSpinner, SPINNER);
         content.add(wrapLinesCheckBox, "span 2");
 
         // ── Tabs section ──────────────────────────────────────────────────
@@ -94,14 +100,14 @@ final class SettingsDialog extends JDialog {
         content.add(confirmAnnotationDeleteCheckBox, "span 2");
         content.add(followByDefaultCheckBox, "span 2");
         content.add(new JLabel(Messages.get("settings.max.entries.per.tab")));
-        content.add(maxEntriesSpinner);
+        content.add(maxEntriesSpinner, SPINNER);
 
         // ── Files section ─────────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.files")), "span 2, gaptop 12, gapbottom 4");
         content.add(new JLabel(Messages.get("settings.recent.max")));
-        content.add(recentMaxSpinner);
+        content.add(recentMaxSpinner, SPINNER);
         content.add(new JLabel(Messages.get("settings.multi.open")));
-        content.add(multiOpenCombo);
+        content.add(multiOpenCombo, "growx");
 
         // ── Appearance section ────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.appearance")), "span 2, gaptop 12, gapbottom 4");
@@ -113,11 +119,11 @@ final class SettingsDialog extends JDialog {
             ThemeManager.getAllThemes().forEach(t -> themeCombo.addItem(t.name()));
             themeCombo.setSelectedItem(current != null ? current : AppPrefs.getTheme());
         });
-        JPanel themeRow = new JPanel(new MigLayout("insets 0", "[][grow][]"));
-        themeRow.add(new JLabel(Messages.get("settings.theme")));
-        themeRow.add(themeCombo, "grow");
+        JPanel themeRow = new JPanel(new MigLayout("insets 0", "[grow,fill][]"));
+        themeRow.add(themeCombo);
         themeRow.add(manageThemesBtn);
-        content.add(themeRow, "span 2, growx");
+        content.add(new JLabel(Messages.get("settings.theme")));
+        content.add(themeRow, "growx");
         content.add(new JLabel(Messages.get("settings.timezone")));
         content.add(timezoneCombo, "growx");
 
