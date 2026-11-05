@@ -151,7 +151,7 @@ final class FileChooserDialog extends JDialog {
         dispose();
     }
 
-    // ââ Favorites sidebar âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // ── Favorites sidebar ─────────────────────────────────────────────────────
 
     private JPanel buildFavoritesPanel() {
         JList<Path> list = new JList<>(favoritesModel);
@@ -258,7 +258,7 @@ final class FileChooserDialog extends JDialog {
         AppPrefs.saveFavorites(list);
     }
 
-    // ââ Parser accessory + preview ââââââââââââââââââââââââââââââââââââââââââââ
+    // ── Parser accessory + preview ────────────────────────────────────────────
 
     private JPanel buildParserAccessory() {
         String[] items = Stream.concat(
@@ -451,7 +451,7 @@ final class FileChooserDialog extends JDialog {
         return panel;
     }
 
-    // ââ Button bar ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // ── Button bar ────────────────────────────────────────────────────────────
 
     private JPanel buildButtonBar() {
         JButton cancelBtn = new JButton(Messages.get("filechooser.button.cancel"));

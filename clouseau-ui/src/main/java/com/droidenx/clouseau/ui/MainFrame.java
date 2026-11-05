@@ -89,7 +89,7 @@ public final class MainFrame extends JFrame {
         });
     }
 
-    // ââ Extension list management âââââââââââââââââââââââââââââââââââââââââââââ
+    // ── Extension list management ─────────────────────────────────────────────
 
     /**
      * Rebuilds the parser list: JSON-defined parsers (built-in and {@code parsers.json})
@@ -128,7 +128,7 @@ public final class MainFrame extends JFrame {
                 syntaxHighlighters.stream().map(LogSyntaxHighlighter::getName).toList());
     }
 
-    // ââ Menu bar âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // ── Menu bar ─────────────────────────────────────────────────────────────
 
     private JMenuBar buildMenuBar() {
         JMenuBar menuBar = new JMenuBar();
@@ -180,7 +180,7 @@ public final class MainFrame extends JFrame {
 
         fileMenu.addSeparator();
 
-        // KeyStroke.getKeyStroke(char, int) casts char to int â ',' (44) == VK_COMMA,
+        // KeyStroke.getKeyStroke(char, int) casts char to int → ',' (44) == VK_COMMA,
         // so getKeyText renders "Comma". The string form with "typed" creates a true
         // char-based stroke (keyCode=0, keyChar=',') that renders the literal character.
         // The actual Ctrl+, binding lives in the root-pane InputMap in the constructor.
@@ -253,7 +253,7 @@ public final class MainFrame extends JFrame {
         return menuBar;
     }
 
-    /** One radio item per theme (the current one selected), then "Manage Themesâ¦". */
+    /** One radio item per theme (the current one selected), then "Manage Themes…". */
     private void rebuildThemeMenu(JMenu menu) {
         menu.removeAll();
         String current = AppPrefs.getTheme();
@@ -283,7 +283,7 @@ public final class MainFrame extends JFrame {
     private void openShortcuts() {
         JDialog dialog = new JDialog(this, Messages.get("shortcuts.title"), true);
 
-        // Single unified grid â all rows share the same two columns so descriptions
+        // Single unified grid — all rows share the same two columns so descriptions
         // and badges stay perfectly aligned across every section.
         JPanel grid = new JPanel(new MigLayout(
                 "insets 24, wrap 2, gapy 10, gapx 40",
@@ -387,7 +387,7 @@ public final class MainFrame extends JFrame {
         }
     }
 
-    // ââ File opening ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // ── File opening ──────────────────────────────────────────────────────────
 
     private void openFile() {
         openFile(false);
@@ -521,7 +521,7 @@ public final class MainFrame extends JFrame {
     private void offerSkipped(List<MergeLoad.Skipped> skipped, Optional<LogParser> parser) {
         StringBuilder list = new StringBuilder();
         for (MergeLoad.Skipped s : skipped) {
-            list.append("\n  â¢ ").append(s.file().fileName()).append(" â ")
+            list.append("\n  • ").append(s.file().fileName()).append(" — ")
                 .append(Messages.get("merge.skipped." + s.reason().name().toLowerCase(java.util.Locale.ROOT)));
         }
         int answer = JOptionPane.showConfirmDialog(this,
@@ -676,7 +676,7 @@ public final class MainFrame extends JFrame {
                 log.warn("Source plugin {} failed in getName()", provider.getClass().getName(), e);
                 continue;
             }
-            JMenuItem item = menuItem(name + "â¦");
+            JMenuItem item = menuItem(name + "…");
             item.addActionListener(e -> openSource(provider, name));
             menu.add(item);
         }
@@ -702,7 +702,7 @@ public final class MainFrame extends JFrame {
         });
     }
 
-    // ââ Tab management ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // ── Tab management ────────────────────────────────────────────────────────
 
     private void addLogTab(String title, Path file, LogPanel panel) {
         tabbedPane.addTab(null, panel);
@@ -718,7 +718,7 @@ public final class MainFrame extends JFrame {
 
         JLabel label = new JLabel(title);
 
-        JButton close = new JButton("\u00d7"); // Ã
+        JButton close = new JButton("\u00d7"); // ×
         close.setPreferredSize(new Dimension(18, 18));
         close.setFocusable(false);
         close.setBorderPainted(false);
@@ -892,7 +892,7 @@ public final class MainFrame extends JFrame {
         return c instanceof LogPanel lp ? lp : null;
     }
 
-    // ââ Welcome panel âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // ── Welcome panel ─────────────────────────────────────────────────────────
 
     private JPanel buildWelcomePanel() {
         JPanel outer = new JPanel(new GridBagLayout());
