@@ -45,6 +45,7 @@ final class FileChooserDialog extends JDialog {
     private int selectedParserIndex;
     private ZoneId selectedSourceTimezone = ZoneId.systemDefault();
     private JButton openBtn;
+    private JTextField nameField;
     private Result result;
     private final boolean merged;
     private volatile SwingWorker<PreviewResult, Void> pendingWorker;
@@ -81,6 +82,7 @@ final class FileChooserDialog extends JDialog {
             if (JFileChooser.APPROVE_SELECTION.equals(e.getActionCommand())) doApprove();
             else if (JFileChooser.CANCEL_SELECTION.equals(e.getActionCommand())) dispose();
         });
+        hookPatternTyping();
 
         JSplitPane leftSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
                 buildFavoritesPanel(), chooser);
@@ -117,7 +119,8 @@ final class FileChooserDialog extends JDialog {
 
     private void doApprove() {
         File[] allSelected = chooser.getSelectedFiles();
-        File single = chooser.getSelectedFile();
+        File typed = typedPattern();
+        File single = typed != null ? typed : chooser.getSelectedFile();
         boolean pattern = false;
         List<Path> files;
         if (single != null && FilePattern.isPattern(single.getName())) {
@@ -149,6 +152,56 @@ final class FileChooserDialog extends JDialog {
         result = new Result(files, chosen, selectedParserIndex, selectedSourceTimezone, merged || pattern);
         AppPrefs.setLastOpenDir(chooser.getCurrentDirectory());
         dispose();
+    }
+
+    /**
+     * The look and feel turns a typed {@code app.log*} into a file filter and never approves,
+     * so Enter and Open take a pattern in the file name field straight to {@link #doApprove()}.
+     */
+    private void hookPatternTyping() {
+        nameField = findNameField(chooser);
+        if (nameField == null) return;
+        Action accept = nameField.getActionMap().get(JTextField.notifyAction);
+        nameField.getActionMap().put(JTextField.notifyAction, new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) {
+                if (typedPattern() != null) doApprove();
+                else if (accept != null) accept.actionPerformed(e);
+            }
+            @Override public boolean isEnabled() {
+                // Disabled lets Enter reach the chooser's own approve binding, as before.
+                return typedPattern() != null || (accept != null && accept.isEnabled());
+            }
+        });
+        nameField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void changed() {
+                if (openBtn != null && typedPattern() != null) openBtn.setEnabled(true);
+            }
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { changed(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { changed(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { changed(); }
+        });
+    }
+
+    private static JTextField findNameField(Container c) {
+        for (Component child : c.getComponents()) {
+            if (child instanceof JComboBox<?>) continue;
+            if (child instanceof JTextField f) return f;
+            if (child instanceof Container sub) {
+                JTextField f = findNameField(sub);
+                if (f != null) return f;
+            }
+        }
+        return null;
+    }
+
+    /** The file name field's text as a file when its name is a pattern ({@code app.log*}), else null. */
+    private File typedPattern() {
+        if (nameField == null) return null;
+        String text = nameField.getText().trim();
+        if (text.isEmpty() || text.startsWith("\"")) return null;
+        File f = new File(text);
+        if (!f.isAbsolute()) f = new File(chooser.getCurrentDirectory(), text);
+        return FilePattern.isPattern(f.getName()) ? f : null;
     }
 
     // ── Favorites sidebar ─────────────────────────────────────────────────────

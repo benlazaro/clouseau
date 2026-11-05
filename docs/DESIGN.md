@@ -187,7 +187,7 @@ refresh; open tabs keep the list they were created with.
 0. **Zips:** `MainFrame` lists a `.zip`'s files with `ZipLogs` (core; names read as
    UTF-8, else CP437). One file opens directly; for several, `ZipPickerDialog` lets the
    user tick files (filter box, Select all), and each opens in its own tab as
-   `load(zip, entry, …)`. The tab keys its annotations to `ZipLogs.entryKey`,
+   `load(zip, entry, …)`, or in one merged view when "Merge into one view" is ticked (D-17). The tab keys its annotations to `ZipLogs.entryKey`,
    `<zip>!<entry>` next to the zip. A zip that `ReviewBundle.read` recognizes as a
    review bundle (D-10) skips the picker and opens the log the manifest names. A zip
    entry ending in `.gz` is unpacked as well.

@@ -1059,9 +1059,29 @@ public final class LogPanel extends JPanel {
                 MergeOrder after = built.extend(view.inputs(view.rowCounts(), offsets));
                 view.setOrder(after, offsets);
                 showReordered(before, after, 0);
+                fitSourceColumn(view);
                 logTable.repaint();
             }
         }.execute();
+    }
+
+    /** Widens the Source column to fit labels such as {@code db.log (+3s)} after an offset change. */
+    private void fitSourceColumn(MergedEntries view) {
+        String header = Messages.get("table.col.source");
+        for (int col = 0; col < logTable.getColumnCount(); col++) {
+            if (!header.equals(logTable.getColumnName(col))) continue;
+            FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
+            int needed = 0;
+            for (int s = 0; s < view.sourceCount(); s++) needed = Math.max(needed, fm.stringWidth(view.sourceLabel(s)));
+            needed += 16;
+            javax.swing.table.TableColumn c = logTable.getColumnModel().getColumn(col);
+            if (needed <= c.getWidth()) return;
+            fittedColumnsWidth += needed - c.getWidth();
+            c.setPreferredWidth(needed);
+            c.setWidth(needed);
+            stretchMessageColumn();
+            return;
+        }
     }
 
     /** Asks for the source timezone of one file of a merged tab, saves it, and reloads. */

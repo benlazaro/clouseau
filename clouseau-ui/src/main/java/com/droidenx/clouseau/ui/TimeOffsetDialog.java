@@ -51,7 +51,10 @@ final class TimeOffsetDialog {
 
     private static JSpinner spinner(long value, int max) {
         JSpinner s = new JSpinner(new SpinnerNumberModel((int) value, 0, max, 1));
-        ((JSpinner.DefaultEditor) s.getEditor()).getTextField().setColumns(max > 999 ? 4 : 3);
+        JFormattedTextField field = ((JSpinner.DefaultEditor) s.getEditor()).getTextField();
+        field.setColumns(max > 999 ? 4 : 3);
+        // Take a typed value at once, so clicking OK right after typing uses it.
+        if (field.getFormatter() instanceof javax.swing.text.DefaultFormatter f) f.setCommitsOnValidEdit(true);
         return s;
     }
 
