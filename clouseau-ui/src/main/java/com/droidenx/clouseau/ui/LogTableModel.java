@@ -271,6 +271,37 @@ public final class LogTableModel extends AbstractTableModel {
         else appendLive(entries);
     }
 
+    /**
+     * A followed merged view re-merged its tail (D-17): ordinals from {@code from} on show
+     * other rows now, and the view holds {@code count} entries. {@code moved} maps an old
+     * ordinal at or after {@code from} to the new ordinal of the same entry, so highlights
+     * stay on their entry. Must be called on the EDT; the caller restores the selection.
+     */
+    public void reorderTail(int from, java.util.function.IntUnaryOperator moved, int count) {
+        Map<Integer, Color> movedHighlights = new HashMap<>();
+        int oldCount = indexedCount;
+        highlights.entrySet().removeIf(e -> {
+            int ord = e.getKey();
+            if (ord < from || ord >= oldCount) return false;
+            movedHighlights.put(moved.applyAsInt(ord), e.getValue());
+            return true;
+        });
+        highlights.putAll(movedHighlights);
+        indexedCount = count;
+        rows.removeRange(rows.countBelow(from), rows.size());
+        boolean filtering = filterFuture != null && !filterFuture.isDone();
+        if (filtering || (count - from > EDT_CATCH_UP_ROWS && indexed.needsText(activeFilter))) {
+            // A run still going saw the old order; a long tail that needs text is read off the EDT.
+            fireTableDataChanged();
+            scheduleReapply();
+            return;
+        }
+        for (int ord = from; ord < count; ord++) {
+            if (passesOnEdt(activeFilter, ord)) rows.add(ord);
+        }
+        fireTableDataChanged();
+    }
+
     /** The indexed file's entries, or null if this tab isn't one indexed file. Must be called on the EDT. */
     public IndexedEntries indexedEntries() { return indexed instanceof IndexedEntries ie ? ie : null; }
 
@@ -284,7 +315,7 @@ public final class LogTableModel extends AbstractTableModel {
         discoverFields(entries);
         int first = rows.size();
         for (LogEntry e : entries) {
-            if (activeFilter.test(e)) rows.add(ordinal);
+            if (indexed.testIndex(activeFilter, ordinal) && activeFilter.test(e)) rows.add(ordinal);
             ordinal++;
         }
         if (rows.size() > first) fireTableRowsInserted(first, rows.size() - 1);

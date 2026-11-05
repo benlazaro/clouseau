@@ -1098,9 +1098,8 @@ as a reusable "workspace".
    - **Not yet (later steps):** single-file tabs keep their own loader (`LogPanel.load`);
      only the model reads both through `EntryRows`. Every file uses the tab's parser
      choice (chosen, or per-line detection) and its one source timezone (per-file in
-     step 6). A merged tab doesn't follow (step 5) and can't be exported for review
-     (step 7). A compressed file that can't be
-     unpacked is left out rather than loaded into memory.
+     step 6). A merged tab can't be exported for review (step 7). A compressed file
+     that can't be unpacked is left out rather than loaded into memory.
 4. ✅ Annotations and highlights per source, keyed by identity. As built: `Notes` (core)
    is what `LogPanel`, the annotations panel and the highlight menus use; one file's
    `AnnotationStore` implements it, and `MergedNotes` puts one store per source behind
@@ -1110,7 +1109,32 @@ as a reusable "workspace".
    the file's own `.annotations` sidecar (or `annotations/`) and show again when the
    file is opened alone. The annotations panel prefixes each preview with `[file]`.
    `MergedNotesTest`.
-5. Following: hold-back, late entries, per-source rotation.
+5. ✅ Following: hold-back, late entries, per-source rotation. As built:
+   - `MergeLoad` returns where each plain file's index ends; `MergedTailer` (ui) runs a
+     `FileFollower` from there for each of them (compressed files aren't followed), adding
+     lines to that file's index as a single-file tab does, so rotation is per source.
+   - `MergedFollow` (core, one thread) holds the rows back. A file counts towards the
+     hold-back once it has written something while followed, so a rotated `app.log.1`
+     that never grows doesn't hold anything up. Held rows go when every such file has
+     delivered something at least as new, or after 1 s; a Swing timer checks every
+     200 ms.
+   - `MergeOrder.placeFrom` finds where new rows go: never before their own file's
+     earlier rows, after equal keys from lower sources. If that is the end,
+     `MergeOrder.extend` appends in place. Otherwise it returns a **new order** that
+     shares the old one's full chunks below that point (copying only the partial chunk)
+     and merges the rest again; `MergedEntries.setOrder` installs it, and readers take
+     the order once per call, so a filter run in progress keeps a consistent view and is
+     restarted. Re-merges happen at most once a second; rows wait meanwhile.
+   - `LogTableModel.reorderTail` re-filters from the changed point (in the background
+     if a long tail needs text), with highlights moved to their entry's new ordinal;
+     `MergedNotes.setOrder` does the same for notes, and the selection stays on its
+     entry. Find's matches are cleared. With Follow on the table scrolls to the bottom,
+     as on a single-file tab.
+   - Clear on a merged tab stops following it; reload follows again.
+   - `MergeOrderExtendTest` (including that extending in random steps gives the same
+     order as one merge), `MergedFollowTest`, `MergedViewTest`.
+   - **Not yet:** single-file tabs still follow through their own worker; joining them
+     to this path (question 4) is left for when per-file settings (step 6) land.
 6. Time offsets: dialog, Sources menu, re-merge, the detail panel line.
 7. Zip picker merge, file patterns, Open Merged…, review bundle version 2.
 8. Update UC-12 (✅), mark D-13 and D-17 Adopted.

@@ -18,8 +18,9 @@ import java.util.function.IntConsumer;
  * With one source there are no arrays: ordinal and row are the same.
  * <p>
  * <b>Threads:</b> {@link #build} runs on any thread; hand the result over through a
- * happens-before edge. After that one thread appends, and others may read ordinals below
- * a size they were handed, as with {@link EntryIndex}.
+ * happens-before edge. After that one thread appends or extends, and others may read
+ * ordinals below a size they were handed, as with {@link EntryIndex}. An order that
+ * {@link #extend} replaced stays as it was for its readers.
  */
 public final class MergeOrder {
 
@@ -68,6 +69,13 @@ public final class MergeOrder {
         }
     }
 
+    private MergeOrder(int sourceCount, ByteColumn sources, IntColumn rows, IntColumn[] ordinals) {
+        this.sourceCount = sourceCount;
+        this.sources = sources;
+        this.rows = rows;
+        this.ordinals = ordinals;
+    }
+
     /** Merges {@code inputs} in timeline order. */
     public static MergeOrder build(List<Input> inputs) {
         return build(inputs, () -> false, done -> {});
@@ -85,18 +93,27 @@ public final class MergeOrder {
             order.size = inputs.get(0).count();
             return order;
         }
+        return order.merge(inputs, new int[k], cancelled, progress) ? order : null;
+    }
 
+    /**
+     * Places rows {@code next[s]} onwards of each input after the rows this order holds.
+     * A source whose next row continues its last placed group goes first: {@link #placeFrom}
+     * only cuts the order where that group ends. False if {@code cancelled} turned true.
+     */
+    private boolean merge(List<Input> inputs, int[] next, BooleanSupplier cancelled, IntConsumer progress) {
+        int k = sourceCount;
         Timeline[] tl = new Timeline[k];
         int[] count = new int[k];
         long[] offset = new long[k];
-        int[] next = new int[k];     // the first row of each source's next group
-        long[] key = new long[k];    // that group's key
+        long[] key = new long[k];    // the key of each source's next group
         for (int s = 0; s < k; s++) {
             Input in = inputs.get(s);
             tl[s] = in.rows();
             count[s] = in.count();
             offset[s] = in.offsetMillis();
-            key[s] = groupKey(tl[s], 0, count[s], offset[s]);
+            while (next[s] > 0 && next[s] < count[s] && tl[s].isContinuation(next[s])) add(s, next[s]++);
+            key[s] = groupKey(tl[s], next[s], count[s], offset[s]);
         }
 
         int placed = 0;
@@ -115,19 +132,95 @@ public final class MergeOrder {
             // doesn't overlap the others (a rotated file) costs one comparison per group.
             do {
                 int end = groupEnd(tl[best], next[best], count[best]);
-                for (int r = next[best]; r < end; r++) order.add(best, r);
+                for (int r = next[best]; r < end; r++) add(best, r);
                 placed += end - next[best];
                 next[best] = end;
                 key[best] = end < count[best] ? keyAt(tl[best], end, offset[best]) : Long.MAX_VALUE;
                 if (placed >= nextCheck) {
-                    if (cancelled.getAsBoolean()) return null;
+                    if (cancelled.getAsBoolean()) return false;
                     progress.accept(placed);
                     nextCheck = placed + CHECK_EVERY;
                 }
             } while (next[best] < count[best]
                     && (second < 0 || key[best] < key[second] || (key[best] == key[second] && best < second)));
         }
-        return order;
+        return true;
+    }
+
+    /**
+     * The first ordinal whose row changes when the rows the sources gained since this order
+     * was built or extended are placed: {@link #size} if they all go after the rows shown.
+     * Each input describes the same source as before, with a count at least its
+     * {@link #rowCount}.
+     */
+    public int placeFrom(List<Input> inputs) {
+        checkInputs(inputs);
+        if (sourceCount == 1) return size;
+        int from = size;
+        for (int s = 0; s < sourceCount; s++) {
+            Input in = inputs.get(s);
+            int n = ordinals[s].size;
+            if (in.count() == n) continue;
+            // Never before this source's own rows: a file keeps its order.
+            int floor = n == 0 ? 0 : ordinalOf(s, n - 1) + 1;
+            if (n > 0 && in.rows().isContinuation(n)) {      // continues the group placed last
+                from = Math.min(from, floor);
+                continue;
+            }
+            long key = groupKey(in.rows(), n, in.count(), in.offsetMillis());
+            int q = size - 1;
+            // Step back over whole groups that sort after the new one.
+            while (q >= floor) {
+                int t = source(q);
+                Input other = inputs.get(t);
+                int head = row(q);
+                while (head > 0 && other.rows().isContinuation(head)) head--;
+                long k = groupKey(other.rows(), head, other.count(), other.offsetMillis());
+                if (k > key || (k == key && t > s)) q = ordinalOf(t, head) - 1;
+                else break;
+            }
+            from = Math.min(from, q + 1);
+        }
+        return from;
+    }
+
+    /**
+     * Places the rows the sources gained (see {@link #placeFrom}). If they all go at the end
+     * they are appended to this order, which is returned. Otherwise returns a new order that
+     * shares this one's rows below {@code placeFrom(inputs)} and merges the rest again; this
+     * order is then left as it was, for readers still using it, and must not be extended.
+     */
+    public MergeOrder extend(List<Input> inputs) {
+        int from = placeFrom(inputs);
+        if (sourceCount == 1) {
+            size = inputs.get(0).count();
+            return this;
+        }
+        MergeOrder target = from == size ? this : prefix(from);
+        int[] next = new int[sourceCount];
+        for (int s = 0; s < sourceCount; s++) next[s] = target.ordinals[s].size;
+        target.merge(inputs, next, () -> false, done -> {});
+        return target;
+    }
+
+    private void checkInputs(List<Input> inputs) {
+        if (inputs.size() != sourceCount) {
+            throw new IllegalArgumentException(inputs.size() + " sources, order has " + sourceCount);
+        }
+        for (int s = 0; s < sourceCount; s++) {
+            if (inputs.get(s).count() < rowCount(s)) {
+                throw new IllegalArgumentException("source " + s + " has fewer rows than placed");
+            }
+        }
+    }
+
+    /** A new order holding this one's first {@code n} ordinals, sharing their full chunks. */
+    private MergeOrder prefix(int n) {
+        IntColumn[] ords = new IntColumn[sourceCount];
+        for (int s = 0; s < sourceCount; s++) ords[s] = ordinals[s].prefix(firstRowAtOrAfter(s, n));
+        MergeOrder o = new MergeOrder(sourceCount, sources.prefix(n), rows.prefix(n), ords);
+        o.size = n;
+        return o;
     }
 
     /** The key of the group starting at {@code row}, the first group of a source if 0. */
@@ -275,6 +368,18 @@ public final class MergeOrder {
             for (int[] chunk : chunks) n += chunk.length;
             return n;
         }
+
+        /** The first {@code n} values; full chunks are shared, the partial one is copied (it is written again). */
+        IntColumn prefix(int n) {
+            IntColumn p = new IntColumn();
+            int[][] cs = chunks;
+            int full = n >>> CHUNK_BITS;
+            int[][] out = Arrays.copyOf(cs, Math.min(cs.length, full + 1));
+            if (full < out.length) out[full] = out[full].clone();
+            p.chunks = out;
+            p.size = n;
+            return p;
+        }
     }
 
     private static final class ByteColumn {
@@ -306,6 +411,18 @@ public final class MergeOrder {
             long n = 0;
             for (byte[] chunk : chunks) n += chunk.length;
             return n;
+        }
+
+        /** The first {@code n} values; full chunks are shared, the partial one is copied (it is written again). */
+        ByteColumn prefix(int n) {
+            ByteColumn p = new ByteColumn();
+            byte[][] cs = chunks;
+            int full = n >>> CHUNK_BITS;
+            byte[][] out = Arrays.copyOf(cs, Math.min(cs.length, full + 1));
+            if (full < out.length) out[full] = out[full].clone();
+            p.chunks = out;
+            p.size = n;
+            return p;
         }
     }
 }

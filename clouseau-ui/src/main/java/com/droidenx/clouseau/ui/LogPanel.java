@@ -19,6 +19,9 @@ import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.LogSniffer;
 import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.MergeLoad;
+import com.droidenx.clouseau.core.MergeOrder;
+import com.droidenx.clouseau.core.MergedEntries;
+import com.droidenx.clouseau.core.MergedFollow;
 import com.droidenx.clouseau.core.MergedNotes;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.core.ReviewBundle;
@@ -86,6 +89,8 @@ public final class LogPanel extends JPanel {
     private List<MergeLoad.File> mergedFiles;
     /** Unpacked copies of a merged view's compressed files, deleted with the view. */
     private List<Path> mergedCopies = List.of();
+    /** Follows a merged tab's files (D-17 step 5); null on other tabs. */
+    private MergedTailer mergedTailer;
     private Optional<LogParser> currentParser = Optional.empty();
     private volatile long tailPosition = 0;
     /**
@@ -275,6 +280,7 @@ public final class LogPanel extends JPanel {
         annotationSaveWarned = false;
         partialLoad = false;
         rotatedTextLost = false;
+        dropMergedTailer();
         logTableModel.clear();
         deleteCacheCopy();
         filterBar.clearLoggers();
@@ -521,6 +527,7 @@ public final class LogPanel extends JPanel {
         annotationSaveWarned = false;
         partialLoad = false;
         rotatedTextLost = false;
+        dropMergedTailer();
         logTableModel.clear();
         deleteCacheCopy();
         filterBar.clearLoggers();
@@ -595,6 +602,10 @@ public final class LogPanel extends JPanel {
                 // Each file's notes stay in its own store, saved next to that file (D-17).
                 annotationStore = new MergedNotes(r.notes(), names, r.entries().order());
                 applySavedHighlights();
+                mergedTailer = new MergedTailer(r.entries(),
+                        mergedFiles.stream().map(MergeLoad.File::path).toList(), r.ends(),
+                        parser, tabParsers, srcTz, mergedHost(r.entries()));
+                if (follow) mergedTailer.start();
                 sizeColumnsWhenRowsArrive();
                 logTableModel.applyFilter(filterBar.buildFilter());
                 logTable.repaint();
@@ -649,6 +660,7 @@ public final class LogPanel extends JPanel {
         }
         log.info("No parser recognizes {}; showing it as plain text", currentFile);
         plainSamples = sample.lines();
+        dropMergedTailer();
         logTableModel.clear();          // closes the index; the unpacked copy is reused below
         filterBar.clearLoggers();
         findBar.cancel();
@@ -713,6 +725,8 @@ public final class LogPanel extends JPanel {
         leavePlainMode();
         partialLoad = false;
         annotationStore = AnnotationStore.inMemory();
+
+        dropMergedTailer();
 
         logTableModel.clear();
         filterBar.clearLoggers();
@@ -793,6 +807,10 @@ public final class LogPanel extends JPanel {
 
     private void startTailing() {
         stopTailing();
+        if (mergedTailer != null) {
+            mergedTailer.start();
+            return;
+        }
         if (currentFile == null || LogReaders.isCompressed(currentFile)) return;
         final Optional<LogParser> parser = currentParser;
         final Path file = currentFile;
@@ -861,6 +879,63 @@ public final class LogPanel extends JPanel {
     private void stopTailing() {
         SwingWorker<?, ?> w = tailWorker;
         if (w != null) { w.cancel(true); tailWorker = null; }
+        if (mergedTailer != null) mergedTailer.stop();
+    }
+
+    /** Stops following a merged tab's files for good: the tab is about to show something else. */
+    private void dropMergedTailer() {
+        if (mergedTailer != null) mergedTailer.stop();
+        mergedTailer = null;
+    }
+
+    /** What a merged tab does with its followed rows (D-17 step 5). */
+    private MergedTailer.Host mergedHost(MergedEntries view) {
+        return new MergedTailer.Host() {
+            @Override
+            public void placed(MergedFollow.Placed p) {
+                if (logTableModel.entryRows() == view) placeFollowed(view, p);
+            }
+
+            @Override
+            public void read(List<LogEntry> entries) {
+                if (logTableModel.entryRows() == view) filterBar.addBatch(entries);
+            }
+
+            @Override
+            public void textLost() {
+                if (logTableModel.entryRows() != view) return;
+                rotatedTextLost = true;
+                logTable.repaint();
+                refreshDetail();
+                updateStatusBar();
+            }
+        };
+    }
+
+    /**
+     * Shows followed rows of a merged tab: appended, or, if the tail re-merged, re-filtered
+     * from where it changed, with highlights, notes and the selection kept on their entries.
+     */
+    private void placeFollowed(MergedEntries view, MergedFollow.Placed p) {
+        MergeOrder before = p.before(), after = p.after();
+        if (!p.moved()) {
+            List<LogEntry> added = new ArrayList<>(after.size() - p.from());
+            for (int o = p.from(); o < after.size(); o++) added.add(view.get(o));
+            logTableModel.appendFollowed(added);
+            return;
+        }
+        java.util.function.IntUnaryOperator moved = o -> after.ordinalOf(before.source(o), before.row(o));
+        int viewRow = logTable.getSelectedRow();
+        int selected = viewRow >= 0 ? logTableModel.ordinalAt(logTable.convertRowIndexToModel(viewRow)) : -1;
+        logTableModel.reorderTail(p.from(), moved, after.size());
+        if (annotationStore instanceof MergedNotes notes) notes.setOrder(after);
+        findBar.clearMatches();
+        if (selected >= 0) {
+            int row = logTableModel.rowOfOrdinal(selected >= p.from() ? moved.applyAsInt(selected) : selected);
+            int v = row >= 0 ? logTable.convertRowIndexToView(row) : -1;
+            if (v >= 0) logTable.setRowSelectionInterval(v, v);
+        }
+        if (follow) scrollToBottom();
     }
 
     public void dispose() {
@@ -1010,6 +1085,7 @@ public final class LogPanel extends JPanel {
         boolean reindex = logTableModel.isIndexed() && cacheCopy == null && currentFile != null;
         stopTailing();
         try { tailPosition = currentFile != null ? Files.size(currentFile) : 0; } catch (IOException ignored) { tailPosition = 0; }
+        dropMergedTailer();
         logTableModel.clear();
         rotatedTextLost = false;
         if (reindex) {

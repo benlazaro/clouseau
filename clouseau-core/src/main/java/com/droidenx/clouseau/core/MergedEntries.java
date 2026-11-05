@@ -18,7 +18,8 @@ public final class MergedEntries implements EntryRows {
     public record Source(String name, IndexedEntries entries) {}
 
     private final List<Source> sources;
-    private final MergeOrder order;
+    /** Replaced when following re-merges the tail (D-17); readers take it once per call. */
+    private volatile MergeOrder order;
 
     /** {@code order} must have been built from these sources, in this order. */
     public MergedEntries(List<Source> sources, MergeOrder order) {
@@ -33,17 +34,42 @@ public final class MergedEntries implements EntryRows {
 
     public MergeOrder order() { return order; }
 
+    /**
+     * Shows {@code order} from now on: the same sources, extended ({@link MergeOrder#extend}).
+     * Called by the one thread that extends the order.
+     */
+    public void setOrder(MergeOrder order) {
+        if (order.sourceCount() != sources.size()) throw new IllegalArgumentException("sources differ");
+        this.order = order;
+    }
+
+    /** What is added to {@code source}'s timestamps to place them (0 until offsets exist). */
+    public long offsetMillis(int source) {
+        return 0;
+    }
+
+    /** The merge's inputs: each source's first {@code counts[s]} rows. */
+    public List<MergeOrder.Input> inputs(int[] counts) {
+        List<MergeOrder.Input> inputs = new java.util.ArrayList<>(sources.size());
+        for (int s = 0; s < sources.size(); s++) {
+            inputs.add(new MergeOrder.Input(index(s), counts[s], offsetMillis(s)));
+        }
+        return inputs;
+    }
+
     /** How many entries the merge holds. */
     public int size() { return order.size(); }
 
     @Override
     public LogEntry get(int ordinal) {
-        return sources.get(order.source(ordinal)).entries().get(order.row(ordinal));
+        MergeOrder o = order;
+        return sources.get(o.source(ordinal)).entries().get(o.row(ordinal));
     }
 
     @Override
     public boolean isContinuation(int ordinal) {
-        return index(order.source(ordinal)).isContinuation(order.row(ordinal));
+        MergeOrder o = order;
+        return index(o.source(ordinal)).isContinuation(o.row(ordinal));
     }
 
     @Override public int sourceCount() { return sources.size(); }
@@ -54,8 +80,9 @@ public final class MergedEntries implements EntryRows {
 
     @Override
     public boolean testIndex(EntryFilter filter, int ordinal) {
-        int s = order.source(ordinal);
-        return filter.testSource(s) && filter.testIndex(index(s), order.row(ordinal));
+        MergeOrder o = order;
+        int s = o.source(ordinal);
+        return filter.testSource(s) && filter.testIndex(index(s), o.row(ordinal));
     }
 
     @Override
@@ -69,6 +96,7 @@ public final class MergedEntries implements EntryRows {
     /** One run per source, each in file order. */
     @Override
     public boolean scan(int from, int to, Visitor visitor, BooleanSupplier cancelled) {
+        MergeOrder order = this.order;
         for (int s = 0; s < sources.size(); s++) {
             int source = s;
             int first = order.firstRowAtOrAfter(s, from);

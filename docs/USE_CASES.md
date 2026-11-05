@@ -357,10 +357,13 @@ one column. Filters, Find and the detail panel work across all files, and the fi
 bar's **Sources** button hides whole files. Notes and highlights are saved with the file
 each entry came from, so they show again when that file is opened alone, and the
 annotations panel names each note's file. Files no parser recognizes, or whose lines
-have no timestamps, are listed and offered in their own tabs. Not yet: following
-(files are read once), per-file parsers and timezones (every file uses the tab's),
-time offsets, merging files picked from a zip, file patterns, and exporting a merged
-view for review.
+have no timestamps, are listed and offered in their own tabs. With Follow on, every
+plain file is followed (compressed ones stay as they are): new lines are held back for
+up to a second so files written a moment apart still land in time order, and a line
+that arrives later than that moves to its place, with the selection, highlights and
+notes staying on their entries. Not yet: per-file parsers and timezones (every file
+uses the tab's), time offsets, merging files picked from a zip, file patterns, and
+exporting a merged view for review.
 
 ### UC-13 · Read a file no parser recognizes ✅
 

@@ -99,6 +99,51 @@ class MergedViewTest {
         }
     }
 
+    private static List<String> messages(LogTableModel model) throws Exception {
+        return onEdt(() -> {
+            List<String> out = new ArrayList<>();
+            for (int r = 0; r < model.getRowCount(); r++) out.add(model.getEntry(r).message());
+            return out;
+        });
+    }
+
+    private static void append(MergeLoad.File f, String line) throws Exception {
+        Files.writeString(f.path(), line + "\n", java.nio.file.StandardOpenOption.APPEND);
+    }
+
+    @Test
+    void followsEveryFileAndPlacesLateLinesInTime() throws Exception {
+        MergeLoad.File app = write("app.log", "2026-11-04 10:00:01 INFO app 1\n");
+        MergeLoad.File db = write("db.log", "2026-11-04 10:00:02 INFO db 2\n");
+        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        try {
+            onEdt(() -> {
+                panel.setFollow(true);
+                panel.loadMerged(List.of(app, db), Optional.empty(), new Listener());
+                return null;
+            });
+            LogTableModel model = (LogTableModel) panel.getLogTable().getModel();
+            await(() -> model.getRowCount() == 2);
+
+            append(db, "2026-11-04 10:00:04 INFO db 4");
+            append(app, "2026-11-04 10:00:03 INFO app 3");
+            await(() -> model.getRowCount() == 4);
+            assertThat(messages(model)).containsExactly("app 1", "db 2", "app 3", "db 4");
+
+            // app 9 shows after the hold-back and is selected; then db 8 arrives too late.
+            append(app, "2026-11-04 10:00:09 INFO app 9");
+            await(() -> model.getRowCount() == 5);
+            onEdt(() -> { panel.getLogTable().setRowSelectionInterval(4, 4); return null; });
+            append(db, "2026-11-04 10:00:08 INFO db 8, late");
+            await(() -> model.getRowCount() == 6);
+            assertThat(messages(model)).containsExactly("app 1", "db 2", "app 3", "db 4", "db 8, late", "app 9");
+            int selected = onEdt(() -> panel.getLogTable().getSelectedRow());
+            assertThat(selected).isEqualTo(5);           // still on app 9
+        } finally {
+            onEdt(() -> { panel.dispose(); return null; });
+        }
+    }
+
     @Test
     void oneMergeableFileIsHandedBackToOpenOnItsOwn() throws Exception {
         MergeLoad.File app = write("app.log", "2026-11-04 10:00:01 INFO app starts\n");
