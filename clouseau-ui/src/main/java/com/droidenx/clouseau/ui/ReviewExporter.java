@@ -23,6 +23,11 @@ final class ReviewExporter {
     /** Exports the log shown in {@code panel} (null if no tab is open). Call on the EDT. */
     static void export(Component parent, LogPanel panel) {
         String title = Messages.get("export.review.title");
+        if (panel != null && panel.isMerged()) {
+            JOptionPane.showMessageDialog(parent, Messages.get("export.review.merged"), title,
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
         if (panel == null || panel.getFile() == null) {
             JOptionPane.showMessageDialog(parent, Messages.get("export.review.nofile"), title,
                     JOptionPane.INFORMATION_MESSAGE);

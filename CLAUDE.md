@@ -27,7 +27,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
                     AnnotationStore, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
-                    LogSniffer, TextLines, MergeOrder, EntryRows
+                    LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -119,6 +119,10 @@ tags.
 - `LogSniffer`, `TextLines` (core), `PlainTextView` (ui) — UC-13: a file no parser recognizes
   opens as plain text. `LogSniffer` samples the first lines (parser match, binary check),
   `TextLines` keeps every line's offset and reads text back from disk, `PlainTextView` shows it.
+- `MergeOrder`, `EntryRows`, `MergedEntries`, `MergeLoad` (core) — UC-12, D-17: several files
+  in one timeline. `MergeOrder` is the merged order, `EntryRows` what the table model reads
+  (one `IndexedEntries` or a `MergedEntries`), `MergeLoad` checks, indexes and merges the
+  files in the background; `LogPanel.loadMerged` shows them.
 - `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row
   highlights, and the per-tab entry limit.
 - `AnnotationStore` (core) — annotations for one file, anchored by entry number and content

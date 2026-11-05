@@ -5,6 +5,7 @@ import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.SourceSetting;
+import com.droidenx.clouseau.core.MergeLoad;
 import com.droidenx.clouseau.core.ParserList;
 import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.SshLogSource;
@@ -73,8 +74,8 @@ public final class MainFrame extends JFrame {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) { openSettings(); }
         });
 
-        // Dropped files open like "Open with": auto-detect, one tab per file (UC-1).
-        FileDropHandler.install(this, files -> files.forEach(this::openFile));
+        // Dropped files open like "Open with": auto-detect; several can be merged (UC-1, UC-12).
+        FileDropHandler.install(this, this::openFiles);
 
         // Tab switching (UC-15): a dispatcher, not key bindings; see TabShortcuts.
         KeyEventDispatcher tabShortcuts = new TabShortcuts(this, tabbedPane);
@@ -393,9 +394,97 @@ public final class MainFrame extends JFrame {
                 if (!srcTz.equals(ZoneId.systemDefault())) {
                     AppPrefs.setSourceTimezone(file.toAbsolutePath(), srcTz);
                 }
-                openFile(file, r.parser());
+            }
+            openFiles(r.files(), r.parser());
+        });
+    }
+
+    /**
+     * Opens several files: zips as usual, and the rest in one merged view or each in its
+     * own tab, as the user chooses (D-17, UC-12).
+     */
+    private void openFiles(List<Path> files, Optional<LogParser> parser) {
+        List<Path> logs = new ArrayList<>();
+        for (Path f : files) {
+            if (f.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".zip")) openFile(f, parser);
+            else logs.add(f);
+        }
+        if (logs.size() >= 2) {
+            AppPrefs.MultiOpen how = chooseMultiOpen(logs.size());
+            if (how == null) return;
+            if (how == AppPrefs.MultiOpen.MERGE) {
+                openMerged(logs.stream().map(p -> new MergeLoad.File(p, null)).toList(), parser);
+                return;
+            }
+        }
+        for (Path f : logs) openFile(f, parser);
+    }
+
+    /** Asks whether several files open merged or in separate tabs, unless remembered; null = cancel. */
+    private AppPrefs.MultiOpen chooseMultiOpen(int count) {
+        AppPrefs.MultiOpen saved = AppPrefs.getMultiOpen();
+        if (saved != AppPrefs.MultiOpen.ASK) return saved;
+        JCheckBox remember = new JCheckBox(Messages.get("merge.ask.remember"));
+        Object[] message = { MessageFormat.format(Messages.get("merge.ask.message"), count), remember };
+        String merge = Messages.get("merge.ask.merge"), separate = Messages.get("merge.ask.separate");
+        int answer = JOptionPane.showOptionDialog(this, message, Messages.get("merge.ask.title"),
+                JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null,
+                new Object[] { merge, separate, Messages.get("settings.button.cancel") }, merge);
+        AppPrefs.MultiOpen how = answer == 0 ? AppPrefs.MultiOpen.MERGE
+                : answer == 1 ? AppPrefs.MultiOpen.SEPARATE : null;
+        if (how != null && remember.isSelected()) AppPrefs.setMultiOpen(how);
+        return how;
+    }
+
+    /** Opens {@code files} in one merged view (D-17). */
+    private void openMerged(List<MergeLoad.File> files, Optional<LogParser> parser) {
+        files.forEach(f -> AppPrefs.addRecentFile(f.path()));
+        refreshRecentMenu();
+        LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
+        ZoneId savedTz = AppPrefs.getSourceTimezone(files.get(0).path());
+        if (savedTz != null) panel.setSourceTimezone(savedTz);
+        String title = MessageFormat.format(Messages.get("merge.tab.title"), files.get(0).fileName(), files.size() - 1);
+        addLogTab(title, null, panel);
+        panel.setCloseAction(() -> removeTab(panel));
+        panel.loadMerged(files, parser, new LogPanel.MergeListener() {
+            @Override public void skipped(List<MergeLoad.Skipped> skipped) { offerSkipped(skipped, parser); }
+
+            @Override public void notMerged(List<MergeLoad.File> mergeable) {
+                removeTab(panel);
+                for (MergeLoad.File f : mergeable) openLog(f.path(), f.entry(), parser);
+            }
+
+            @Override public void failed() { removeTab(panel); }
+
+            @Override public void merged(List<MergeLoad.File> merged) {
+                setTabTitle(panel, MessageFormat.format(Messages.get("merge.tab.title"),
+                        merged.get(0).fileName(), merged.size() - 1));
             }
         });
+    }
+
+    /** Renames the tab showing {@code panel}. */
+    private void setTabTitle(LogPanel panel, String title) {
+        int idx = tabbedPane.indexOfComponent(panel);
+        if (idx >= 0 && tabbedPane.getTabComponentAt(idx) instanceof JPanel header
+                && header.getComponentCount() > 0 && header.getComponent(0) instanceof JLabel label) {
+            label.setText(title);
+            header.revalidate();
+        }
+    }
+
+    /** Says which files couldn't be merged, and offers to open them in their own tabs. */
+    private void offerSkipped(List<MergeLoad.Skipped> skipped, Optional<LogParser> parser) {
+        StringBuilder list = new StringBuilder();
+        for (MergeLoad.Skipped s : skipped) {
+            list.append("\n  • ").append(s.file().fileName()).append(" — ")
+                .append(Messages.get("merge.skipped." + s.reason().name().toLowerCase(java.util.Locale.ROOT)));
+        }
+        int answer = JOptionPane.showConfirmDialog(this,
+                MessageFormat.format(Messages.get("merge.skipped.message"), skipped.size(), list.toString()),
+                Messages.get("merge.skipped.title"), JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
+        if (answer != JOptionPane.YES_OPTION) return;
+        for (MergeLoad.Skipped s : skipped) openLog(s.file().path(), s.file().entry(), parser);
     }
 
     /** Opens {@code file} in a new tab with auto-detect parser. Called via IPC or CLI args. */
@@ -408,6 +497,19 @@ public final class MainFrame extends JFrame {
             return;
         }
         openFile(file, Optional.empty());
+    }
+
+    /**
+     * Opens files given on the command line or dropped on the window, with auto-detect;
+     * several can open in one merged view (UC-12).
+     */
+    public void openFiles(List<Path> files) {
+        if (files.isEmpty()) return;
+        if (parsers.isEmpty()) {
+            openFile(files.get(0));     // says there are no parsers
+            return;
+        }
+        openFiles(files, Optional.empty());
     }
 
     private void openFile(Path file, Optional<LogParser> parser) {

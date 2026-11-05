@@ -29,4 +29,10 @@ public interface EntryFilter extends Predicate<LogEntry> {
 
     /** True if rows that pass {@link #testIndex} must still be read and given to {@link #test}. */
     default boolean needsText(EntryIndex index) { return true; }
+
+    /**
+     * False if every entry of this source of a merged view is hidden (D-17); a source is
+     * its index in the tab. Checked before {@link #testIndex}. Must be safe on any thread.
+     */
+    default boolean testSource(int source) { return true; }
 }

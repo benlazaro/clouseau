@@ -21,6 +21,15 @@ public interface EntryRows extends Closeable {
     /** True if the entry at {@code ordinal} continues the one before it in its file. */
     boolean isContinuation(int ordinal);
 
+    /** How many files these entries come from. */
+    default int sourceCount() { return 1; }
+
+    /** The source (its index among {@link #sourceCount()}) of the entry at {@code ordinal}. */
+    default int sourceOf(int ordinal) { return 0; }
+
+    /** A short name for a source, such as its file name; null for a single file. */
+    default String sourceName(int source) { return null; }
+
     /** The index part of {@code filter} for one ordinal (D-16): no I/O. */
     boolean testIndex(EntryFilter filter, int ordinal);
 

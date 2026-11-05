@@ -32,6 +32,7 @@ public final class AppPrefs {
     private static final String KEY_HIGHLIGHT_CLEAR_ALL_CONFIRM  = "highlight.clear.all.confirm";
     private static final String KEY_ANNOTATION_DELETE_CONFIRM    = "annotation.delete.confirm";
     private static final String KEY_FOLLOW_BY_DEFAULT  = "follow.by.default";
+    private static final String KEY_MULTI_OPEN         = "open.several";
     private static final String KEY_DETAIL_FONT_SIZE   = "detail.font.size";
     private static final String KEY_DETAIL_WRAP_LINES  = "detail.wrap.lines";
     private static final String KEY_ROW_HEIGHT         = "row.height";
@@ -185,6 +186,21 @@ public final class AppPrefs {
 
     public static void setFollowByDefault(boolean value) {
         putBool(KEY_FOLLOW_BY_DEFAULT, value);
+    }
+
+    /** What opening several files at once does (D-17). */
+    public enum MultiOpen { ASK, MERGE, SEPARATE }
+
+    public static MultiOpen getMultiOpen() {
+        try {
+            return MultiOpen.valueOf(getString(KEY_MULTI_OPEN, MultiOpen.ASK.name()));
+        } catch (IllegalArgumentException e) {
+            return MultiOpen.ASK;
+        }
+    }
+
+    public static void setMultiOpen(MultiOpen value) {
+        putString(KEY_MULTI_OPEN, value.name());
     }
 
     public static int getMaxEntriesPerTab() {

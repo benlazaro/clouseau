@@ -40,6 +40,11 @@ import java.util.function.Predicate;
 public final class LogTableModel extends AbstractTableModel {
 
     private static final int FIXED_COLUMNS = 6;
+    /**
+     * The key of the Source column of a merged view (D-17), the first custom column. Not a
+     * name a parser can declare, so it never clashes with a field.
+     */
+    static final String SOURCE_COLUMN = "\u0000source";
     private static final String[] COLUMN_KEYS = {
         "table.col.index", "table.col.timestamp", "table.col.level",
         "table.col.thread", "table.col.logger",   "table.col.message"
@@ -223,6 +228,25 @@ public final class LogTableModel extends AbstractTableModel {
         if (!allEntries.isEmpty() || indexed != null) throw new IllegalStateException("clear() first");
         indexed = entries;
         indexedCount = 0;
+    }
+
+    /**
+     * Makes this tab show a merged view (D-17) whose {@code count} entries are all indexed
+     * already: adds the Source column before {@code fields}, then filters every row in the
+     * background. Call after {@link #clear()}; the model closes {@code entries} when it is
+     * cleared or disposed. Must be called on the EDT.
+     */
+    public void beginMergedLoad(EntryRows entries, int count, List<String> fields) {
+        if (!allEntries.isEmpty() || indexed != null) throw new IllegalStateException("clear() first");
+        indexed = entries;
+        indexedCount = count;
+        staticCount = count;
+        knownFieldKeys.clear();
+        if (entries.sourceCount() > 1) knownFieldKeys.add(SOURCE_COLUMN);
+        knownFieldKeys.addAll(fields);
+        customFields = List.copyOf(knownFieldKeys);
+        fireTableStructureChanged();
+        scheduleReapply();
     }
 
     /**
@@ -667,7 +691,8 @@ public final class LogTableModel extends AbstractTableModel {
 
     @Override public String getColumnName(int col) {
         if (col < FIXED_COLUMNS) return Messages.get(COLUMN_KEYS[col]);
-        return customFields.get(col - FIXED_COLUMNS);
+        String field = customFields.get(col - FIXED_COLUMNS);
+        return SOURCE_COLUMN.equals(field) ? Messages.get("table.col.source") : field;
     }
 
     @Override
@@ -688,8 +713,13 @@ public final class LogTableModel extends AbstractTableModel {
             case 5 -> e.message()   != null ? e.message()                  : "";
             default -> "";
         };
+        String field = customFields.get(col - FIXED_COLUMNS);
+        if (SOURCE_COLUMN.equals(field)) {
+            String name = indexed != null ? indexed.sourceName(indexed.sourceOf(ordinalAt(row))) : null;
+            return name != null ? name : "";
+        }
         Map<String, String> fields = e.fields();
-        return fields != null ? fields.getOrDefault(customFields.get(col - FIXED_COLUMNS), "") : "";
+        return fields != null ? fields.getOrDefault(field, "") : "";
     }
 
     /** A growable list of ascending ints: 4 bytes a row, and a cheap drop-from-front. */

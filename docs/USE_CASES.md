@@ -289,7 +289,7 @@ logfmt parser and a demo live source.
 **Scope note:** Sources that read from log aggregators (Loki, CloudWatch, and similar)
 are welcome as plugins. The core application does not ship them.
 
-### UC-12 · View related logs in one merged view ❌
+### UC-12 · View related logs in one merged view 🟡
 
 **Actor:** Developer, Field engineer
 **Goal:** Read several related logs as one timeline: the rolled files of one app
@@ -346,6 +346,20 @@ often visible through an ID that appears in both files.
 
 The offset is applied after the file's source timezone: the timezone setting says how to
 read the timestamps, and the offset corrects a clock that is simply wrong.
+
+**Current behavior:** Choosing several files in the open dialog, dropping them, or
+passing them on the command line asks whether to open them in one merged view or in
+separate tabs; "Remember my choice" sets this, and Settings → "When opening several
+files" changes it later. A merged view interleaves the files by timestamp, keeps stack
+traces with their entry, keeps each file's order for equal timestamps, and shows a
+**Source** column; plain and `.gz` files can be mixed. Fields with the same name share
+one column. Filters, Find and the detail panel work across all files, and the filter
+bar's **Sources** button hides whole files. Files no parser recognizes, or whose lines
+have no timestamps, are listed and offered in their own tabs. Not yet: following
+(files are read once), per-file parsers and timezones (every file uses the tab's),
+time offsets, notes and highlights saved with each file (they last only while the tab
+is open), merging files picked from a zip, file patterns, and exporting a merged view
+for review.
 
 ### UC-13 · Read a file no parser recognizes ✅
 

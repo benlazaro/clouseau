@@ -83,7 +83,7 @@ public final class ClouseauApp {
 
             Runnable show = () -> {
                 frame.setVisible(true);
-                for (String arg : args) frame.openFile(Path.of(arg));
+                frame.openFiles(java.util.Arrays.stream(args).map(Path::of).toList());
                 pendingOpens.forEach(frame::openFile);
                 pendingOpens.clear();
             };

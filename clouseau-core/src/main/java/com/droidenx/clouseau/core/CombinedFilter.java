@@ -30,6 +30,7 @@ public final class CombinedFilter implements EntryFilter {
     private final Map<String, Set<String>> excludedFieldValues;
     private final long fromMillis, toMillis;
     private final Pattern text;                    // null = none
+    private final Set<Integer> excludedSources;    // empty = none
 
     /**
      * @param levels          the levels to show; entries with no level always show
@@ -43,6 +44,18 @@ public final class CombinedFilter implements EntryFilter {
      */
     public CombinedFilter(Set<LogLevel> levels, Set<String> excludedLoggers, boolean noLoggers,
                           Map<String, Set<String>> excludedFieldValues, Instant from, Instant to, String text) {
+        this(levels, excludedLoggers, noLoggers, excludedFieldValues, from, to, text, Set.of());
+    }
+
+    /**
+     * As above, also hiding whole sources of a merged view (D-17).
+     *
+     * @param excludedSources the sources to hide, by their index in the tab
+     */
+    public CombinedFilter(Set<LogLevel> levels, Set<String> excludedLoggers, boolean noLoggers,
+                          Map<String, Set<String>> excludedFieldValues, Instant from, Instant to, String text,
+                          Set<Integer> excludedSources) {
+        this.excludedSources = Set.copyOf(excludedSources);
         this.levels = levels == null || levels.containsAll(EnumSet.allOf(LogLevel.class))
                 ? null : Set.copyOf(levels);
         this.excludedLoggers = Set.copyOf(excludedLoggers);
@@ -108,6 +121,11 @@ public final class CombinedFilter implements EntryFilter {
             if (index.hasTooManyValues(name)) return true;
         }
         return false;
+    }
+
+    @Override
+    public boolean testSource(int source) {
+        return !excludedSources.contains(source);
     }
 
     /** True if this filter has message text, which can only be tested by reading entries. */

@@ -51,6 +51,7 @@ final class FilterBar extends JPanel {
     private final Map<LogLevel, JToggleButton> levelButtons = new EnumMap<>(LogLevel.class);
     private final JButton        loggerButton;
     private final JButton        fieldsButton;
+    private final JButton        sourcesButton;
     private final JTextField     fromField   = new JTextField(19);
     private final JTextField     toField     = new JTextField(19);
     private final JTextField     searchField = new JTextField(16);
@@ -68,6 +69,10 @@ final class FilterBar extends JPanel {
     // Field value picker state: fieldKey → sorted distinct values / excluded values
     private final Map<String, TreeSet<String>> allFieldValues      = new LinkedHashMap<>();
     private final Map<String, Set<String>>     excludedFieldValues = new LinkedHashMap<>();
+
+    // Source picker state (a merged view, D-17): source names, and the indexes hidden
+    private List<String>        allSources      = List.of();
+    private final Set<Integer>  excludedSources = new LinkedHashSet<>();
 
     // Used when only HH:mm:ss is typed — anchors time to the date of the first log entry
     private LocalDate referenceDate = LocalDate.now();
@@ -109,6 +114,12 @@ final class FilterBar extends JPanel {
         }
 
         add(new JSeparator(JSeparator.VERTICAL), "growy, gapx 4");
+
+        // ── Source picker button (merged views only) ──────────────────────────
+        sourcesButton = new JButton(Messages.get("filter.sources.all"));
+        sourcesButton.addActionListener(e -> showSourcesPopup(sourcesButton));
+        sourcesButton.setVisible(false);
+        add(sourcesButton, "hidemode 3");
 
         // ── Logger picker button ──────────────────────────────────────────────
         loggerButton = new JButton(Messages.get("filter.loggers.all"));
@@ -189,6 +200,18 @@ final class FilterBar extends JPanel {
         excludedFieldValues.clear();
         fieldsButton.setVisible(false);
         updateFieldsButtonLabel();
+        setSources(List.of());
+    }
+
+    /**
+     * The files of a merged view (D-17), in the tab's order, for the Sources picker; an
+     * empty list (one file) hides it. Clears what was hidden.
+     */
+    void setSources(List<String> names) {
+        allSources = List.copyOf(names);
+        excludedSources.clear();
+        sourcesButton.setVisible(allSources.size() > 1);
+        updateSourcesButtonLabel();
     }
 
     /**
@@ -282,7 +305,7 @@ final class FilterBar extends JPanel {
         boolean noLoggers = !excludedLoggers.isEmpty() && excludedLoggers.containsAll(allLoggers);
         return new CombinedFilter(allowed, excludedLoggers, noLoggers, excludedFieldValues,
                 parseTimestamp(fromField.getText().trim()), parseTimestamp(toField.getText().trim()),
-                searchField.getText());
+                searchField.getText(), excludedSources);
     }
 
     /** Resets all filters to their default (pass-through) state. */
@@ -292,6 +315,8 @@ final class FilterBar extends JPanel {
         updateLoggerButtonLabel();
         excludedFieldValues.values().forEach(Set::clear);
         updateFieldsButtonLabel();
+        excludedSources.clear();
+        updateSourcesButtonLabel();
         fromField.setText("");
         toField.setText("");
         searchField.setText("");
@@ -508,6 +533,60 @@ final class FilterBar extends JPanel {
 
         popup.add(content);
         popup.show(invoker, 0, invoker.getHeight());
+    }
+
+    // ── Source picker popup ───────────────────────────────────────────────────
+
+    private void showSourcesPopup(JButton invoker) {
+        JPopupMenu popup = new JPopupMenu();
+        JPanel content = new JPanel(new MigLayout("fill, insets 6", "[grow]", "[grow][]"));
+
+        JPanel listPanel = new JPanel();
+        listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
+        listPanel.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+        List<JCheckBox> boxes = new ArrayList<>();
+        for (int i = 0; i < allSources.size(); i++) {
+            int source = i;
+            JCheckBox cb = new JCheckBox(allSources.get(i), !excludedSources.contains(i));
+            cb.setFont(cb.getFont().deriveFont(12f));
+            cb.setAlignmentX(Component.LEFT_ALIGNMENT);
+            cb.addActionListener(e -> {
+                if (cb.isSelected()) excludedSources.remove(source);
+                else                 excludedSources.add(source);
+                updateSourcesButtonLabel();
+                onChanged.run();
+            });
+            listPanel.add(cb);
+            boxes.add(cb);
+        }
+        JScrollPane scroll = new JScrollPane(listPanel,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setBorder(UIManager.getBorder("PopupMenu.border"));
+        content.add(scroll, "grow, wrap, hmax 320");
+
+        JButton allBtn   = new JButton(Messages.get("filter.loggers.select.all"));
+        JButton closeBtn = new JButton(Messages.get("filter.loggers.close"));
+        allBtn.addActionListener(e -> {
+            excludedSources.clear();
+            boxes.forEach(cb -> cb.setSelected(true));
+            updateSourcesButtonLabel();
+            onChanged.run();
+        });
+        closeBtn.addActionListener(e -> popup.setVisible(false));
+        JPanel btnRow = new JPanel(new MigLayout("insets 0", "[]push[]"));
+        btnRow.add(allBtn);
+        btnRow.add(closeBtn);
+        content.add(btnRow, "growx");
+
+        popup.add(content);
+        popup.show(invoker, 0, invoker.getHeight());
+    }
+
+    private void updateSourcesButtonLabel() {
+        int total = allSources.size();
+        sourcesButton.setText(excludedSources.isEmpty() || total == 0
+            ? Messages.get("filter.sources.all")
+            : Messages.get("filter.sources.partial").formatted(total - excludedSources.size(), total));
     }
 
     // Logger-tree depth colors read from UIManager via ClouseauColors at render time.

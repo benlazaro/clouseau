@@ -18,6 +18,7 @@ import com.droidenx.clouseau.core.LogFileReader;
 import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.LogSniffer;
 import com.droidenx.clouseau.core.MemoryGuard;
+import com.droidenx.clouseau.core.MergeLoad;
 import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
@@ -79,6 +80,10 @@ public final class LogPanel extends JPanel {
     private String currentEntry;
     /** The decompressed copy of a compressed log this tab reads rows from, or null (D-16). */
     private Path cacheCopy;
+    /** The files of a merged view (D-17), or null for a single-file tab. */
+    private List<MergeLoad.File> mergedFiles;
+    /** Unpacked copies of a merged view's compressed files, deleted with the view. */
+    private List<Path> mergedCopies = List.of();
     private Optional<LogParser> currentParser = Optional.empty();
     private volatile long tailPosition = 0;
     /**
@@ -248,6 +253,7 @@ public final class LogPanel extends JPanel {
      * plain (or .gz) file.
      */
     public void load(Path file, String entry, Optional<LogParser> parser, Runnable onError) {
+        mergedFiles = null;
         currentFile = file.toAbsolutePath();
         currentEntry = entry;
         currentParser = parser;
@@ -436,7 +442,160 @@ public final class LogPanel extends JPanel {
     }
 
     public void reload() {
-        if (currentFile != null) load(currentFile, currentEntry, currentParser, () -> {});
+        if (mergedFiles != null) loadMerged(mergedFiles, currentParser, mergeListener);
+        else if (currentFile != null) load(currentFile, currentEntry, currentParser, () -> {});
+    }
+
+    // ── Merged view (UC-12, D-17) ─────────────────────────────────────────────
+
+    /** What a merged load tells the window, on the EDT, once it ends. */
+    public interface MergeListener {
+        /** Some files can't go on a timeline; offer them in their own tabs. */
+        void skipped(List<MergeLoad.Skipped> skipped);
+
+        /**
+         * Fewer than two files could be merged, so nothing was: close this tab, and open
+         * {@code mergeable} (zero or one file) as an ordinary tab. {@link #skipped} follows.
+         */
+        void notMerged(List<MergeLoad.File> mergeable);
+
+        /** Loading failed or stopped (the user was told why): close this tab. */
+        void failed();
+
+        /** The view shows these files (those that could be merged): title the tab after them. */
+        void merged(List<MergeLoad.File> files);
+    }
+
+    private MergeListener mergeListener;
+
+    /** True while this tab shows several files merged into one timeline. */
+    public boolean isMerged() { return mergedFiles != null; }
+
+    /** The files of a merged view, in the order given, or null for a single-file tab. */
+    public List<MergeLoad.File> getMergedFiles() { return mergedFiles; }
+
+    private void showMergedPath(List<MergeLoad.File> files) {
+        statusBarPathLabel.setText(java.text.MessageFormat.format(Messages.get("merge.status.path"), files.size(),
+                String.join(", ", files.stream().map(MergeLoad.File::fileName).toList())));
+        statusBarPathLabel.setToolTipText(String.join("\n", files.stream().map(MergeLoad.File::toString).toList()));
+    }
+
+    /**
+     * Sizes the columns once the first filter result is in: a merged view's rows only
+     * appear when the background filter finishes, after loading.
+     */
+    private void sizeColumnsWhenRowsArrive() {
+        javax.swing.event.TableModelListener[] once = new javax.swing.event.TableModelListener[1];
+        once[0] = e -> {
+            if (logTableModel.getRowCount() == 0) return;
+            logTableModel.removeTableModelListener(once[0]);
+            SwingUtilities.invokeLater(() -> {
+                autoResizeColumns();
+                applyDefaultLayoutIfSet();
+            });
+        };
+        logTableModel.addTableModelListener(once[0]);
+    }
+
+    /** Loads several files into one merged view (D-17); {@code listener} hears how it went. */
+    public void loadMerged(List<MergeLoad.File> files, Optional<LogParser> parser, MergeListener listener) {
+        mergeListener = listener;
+        final java.util.function.Consumer<List<MergeLoad.Skipped>> onSkipped = listener::skipped;
+        final Runnable onError = listener::failed;
+        stopTailing();
+        SwingWorker<?, ?> old = currentWorker;
+        if (old != null) old.cancel(true);
+        leavePlainMode();
+        currentFile = null;
+        currentEntry = null;
+        currentParser = parser;
+        mergedFiles = List.copyOf(files);
+        showMergedPath(files);
+        loading = true;
+        annotationStore = AnnotationStore.inMemory();
+        annotationSaveWarned = false;
+        partialLoad = false;
+        rotatedTextLost = false;
+        logTableModel.clear();
+        deleteCacheCopy();
+        filterBar.clearLoggers();
+        hiddenColumns.clear();
+        activeLayoutName = null;
+        logTableModel.setCustomFields(List.of());
+        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
+
+        final ZoneId srcTz = this.sourceTimezone;
+        final MemoryGuard memory = new MemoryGuard();
+        final List<LogParser> tabParsers = parsers;
+        SwingWorker<MergeLoad.Result, LogEntry> worker = new SwingWorker<>() {
+            @Override
+            protected MergeLoad.Result doInBackground() throws Exception {
+                return MergeLoad.run(files, parser, tabParsers, srcTz, AppDirs.cacheDir(),
+                        Messages.get("table.rotated.text"), memory::isLow, this::isCancelled, this::publish);
+            }
+
+            @Override
+            protected void process(List<LogEntry> chunk) {
+                if (!isCancelled()) filterBar.addBatch(chunk);
+            }
+
+            @Override
+            protected void done() {
+                if (currentWorker == this) loading = false;
+                ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
+                MergeLoad.Result r;
+                try {
+                    r = get();
+                } catch (java.util.concurrent.CancellationException | InterruptedException ex) {
+                    return;     // the worker cleans up what it made
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    log.error("Failed to merge {}", files, ex.getCause());
+                    onError.run();
+                    JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(LogPanel.this),
+                            String.valueOf(ex.getCause().getMessage()), Messages.get("filechooser.error.title"),
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                if (r == null) return;
+                if (isCancelled() || currentWorker != this) {
+                    if (r.entries() != null) r.entries().close();
+                    r.copies().forEach(LogCache::delete);
+                    return;
+                }
+                if (r.stopped()) {
+                    onError.run();
+                    JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(LogPanel.this),
+                            r.diskFull()
+                                    ? java.text.MessageFormat.format(Messages.get("merge.diskfull.message"),
+                                            AppDirs.cacheDir().toString())
+                                    : java.text.MessageFormat.format(Messages.get("merge.lowmemory.message"),
+                                            memory.maxMiB()),
+                            Messages.get("load.lowmemory.title"), JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if (r.entries() == null) {
+                    // Fewer than two files can be merged: one opens as an ordinary tab.
+                    listener.notMerged(r.mergeable());
+                    if (!r.skipped().isEmpty()) onSkipped.accept(r.skipped());
+                    return;
+                }
+                mergedCopies = r.copies();
+                mergedFiles = r.mergeable();    // a reload doesn't check the skipped ones again
+                showMergedPath(mergedFiles);
+                listener.merged(mergedFiles);
+                List<String> names = new ArrayList<>();
+                for (int i = 0; i < r.entries().sourceCount(); i++) names.add(r.entries().sourceName(i));
+                filterBar.setSources(names);
+                logTableModel.beginMergedLoad(r.entries(), r.entries().size(), r.fields());
+                sizeColumnsWhenRowsArrive();
+                logTableModel.applyFilter(filterBar.buildFilter());
+                logTable.repaint();
+                updateStatusBar();
+                if (!r.skipped().isEmpty()) onSkipped.accept(r.skipped());
+            }
+        };
+        currentWorker = worker;
+        worker.execute();
     }
 
     // ── Plain text (UC-13) ────────────────────────────────────────────────────
@@ -732,6 +891,8 @@ public final class LogPanel extends JPanel {
     private void deleteCacheCopy() {
         LogCache.delete(cacheCopy);
         cacheCopy = null;
+        mergedCopies.forEach(LogCache::delete);
+        mergedCopies = List.of();
     }
 
     public JTable getLogTable() { return logTable; }

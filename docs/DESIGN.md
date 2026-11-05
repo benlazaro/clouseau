@@ -1073,9 +1073,34 @@ as a reusable "workspace".
    takes a `Visitor` and reports ordinals in **runs** (one per source): the filter
    executor sorts what several runs found, and Find starts its continuation tracking
    again at each run. `EntryRowsRunsTest` checks both with a fake two-run source.
-3. `MergedEntries`, and a static merged tab from the open dialog and drops: the prompt,
+3. ✅ `MergedEntries`, and a static merged tab from the open dialog and drops: the prompt,
    sniffing and the no-timestamp offer, parallel loading, the Source column and filter,
-   union columns, filters and Find across sources.
+   union columns, filters and Find across sources. As built:
+   - `MergeLoad` (core) does the background work: `LogSniffer` on each file (a file is
+     left out if no parser recognizes its sample, no sample line has a timestamp, or a
+     compressed file can't be unpacked to `cache/`), then one indexing thread per file
+     (up to the number of processors), then `MergeOrder`. Entries are handed to the
+     filter bar as they're indexed, so it learns loggers and field values. Low memory or
+     a full disk stops the whole load and merges nothing; a partial timeline would
+     mislead. `MergeLoadTest`, `MergedEntriesTest`, `MergedViewTest`.
+   - `LogPanel.loadMerged` shows it; `MergeListener` tells `MainFrame` which files were
+     left out (offered in their own tabs), when fewer than two could be merged (the tab
+     closes and the one file opens normally), and which files the view shows (the tab
+     title, `app.log +2`). A reload merges only those.
+   - **Opening:** several files from the open dialog, dropped, or given on the command
+     line ask "merged view or separate tabs?", with "Remember my choice"; Settings →
+     "When opening several files" (`open.several` in `settings.json`) changes it later.
+     Zips open as before.
+   - **Source column and filter:** the Source column is the first custom column, keyed
+     `LogTableModel.SOURCE_COLUMN` (a name no parser can declare). The filter bar's
+     **Sources** button hides whole files; `EntryFilter.testSource` carries that, and
+     `MergedEntries.testIndex` checks it before the index columns.
+   - **Not yet (later steps):** single-file tabs keep their own loader (`LogPanel.load`);
+     only the model reads both through `EntryRows`. Every file uses the tab's parser
+     choice (chosen, or per-line detection) and its one source timezone (per-file in
+     step 6). A merged tab doesn't follow (step 5), keeps notes and highlights in memory
+     (step 4), and can't be exported for review (step 7). A compressed file that can't be
+     unpacked is left out rather than loaded into memory.
 4. Annotations and highlights per source, keyed by identity.
 5. Following: hold-back, late entries, per-source rotation.
 6. Time offsets: dialog, Sources menu, re-merge, the detail panel line.

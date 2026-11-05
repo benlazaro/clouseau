@@ -214,6 +214,20 @@ public final class MergeOrder {
         return row;
     }
 
+    /** The first row of {@code source} placed at {@code ordinal} or later (its row count if none). */
+    public int firstRowAtOrAfter(int source, int ordinal) {
+        check(source, sourceCount);
+        if (sourceCount == 1) return Math.max(0, Math.min(ordinal, size));
+        IntColumn col = ordinals[source];
+        int lo = 0, hi = col.size;        // ordinals ascend with rows
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (col.get(mid) < ordinal) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
+    }
+
     /** About how many bytes of heap the arrays use. */
     public long estimatedBytes() {
         if (sourceCount == 1) return 0;
