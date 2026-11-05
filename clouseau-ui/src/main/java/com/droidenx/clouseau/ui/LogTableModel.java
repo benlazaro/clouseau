@@ -2,7 +2,7 @@ package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.core.EntryFilter;
-import com.droidenx.clouseau.core.EntryIndex;
+import com.droidenx.clouseau.core.EntryRows;
 import com.droidenx.clouseau.core.IndexedEntries;
 
 import javax.swing.*;
@@ -34,7 +34,8 @@ import java.util.function.Predicate;
  * <p>
  * A static file can be <em>indexed</em> (D-16): its entries then live in an
  * {@link IndexedEntries}, read back from disk on demand. Following such a file adds to
- * the index too ({@link #appendFollowed}), so an indexed tab is never trimmed.
+ * the index too ({@link #appendFollowed}), so an indexed tab is never trimmed. The model
+ * reads indexed entries through {@link EntryRows}, so a merged view (D-17) works the same.
  */
 public final class LogTableModel extends AbstractTableModel {
 
@@ -58,8 +59,8 @@ public final class LogTableModel extends AbstractTableModel {
         fireTableDataChanged();
     }
 
-    /** The indexed static file's entries (ordinals 0 to indexedCount - 1), or null. */
-    private IndexedEntries               indexed;
+    /** The indexed entries (ordinals 0 to indexedCount - 1): one file, or a merged view (D-17); or null. */
+    private EntryRows                    indexed;
     /** Rows of {@link #indexed} handed to this model so far. */
     private int                          indexedCount = 0;
     /** Entries held in memory, oldest first; the entry at index i has ordinal listBase() + i. */
@@ -218,7 +219,7 @@ public final class LogTableModel extends AbstractTableModel {
      * first {@link #appendBatch}; the model closes {@code entries} when it is cleared or
      * disposed. Must be called on the EDT.
      */
-    public void beginIndexedLoad(IndexedEntries entries) {
+    public void beginIndexedLoad(EntryRows entries) {
         if (!allEntries.isEmpty() || indexed != null) throw new IllegalStateException("clear() first");
         indexed = entries;
         indexedCount = 0;
@@ -246,8 +247,11 @@ public final class LogTableModel extends AbstractTableModel {
         else appendLive(entries);
     }
 
-    /** The indexed file's entries, or null if this tab isn't indexed. Must be called on the EDT. */
-    public IndexedEntries indexedEntries() { return indexed; }
+    /** The indexed file's entries, or null if this tab isn't one indexed file. Must be called on the EDT. */
+    public IndexedEntries indexedEntries() { return indexed instanceof IndexedEntries ie ? ie : null; }
+
+    /** The indexed entries (one file or a merged view), or null. Must be called on the EDT. */
+    public EntryRows entryRows() { return indexed; }
 
     /** Counts in rows just added to the index, and shows those that pass the filter. */
     private void addIndexedRows(List<LogEntry> entries) {
@@ -357,7 +361,7 @@ public final class LogTableModel extends AbstractTableModel {
      * round again for those rather than reading them on the EDT.
      */
     private void submitFilterRun(long generation, EntryFilter filter, IntList acc, int from) {
-        IndexedEntries indexedSnapshot = indexed;
+        EntryRows indexedSnapshot = indexed;
         int to = indexedCount;
         List<LogEntry> snapshot = List.copyOf(allEntries);
         int base = listBase();
@@ -373,7 +377,7 @@ public final class LogTableModel extends AbstractTableModel {
             SwingUtilities.invokeLater(() -> {
                 if (filterGeneration != generation) return; // superseded by a newer filter
                 if (indexed != null && indexedCount - to > EDT_CATCH_UP_ROWS
-                        && filter.needsText(indexed.index())) {
+                        && indexed.needsText(filter)) {
                     submitFilterRun(generation, filter, acc, to);
                     return;
                 }
@@ -399,33 +403,41 @@ public final class LogTableModel extends AbstractTableModel {
     }
 
     /** Filters indexed rows [from, to) into {@code acc}; false if interrupted. Runs on the filter executor. */
-    private boolean filterIndexed(IndexedEntries entries, int from, int to, EntryFilter filter,
+    private boolean filterIndexed(EntryRows entries, int from, int to, EntryFilter filter,
                                   IntList acc, long generation) {
-        EntryIndex index = entries.index();
-        if (!filter.needsText(index)) {
+        if (!entries.needsText(filter)) {
             for (int row = from; row < to; row++) {
                 if ((row & 0xFFFF) == 0 && Thread.currentThread().isInterrupted()) return false;
-                if (filter.testIndex(index, row)) acc.add(row);
+                if (entries.testIndex(filter, row)) acc.add(row);
             }
             return true;
         }
         // Only rows the columns pass are read, in file order, in large sequential reads.
-        Progress progress = new Progress(from, to, p -> postProgress(generation, p));
-        entries.scan(from, to, row -> {
-            progress.at(row);
-            return filter.testIndex(index, row);
-        }, (row, e) -> {
-            if (filter.test(e)) acc.add(row);
+        // A merged view reads one source after another, so its ordinals are sorted after.
+        Progress progress = new Progress(to - from, p -> postProgress(generation, p));
+        int added = acc.size();
+        int[] runs = {0};
+        entries.scan(from, to, new EntryRows.Visitor() {
+            @Override public void startRun() { runs[0]++; }
+
+            @Override public boolean wanted(int ordinal, boolean continuation) {
+                progress.step();
+                return entries.testIndex(filter, ordinal);
+            }
+
+            @Override public void accept(int ordinal, LogEntry e) {
+                if (filter.test(e)) acc.add(ordinal);
+            }
         }, () -> Thread.currentThread().isInterrupted());
+        if (runs[0] > 1) acc.sortFrom(added);
         return !Thread.currentThread().isInterrupted();
     }
 
     /** Tests one entry on the EDT, reading an indexed row's text only if the filter needs it. */
     private boolean passesOnEdt(EntryFilter filter, int ordinal) {
         if (indexed != null && ordinal < indexedCount) {
-            EntryIndex index = indexed.index();
-            if (!filter.testIndex(index, ordinal)) return false;
-            if (!filter.needsText(index)) return true;
+            if (!indexed.testIndex(filter, ordinal)) return false;
+            if (!indexed.needsText(filter)) return true;
         }
         LogEntry e = entryAtOrdinal(ordinal);
         return e != null && filter.test(e);
@@ -450,7 +462,7 @@ public final class LogTableModel extends AbstractTableModel {
         cancelFind();
         long generation = findGeneration;
         IntList visible = rows.copy();
-        IndexedEntries indexedSnapshot = indexed;
+        EntryRows indexedSnapshot = indexed;
         int indexedRows = indexedCount;
         List<LogEntry> snapshot = List.copyOf(allEntries);
         int base = listBase();
@@ -459,14 +471,19 @@ public final class LogTableModel extends AbstractTableModel {
             FindScan scan = new FindScan(visible, matches);
             int first = visible.size() > 0 ? visible.get(0) : Integer.MAX_VALUE;
             if (indexedSnapshot != null && first < indexedRows) {
-                EntryIndex index = indexedSnapshot.index();
-                Progress p = new Progress(first, indexedRows, pct -> SwingUtilities.invokeLater(() -> {
+                Progress p = new Progress(indexedRows - first, pct -> SwingUtilities.invokeLater(() -> {
                     if (findGeneration == generation) progress.accept(pct);
                 }));
-                indexedSnapshot.scan(first, indexedRows, row -> {
-                    p.at(row);
-                    return scan.wanted(row, index.isContinuation(row));
-                }, scan::accept, () -> Thread.currentThread().isInterrupted());
+                indexedSnapshot.scan(first, indexedRows, new EntryRows.Visitor() {
+                    @Override public void startRun() { scan.startRun(); }
+
+                    @Override public boolean wanted(int ordinal, boolean continuation) {
+                        p.step();
+                        return scan.wanted(ordinal, continuation);
+                    }
+
+                    @Override public void accept(int ordinal, LogEntry e) { scan.accept(ordinal, e); }
+                }, () -> Thread.currentThread().isInterrupted());
                 if (Thread.currentThread().isInterrupted()) return;
             }
             for (int i = Math.max(0, first - base); i < snapshot.size(); i++) {
@@ -511,7 +528,13 @@ public final class LogTableModel extends AbstractTableModel {
             this.matches = matches;
         }
 
-        /** Called for every ordinal in order; true if the entry must be read and given to {@link #accept}. */
+        /** A new run of ascending ordinals starts (another source of a merged view). */
+        void startRun() {
+            cursor = 0;
+            open.clear();
+        }
+
+        /** Called for every ordinal of a run in order; true if the entry must be read and given to {@link #accept}. */
         boolean wanted(int ordinal, boolean continuation) {
             if (!continuation) open.clear();
             while (cursor < visible.size() && visible.get(cursor) < ordinal) cursor++;
@@ -538,19 +561,20 @@ public final class LogTableModel extends AbstractTableModel {
 
     /** Turns rows done into a percentage, reporting only when it changes. */
     private static final class Progress {
-        private final int from, total;
+        private final int total;
         private final IntConsumer out;
+        private int done = 0;
         private int last = -1;
 
-        Progress(int from, int to, IntConsumer out) {
-            this.from = from;
-            this.total = to - from;
+        Progress(int total, IntConsumer out) {
+            this.total = total;
             this.out = out;
         }
 
-        void at(int row) {
+        /** Called once per row, before it is read. */
+        void step() {
             if (total <= 0) return;
-            int p = (int) ((row - from) * 100L / total);
+            int p = (int) (done++ * 100L / total);
             if (p != last) {
                 last = p;
                 out.accept(p);
@@ -717,6 +741,11 @@ public final class LogTableModel extends AbstractTableModel {
             }
             System.arraycopy(data, start + to, data, start + from, size - to);
             size -= to - from;
+        }
+
+        /** Sorts the values from position {@code from} on (they came in several ascending runs). */
+        void sortFrom(int from) {
+            Arrays.sort(data, start + from, start + size);
         }
 
         /** How many leading values are below {@code value}. */

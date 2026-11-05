@@ -3,7 +3,6 @@ package com.droidenx.clouseau.core;
 import com.droidenx.clouseau.api.LogEntry;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
@@ -42,7 +41,7 @@ import java.util.function.IntPredicate;
  * called by that thread, before it adds the first row of the new file.
  */
 @Slf4j
-public final class IndexedEntries implements Closeable {
+public final class IndexedEntries implements EntryRows {
 
     /** Entries kept parsed for {@link #get}: enough for scrolling and the detail panel. */
     public static final int CACHE_SIZE = 10_000;
@@ -131,6 +130,22 @@ public final class IndexedEntries implements Closeable {
     }
 
     public EntryIndex index() { return index; }
+
+    @Override
+    public boolean isContinuation(int row) { return index.isContinuation(row); }
+
+    @Override
+    public boolean testIndex(EntryFilter filter, int row) { return filter.testIndex(index, row); }
+
+    @Override
+    public boolean needsText(EntryFilter filter) { return filter.needsText(index); }
+
+    /** One run, in file order. */
+    @Override
+    public boolean scan(int from, int to, Visitor visitor, BooleanSupplier cancelled) {
+        visitor.startRun();
+        return scan(from, to, row -> visitor.wanted(row, index.isContinuation(row)), visitor::accept, cancelled);
+    }
 
     /**
      * The followed file was rotated: rows added from now on are in the file the path names

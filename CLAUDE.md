@@ -27,7 +27,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
                     AnnotationStore, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
-                    LogSniffer, TextLines, MergeOrder
+                    LogSniffer, TextLines, MergeOrder, EntryRows
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped

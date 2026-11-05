@@ -767,7 +767,8 @@ SSH and plugin sources keep the in-memory model and its entry limit (D-7).
   scan, as step 3 did, can't work after a rename, which leaves the old file without its
   name.) Rows are kept in segments, one per file the followed path has named, each with
   its own pair of channels (see Rotation).
-- **`LogTableModel`** (ui) holds an optional `IndexedEntries` in front of its in-memory
+- **`LogTableModel`** (ui) holds an optional `IndexedEntries` (read through `EntryRows`
+  since D-17 step 2) in front of its in-memory
   list: ordinals below the indexed count are read through it. Followed lines are added
   to the index (`appendFollowed`); the list after it stays empty on an indexed tab, which
   is never trimmed. Rows
@@ -1067,8 +1068,11 @@ as a reusable "workspace".
    files (one row in five a continuation line), both interleaved and as four rotated
    files that don't overlap: the test's three merges and their setup take 0.2 s in all.
    The arrays cost 9 bytes per entry, as estimated.
-2. `EntryRows` with `IndexedEntries` as its one-source implementation, behind
-   `LogTableModel`; no change in behavior (the existing tests must pass unchanged).
+2. ✅ `EntryRows` with `IndexedEntries` as its one-source implementation, behind
+   `LogTableModel`; no change in behavior (the existing tests pass unchanged). `scan`
+   takes a `Visitor` and reports ordinals in **runs** (one per source): the filter
+   executor sorts what several runs found, and Find starts its continuation tracking
+   again at each run. `EntryRowsRunsTest` checks both with a fake two-run source.
 3. `MergedEntries`, and a static merged tab from the open dialog and drops: the prompt,
    sniffing and the no-timestamp offer, parallel loading, the Source column and filter,
    union columns, filters and Find across sources.
