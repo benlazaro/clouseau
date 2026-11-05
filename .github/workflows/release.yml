@@ -59,4 +59,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: clouseau-ui/build/distributions/clouseau-${{ steps.version.outputs.VERSION }}-${{ matrix.platform }}.zip
-          generate_release_notes: true
+          # All three platform jobs upload to the same release, and each one that generates
+          # notes appends them again, so only one does.
+          generate_release_notes: ${{ matrix.platform == 'linux' }}
