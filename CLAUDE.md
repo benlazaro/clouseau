@@ -22,7 +22,7 @@ as the code.
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
                     LogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
-clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogReaders, LogFileReader,
+clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogReaders, LogFileReader, FileIndexer, IndexedFollow,
                     FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
                     AnnotationStore, Notes, MergedNotes, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
@@ -105,6 +105,8 @@ tags.
 - `LineParser` (core) — one line → `LogEntry` (chosen parser or per-line auto-detection, source timezone).
 - `LogFileReader` (core) — reads a static log, stopping early when memory runs low.
 - `FileFollower` (core) — follow loop for a local file: reads appends, handles rotation.
+- `FileIndexer`, `IndexedFollow` (core) — G-11: index one file (unpacking and anchoring notes) and
+  follow one file into its index; single-file tabs and every file of a merged view use both.
 - `LineScanner`, `EntryIndex`, `IndexedEntries` (core) — D-16: byte-offset line splitting, the compact
   per-entry index, and reading entries back from disk. Every static file is indexed.
 - `LogCache`, `CopyingInputStream` (core) — a `.gz` or zip entry is unpacked to

@@ -41,7 +41,8 @@ clouseau-ui ─────────────┐   MainFrame, tabs, LogPan
    │                     │
    ▼                     │
 clouseau-core ◀──────────┘   RegexLogParser, ParserList, LineParser, LogReaders,
-                             LogFileReader, FileFollower, FileTail, FileChangeWatcher,
+                             LogFileReader, FileIndexer, IndexedFollow, FileFollower,
+                             FileTail, FileChangeWatcher,
                              SshLogSource, SourceSettings, AnnotationStore, ZipLogs, …
    │
    ▼
@@ -218,7 +219,8 @@ refresh; open tabs keep the list they were created with.
 
 ### 6.3 Following a log (UC-6)
 
-- **Local files:** The tail worker runs `FileFollower` (core), which waits on a `FileChangeWatcher` (core). It uses the
+- **Local files:** The tail worker runs `IndexedFollow` (core), which keeps the position
+  between runs and adds each line to the file's index; it reads with `FileFollower` (core), which waits on a `FileChangeWatcher` (core). It uses the
   OS change notifications (`WatchService`) for the file's folder. When the file is written,
   created or replaced, it reads the new bytes from the last position with `FileTail`
   (core), through a channel it holds open on the file. If no notification comes within
@@ -654,7 +656,9 @@ compelling. Re-measure first.
 To support merged views (UC-12), a tab holds a list of **sources** instead of one file.
 Each source has its own file (or zip entry), parser, source timezone, time offset, tail
 worker, and `AnnotationStore`. A single-file tab is just a tab with one source.
-Built as D-17 describes; one part differs, see G-11.
+Built as D-17 describes. A single-file tab shares the per-file loading and following
+classes with a merged view's files rather than going through the merge itself (D-17,
+question 4).
 
 - **Entry origin:** The table model records which source each entry came from, so the
   Source column, annotations, and export can find it. This lives in the UI/core model,
@@ -922,8 +926,8 @@ removes that ceiling too.
 
 The design for D-13 and UC-12. Accepted on 2026-11-04 with the recommended answer to
 each question at the end, and built in the eight steps below (all done on 2026-11-04).
-What was built differently is noted in each step; what is left is G-11 (G-10, a parser per
-file, was built afterwards; see step 6).
+What was built differently is noted in each step. Nothing is left: G-10 (a parser per
+file, step 6) and G-11 (single-file tabs, question 4) were closed afterwards.
 
 **Scope.** A merged view combines **local files**: plain files, `.gz` files and zip
 entries, each indexed as in D-16. SSH and plugin sources stay one per tab. Merging them
@@ -1104,7 +1108,7 @@ as a reusable "workspace".
      `LogTableModel.SOURCE_COLUMN` (a name no parser can declare). The filter bar's
      **Sources** button hides whole files; `EntryFilter.testSource` carries that, and
      `MergedEntries.testIndex` checks it before the index columns.
-   - **Not yet (later steps):** single-file tabs keep their own loader (`LogPanel.load`);
+   - **Not yet (later steps):** single-file tabs keep their own loader (`LogPanel.load`; it now indexes through `FileIndexer`, question 4);
      only the model reads both through `EntryRows`. Every file uses the tab's parser
      choice (chosen, or per-line detection). A merged tab can't be exported for review
      (step 7). A compressed file that can't be unpacked is left out rather than loaded
@@ -1142,8 +1146,8 @@ as a reusable "workspace".
    - Clear on a merged tab stops following it; reload follows again.
    - `MergeOrderExtendTest` (including that extending in random steps gives the same
      order as one merge), `MergedFollowTest`, `MergedViewTest`.
-   - **Not yet:** single-file tabs still follow through their own worker; joining them
-     to this path (question 4) is left for when per-file settings (step 6) land.
+   - **Since joined:** single-file tabs follow through `IndexedFollow` too (question 4);
+     they keep their own tail worker, without the hold-back a single file doesn't need.
 6. ✅ Time offsets: dialog, Sources menu, re-merge, the detail panel line. As built:
    - **Per-file setup:** `MergeLoad.run` takes a `PerFile` (source timezone and offset)
      for each file. A file's timezone is its own saved one (`source.timezones` in
@@ -1190,7 +1194,7 @@ as a reusable "workspace".
      parser is taken from the bundle by name (G-10); one this Clouseau doesn't have falls
      back to the tab's choice.
    - `FilePatternTest`, `ReviewBundleTest`, `MergedViewTest`.
-8. ✅ Update UC-12 (✅), mark D-13 and D-17 Adopted; G-10 (since closed) and G-11 record what was
+8. ✅ Update UC-12 (✅), mark D-13 and D-17 Adopted; G-10 and G-11 (both since closed) record what was
    left out.
 
 **Questions settled at review** (each took the recommendation):
@@ -1209,6 +1213,15 @@ as a reusable "workspace".
    merged code is exercised by every tab, but the refactor touches all of
    `LogPanel`'s loading. *Recommendation:* one path, with step 2 as a pure refactor so
    any regression shows up before merging exists.
+   *As built (closing G-11):* single-file tabs share the **per-file** machinery with every
+   file of a merged view: `FileIndexer` (core) indexes one file, unpacking a compressed
+   one and anchoring its notes, and `IndexedFollow` (core) follows one file into its
+   index, keeping the position and the one-reader lock. `MergeLoad`, `MergedTailer` and
+   `LogPanel.load`/`startTailing` all go through them. A single-file tab doesn't go
+   through `MergeLoad` itself, because it deliberately behaves differently: rows appear
+   while it loads, a load cut short by low memory is kept (marked "partly loaded"), a
+   file no parser recognizes opens as plain text (UC-13), a compressed file with no room
+   for its copy is read into memory, and lines need no timestamps.
 5. **Live sources (SSH, plugins) in a merge:** *Recommendation:* not now, as in *Scope*.
 
 ## 10. Planned features
@@ -1224,4 +1237,3 @@ Remove an entry once it's fixed.
 | ID | Gap | Impact |
 |---|---|---|
 | **G-9** | Reading, parsing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `LogFileReader`, `FileFollower`, `AnnotationStore`); the detail pane, find bar and highlight navigation bar are their own classes (`DetailPanel`, `FindBar`, `HighlightNavBar`). `LogPanel` is about 2,000 lines (merged views, D-17, added loading, re-ordering, offsets and timezones; their tail workers are `MergedTailer`): loading and follow wiring, the table with its renderers and header menu, column visibility and saved layouts, the highlight and annotation context menu, and the status bar. | Still long to review. Next splits: the table with its renderers, column visibility and layouts into one class (about 450 lines), and the row context menu (highlights and notes, about 220 lines) into another. |
-| **G-11** | Single-file tabs still load and follow through their own code in `LogPanel` (`load`, `startTailing`); only the table model reads both kinds of tab through `EntryRows`. D-17's question 4 chose one path for both. | Two loading and following paths to keep in step. Joining them would also shrink `LogPanel` (G-9). |

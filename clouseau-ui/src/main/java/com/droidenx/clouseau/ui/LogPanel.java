@@ -7,12 +7,11 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.AnnotationStore;
-import com.droidenx.clouseau.core.CopyingInputStream;
 import com.droidenx.clouseau.core.EntryIndex;
-import com.droidenx.clouseau.core.FileFollower;
+import com.droidenx.clouseau.core.FileIndexer;
 import com.droidenx.clouseau.core.IndexedEntries;
+import com.droidenx.clouseau.core.IndexedFollow;
 import com.droidenx.clouseau.core.LineParser;
-import com.droidenx.clouseau.core.LineScanner;
 import com.droidenx.clouseau.core.LogCache;
 import com.droidenx.clouseau.core.LogFileReader;
 import com.droidenx.clouseau.core.LogReaders;
@@ -44,7 +43,6 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
@@ -101,12 +99,8 @@ public final class LogPanel extends JPanel {
     /** Follows a merged tab's files (D-17 step 5); null on other tabs. */
     private MergedTailer mergedTailer;
     private Optional<LogParser> currentParser = Optional.empty();
-    private volatile long tailPosition = 0;
-    /**
-     * Held by the tail worker while it follows. A cancelled worker may still be finishing a
-     * read; the next one waits for it, so only one thread ever adds to the index.
-     */
-    private final java.util.concurrent.locks.ReentrantLock tailLock = new java.util.concurrent.locks.ReentrantLock();
+    /** Follows a single-file tab's file and keeps its position (G-11); null on other tabs. */
+    private IndexedFollow fileFollow;
     /** True once the followed file was truncated in place, so older rows lost their text (D-16). */
     private boolean rotatedTextLost = false;
     private boolean follow  = AppPrefs.isFollowByDefault();
@@ -309,6 +303,7 @@ public final class LogPanel extends JPanel {
         statusBarPathLabel.setText(shown);
         statusBarPathLabel.setToolTipText(shown);
         final Path annotationKey = entry == null ? currentFile : ZipLogs.entryKey(currentFile, entry);
+        final IndexedFollow follower = fileFollow = new IndexedFollow(currentFile, 0);
         stopTailing();
         SwingWorker<?, ?> old = currentWorker;
         if (old != null) old.cancel(true);
@@ -372,11 +367,14 @@ public final class LogPanel extends JPanel {
                 }
                 // A review bundle's log starts from the bundle's notes until its own sidecar exists (D-10).
                 AnnotationStore annotations = ReviewBundle.loadAnnotations(file, entry, annotationKey, AppDirs.annotationsDir());
-                AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
                 LineParser lineParser = new LineParser(parser, parsers, srcTz);
                 if (indexed) {
-                    indexFile(lineParser, anchoring);
-                } else try (BufferedReader reader = LogReaders.open(file, entry)) {
+                    indexFile(lineParser, annotations);
+                    loadedAnnotations = annotations;
+                    return null;
+                }
+                AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
+                try (BufferedReader reader = LogReaders.open(file, entry)) {
                     LogFileReader.Result result = LogFileReader.read(reader, lineParser,
                             LogFileReader.DEFAULT_CHECK_INTERVAL, memory::isLow, this::isCancelled,
                             e -> {
@@ -395,39 +393,23 @@ public final class LogPanel extends JPanel {
             }
 
             /**
-             * Reads the file once into the index. Each entry is still published, so the
-             * table can filter it and the filter bar can learn its logger, but only the
-             * index keeps it.
+             * Reads the file once into the index, as every file of a merged view is read
+             * (G-11). Each entry is still published, so the table can filter it and the
+             * filter bar can learn its logger, but only the index keeps it.
              */
-            private void indexFile(LineParser lineParser, AnnotationStore.Anchoring anchoring) throws IOException {
-                long[] count = {0};
-                boolean[] lowMemory = {false};
-                InputStream source = compressed
-                        ? new CopyingInputStream(LogReaders.openBytes(file, entry), Files.newOutputStream(rowSource))
-                        : Files.newInputStream(file);
-                try (InputStream in = source) {
-                    long read = LineScanner.scan(in, (offset, length, text) -> {
-                        LogEntry e = lineParser.parse(text);
-                        index.add(offset, length, e);
-                        if (anchoring != null) anchoring.accept(e.rawLine());
-                        publish(e);
-                        if (++count[0] % LogFileReader.DEFAULT_CHECK_INTERVAL == 0 && memory.isLow()) {
-                            lowMemory[0] = true;
-                        }
-                    }, () -> lowMemory[0] || isCancelled());
-                    // Follow from exactly where the index ends, not the size at the end of the
-                    // load: lines written in between would be skipped.
-                    if (!compressed) indexedTo = read;
-                }
-                if (source instanceof CopyingInputStream c && c.writeFailure() != null && !isCancelled()) {
-                    diskFull = true;
-                    stoppedAtLine = count[0];
-                    log.warn("Stopped unpacking {} to {} after {} entries", file, rowSource, stoppedAtLine,
-                            c.writeFailure());
-                } else if (lowMemory[0]) {
-                    stoppedAtLine = count[0];
-                    log.warn("Low memory: stopped indexing {} after {} entries (max heap {} MiB)",
-                            file, stoppedAtLine, memory.maxMiB());
+            private void indexFile(LineParser lineParser, AnnotationStore annotations) throws IOException {
+                FileIndexer.Result r = FileIndexer.index(file, entry, compressed ? rowSource : null, lineParser,
+                        index, annotations, this::publish, memory::isLow, this::isCancelled);
+                // Follow from exactly where the index ends, not the size at the end of the
+                // load: lines written in between would be skipped.
+                if (!compressed) indexedTo = r.end();
+                if (r.partial()) {
+                    diskFull = r.diskFull();
+                    stoppedAtLine = r.lines();
+                    if (!diskFull) {
+                        log.warn("Low memory: stopped indexing {} after {} entries (max heap {} MiB)",
+                                file, stoppedAtLine, memory.maxMiB());
+                    }
                 }
             }
 
@@ -472,8 +454,8 @@ public final class LogPanel extends JPanel {
                                 JOptionPane.WARNING_MESSAGE);
                         return;
                     }
-                    if (indexedTo >= 0) tailPosition = indexedTo;
-                    else try { tailPosition = Files.size(currentFile); } catch (IOException ignored) {}
+                    if (indexedTo >= 0) follower.setPosition(indexedTo);
+                    else try { follower.setPosition(Files.size(currentFile)); } catch (IOException ignored) {}
                     if (follow) startTailing();
                 } catch (Exception ex) {
                     log.error("Failed to load {}", file, ex);
@@ -559,6 +541,7 @@ public final class LogPanel extends JPanel {
         currentEntry = null;
         currentParser = parser;
         mergedFiles = List.copyOf(files);
+        fileFollow = null;
         showMergedPath(files);
         loading = true;
         annotationStore = AnnotationStore.inMemory();
@@ -763,6 +746,7 @@ public final class LogPanel extends JPanel {
         String name = sourceName(source);
         currentFile   = null;
         currentEntry  = null;
+        fileFollow    = null;
         currentParser = parser;
         statusBarPathLabel.setText(name);
         statusBarPathLabel.setToolTipText(name);
@@ -856,55 +840,32 @@ public final class LogPanel extends JPanel {
             mergedTailer.start();
             return;
         }
-        if (currentFile == null || LogReaders.isCompressed(currentFile)) return;
+        final IndexedFollow follower = fileFollow;
+        if (currentFile == null || follower == null || LogReaders.isCompressed(currentFile)) return;
         final Optional<LogParser> parser = currentParser;
-        final Path file = currentFile;
         final ZoneId srcTz = this.sourceTimezone; // capture before worker starts
         // D-16: on an indexed tab, followed lines extend the index and are never trimmed.
         final IndexedEntries indexed = logTableModel.indexedEntries();
         tailWorker = new SwingWorker<>() {
             @Override
-            protected Void doInBackground() throws Exception {
-                LineParser lineParser = new LineParser(parser, parsers, srcTz);
-                try {
-                    tailLock.lockInterruptibly();
-                } catch (InterruptedException e) {
-                    return null;                    // cancelled while the last worker finished
-                }
-                try {
-                    if (isCancelled()) return null;
-                    FileFollower.follow(file, tailPosition, new FileFollower.Listener() {
-                        @Override
-                        public void line(long offset, int length, String text) {
-                            LogEntry e = lineParser.parse(text);
-                            if (indexed != null) indexed.index().add(offset, length, e);
-                            publish(e);
-                        }
+            protected Void doInBackground() {
+                follower.run(indexed, new LineParser(parser, parsers, srcTz), new IndexedFollow.Listener() {
+                    @Override
+                    public void entry(LogEntry e) {
+                        publish(e);
+                    }
 
-                        @Override
-                        public void rotated(FileFollower.Rotation how) {
-                            log.info("{} was rotated ({})", file, how);
-                            if (indexed != null && indexed.rotated()) {
-                                SwingUtilities.invokeLater(() -> {
-                                    if (logTableModel.indexedEntries() != indexed) return;   // cleared
-                                    rotatedTextLost = true;
-                                    logTable.repaint();
-                                    refreshDetail();
-                                    updateStatusBar();
-                                });
-                            }
-                        }
-
-                        @Override
-                        public void position(long position) {
-                            if (!isCancelled()) tailPosition = position;
-                        }
-                    }, this::isCancelled, FOLLOW_SAFETY_POLL_MS);
-                } catch (InterruptedException e) {
-                    // cancel(true) interrupts the wait: following stopped
-                } finally {
-                    tailLock.unlock();
-                }
+                    @Override
+                    public void textLost() {
+                        SwingUtilities.invokeLater(() -> {
+                            if (logTableModel.indexedEntries() != indexed) return;   // cleared
+                            rotatedTextLost = true;
+                            logTable.repaint();
+                            refreshDetail();
+                            updateStatusBar();
+                        });
+                    }
+                }, this::isCancelled, FOLLOW_SAFETY_POLL_MS);
                 return null;
             }
 
@@ -1324,7 +1285,9 @@ public final class LogPanel extends JPanel {
         // A plain file stays indexed: what is followed from here on starts a new index.
         boolean reindex = logTableModel.isIndexed() && cacheCopy == null && currentFile != null;
         stopTailing();
-        try { tailPosition = currentFile != null ? Files.size(currentFile) : 0; } catch (IOException ignored) { tailPosition = 0; }
+        if (fileFollow != null) {
+            try { fileFollow.setPosition(Files.size(currentFile)); } catch (IOException ignored) { fileFollow.setPosition(0); }
+        }
         dropMergedTailer();
         logTableModel.clear();
         rotatedTextLost = false;

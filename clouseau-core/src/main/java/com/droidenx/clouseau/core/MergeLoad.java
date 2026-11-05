@@ -5,8 +5,6 @@ import com.droidenx.clouseau.api.LogParser;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -22,7 +20,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -274,35 +271,23 @@ public final class MergeLoad {
                                  ZoneId zone, Path notesDir, BooleanSupplier lowMemory, BooleanSupplier halt,
                                  AtomicBoolean stop, AtomicBoolean diskFull, Sink sink) throws IOException {
         EntryIndex index = new EntryIndex();
-        LineParser lineParser = new LineParser(parser, parsers, zone);
         // Each file's notes, read and anchored as a single-file tab does (section 6.6).
         AnnotationStore notes = notesDir == null ? AnnotationStore.inMemory()
                 : ReviewBundle.loadAnnotations(f.path(), f.entry(), f.key(), notesDir);
-        AnnotationStore.Anchoring anchoring = notes.startAnchoring();
-        long[] count = {0};
-        InputStream source = copy != null
-                ? new CopyingInputStream(LogReaders.openBytes(f.path(), f.entry()), Files.newOutputStream(copy))
-                : Files.newInputStream(f.path());
-        long end;
-        try (InputStream in = source) {
-            end = LineScanner.scan(in, (offset, length, text) -> {
-                LogEntry e = lineParser.parse(text);
-                index.add(offset, length, e);
-                if (anchoring != null) anchoring.accept(e.rawLine());
-                sink.entry(e);
-                if (++count[0] % LogFileReader.DEFAULT_CHECK_INTERVAL == 0 && lowMemory.getAsBoolean()) {
-                    log.warn("Low memory: stopped the merged load at {} lines of {}", count[0], f);
-                    stop.set(true);
-                }
-            }, halt);
-        }
-        if (source instanceof CopyingInputStream c && c.writeFailure() != null && !halt.getAsBoolean()) {
-            log.warn("Stopped unpacking {} to {} after {} entries", f, copy, count[0], c.writeFailure());
+        // Low memory in one file stops every file of the merge at once.
+        BooleanSupplier low = () -> {
+            if (!lowMemory.getAsBoolean()) return false;
+            stop.set(true);
+            return true;
+        };
+        FileIndexer.Result r = FileIndexer.index(f.path(), f.entry(), copy, new LineParser(parser, parsers, zone),
+                index, notes, sink::entry, low, halt);
+        if (r.lowMemory()) log.warn("Low memory: stopped the merged load at {} lines of {}", r.lines(), f);
+        if (r.diskFull()) {
             diskFull.set(true);
             stop.set(true);
         }
-        if (anchoring != null) anchoring.finish();
-        return new Indexed(index, notes, copy != null ? -1 : end);
+        return new Indexed(index, notes, r.end());
     }
 
     /**
