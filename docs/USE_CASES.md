@@ -175,6 +175,9 @@ followed. If it is truncated in place (logrotate's `copytruncate`), the existing
 their time, level, logger and thread, their message reads "Text no longer in the file
 (rotated)", and the status bar says the file was rotated.
 
+**SSH tab names:** An SSH tab is titled with the file name and host (`app.log — 10.0.0.5`);
+its tooltip shows user, host, full path, and the port when it isn't 22.
+
 **Rotation and lost connections (SSH):** The server runs `tail -F`, which follows the file
 by name, so a rotated or replaced log keeps streaming (the rows already shown stay). A
 wrong path or an unreadable file is reported as an error instead of an empty tab. If the

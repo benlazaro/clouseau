@@ -8,6 +8,7 @@ import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.MergeLoad;
 import com.droidenx.clouseau.core.ParserList;
 import com.droidenx.clouseau.core.ReviewBundle;
+import com.droidenx.clouseau.core.SshConfig;
 import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
@@ -660,8 +661,7 @@ public final class MainFrame extends JFrame {
         new SshConnectionDialog(this, parsers).showDialog().ifPresent(r -> {
             log.info("Opening SSH: {}", r.config().displayName());
             LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
-            String title = r.config().user() + "@" + r.config().host();
-            addLogTab(title, null, panel);
+            addLogTab(sshTabTitle(r.config()), null, panel, sshTabTooltip(r.config()));
             panel.loadSource(new SshLogSource(r.config()), r.parser());
         });
     }
@@ -710,10 +710,35 @@ public final class MainFrame extends JFrame {
 
     // ── Tab management ────────────────────────────────────────────────────────
 
+    /** An SSH tab's title: the remote file's name and the host, e.g. "app.log — 10.0.0.5". */
+    static String sshTabTitle(SshConfig config) {
+        return MessageFormat.format(Messages.get("ssh.tab.title"),
+                config.fileName(), config.host());
+    }
+
+    /** An SSH tab's tooltip: user, host, path, and the port if it isn't 22. */
+    static String sshTabTooltip(SshConfig config) {
+        return config.port() == SshConfig.DEFAULT_PORT
+                ? MessageFormat.format(Messages.get("ssh.tab.tooltip"),
+                        config.user(), config.host(), config.remotePath())
+                : MessageFormat.format(Messages.get("ssh.tab.tooltip.port"),
+                        config.user(), config.host(), config.remotePath(), String.valueOf(config.port()));
+    }
+
     private void addLogTab(String title, Path file, LogPanel panel) {
+        addLogTab(title, file, panel, null);
+    }
+
+    private void addLogTab(String title, Path file, LogPanel panel, String tooltip) {
         tabbedPane.addTab(null, panel);
         int idx = tabbedPane.getTabCount() - 1;
-        tabbedPane.setTabComponentAt(idx, buildTabHeader(title, file, panel));
+        JPanel header = buildTabHeader(title, file, panel);
+        if (tooltip != null) {
+            for (Component c : header.getComponents()) {
+                if (c instanceof JLabel label) label.setToolTipText(tooltip);
+            }
+        }
+        tabbedPane.setTabComponentAt(idx, header);
         tabbedPane.setSelectedIndex(idx);
         updateCard();
     }

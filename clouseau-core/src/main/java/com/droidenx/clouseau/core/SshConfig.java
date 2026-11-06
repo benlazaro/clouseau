@@ -14,7 +14,23 @@ public record SshConfig(
         String keyPassphrase, // null or blank if key has no passphrase
         String remotePath
 ) {
+    public static final int DEFAULT_PORT = 22;
+
     public String displayName() {
         return user + "@" + host + ":" + remotePath;
+    }
+
+    /**
+     * The remote file's name without its folder, such as {@code app.log} for
+     * {@code /var/log/app.log}. Trailing slashes are ignored; a path with no name part
+     * ({@code /}, {@code ~}) is returned whole.
+     */
+    public String fileName() {
+        String path = remotePath == null ? "" : remotePath.strip();
+        int end = path.length();
+        while (end > 1 && path.charAt(end - 1) == '/') end--;
+        String trimmed = path.substring(0, end);
+        String name = trimmed.substring(trimmed.lastIndexOf('/') + 1);
+        return name.isEmpty() ? trimmed : name;
     }
 }

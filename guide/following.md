@@ -44,6 +44,10 @@ Clouseau keeps your rows when the log is rotated:
    right.
 4. Click **Connect**.
 
+The tab is named after the file and the host, such as `app.log — 10.0.0.5`, so the same
+log followed on two servers gets two distinct tabs. Point at the name to see the user, the
+full path, and the port if it isn't 22.
+
 Clouseau runs `tail -F` on the server, so lines arrive as soon as they're written, and it
 keeps going when the log is rotated or replaced. If the path is wrong or you can't read
 the file, Clouseau says so. If the connection drops without closing (a router or VPN
