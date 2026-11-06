@@ -38,7 +38,7 @@ exactly where the field left off.
 | Support tickets | Attachments, often `.zip` or `.gz` | Downloaded to disk, then opened as a local file |
 | Email | Attachments, often compressed | Saved to disk, then opened as a local file |
 | Local development | Plain files written by the running app, still growing | Opened directly, optionally followed live |
-| Remote hosts | Files on a server reachable over SSH | Streamed via SSH (`tail -f`) |
+| Remote hosts | Files on a server reachable over SSH | Streamed via SSH (`tail -F`) |
 | Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Open Source (UC-11) |
 
 Logs from tickets and email are **local files the user has already saved**. Opening them
@@ -174,6 +174,13 @@ logback rolling), the existing rows stay readable from the old file and the new 
 followed. If it is truncated in place (logrotate's `copytruncate`), the existing rows keep
 their time, level, logger and thread, their message reads "Text no longer in the file
 (rotated)", and the status bar says the file was rotated.
+
+**Rotation and lost connections (SSH):** The server runs `tail -F`, which follows the file
+by name, so a rotated or replaced log keeps streaming (the rows already shown stay). A
+wrong path or an unreadable file is reported as an error instead of an empty tab. If the
+connection dies without being closed (a router or VPN dropping it), Clouseau notices
+within about 75 seconds and reports that the connection was lost, instead of silently
+showing nothing new.
 
 **Memory limit:** A followed local file is indexed (UC-1, D-16), so its lines cost about
 29 bytes of heap each and are never dropped. SSH and plugin sources hold their entries

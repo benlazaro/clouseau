@@ -44,9 +44,12 @@ Clouseau keeps your rows when the log is rotated:
    right.
 4. Click **Connect**.
 
-Clouseau runs `tail -f` on the server, so lines arrive as soon as they're written. Save
-connections you use often with the **★** button next to **Favorites**, and pick them from
-that list next time.
+Clouseau runs `tail -F` on the server, so lines arrive as soon as they're written, and it
+keeps going when the log is rotated or replaced. If the path is wrong or you can't read
+the file, Clouseau says so. If the connection drops without closing (a router or VPN
+timing it out), Clouseau notices within about a minute and a quarter and shows an error,
+instead of the tab quietly going still. Save connections you use often with the **★**
+button next to **Favorites**, and pick them from that list next time.
 
 An SSH tab keeps its lines in memory, at most **Max entries per tab** (200,000 by default,
 in [Settings](settings.md)); past that, the oldest lines are dropped. The status bar shows

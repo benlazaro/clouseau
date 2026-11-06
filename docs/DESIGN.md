@@ -126,7 +126,7 @@ tab.
 - `LogFormatter` and `LogSyntaxHighlighter` work on message text, so one implementation
   works for any log format.
 - `LogSource.open(Consumer<String>)` **pushes** lines to the consumer. The source decides
-  how to get them: a server-side `tail -f`, or a streaming API. `open` runs on a
+  how to get them: a server-side `tail -F`, or a streaming API. `open` runs on a
   background thread and blocks until the stream ends or `close()` is called; `close()`
   comes from another thread, maybe more than once, maybe before `open` connects. This is
   what lets aggregator sources such as Loki or CloudWatch exist as plugins (UC-11, D-11).
@@ -247,10 +247,17 @@ refresh; open tabs keep the list they were created with.
   the message "Text no longer in the file (rotated)", and the status bar says the file was
   rotated. `IndexedEntries` decides whether text was lost from its own channel's size,
   so a rename while follow was off isn't mistaken for a truncation.
-- **SSH:** `SshLogSource` runs `tail -n <N> -f -- '<path>'` on the server over sshj and
-  receives lines as they're written. Nothing on the client polls. The path is
-  single-quoted for a POSIX shell, so spaces and shell metacharacters are taken
-  literally; a leading `~/` is left unquoted so it still expands to the remote home.
+- **SSH:** `SshLogSource` runs `sh -c 'test -r "$1" || exit 66; exec tail -n <N> -F -- "$1"' sh '<path>'`
+  on the server over sshj and receives lines as they're written. Nothing on the client
+  polls. `-F` follows the file by name, so rotation or replacement doesn't stop the
+  stream; the `test -r` comes first because `-F` would otherwise wait forever for a
+  missing file, and exit 66 becomes `UnreadableFileException`. `sh -c` keeps this working
+  under any login shell (csh, fish). The path is single-quoted, so spaces and shell
+  metacharacters are taken literally; a leading `~/` is left unquoted so it still expands
+  to the remote home. stderr is drained on its own thread (unread, it would eventually
+  fill the channel window and stall stdout) and its last lines become the error if
+  `tail` exits. sshj keepalives every 15 s fail the stream after 5 unanswered ones, so a
+  connection that died silently ends with an error instead of hanging in `readLine`.
 - **Plugin sources (D-14):** **File → Open Source** lists every `LogSourceProvider`,
   rebuilt each time the menu opens. Choosing one opens `SourceSettingsDialog`, a form
   with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`
@@ -534,7 +541,7 @@ compile only against `clouseau-api`.
 
 `LogSource` hands lines to a consumer instead of being polled through a file abstraction
 like the Apache Commons VFS layer in OtrosLogViewer. Each source picks its own streaming
-model, such as a real server-side `tail -f` over sshj for SSH. This avoids polling and the
+model, such as a real server-side `tail -F` over sshj for SSH. This avoids polling and the
 unmaintained JSch dependency. Local follow is woken by the OS when the file changes, with a
 slow read as a backstop for file systems that send no notifications (section 6.3).
 

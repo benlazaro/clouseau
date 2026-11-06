@@ -24,6 +24,7 @@ import com.droidenx.clouseau.core.MergedFollow;
 import com.droidenx.clouseau.core.MergedNotes;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.core.ReviewBundle;
+import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -792,7 +793,9 @@ public final class LogPanel extends JPanel {
                 } catch (java.util.concurrent.ExecutionException ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     log.error("Source error for {}", name, cause);
-                    String message = cause.getMessage() != null ? cause.getMessage() : cause.toString();
+                    String message = cause instanceof SshLogSource.UnreadableFileException u
+                            ? java.text.MessageFormat.format(Messages.get("ssh.error.unreadable"), u.path())
+                            : cause.getMessage() != null ? cause.getMessage() : cause.toString();
                     JOptionPane.showMessageDialog(
                             SwingUtilities.getWindowAncestor(LogPanel.this),
                             message,
