@@ -174,6 +174,7 @@ refresh; open tabs keep the list they were created with.
 | **Tail worker** (`SwingWorker`, one per tab) | Wait for the file to change, then read new lines while following; on an indexed tab, add them to the index. Holds the tab's tail lock, so a cancelled worker finishes before the next one starts. |
 | **Filter executor** (`clouseau-filter`, one per tab) | Re-run the active filter over all entries; a generation counter discards stale results. |
 | **Source worker** (`SwingWorker`, one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. |
+| **Source close** (`source-close`, a daemon thread per close) | Run `LogSource.close` when a live tab is closed or reloaded. Closing can wait on the network or a plugin, so it never runs on the EDT (issue #1). |
 
 **Rules:**
 
@@ -182,7 +183,8 @@ refresh; open tabs keep the list they were created with.
    `SwingUtilities.invokeLater`.
 3. Anything that can take longer than a few milliseconds (I/O, parsing, filtering a large
    set) runs off the EDT and must be cancellable. Opening a new file cancels the tab's
-   previous load and tail workers.
+   previous load and tail workers. Network calls count, closing included: an SSH
+   connection that went silent can take seconds to give up.
 
 ### 6.2 Opening a file (UC-1, UC-2)
 
@@ -258,6 +260,8 @@ refresh; open tabs keep the list they were created with.
   fill the channel window and stall stdout) and its last lines become the error if
   `tail` exits. sshj keepalives every 15 s fail the stream after 5 unanswered ones, so a
   connection that died silently ends with an error instead of hanging in `readLine`.
+  `close` disconnects the transport without closing the channel first: a channel close
+  waits up to 30 s for a reply that a silent connection never sends.
   "No password" (`SshConfig` with neither a password nor a key file) tries the `none`
   method, then `password` with an empty password, then `keyboard-interactive` answering
   password prompts with an empty one; servers differ in which an account without a

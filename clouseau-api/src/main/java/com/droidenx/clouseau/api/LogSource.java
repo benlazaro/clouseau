@@ -26,7 +26,8 @@ public interface LogSource {
     /**
      * Stops the stream and releases its resources, making a blocked {@link #open} return.
      * Called from a different thread than {@code open}, possibly more than once, and
-     * possibly before {@code open} has connected.
+     * possibly before {@code open} has connected. Clouseau calls it on a thread of its own,
+     * never the Swing event thread, so it may block on the network briefly.
      */
     void close() throws Exception;
 }

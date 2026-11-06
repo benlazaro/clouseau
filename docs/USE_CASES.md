@@ -180,7 +180,8 @@ by name, so a rotated or replaced log keeps streaming (the rows already shown st
 wrong path or an unreadable file is reported as an error instead of an empty tab. If the
 connection dies without being closed (a router or VPN dropping it), Clouseau notices
 within about 75 seconds and reports that the connection was lost, instead of silently
-showing nothing new.
+showing nothing new. Closing an SSH tab returns at once, even when the connection
+has already gone quiet.
 
 **Signing in (SSH):** Password, private key (with or without a passphrase), or "No
 password" for accounts without one, common on embedded devices. "No password" works with

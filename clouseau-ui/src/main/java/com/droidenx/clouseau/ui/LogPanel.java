@@ -711,13 +711,24 @@ public final class LogPanel extends JPanel {
         if (w != null) w.cancel(true);
         LogSource s = liveSource;
         liveSource = null;
-        if (s != null) {
+        if (s != null) closeInBackground(s);
+    }
+
+    /**
+     * Closes a live source on its own daemon thread. Closing can wait on the network (an
+     * SSH connection that went silent) or on a plugin, and that must never freeze the
+     * window (issue #1). The tab doesn't need the source once its worker is cancelled.
+     */
+    private static void closeInBackground(LogSource s) {
+        Thread t = new Thread(() -> {
             try {
                 s.close();
             } catch (Exception | LinkageError e) {
                 log.warn("Error closing source {}", s.getClass().getName(), e);
             }
-        }
+        }, "source-close");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**

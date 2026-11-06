@@ -52,10 +52,8 @@ public class SshLogSource implements LogSource {
     private static final int STDERR_LINES_KEPT = 5;
 
     private final SshConfig config;
-    private volatile SSHClient      ssh;
-    private volatile Session        session;
-    private volatile Session.Command cmd;
-    private volatile boolean        closed;
+    private volatile SSHClient ssh;
+    private volatile boolean   closed;
 
     /** The remote file doesn't exist or the user can't read it. */
     public static class UnreadableFileException extends IOException {
@@ -98,13 +96,15 @@ public class SshLogSource implements LogSource {
         client.addHostKeyVerifier(new PromiscuousVerifier());
         client.connect(config.host(), config.port());
         this.ssh = client;
+        if (closed) {   // close() ran while connecting, before it could see the client
+            client.disconnect();
+            return;
+        }
 
         authenticate(client);
 
         Session s = client.startSession();
-        this.session = s;
         Session.Command c = s.exec(tailCommand(config.remotePath()));
-        this.cmd = c;
 
         // Drain stderr: tail -F reports replaced files there, and unread output would
         // eventually fill the channel's window and stall stdout too.
@@ -233,11 +233,15 @@ public class SshLogSource implements LogSource {
     }
 
     /** Closes the SSH session and disconnects, unblocking any active {@link #open} call. */
+    /**
+     * Disconnects without closing the channel first: a channel close waits for the
+     * server's reply (up to sshj's 30 s timeout), which never comes on a connection that
+     * went silent. Disconnecting fails the open streams at once and closes the socket;
+     * the server ends {@code tail} when the connection goes away.
+     */
     @Override
     public void close() {
         closed = true;
-        try { Session.Command c = cmd;     if (c != null) c.close();          } catch (Exception ignored) {}
-        try { Session        s = session;  if (s != null) s.close();          } catch (Exception ignored) {}
-        try { SSHClient      cl = ssh;     if (cl != null) cl.disconnect();   } catch (Exception ignored) {}
+        try { SSHClient cl = ssh; if (cl != null) cl.disconnect(); } catch (Exception ignored) {}
     }
 }

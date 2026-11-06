@@ -48,7 +48,8 @@ Clouseau runs `tail -F` on the server, so lines arrive as soon as they're writte
 keeps going when the log is rotated or replaced. If the path is wrong or you can't read
 the file, Clouseau says so. If the connection drops without closing (a router or VPN
 timing it out), Clouseau notices within about a minute and a quarter and shows an error,
-instead of the tab quietly going still. Save connections you use often with the **★**
+instead of the tab quietly going still. Closing an SSH tab is immediate, even if the connection has
+dropped. Save connections you use often with the **★**
 button next to **Favorites**, and pick them from that list next time.
 
 An SSH tab keeps its lines in memory, at most **Max entries per tab** (200,000 by default,

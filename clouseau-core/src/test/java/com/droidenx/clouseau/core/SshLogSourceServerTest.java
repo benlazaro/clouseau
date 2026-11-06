@@ -98,6 +98,87 @@ class SshLogSourceServerTest {
         }
     }
 
+    /**
+     * Issue #1: closing a source whose connection had gone silent waited for the server to
+     * confirm the channel close (sshj's 30 s timeout), freezing the UI that called it.
+     */
+    @Test
+    @Timeout(30)
+    void closeReturnsAtOnceWhenTheConnectionHasGoneSilent() throws Exception {
+        int port = startServer(UserAuthPasswordFactory.INSTANCE);
+        try (FreezableProxy proxy = new FreezableProxy(port)) {
+            SshLogSource source = new SshLogSource(noPassword(proxy.port()));
+            BlockingQueue<String> lines = new LinkedBlockingQueue<>();
+            CountDownLatch ended = new CountDownLatch(1);
+            Thread t = new Thread(() -> {
+                try { source.open(lines::add); } catch (Exception ignored) {} finally { ended.countDown(); }
+            }, "ssh-test-open");
+            t.setDaemon(true);
+            t.start();
+            assertThat(lines.poll(20, TimeUnit.SECONDS)).isEqualTo("hello");
+
+            proxy.freeze();   // the network goes quiet: nothing reaches either side any more
+            long start = System.nanoTime();
+            source.close();
+            long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+
+            assertThat(millis).as("close() time in ms").isLessThan(3000);
+            assertThat(ended.await(3, TimeUnit.SECONDS)).as("open() returns after close()").isTrue();
+        }
+    }
+
+    /**
+     * A TCP proxy to the server that can stop forwarding, like a connection a router or VPN
+     * dropped without closing: both sockets stay open but no bytes get through.
+     */
+    static class FreezableProxy implements AutoCloseable {
+        private final java.net.ServerSocket listener = new java.net.ServerSocket(0, 1,
+                java.net.InetAddress.getLoopbackAddress());
+        private final List<java.net.Socket> sockets = new java.util.concurrent.CopyOnWriteArrayList<>();
+        private volatile boolean frozen;
+
+        FreezableProxy(int targetPort) throws java.io.IOException {
+            Thread acceptor = new Thread(() -> {
+                try {
+                    java.net.Socket client = listener.accept();
+                    java.net.Socket target = new java.net.Socket(java.net.InetAddress.getLoopbackAddress(), targetPort);
+                    sockets.add(client);
+                    sockets.add(target);
+                    pump(client, target);
+                    pump(target, client);
+                } catch (java.io.IOException ignored) {}
+            }, "proxy-accept");
+            acceptor.setDaemon(true);
+            acceptor.start();
+        }
+
+        int port() { return listener.getLocalPort(); }
+
+        void freeze() { frozen = true; }
+
+        private void pump(java.net.Socket from, java.net.Socket to) {
+            Thread t = new Thread(() -> {
+                byte[] buf = new byte[8192];
+                try (InputStream in = from.getInputStream(); OutputStream out = to.getOutputStream()) {
+                    int n;
+                    while ((n = in.read(buf)) >= 0) {
+                        if (frozen) continue;   // read and drop, so neither side sees a closed socket
+                        out.write(buf, 0, n);
+                        out.flush();
+                    }
+                } catch (java.io.IOException ignored) {}
+            }, "proxy-pump");
+            t.setDaemon(true);
+            t.start();
+        }
+
+        @Override
+        public void close() throws java.io.IOException {
+            listener.close();
+            for (java.net.Socket s : sockets) s.close();
+        }
+    }
+
     /** Writes {@code hello} and then keeps the channel open until the client closes it. */
     static class HelloCommand implements Command {
         private OutputStream out;
