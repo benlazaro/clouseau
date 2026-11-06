@@ -39,7 +39,7 @@ Clouseau keeps your rows when the log is rotated:
 
 1. Enter the **Host**, **Port** and **Username**.
 2. Choose how to sign in: **Password**, **Private key** (with its passphrase, if it has
-   one), or **No password**.
+   one), or **No password** for an account that has none (common on embedded devices).
 3. Enter the **Remote path** of the log, and pick a **Parser** if auto-detection isn't
    right.
 4. Click **Connect**.

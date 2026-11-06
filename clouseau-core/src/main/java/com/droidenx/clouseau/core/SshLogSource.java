@@ -7,6 +7,13 @@ import net.schmizz.sshj.DefaultConfig;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
+import net.schmizz.sshj.userauth.method.AuthKeyboardInteractive;
+import net.schmizz.sshj.userauth.method.AuthMethod;
+import net.schmizz.sshj.userauth.method.AuthNone;
+import net.schmizz.sshj.userauth.method.AuthPassword;
+import net.schmizz.sshj.userauth.method.PasswordResponseProvider;
+import net.schmizz.sshj.userauth.password.PasswordFinder;
+import net.schmizz.sshj.userauth.password.Resource;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,6 +22,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -198,9 +206,30 @@ public class SshLogSource implements LogSource {
             } else {
                 client.authPublickey(config.user(), config.keyFilePath());
             }
+        } else if (config.password() == null || config.password().isEmpty()) {
+            client.auth(config.user(), noPasswordMethods());
         } else {
             client.authPassword(config.user(), config.password());
         }
+    }
+
+    /**
+     * The sign-in methods tried, in order, for "No password" (and an empty password):
+     * SSH {@code none}, then {@code password} with an empty password, then
+     * {@code keyboard-interactive} answering password prompts with an empty password.
+     * Servers differ in which one an account without a password is let in by: OpenSSH
+     * with {@code PermitEmptyPasswords} uses {@code password} or
+     * {@code keyboard-interactive}, Dropbear started with {@code -B} uses {@code password}.
+     */
+    static List<AuthMethod> noPasswordMethods() {
+        PasswordFinder empty = new PasswordFinder() {
+            @Override public char[] reqPassword(Resource<?> resource) { return new char[0]; }
+            @Override public boolean shouldRetry(Resource<?> resource) { return false; }
+        };
+        return List.of(
+                new AuthNone(),
+                new AuthPassword(empty),
+                new AuthKeyboardInteractive(new PasswordResponseProvider(empty)));
     }
 
     /** Closes the SSH session and disconnects, unblocking any active {@link #open} call. */

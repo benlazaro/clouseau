@@ -258,6 +258,11 @@ refresh; open tabs keep the list they were created with.
   fill the channel window and stall stdout) and its last lines become the error if
   `tail` exits. sshj keepalives every 15 s fail the stream after 5 unanswered ones, so a
   connection that died silently ends with an error instead of hanging in `readLine`.
+  "No password" (`SshConfig` with neither a password nor a key file) tries the `none`
+  method, then `password` with an empty password, then `keyboard-interactive` answering
+  password prompts with an empty one; servers differ in which an account without a
+  password is let in by. `SshLogSourceServerTest` runs the source against an embedded
+  Apache MINA SSHD server (a test-only dependency).
 - **Plugin sources (D-14):** **File → Open Source** lists every `LogSourceProvider`,
   rebuilt each time the menu opens. Choosing one opens `SourceSettingsDialog`, a form
   with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`

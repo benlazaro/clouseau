@@ -182,6 +182,11 @@ connection dies without being closed (a router or VPN dropping it), Clouseau not
 within about 75 seconds and reports that the connection was lost, instead of silently
 showing nothing new.
 
+**Signing in (SSH):** Password, private key (with or without a passphrase), or "No
+password" for accounts without one, common on embedded devices. "No password" works with
+servers that let such accounts in by any of the usual methods (none, an empty password,
+or keyboard-interactive).
+
 **Memory limit:** A followed local file is indexed (UC-1, D-16), so its lines cost about
 29 bytes of heap each and are never dropped. SSH and plugin sources hold their entries
 in memory, at most a configurable number per tab (default 200,000); the oldest are
