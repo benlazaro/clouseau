@@ -1,6 +1,6 @@
 # Clouseau Design
 
-> **Status:** Draft · **Last updated:** 2026-11-04
+> **Status:** Draft · **Last updated:** 2026-11-06
 >
 > This document describes *how* Clouseau works and *why* it is built that way. It
 > complements [`USE_CASES.md`](USE_CASES.md), which describes *what* Clouseau is for.
@@ -450,6 +450,8 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `plugins/` | Installed plugin JARs |
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
+| `session.json` | *Planned (D-19).* The last session: windows, tabs, and each tab's sources, layout and filters. Never passwords. |
+| `sessions/` | *Planned (D-19).* Named sessions, one `<name>.json` each, in the `session.json` format. |
 | `<logfile>.annotations` | **Next to the log, not in the data folder.** Annotations for that file. |
 | `annotations/` | Annotations for logs whose own folder is read-only, named after a hash of the log's path (D-9). |
 | `cache/` | Decompressed copies of the compressed logs open in tabs (D-16), named `<hash of path and entry>-<unique>.log`. Not persistent: a copy is deleted when its tab closes, and the folder is emptied at startup (by the running instance only) and at exit. |
@@ -1241,10 +1243,225 @@ as a reusable "workspace".
    for its copy is read into memory, and lines need no timestamps.
 5. **Live sources (SSH, plugins) in a merge:** *Recommendation:* not now, as in *Scope*.
 
+### D-18 · One process, several windows · Accepted
+
+UC-16 puts logs on several monitors. Clouseau does this with **several windows in one
+process**, not by allowing several instances.
+
+**Rejected: several instances** (dropping or relaxing the single-instance rule, 6.8).
+- Every instance carries its own heap, so two large logs need two heaps' worth of memory.
+- Instances would share one data folder with no coordination: `settings.json`,
+  `parsers.json`, `cache/` (emptied at startup, 7) and, worst, annotation sidecars. Two
+  `AnnotationStore`s writing notes for the same file overwrite each other's work.
+- "Open with" and double-click would have to pick an instance, and a later feature that
+  links windows (section 10, ideas) would need a protocol between processes.
+
+In one process, a tab is a `LogPanel` whichever window holds it, so moving it is a Swing
+re-parent, not a reload, and everything shared stays shared.
+
+**Shape.**
+- **`WindowManager` (ui, new)** owns the list of windows, the window used last, and what
+  is shared by all of them: the parser, formatter and highlighter lists (moved out of
+  `MainFrame`, so `reloadExtensions` serves every window), the open-file lookup behind
+  "one tab per file", and refreshing every window's Recent Files menu. Files from the
+  open dialog, Recent Files, a drop, macOS open-file events and `SingleInstanceManager`
+  go to the window used last. The single-instance protocol (6.8) is unchanged.
+- **`MainFrame` becomes the per-window frame**: its tab strip, menu bar (built per
+  window; macOS shows the front window's in the screen menu bar), welcome card and status.
+  Menu actions use their own window as the parent of dialogs and the target of new tabs.
+  It no longer uses `EXIT_ON_CLOSE`: closing it asks the same confirmation as closing a
+  tab (UC-15, "Don't ask again" honoured, counting its tabs), disposes its tabs, and tells
+  `WindowManager`, which quits after the last window and on **File → Exit**.
+- **Moving a tab** removes the `LogPanel` from one `JTabbedPane` and adds it to another;
+  the target window builds a new tab header. Workers, follow, Find and the selection
+  carry on, and nothing is re-read. **Move to New Window** and **Move to ▸ Window N** are
+  on the tab's right-click menu. The tab drag of UC-15 is extended: released outside
+  every Clouseau window it opens a new window at the cursor; released over another
+  window's tab strip it moves there. Windows are numbered in the order they were opened;
+  the Move to submenu names each by its number and selected tab.
+- **Shortcuts:** `TabShortcuts` (6.9) stays one dispatcher but acts on whichever
+  Clouseau window is active, instead of only the main one. `FileDropHandler` (6.10) is
+  installed on every window.
+- **Themes:** `ThemeManager.updateUI` already walks every window (6.8.1), so a theme
+  switch reaches all of them.
+
+**Unchanged:** a tab's own state (filters, follow, highlights, layout, timezone) is the
+tab's, wherever it is. Several windows share one heap, as several tabs do today, so the
+memory rules (D-7, D-8) need nothing new.
+
+**Questions settled in review (2026-11-06):** full menu bar in every window; new files go
+to the window used last; closing a window closes its tabs; no main window; shortcuts act
+on the front window; "one tab per file" counts every window.
+
+### D-19 · Sessions · Accepted
+
+UC-17 reopens what was open: automatically at startup, and as named sessions.
+
+**What a session holds.** Every window (its usual place: bounds in screen coordinates
+and the screen's ID; maximized; selected tab) and its tabs in order. Each tab records what it shows and how:
+
+- a **file** (path, zip entry if any), its parser by name or automatic detection, source
+  timezone, and whether it was shown as plain text;
+- a **merged view**: each file with its parser, timezone and time offset (the same per-file
+  facts as a version 2 review bundle, 7.1);
+- a **review bundle**: the bundle's path, so it reopens as a bundle;
+- an **SSH source**: host, port, user, authentication mode, key file and remote path; or
+  a **plugin source**: the provider's ID and its settings;
+- for every tab: follow on or off, column layout (order, widths, visibility), and filters
+  (levels, excluded loggers, field filters, time range, text, and a merged view's hidden
+  sources).
+
+**Never in a session:** passwords, passphrases or `SourceSetting`s of type `PASSWORD`
+(section 7, rule 2). On restore a source looks for its secret where it does today (a
+saved SSH connection, the provider's saved settings, both through `CredentialStore`); if
+there is none, the tab is a placeholder with **Reconnect**, which opens the source's
+dialog filled in. Annotations and highlights aren't in a session either: they live in
+each file's sidecar (D-5, D-15) and come back with the file.
+
+**Files.** `<data>/session.json` is the last session; `<data>/sessions/<name>.json` holds
+one named session each (file name sanitized, the real name inside). Both use one format,
+read and written by **`SessionStore` (core, new)** as plain records, so the model needs no
+Swing; the UI turns windows into that model and back. The format is local, not an
+interchange format (7, rule 3), but versioned like one so a newer Clouseau reads older
+files:
+
+```json
+{
+  "format": "clouseau-session",
+  "formatVersion": 1,
+  "clouseauVersion": "0.2.0",
+  "savedAt": "2026-11-06T18:02:11.412Z",
+  "activeSession": "Payments",
+  "windows": [
+    {
+      "bounds": { "x": 1920, "y": 0, "width": 1600, "height": 1000 },
+      "screen": "\\Display2", "maximized": true, "selectedTab": 0,
+      "tabs": [
+        { "kind": "file", "path": "C:/logs/api.log", "parser": "Log4j Pattern",
+          "timezone": "UTC", "follow": true,
+          "columns": { "…": "as a saved column layout" },
+          "filters": { "levels": ["ERROR", "WARN"], "excludedLoggers": ["org.hibernate"],
+                       "from": "2026-11-06T10:02:00Z", "to": null, "text": "" } },
+        { "kind": "ssh", "host": "db01", "port": 22, "user": "ops", "auth": "key",
+          "keyFile": "C:/Users/me/.ssh/id_ed25519", "remotePath": "/var/log/db.log" }
+      ]
+    }
+  ]
+}
+```
+
+`activeSession` appears only in `session.json`. Reading rules: unknown fields are
+ignored and a newer `formatVersion` is read anyway (logged), so new fields stay optional.
+A file that doesn't parse is renamed `session.json.bad` and Clouseau starts empty, with a
+message, rather than failing to start.
+
+**When it is written.** `session.json` is kept current while Clouseau runs, not only
+written at exit. A clean quit is the exception, not the rule: an overnight OS update, a
+logoff with Clouseau open (the JVM isn't reliably given time to save), a killed process, a
+crash or a power cut would otherwise restore an old session or none.
+
+- **Triggers:** only changes to what the session records: a window opened, closed,
+  moved, resized, maximized or restored; a tab opened, closed, moved between windows,
+  reordered or selected; a tab's filters, column layout, follow mode, parser, timezone or
+  time offset. New lines in a followed log, scrolling, row selection and load progress
+  aren't recorded, so they don't trigger a save. Notes and highlights are saved in their
+  sidecars (D-5, D-15), not here.
+- **Debounced:** each trigger restarts a timer of about 2 seconds, and the save runs when
+  it fires, so a window drag (hundreds of move events) or typing a filter (an event per
+  key) ends in one write. With no triggers, nothing runs: an idle Clouseau costs nothing.
+- **Compared before writing:** when the timer fires, the snapshot is taken on the EDT (it
+  reads components, a few dozen values per tab) and serialized off the EDT. The JSON is
+  compared with the last JSON written, and if they're equal nothing is written. Building
+  the JSON is needed either way; the comparison costs microseconds in memory, while a
+  write costs several file-system calls and, on Windows, usually a virus scan of the new
+  file. The serialized text is compared rather than a "dirty" flag, because a flag can't
+  tell that a change was undone (a window moved and moved back) and can be lost if an
+  event is missed.
+- **Atomic:** a write goes to `session.json.tmp`, which is then moved over `session.json`
+  in one step, so an interruption leaves the previous complete file. A move that fails
+  (a scanner holding the file) is retried briefly; if it still fails, that save is skipped
+  and logged, and the next trigger tries again.
+- **Exit:** **File → Exit** cancels a pending save, writes the snapshot of every window
+  at once, then closes the windows without further saves, so closing them can't overwrite
+  that snapshot with an empty session. Closing a window yourself is an ordinary trigger:
+  the next save leaves that window out (UC-17).
+- **Start empty:** with Settings → **On startup** set to **Start empty**, `session.json`
+  isn't written at all.
+- **Named sessions** are written only by **Save Session** and **Save Session As…**
+  (UC-17: a snapshot), never by these automatic saves. The automatic save does record
+  which named session is active (`activeSession`).
+
+Rejected: saving only at exit (fails in the cases above), and saving every N seconds
+(loses up to N seconds, and writes when nothing has changed).
+
+**Restoring.**
+- At startup, if Settings → **On startup** (`startup.restore`, default on) is set and
+  `session.json` exists, `WindowManager` builds its windows before files passed at
+  startup open (those go to the window used last, as usual).
+- **Window placement.** A window opens at its saved bounds if at least 100 × 20 px of its
+  title bar (the top strip of the bounds) is on a connected screen, so it can always be
+  grabbed; overlapping a screen by a few pixels doesn't count. Otherwise, typically
+  because its monitor isn't connected, it is **placed**: on the primary screen at its
+  saved size, shrunk to fit. Placed windows are cascaded, each about 30 px right and down
+  from the last, starting near the top left, so no window hides another's title bar. A
+  maximized window is maximized on the screen it's placed on, and un-maximizing it gives
+  the cascaded bounds.
+- **A placed window keeps its usual place.** The saved bounds and screen stay in the
+  session while the window is placed, so the next start with the monitor connected puts
+  it back there. They are replaced only when the user moves or resizes the window (or
+  maximizes or restores it); that new place becomes the usual one. The window's own
+  placement doesn't count as such a change.
+- **Monitors changing while running** aren't handled by this rule. The OS moves windows
+  off a screen that disappears (and Windows 11 can move them back when it returns).
+  Clouseau can't reliably tell those moves from the user's, so it records them like any
+  move.
+- Only each window's selected tab loads at once. The others are **pending tabs**: a
+  light placeholder holding the saved tab, replaced by a real `LogPanel` the first time
+  it is selected. Pending tabs count for "one tab per file" and are saved as they were.
+- A tab that can't open (file gone, plugin not installed, parser no longer defined) is a
+  placeholder that says why, with **Try Again**, and stays in the session until closed. A
+  parser that no longer exists falls back to automatic detection, and the filter strip
+  says so.
+- Filters are applied when the tab opens, before its first rows are shown. A tab whose
+  filters differ from "show everything" shows the **filter strip**: what was restored
+  (levels, loggers, fields, time range, text, sources), whether a time range will hide a
+  followed file's new lines, and **Clear filters** (the filter bar's Clear All Filters).
+  The strip closes with its button or the first filter change. Excluded loggers and field
+  filters that match nothing in the file are kept, as the filter bar already keeps them.
+- **Opening a named session** while tabs are open asks *Close current windows* (default)
+  / *Add to current* / *Cancel*. Closing them asks nothing more. Adding skips files that
+  are already open (their tab stays where it is), and leaves the active session as it was.
+  The active session's name is in every window's title.
+
+**Rejected:** saving sessions in `settings.json` (rewritten often; a damaged session
+would cost the user their settings), live named sessions that save every change (easy to
+change by accident), saving filters but not applying them (looks like a bug), and a
+modal dialog announcing restored filters (one per tab).
+
+**Questions settled in review (2026-11-06):** restore by default, configurable in
+Settings; named sessions in the same feature; a named session is a snapshot; filters are
+saved, reapplied and announced by a strip; sessions aren't shared between machines.
+
 ## 10. Planned features
 
-Accepted in the use cases, with no design decision needed beyond the above: none at
-the moment. (The plain-text view, UC-13, is now built; see 6.11.)
+Accepted in the use cases:
+
+- **UC-16, several windows** — D-18. Build first: sessions need its window model.
+- **UC-17, sessions** — D-19. Build after UC-16: restoring the last session, then named
+  sessions.
+
+**Ideas, not yet accepted.** Raised while designing UC-16 and kept for later; each needs a
+use case before it is built.
+
+- **Same file twice:** open one file in two tabs with different filters (for example
+  errors only next to everything). Needs an exception to "one tab per file" (UC-15).
+- **Synchronized selection:** selecting an entry in one tab moves other tabs to the same
+  moment (corrected time, D-17), optionally scrolling them together.
+- **Linked filters:** a filter change in one tab also applies to the tabs linked to it,
+  per filter (for example a shared time range with separate levels).
+- **Diff two logs:** a good run against a bad one. Normalize what always changes
+  (timestamps, IDs, numbers) into message templates and show what only one side has, or
+  has far more of.
 
 ## 11. Known gaps
 

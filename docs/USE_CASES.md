@@ -1,6 +1,6 @@
 # Clouseau Use Cases
 
-> **Status:** Draft · **Last updated:** 2026-11-04
+> **Status:** Draft · **Last updated:** 2026-11-06
 >
 > This document describes *what Clouseau is for*: who uses it, what they are trying to
 > accomplish, and what it deliberately does not do. It is the reference reviewers use to
@@ -504,6 +504,110 @@ opening the same file twice.
 apply wherever focus is in the main window (not in dialogs) and are listed in Help →
 Keyboard Shortcuts. `Ctrl+1` to `Ctrl+8` past the last open tab do nothing. The
 shortcuts use `Ctrl` on every platform, including macOS.
+
+### UC-16 · Spread logs across several windows ❌
+
+**Actor:** Developer, Field engineer
+**Goal:** Watch several logs at once on different monitors, for example the API's log on
+one screen and the database's on the other while reproducing a problem.
+
+1. User right-clicks a tab and chooses **Move to New Window**. The tab opens in a new
+   window, with its table, filters, follow mode and notes exactly as they were.
+2. User drags the new window to another monitor.
+3. To move a tab later, the user right-clicks it and chooses **Move to ▸ Window N**, or
+   drags it:
+   - dropping it outside every Clouseau window opens a new window there;
+   - dropping it on another window's tabs moves it into that window.
+4. User works in any window as in the first one: every window has the full menu bar, its
+   own tabs and the same keyboard shortcuts.
+5. User closes a window with its close button. Its tabs close with it.
+
+**Success:** The user can lay logs out across all their monitors and keep each one live,
+without running a second copy of Clouseau.
+
+**Rules:**
+- **One application, several windows.** Every window belongs to the same running
+  Clouseau, so settings, parsers, plugins, themes and Recent Files are shared, and a
+  second launch still hands its files to the running one (UC-1).
+- **Menus act on their own window.** Open, Close Tab, Export for Review and the other
+  menu actions apply to the window whose menu was used.
+- **New files open in the window used last.** That covers the open dialog, Recent Files,
+  dropped files, and files sent by "Open with" or a second launch.
+- **One tab per file, across windows:** Opening a file that's already open in any window
+  brings that window to the front and selects its tab (UC-15).
+- **A moved tab keeps working.** Moving a tab never reloads it: following, loading and
+  Find carry on, and merged views and SSH tabs move like any other tab.
+- **Closing a window closes its tabs,** with the same confirmation as closing a tab
+  (UC-15). Closing the last window quits Clouseau.
+- **All windows are equal.** No window is the "main" one; any of them can be closed.
+- **Shortcuts stay in their window.** `Ctrl+Tab`, `Ctrl+1` to `Ctrl+9` and `Ctrl+W` act on
+  the tabs of the window in front. Switching windows is left to the operating system.
+
+**Current behavior:** Not built yet. Clouseau has one window, and every log opens as a
+tab in it (UC-15). Design: DESIGN.md D-18.
+
+### UC-17 · Pick up where I left off ❌
+
+**Actor:** Developer, Field engineer
+**Goal:** Close Clouseau at the end of the day and find the same logs open, in the same
+windows, the next morning, especially remote logs that take several steps to open.
+
+1. User quits Clouseau with several windows and tabs open.
+2. Next time it starts, Clouseau reopens every window where it was (position, size,
+   monitor, maximized) with its tabs in the same order and the same tab selected.
+3. Each tab opens as it was: the same file or files, parser, source timezone, time
+   offsets, follow mode, column layout and filters.
+4. Each tab whose filters were restored shows a strip saying so, for example *"Filters
+   restored from your last session: levels, 3 loggers, time range"*, with **Clear
+   filters** and a close button.
+
+**Success:** Starting Clouseau puts the user straight back into their investigation,
+with nothing to reopen or re-filter by hand.
+
+**Variation: named sessions.** Keep one set of open logs per project or incident and
+switch between them.
+1. User opens the logs for a project and chooses **File → Sessions → Save Session As…**,
+   naming it, for example, *Payments*.
+2. The window titles show the session's name. **File → Sessions → Save Session** updates
+   it later with what is open now.
+3. Another day, the user picks *Payments* from **File → Sessions**. If logs are already
+   open, Clouseau asks whether to **Close current windows** (the default), **Add to
+   current**, or **Cancel**, then opens the session's windows and tabs.
+4. **File → Sessions → Manage Sessions…** renames and deletes saved sessions.
+
+**Rules:**
+- **On by default, and optional.** Settings → **On startup** offers **Restore last
+  session** (the default) and **Start empty**.
+- **The last session is what was open when Clouseau quit.** If a named session was
+  active, it is still active after the restart. **File → Exit** quits with every window;
+  closing windows one at a time takes each out of the session, so only the last one is
+  restored. Files passed at startup ("Open with", the command line) open alongside the
+  restored session.
+- **A named session is a snapshot.** It changes only when the user saves it; opening or
+  closing tabs afterwards doesn't change it.
+- **Passwords are never saved in a session.** An SSH or plugin source whose password is
+  saved in Clouseau reconnects by itself. Otherwise its tab opens with a **Reconnect**
+  button, so starting Clouseau never shows a pile of password prompts.
+- **Nothing is silently dropped.** A file that no longer exists, or a source whose plugin
+  is gone, opens as a tab that says so, with **Try Again**. The tab stays in the session
+  until the user closes it, so a log on a drive that isn't connected yet comes back later.
+- **Restored filters are announced.** The filter strip names what was restored. It calls
+  out a time range that hides new lines of a followed log, and it goes away when the user
+  closes it or changes a filter. A filter on a logger or field the file doesn't have
+  (yet) is kept, so it applies again if that logger appears.
+- **A missing monitor is handled.** A window saved on a monitor that isn't connected,
+  for example a laptop away from its desk, opens on the main screen instead, offset so
+  it doesn't hide another window. Its place on the missing monitor is remembered, so it
+  goes back there the next time that monitor is connected at startup, unless the user
+  moved the window in the meantime. A window whose title bar would be off every screen
+  is moved the same way, so it can always be grabbed.
+- **Large sessions start quickly.** Only the tab in front in each window loads at start;
+  the others load when they are first selected.
+- **Sessions stay on this machine.** They hold paths and host names that mean nothing
+  elsewhere. To hand logs to someone, export them for review (UC-8).
+
+**Current behavior:** Not built yet. Clouseau starts empty (with any files passed to it),
+and Recent Files lists the last opened files. Design: DESIGN.md D-19.
 
 ---
 
