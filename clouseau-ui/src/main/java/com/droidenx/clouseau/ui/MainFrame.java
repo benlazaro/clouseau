@@ -93,6 +93,7 @@ public final class MainFrame extends JFrame {
             }
         });
         addWindowStateListener(e -> manager.sessionChanged());
+        WindowActivator.install(this);   // remembers maximized, for bringing it forward (#5)
         addComponentListener(new java.awt.event.ComponentAdapter() {
             // Later: maximizing reports the new size before the new state.
             @Override public void componentMoved(java.awt.event.ComponentEvent e)   { SwingUtilities.invokeLater(MainFrame.this::boundsChanged); }

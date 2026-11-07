@@ -14,7 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SingleInstanceManagerTest {
 
-    private final BlockingQueue<String> received = new LinkedBlockingQueue<>();
+    /** One element per secondary launch: the paths it sent. */
+    private final BlockingQueue<List<String>> received = new LinkedBlockingQueue<>();
     private ServerSocket server;
 
     @AfterEach
@@ -28,10 +29,10 @@ class SingleInstanceManagerTest {
         }
     }
 
-    private List<String> drain(int expected) throws InterruptedException {
-        List<String> out = new ArrayList<>();
-        while (out.size() < expected) {
-            String p = received.poll(5, TimeUnit.SECONDS);
+    private List<List<String>> drain(int launches) throws InterruptedException {
+        List<List<String>> out = new ArrayList<>();
+        while (out.size() < launches) {
+            List<String> p = received.poll(5, TimeUnit.SECONDS);
             if (p == null) break;
             out.add(p);
         }
@@ -47,7 +48,7 @@ class SingleInstanceManagerTest {
         List<String> paths = List.of("C:\\logs\\a.log", "C:\\logs\\b.log", "C:\\logs\\follow.log");
         assertThat(SingleInstanceManager.send(port, paths)).isTrue();
 
-        assertThat(drain(3)).containsExactlyElementsOf(paths);
+        assertThat(drain(1)).containsExactly(paths);
     }
 
     @Test
@@ -73,7 +74,42 @@ class SingleInstanceManagerTest {
             pool.shutdownNow();
         }
 
-        assertThat(drain(launches * 2)).hasSize(launches * 2);
+        List<List<String>> got = drain(launches);
+        assertThat(got).hasSize(launches).allSatisfy(l -> assertThat(l).hasSize(2));
+    }
+
+    @Test
+    void launchWithoutFilesArrivesAsAnEmptyBatch() throws Exception {
+        int port = freePort();
+        server = SingleInstanceManager.listen(port, received::add);
+
+        assertThat(SingleInstanceManager.send(port, List.of())).isTrue();
+
+        assertThat(drain(1)).containsExactly(List.of());
+    }
+
+    @Test
+    void skipsBlankLines() throws Exception {
+        int port = freePort();
+        server = SingleInstanceManager.listen(port, received::add);
+
+        assertThat(SingleInstanceManager.send(port, List.of("", "/logs/a.log", " "))).isTrue();
+
+        assertThat(drain(1)).containsExactly(List.of("/logs/a.log"));
+    }
+
+    @Test
+    void keepsServingAfterTheCallbackFails() throws Exception {
+        int port = freePort();
+        server = SingleInstanceManager.listen(port, paths -> {
+            if (paths.contains("/logs/bad.log")) throw new IllegalStateException("boom");
+            received.add(paths);
+        });
+
+        assertThat(SingleInstanceManager.send(port, List.of("/logs/bad.log"))).isTrue();
+        assertThat(SingleInstanceManager.send(port, List.of("/logs/good.log"))).isTrue();
+
+        assertThat(drain(1)).containsExactly(List.of("/logs/good.log"));
     }
 
     @Test
@@ -83,7 +119,7 @@ class SingleInstanceManagerTest {
 
         assertThat(SingleInstanceManager.send(port, List.of("/logs/journal-é-日本.log"))).isTrue();
 
-        assertThat(drain(1)).containsExactly("/logs/journal-é-日本.log");
+        assertThat(drain(1)).containsExactly(List.of("/logs/journal-é-日本.log"));
     }
 
     @Test

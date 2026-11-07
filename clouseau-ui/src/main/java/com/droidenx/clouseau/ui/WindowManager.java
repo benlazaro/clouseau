@@ -396,6 +396,23 @@ final class WindowManager {
         if (w != null) w.openFile(file);
     }
 
+    /**
+     * Files from another launch ("Open with", a double-click in Explorer, or none at all):
+     * brings the window used last to the front first, so any message about the files shows
+     * in front too, then opens them there (#5). If the last file was already open in another
+     * window, that window comes to the front instead.
+     */
+    void handOver(List<Path> files) {
+        MainFrame w = lastActive();
+        if (w == null) return;
+        WindowActivator.bringToFront(w);
+        files.forEach(this::openFile);
+        if (files.isEmpty()) return;
+        findTab(files.get(files.size() - 1), null).map(WindowManager::windowOf)
+                .filter(holder -> holder != null && holder != w)
+                .ifPresent(WindowActivator::bringToFront);
+    }
+
     /** Opens files given on the command line, in the window used last. */
     void openFiles(List<Path> files) {
         MainFrame w = lastActive();

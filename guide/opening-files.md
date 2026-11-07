@@ -23,7 +23,9 @@ nav_order: 1
 - **The command line**: pass one or more file paths to the launcher.
 
 Only one Clouseau runs at a time. Opening a file while it's running sends the file to the
-window that's already open, so you never get two copies.
+window that's already open, so you never get two copies, and brings that window to the
+front (restoring it if it was minimized). Starting Clouseau again without a file just
+brings the open window forward.
 
 Each file opens in its own tab. Opening a file that's already open switches to its tab.
 

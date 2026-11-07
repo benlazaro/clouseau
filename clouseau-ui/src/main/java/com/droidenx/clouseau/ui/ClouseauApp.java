@@ -25,9 +25,41 @@ public final class ClouseauApp {
         log.info("Starting Clouseau Log Viewer");
         log.info("Data dir: {}{}", AppDirs.dataDir(), AppDirs.isPortable() ? " (portable)" : "");
 
-        FlatLaf.registerCustomDefaultsSource("com.droidenx.clouseau.ui.theme");
-        ThemeManager.applyTheme(AppPrefs.getTheme());
+        // Use an array so the IPC lambda can capture the reference set later on the EDT.
+        WindowManager[] windowsRef = new WindowManager[1];
+        // Files the OS asked us to open before the window existed (EDT only).
+        List<Path> pendingOpens = new java.util.ArrayList<>();
 
+        // Checked before the theme, splash and plugins, so a launch that only hands its files
+        // to the running window shows nothing of its own and hands them over quickly.
+        boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePaths ->
+                SwingUtilities.invokeLater(() -> {
+                    List<Path> files = filePaths.stream().map(Path::of).toList();
+                    WindowManager windows = windowsRef[0];
+                    if (windows != null && windows.isShown()) {
+                        windows.handOver(files);   // brings a window forward too (#5)
+                    } else {
+                        pendingOpens.addAll(files);   // window not shown yet; it comes up anyway
+                    }
+                }));
+
+        if (!isPrimary) {
+            // Forward any CLI file args to the running instance, then exit. Paths are made
+            // absolute here: the running instance has its own working directory. With no
+            // files, an empty message still brings the running window to the front.
+            List<String> paths = java.util.Arrays.stream(args)
+                    .map(a -> Path.of(a).toAbsolutePath().toString())
+                    .toList();
+            if (!SingleInstanceManager.sendToPrimary(paths) && !paths.isEmpty()) {
+                showNotDelivered(paths);
+                System.exit(1);
+            }
+            log.info("Delegated to existing instance — exiting.");
+            System.exit(0);
+        }
+
+        applyTheme();
+        installOpenFileHandler(windowsRef, pendingOpens);
         SplashWindow splash = SplashWindow.createAndShow();
 
         // Plugin parsers — loaded from the plugins directory; may be empty if dir not found
@@ -43,35 +75,7 @@ public final class ClouseauApp {
 
         Runtime.getRuntime().addShutdownHook(new Thread(pluginManager::stopAll, "plugin-shutdown"));
 
-        // Use an array so the IPC lambda can capture the reference set later on the EDT.
-        WindowManager[] windowsRef = new WindowManager[1];
-        // Files the OS asked us to open before the window existed (EDT only).
-        List<Path> pendingOpens = new java.util.ArrayList<>();
-        installOpenFileHandler(windowsRef, pendingOpens);
-
         if (splash != null) splash.setStatus("Starting...");
-        boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePath ->
-                SwingUtilities.invokeLater(() -> {
-                    WindowManager windows = windowsRef[0];
-                    if (windows != null && windows.isShown()) windows.openFile(Path.of(filePath));
-                    else pendingOpens.add(Path.of(filePath));   // window not shown yet
-                }));
-
-        if (!isPrimary) {
-            // Forward any CLI file args to the running instance, then exit. Paths are made
-            // absolute here: the running instance has its own working directory.
-            if (args.length > 0) {
-                List<String> paths = java.util.Arrays.stream(args)
-                        .map(a -> Path.of(a).toAbsolutePath().toString())
-                        .toList();
-                if (!SingleInstanceManager.sendToPrimary(paths)) {
-                    showNotDelivered(splash, paths);
-                    System.exit(1);
-                }
-            }
-            log.info("Delegated to existing instance — exiting.");
-            System.exit(0);
-        }
 
         // Only the running instance may do this: copies in use belong to its open tabs.
         com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir());
@@ -125,16 +129,19 @@ public final class ClouseauApp {
         });
     }
 
+    /** Sets up FlatLaf and the user's theme. Call once, before the first window. */
+    private static void applyTheme() {
+        FlatLaf.registerCustomDefaultsSource("com.droidenx.clouseau.ui.theme");
+        ThemeManager.applyTheme(AppPrefs.getTheme());
+    }
+
     /** Tells the user that the running instance couldn't be reached, so the files didn't open. */
-    private static void showNotDelivered(SplashWindow splash, List<String> paths) {
+    private static void showNotDelivered(List<String> paths) {
         String message = java.text.MessageFormat.format(Messages.get("app.instance.unreachable.message"),
                 String.valueOf(SingleInstanceManager.PORT), String.join("\n", paths));
+        applyTheme();
         try {
             SwingUtilities.invokeAndWait(() -> {
-                if (splash != null) {
-                    splash.setVisible(false);
-                    splash.dispose();
-                }
                 JOptionPane.showMessageDialog(null, message,
                         Messages.get("app.instance.unreachable.title"), JOptionPane.ERROR_MESSAGE);
             });
@@ -156,7 +163,7 @@ public final class ClouseauApp {
             List<Path> files = e.getFiles().stream().map(java.io.File::toPath).toList();
             SwingUtilities.invokeLater(() -> {
                 WindowManager windows = windowsRef[0];
-                if (windows != null && windows.isShown()) files.forEach(windows::openFile);
+                if (windows != null && windows.isShown()) windows.handOver(files);
                 else pending.addAll(files);
             });
         });
