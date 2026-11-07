@@ -8,3 +8,6 @@ data/
 
 # IntelliJ project files (regenerated from the Gradle import; machine-specific)
 .idea/
+
+# Claude desktop app preview servers (local only)
+.claude/launch.json

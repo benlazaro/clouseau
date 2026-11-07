@@ -94,3 +94,28 @@ If a file looks binary rather than text, Clouseau asks before showing it.
   the same timezone for every tab.
 
 Each tab keeps its own filters, follow mode, highlights and column layout.
+
+## Several windows
+
+To watch logs on more than one monitor, spread your tabs across several windows:
+
+- Right-click a tab and choose **Move to New Window**, then drag that window to another
+  monitor.
+- Right-click a tab and choose **Move to ▸ Window 2** (or any other open window) to send
+  it there.
+- Drag a tab out of its window: release it over another Clouseau window's tabs to move it
+  there, or anywhere else to open it in a new window at that spot.
+- **File → New Window** (`Ctrl+N`) opens an empty window. Files you open from its menu
+  open in it.
+
+A moved tab carries on as it was: following, filters, notes and Find aren't interrupted,
+and nothing is reloaded. A window you empty by moving its last tab away closes itself.
+
+Every window has the full menu bar, and the menus and shortcuts act on the window you're
+in, and a file dropped on a window opens in that window. Files opened from outside
+Clouseau (double-clicking a file, "Open with") open in the window you used last. A file can only be open once: opening it
+again brings its window to the front and selects its tab.
+
+Closing a window closes its tabs. Clouseau asks first, as it does for a tab, unless you
+turned that question off. Closing the last window quits Clouseau, without asking, as
+before.

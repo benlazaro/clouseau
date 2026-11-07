@@ -125,7 +125,9 @@ tags.
 - `EntryFilter`, `CombinedFilter` (core) — a filter that can also be decided from index
   columns; `CombinedFilter` is the filter bar's (levels, loggers, fields, time, text).
 - `ClouseauPluginManager` (plugin) — `loadAll()` at startup, `refresh()` to hot-reload.
-- `MainFrame` (ui) — window, menus, tabs; holds the parser/formatter/highlighter lists.
+- `WindowManager` (ui) — UC-16, D-18: every window, the one used last, and what they share
+  (parser/formatter/highlighter/source lists, "one tab per file" across windows).
+- `MainFrame` (ui) — one window: its menus and tabs, and moving tabs between windows.
 - `LogPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.
 - `LogTableView`, `RowMenu` (ui) — G-9: a tab's table (renderer, header menu, column sizing,
   visibility and saved layouts) and its rows' right-click menu (highlights, notes, merged-file items).

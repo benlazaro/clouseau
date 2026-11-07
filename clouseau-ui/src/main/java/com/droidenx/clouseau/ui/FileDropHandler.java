@@ -58,10 +58,18 @@ final class FileDropHandler extends TransferHandler {
         });
     }
 
+    /** Where this handler sends dropped files: its window's opener. */
+    Consumer<List<Path>> opener() { return opener; }
+
     static void wrapTree(Component c, Consumer<List<Path>> opener) {
         if (c instanceof JComponent jc) {
             TransferHandler th = jc.getTransferHandler();
-            if (th != null && !(th instanceof FileDropHandler)) {
+            if (th instanceof FileDropHandler fdh) {
+                // A tab moved from another window (UC-16): drops now open in this one.
+                if (fdh.opener != opener && fdh.delegate != null) {
+                    jc.setTransferHandler(new FileDropHandler(opener, fdh.delegate));
+                }
+            } else if (th != null) {
                 jc.setTransferHandler(new FileDropHandler(opener, th));
             }
         }

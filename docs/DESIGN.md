@@ -351,7 +351,8 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
 
 `SingleInstanceManager` binds a localhost socket (port 54823). If another Clouseau is
 already running, a new launch forwards its file arguments to it and exits, so
-double-clicking several files opens tabs in one window.
+double-clicking several files opens tabs in one window: the window used last, when there
+are several (D-18).
 
 - **Protocol:** one connection per launch, carrying every path as an absolute path (the
   running instance has its own working directory), one per line in UTF-8, until the
@@ -378,8 +379,8 @@ it.
 ### 6.9 Tab switching shortcuts (UC-15)
 
 `TabShortcuts` is a `KeyEventDispatcher` registered with the `KeyboardFocusManager` by
-`MainFrame`, not a set of ordinary key bindings, because two Swing behaviors would
-otherwise swallow the keys:
+each `MainFrame` (one per window, D-18), not a set of ordinary key bindings, because two
+Swing behaviors would otherwise swallow the keys:
 
 - `Ctrl+Tab` and `Ctrl+Shift+Tab` are default focus-traversal keys, consumed by the
   focus manager before any key binding runs (`JTable` also uses them to move focus).
@@ -387,7 +388,7 @@ otherwise swallow the keys:
   component's bindings are checked before window-level (`WHEN_IN_FOCUSED_WINDOW`) ones.
 
 A dispatcher sees key events before both, so the shortcuts work wherever focus is. It
-acts only while the main window is active, so dialogs keep their own keys, and it
+acts only while its own window is active, so dialogs keep their own keys, and it
 consumes only the shortcuts it handles (a `Ctrl+digit` past the last tab is left alone).
 Plain `Tab` and `Shift+Tab` still move focus. The index arithmetic is a static method,
 unit-tested without a display.
@@ -1243,7 +1244,7 @@ as a reusable "workspace".
    for its copy is read into memory, and lines need no timestamps.
 5. **Live sources (SSH, plugins) in a merge:** *Recommendation:* not now, as in *Scope*.
 
-### D-18 · One process, several windows · Accepted
+### D-18 · One process, several windows · Adopted
 
 UC-16 puts logs on several monitors. Clouseau does this with **several windows in one
 process**, not by allowing several instances.
@@ -1259,39 +1260,60 @@ process**, not by allowing several instances.
 In one process, a tab is a `LogPanel` whichever window holds it, so moving it is a Swing
 re-parent, not a reload, and everything shared stays shared.
 
-**Shape.**
-- **`WindowManager` (ui, new)** owns the list of windows, the window used last, and what
-  is shared by all of them: the parser, formatter and highlighter lists (moved out of
-  `MainFrame`, so `reloadExtensions` serves every window), the open-file lookup behind
-  "one tab per file", and refreshing every window's Recent Files menu. Files from the
-  open dialog, Recent Files, a drop, macOS open-file events and `SingleInstanceManager`
-  go to the window used last. The single-instance protocol (6.8) is unchanged.
-- **`MainFrame` becomes the per-window frame**: its tab strip, menu bar (built per
-  window; macOS shows the front window's in the screen menu bar), welcome card and status.
-  Menu actions use their own window as the parent of dialogs and the target of new tabs.
-  It no longer uses `EXIT_ON_CLOSE`: closing it asks the same confirmation as closing a
-  tab (UC-15, "Don't ask again" honoured, counting its tabs), disposes its tabs, and tells
-  `WindowManager`, which quits after the last window and on **File → Exit**.
-- **Moving a tab** removes the `LogPanel` from one `JTabbedPane` and adds it to another;
-  the target window builds a new tab header. Workers, follow, Find and the selection
-  carry on, and nothing is re-read. **Move to New Window** and **Move to ▸ Window N** are
-  on the tab's right-click menu. The tab drag of UC-15 is extended: released outside
-  every Clouseau window it opens a new window at the cursor; released over another
-  window's tab strip it moves there. Windows are numbered in the order they were opened;
-  the Move to submenu names each by its number and selected tab.
-- **Shortcuts:** `TabShortcuts` (6.9) stays one dispatcher but acts on whichever
-  Clouseau window is active, instead of only the main one. `FileDropHandler` (6.10) is
-  installed on every window.
+**Shape** (as built, 2026-11-06).
+- **`WindowManager` (ui)** owns the list of windows (in the order they were opened), the
+  window used last (updated on `windowActivated`), and what all of them share: the parser,
+  formatter, highlighter and source lists and the open dialog's last parser (moved out of
+  `MainFrame`, so `reloadExtensions` serves every window), `findTab` behind "one tab per
+  file", `allPanels`, and refreshing every window's Recent Files menu. `ClouseauApp`
+  creates it and sends command-line files, macOS open-file events and files from
+  `SingleInstanceManager` to the window used last. The single-instance protocol (6.8) is
+  unchanged.
+- **`MainFrame` is one window**: its tab strip, menu bar (built per window; macOS shows the
+  front window's in the screen menu bar), welcome card and tab menus. Menu actions use
+  their own window as the parent of dialogs and the target of new tabs. It uses
+  `DO_NOTHING_ON_CLOSE`: closing the last window calls `WindowManager.exit` without asking,
+  as closing Clouseau always has; closing any other asks the tab-close confirmation
+  ("Close this window and its N tabs?", same "Don't ask again" preference), disposes its
+  tabs and tells `WindowManager.closed`. **File → Exit** quits from any window. **File →
+  New Window** (`Ctrl+N`; `Ctrl+Shift+N` is the notes list) opens an empty window.
+- **Moving a tab** (`MainFrame.moveTabTo`) removes the `LogPanel` from one `JTabbedPane`
+  and inserts it into another; the target builds a new tab header with the same title and
+  tooltip. Workers, follow, Find and the selection carry on, and nothing is re-read. A
+  window left with no tabs by a move closes. **Move to New Window** (greyed out for a
+  window's only tab) and **Move to ▸ Window N: <selected tab>** are on the tab's
+  right-click menu; N is the window's position in the list, so numbers close up when a
+  window closes. The tab drag of UC-15 ends in `dropTab`: released over its own window it
+  stays where the drag put it; over another Clouseau window it moves there, at the tab
+  under the cursor (else at the end); anywhere else it opens a new window with its tab
+  strip under the cursor.
+- **Callbacks follow the tab.** A tab's close, load-failure, merge and create-parser
+  callbacks look up the window that holds the panel when they run
+  (`WindowManager.windowOf`), not the window that created it, because the tab may have
+  moved since.
+- **Placement.** A new window copies the size of the window it came from (three quarters
+  of it if that one is maximized), cascaded 30 px down and right; a dragged-out tab's
+  window opens at the cursor. Either way `WindowManager.fitOnScreen` moves and shrinks it
+  into the usable bounds of the screen holding its top-left corner, or the first screen.
+- **Shortcuts:** each window registers its own `TabShortcuts` dispatcher (6.9), which acts
+  only while that window is active. Menu accelerators and the `Ctrl+,` binding are per
+  window too.
+- **Drops:** `FileDropHandler` (6.10) is installed on every window. When a moved tab's
+  components are added to the new window, the AWT container listener wraps them again with
+  the new window's opener, replacing the old one around the same original handler, so a
+  drop on a moved tab opens in the window it is in now.
 - **Themes:** `ThemeManager.updateUI` already walks every window (6.8.1), so a theme
   switch reaches all of them.
+- **Set Source Timezone for All Tabs** applies to the tabs of every window.
 
 **Unchanged:** a tab's own state (filters, follow, highlights, layout, timezone) is the
-tab's, wherever it is. Several windows share one heap, as several tabs do today, so the
-memory rules (D-7, D-8) need nothing new.
+tab's, wherever it is. Several windows share one heap, as several tabs do, so the memory
+rules (D-7, D-8) need nothing new.
 
 **Questions settled in review (2026-11-06):** full menu bar in every window; new files go
 to the window used last; closing a window closes its tabs; no main window; shortcuts act
-on the front window; "one tab per file" counts every window.
+on the front window; "one tab per file" counts every window; closing the last window quits
+without asking; a window emptied by a move closes; File → New Window.
 
 ### D-19 · Sessions · Accepted
 
@@ -1446,9 +1468,8 @@ saved, reapplied and announced by a strip; sessions aren't shared between machin
 
 Accepted in the use cases:
 
-- **UC-16, several windows** — D-18. Build first: sessions need its window model.
-- **UC-17, sessions** — D-19. Build after UC-16: restoring the last session, then named
-  sessions.
+- **UC-17, sessions** — D-19. Builds on UC-16's windows (D-18, now built): restoring the
+  last session first, then named sessions.
 
 **Ideas, not yet accepted.** Raised while designing UC-16 and kept for later; each needs a
 use case before it is built.

@@ -44,15 +44,37 @@ class FileDropHandlerTest {
         root.add(field);
         root.add(label);
 
-        FileDropHandler.wrapTree(root, opened::add);
+        java.util.function.Consumer<List<Path>> opener = opened::add;   // one per window, as install passes it
+        FileDropHandler.wrapTree(root, opener);
         TransferHandler tableHandler = table.getTransferHandler();
-        FileDropHandler.wrapTree(root, opened::add);
+        FileDropHandler.wrapTree(root, opener);
 
         assertThat(tableHandler).isInstanceOf(FileDropHandler.class);
         assertThat(table.getTransferHandler()).isSameAs(tableHandler);   // not wrapped twice
         assertThat(field.getTransferHandler()).isInstanceOf(FileDropHandler.class);
         assertThat(label.getTransferHandler()).isNull();
         assertThat(root.getTransferHandler()).isNull();
+    }
+
+    @Test
+    void aTabMovedToAnotherWindowOpensDropsThere() throws Exception {
+        JTable table = new JTable(new Object[][]{{"hello"}}, new Object[]{"c"});
+        List<List<Path>> secondWindow = new ArrayList<>();
+        java.util.function.Consumer<List<Path>> first = opened::add;
+        java.util.function.Consumer<List<Path>> second = secondWindow::add;
+        FileDropHandler.wrapTree(table, first);
+        FileDropHandler.wrapTree(table, second);   // what installing on the new window does
+
+        TransferHandler handler = table.getTransferHandler();
+        assertThat(handler).isInstanceOf(FileDropHandler.class);
+        assertThat(((FileDropHandler) handler).opener()).isSameAs(second);
+
+        // The table's own handler is still the one underneath, not a wrapped wrapper: copy works.
+        table.setRowSelectionInterval(0, 0);
+        table.setColumnSelectionInterval(0, 0);
+        Clipboard clipboard = new Clipboard("test");
+        handler.exportToClipboard(table, clipboard, TransferHandler.COPY);
+        assertThat(clipboard.getData(DataFlavor.stringFlavor)).isEqualTo("hello");
     }
 
     @Test

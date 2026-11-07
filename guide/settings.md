@@ -44,10 +44,12 @@ readable in any theme.
 
 ## Keyboard shortcuts
 
-**Help → Keyboard Shortcuts** lists them in the app. They work anywhere in the main window.
+**Help → Keyboard Shortcuts** lists them in the app. They work anywhere in a Clouseau
+window, and act on that window.
 
 | Shortcut | Action |
 |---|---|
+| `Ctrl+N` | New window |
 | `Ctrl+O` | Open a file |
 | `Ctrl+W` | Close the tab |
 | `Ctrl+,` | Settings |

@@ -505,7 +505,7 @@ apply wherever focus is in the main window (not in dialogs) and are listed in He
 Keyboard Shortcuts. `Ctrl+1` to `Ctrl+8` past the last open tab do nothing. The
 shortcuts use `Ctrl` on every platform, including macOS.
 
-### UC-16 · Spread logs across several windows ❌
+### UC-16 · Spread logs across several windows ✅
 
 **Actor:** Developer, Field engineer
 **Goal:** Watch several logs at once on different monitors, for example the API's log on
@@ -531,20 +531,27 @@ without running a second copy of Clouseau.
   second launch still hands its files to the running one (UC-1).
 - **Menus act on their own window.** Open, Close Tab, Export for Review and the other
   menu actions apply to the window whose menu was used.
-- **New files open in the window used last.** That covers the open dialog, Recent Files,
-  dropped files, and files sent by "Open with" or a second launch.
+- **New files open where you'd expect.** The open dialog and Recent Files open in their
+  own window, a dropped file in the window it was dropped on, and files sent by "Open
+  with" or a second launch in the window used last.
 - **One tab per file, across windows:** Opening a file that's already open in any window
   brings that window to the front and selects its tab (UC-15).
 - **A moved tab keeps working.** Moving a tab never reloads it: following, loading and
   Find carry on, and merged views and SSH tabs move like any other tab.
 - **Closing a window closes its tabs,** with the same confirmation as closing a tab
-  (UC-15). Closing the last window quits Clouseau.
+  (UC-15). Closing the last window quits Clouseau, without asking, as it always has. A
+  window emptied by moving its last tab away closes by itself.
 - **All windows are equal.** No window is the "main" one; any of them can be closed.
 - **Shortcuts stay in their window.** `Ctrl+Tab`, `Ctrl+1` to `Ctrl+9` and `Ctrl+W` act on
   the tabs of the window in front. Switching windows is left to the operating system.
 
-**Current behavior:** Not built yet. Clouseau has one window, and every log opens as a
-tab in it (UC-15). Design: DESIGN.md D-18.
+**Current behavior:** All of the above works. Besides **Move to New Window** and **Move
+to ▸ Window N** on a tab's right-click menu and dragging tabs between windows, **File →
+New Window** (`Ctrl+N`) opens an empty window. Move to New Window is greyed out for a
+window's only tab, and Move to lists each other window by its number and selected tab.
+A tab dragged out of every window opens a new window at the drop point, kept on screen.
+A new window takes its size from the window it came from, offset down and right. Set
+Source Timezone for All Tabs applies to the tabs of every window. Design: DESIGN.md D-18.
 
 ### UC-17 · Pick up where I left off ❌
 

@@ -6,7 +6,6 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.MergeLoad;
-import com.droidenx.clouseau.core.ParserList;
 import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.SshConfig;
 import com.droidenx.clouseau.core.SshLogSource;
@@ -33,32 +32,32 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+/**
+ * One Clouseau window (UC-16, D-18): its tabs, menu bar and welcome screen. What all
+ * windows share (extensions, the window used last, "one tab per file") is in
+ * {@link WindowManager}.
+ */
 @Slf4j
 public final class MainFrame extends JFrame {
 
+    private final WindowManager manager;
     private final ClouseauPluginManager pluginManager;
-    private List<LogParser> parsers;
-    private List<LogFormatter> formatters;
-    private List<LogSyntaxHighlighter> syntaxHighlighters;
-    private List<LogSourceProvider> sourceProviders = List.of();
     private final JTabbedPane tabbedPane = new JTabbedPane();
     private final CardLayout cardLayout  = new CardLayout();
     private final JPanel contentArea     = new JPanel(cardLayout);
-    private int lastParserIndex = 0;
     private JMenuItem closeTabItem;
     private JMenu recentMenu;
 
     private static final String CARD_WELCOME = "welcome";
     private static final String CARD_TABS    = "tabs";
 
-    public MainFrame(ClouseauPluginManager pluginManager) {
+    MainFrame(WindowManager manager) {
         super(Messages.get("app.title"));
-        this.pluginManager = pluginManager;
-        reloadExtensions();
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(1280, 800);
+        this.manager = manager;
+        this.pluginManager = manager.pluginManager();
+        // Closing is decided in requestClose: the last window quits, others ask first.
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(800, 500));
-        setLocationRelativeTo(null);
         setIconImages(loadAppIcons());
 
         contentArea.add(buildWelcomePanel(), CARD_WELCOME);
@@ -80,53 +79,74 @@ public final class MainFrame extends JFrame {
         // Dropped files open like "Open with": auto-detect; several can be merged (UC-1, UC-12).
         FileDropHandler.install(this, this::openFiles);
 
-        // Tab switching (UC-15): a dispatcher, not key bindings; see TabShortcuts.
+        // Tab switching (UC-15): a dispatcher, not key bindings; see TabShortcuts. Each
+        // window has its own, active only while that window is.
         KeyEventDispatcher tabShortcuts = new TabShortcuts(this, tabbedPane);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(tabShortcuts);
         addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowActivated(java.awt.event.WindowEvent e) { manager.activated(MainFrame.this); }
+            @Override public void windowClosing(java.awt.event.WindowEvent e) { requestClose(); }
             @Override public void windowClosed(java.awt.event.WindowEvent e) {
                 KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(tabShortcuts);
             }
         });
     }
 
-    // ── Extension list management ─────────────────────────────────────────────
+    // ── Shared state, through the window manager ──────────────────────────────
 
-    /**
-     * Rebuilds the parser list: JSON-defined parsers (built-in and {@code parsers.json})
-     * first, then plugin parsers (see {@link ParserList}). Called at startup, after
-     * parsers.json is saved, and after a plugin refresh.
-     */
-    void reloadParsers() {
-        this.parsers = ParserList.combine(UserParsersLoader.load(),
-                pluginManager.getExtensions(LogParser.class));
-        if (lastParserIndex > parsers.size()) lastParserIndex = 0;
-        log.info("Loaded {} parser(s): {}", parsers.size(),
-                parsers.stream().map(LogParser::getName).toList());
+    private List<LogParser> parsers()                       { return manager.parsers(); }
+    private List<LogFormatter> formatters()                 { return manager.formatters(); }
+    private List<LogSyntaxHighlighter> syntaxHighlighters() { return manager.syntaxHighlighters(); }
+
+    private LogPanel newLogPanel() {
+        return new LogPanel(parsers(), formatters(), syntaxHighlighters());
     }
 
+    /** This window's log tabs, in tab order. */
+    List<LogPanel> panels() {
+        List<LogPanel> list = new ArrayList<>();
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp) list.add(lp);
+        }
+        return list;
+    }
+
+    /** The selected tab's title, for naming this window in the Move to menu. */
+    String selectedTabTitle() {
+        int idx = tabbedPane.getSelectedIndex();
+        return idx < 0 ? "" : tabTitle(idx);
+    }
+
+    // ── Closing the window ────────────────────────────────────────────────────
+
     /**
-     * Fetches parsers, formatters and highlighters, including those from plugins.
-     * Called at startup and after a plugin refresh. Open tabs keep the extensions they
-     * were created with; new tabs get the new ones.
+     * The close button: the last window quits, as closing Clouseau always has. Another
+     * window asks first, as closing a tab does (UC-15), then closes with its tabs.
      */
-    void reloadExtensions() {
-        reloadParsers();
+    private void requestClose() {
+        if (manager.windows().size() <= 1) {
+            manager.exit();
+            return;
+        }
+        int tabs = tabbedPane.getTabCount();
+        if (tabs > 0 && AppPrefs.isTabCloseConfirm()) {
+            JCheckBox dontAsk = new JCheckBox(Messages.get("tab.close.dontask"));
+            int result = JOptionPane.showConfirmDialog(this,
+                    new Object[]{ MessageFormat.format(Messages.get("window.close.confirm.message"), tabs), dontAsk },
+                    Messages.get("window.close.confirm.title"),
+                    JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (dontAsk.isSelected()) AppPrefs.setTabCloseConfirm(false);
+            if (result != JOptionPane.YES_OPTION) return;
+        }
+        closeWindow();
+    }
 
-        this.sourceProviders = List.copyOf(pluginManager.getExtensions(LogSourceProvider.class));
-        log.info("Loaded {} source provider(s)", sourceProviders.size());
-
-        this.formatters = new ArrayList<>();
-        this.formatters.add(new JsonMessageFormatter());
-        this.formatters.addAll(pluginManager.getExtensions(LogFormatter.class));
-        log.info("Loaded {} formatter(s): {}", formatters.size(),
-                formatters.stream().map(LogFormatter::getName).toList());
-
-        this.syntaxHighlighters = new ArrayList<>();
-        this.syntaxHighlighters.add(new JsonSyntaxHighlighter());
-        this.syntaxHighlighters.addAll(pluginManager.getExtensions(LogSyntaxHighlighter.class));
-        log.info("Loaded {} syntax highlighter(s): {}", syntaxHighlighters.size(),
-                syntaxHighlighters.stream().map(LogSyntaxHighlighter::getName).toList());
+    /** Closes this window and its tabs without asking. */
+    private void closeWindow() {
+        for (LogPanel lp : panels()) lp.dispose();
+        tabbedPane.removeAll();
+        dispose();
+        manager.closed(this);
     }
 
     // ── Menu bar ─────────────────────────────────────────────────────────────
@@ -136,6 +156,13 @@ public final class MainFrame extends JFrame {
         menuBar.setBorder(BorderFactory.createEmptyBorder(5, 1, 2, 0));
 
         JMenu fileMenu = new JMenu(Messages.get("menu.file"));
+
+        JMenuItem newWindowItem = menuItem(Messages.get("menu.file.new.window"));
+        newWindowItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N,
+                java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        newWindowItem.addActionListener(e -> manager.newWindow(this));
+        fileMenu.add(newWindowItem);
+        fileMenu.addSeparator();
 
         JMenuItem openItem = menuItem(Messages.get("menu.file.open"));
         openItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O,
@@ -195,7 +222,7 @@ public final class MainFrame extends JFrame {
         fileMenu.addSeparator();
 
         JMenuItem exitItem = menuItem(Messages.get("menu.file.exit"));
-        exitItem.addActionListener(e -> dispose());
+        exitItem.addActionListener(e -> manager.exit());
         fileMenu.add(exitItem);
 
         menuBar.add(fileMenu);
@@ -217,12 +244,12 @@ public final class MainFrame extends JFrame {
         JMenu toolsMenu = new JMenu(Messages.get("menu.tools"));
         JMenuItem parsersItem = menuItem(Messages.get("menu.tools.parsers"));
         parsersItem.addActionListener(e ->
-                new ParserEditorDialog(this, this::reloadParsers).setVisible(true));
+                new ParserEditorDialog(this, manager::reloadParsers).setVisible(true));
         toolsMenu.add(parsersItem);
         JMenuItem pluginsItem = menuItem(Messages.get("menu.tools.plugins"));
         pluginsItem.setToolTipText(Messages.get("toolbar.plugins.tooltip"));
         pluginsItem.addActionListener(e ->
-                new PluginManagerDialog(this, pluginManager, this::reloadExtensions).setVisible(true));
+                new PluginManagerDialog(this, pluginManager, manager::reloadExtensions).setVisible(true));
         toolsMenu.add(pluginsItem);
         menuBar.add(toolsMenu);
 
@@ -291,6 +318,7 @@ public final class MainFrame extends JFrame {
                 "[grow, fill][right]"));
 
         addDialogSection(grid, Messages.get("shortcuts.section.file"),  "gaptop 0");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.new.window"), "Ctrl+N");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.open"),      "Ctrl+O");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.close.tab"), "Ctrl+W");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.settings"),  "Ctrl+,");
@@ -357,20 +385,12 @@ public final class MainFrame extends JFrame {
 
     private void openSettings() {
         new SettingsDialog(this, activeLogPanel(), () -> {
-            refreshRecentMenu();
-            refreshAllTabTimezones();
+            manager.refreshRecentMenus();
+            manager.allPanels().forEach(LogPanel::refreshTimezone);
         }).setVisible(true);
     }
 
-    private void refreshAllTabTimezones() {
-        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp) {
-                lp.refreshTimezone();
-            }
-        }
-    }
-
-    private void refreshRecentMenu() {
+    void refreshRecentMenu() {
         recentMenu.removeAll();
         java.util.List<java.nio.file.Path> recents = AppPrefs.getRecentFiles();
         recentMenu.setEnabled(!recents.isEmpty());
@@ -383,7 +403,7 @@ public final class MainFrame extends JFrame {
         if (!recents.isEmpty()) {
             recentMenu.addSeparator();
             JMenuItem clear = menuItem(Messages.get("menu.file.recent.clear"));
-            clear.addActionListener(e -> { AppPrefs.clearRecentFiles(); refreshRecentMenu(); });
+            clear.addActionListener(e -> { AppPrefs.clearRecentFiles(); manager.refreshRecentMenus(); });
             recentMenu.add(clear);
         }
     }
@@ -396,8 +416,8 @@ public final class MainFrame extends JFrame {
 
     /** The open dialog; {@code merged}: File → Open Merged…, which merges without asking. */
     private void openFile(boolean merged) {
-        new FileChooserDialog(this, parsers, lastParserIndex, merged).showDialog().ifPresent(r -> {
-            lastParserIndex = r.parserIndex();
+        new FileChooserDialog(this, parsers(), manager.lastParserIndex(), merged).showDialog().ifPresent(r -> {
+            manager.setLastParserIndex(r.parserIndex());
             ZoneId srcTz = r.sourceTimezone();
             for (Path file : r.files()) {
                 log.info("Opening {} with parser: {}", file.getFileName(),
@@ -471,7 +491,7 @@ public final class MainFrame extends JFrame {
                 log.warn("Review bundle {} names an unknown timezone {}", zip.getFileName(), s.timezone());
             }
             LogParser own = s.parser() == null ? null
-                    : parsers.stream().filter(p -> s.parser().equals(p.getName())).findFirst().orElse(null);
+                    : parsers().stream().filter(p -> s.parser().equals(p.getName())).findFirst().orElse(null);
             if (s.parser() != null && own == null) {
                 log.info("Review bundle {} names a parser this Clouseau doesn't have, {}", zip.getFileName(), s.parser());
             }
@@ -489,26 +509,28 @@ public final class MainFrame extends JFrame {
     private void openMerged(List<MergeLoad.File> files, Optional<LogParser> parser,
                             Map<MergeLoad.File, MergeLoad.PerFile> setup) {
         files.forEach(f -> AppPrefs.addRecentFile(f.path()));
-        refreshRecentMenu();
-        LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
+        manager.refreshRecentMenus();
+        LogPanel panel = newLogPanel();
         ZoneId savedTz = AppPrefs.getSourceTimezone(files.get(0).path());
         if (savedTz != null) panel.setSourceTimezone(savedTz);
         String title = MessageFormat.format(Messages.get("merge.tab.title"), files.get(0).fileName(), files.size() - 1);
         addLogTab(title, null, panel);
         panel.presetMerged(setup);
-        panel.setCloseAction(() -> removeTab(panel));
+        // The tab may have moved to another window by the time these run (UC-16).
+        panel.setCloseAction(() -> owner(panel).removeTab(panel));
         panel.loadMerged(files, parser, new LogPanel.MergeListener() {
-            @Override public void skipped(List<MergeLoad.Skipped> skipped) { offerSkipped(skipped, parser); }
+            @Override public void skipped(List<MergeLoad.Skipped> skipped) { owner(panel).offerSkipped(skipped, parser); }
 
             @Override public void notMerged(List<MergeLoad.File> mergeable) {
-                removeTab(panel);
-                for (MergeLoad.File f : mergeable) openLog(f.path(), f.entry(), parser);
+                MainFrame window = owner(panel);
+                window.removeTab(panel);
+                for (MergeLoad.File f : mergeable) window.openLog(f.path(), f.entry(), parser);
             }
 
-            @Override public void failed() { removeTab(panel); }
+            @Override public void failed() { owner(panel).removeTab(panel); }
 
             @Override public void merged(List<MergeLoad.File> merged) {
-                setTabTitle(panel, MessageFormat.format(Messages.get("merge.tab.title"),
+                owner(panel).setTabTitle(panel, MessageFormat.format(Messages.get("merge.tab.title"),
                         merged.get(0).fileName(), merged.size() - 1));
             }
         });
@@ -517,10 +539,10 @@ public final class MainFrame extends JFrame {
     /** Renames the tab showing {@code panel}. */
     private void setTabTitle(LogPanel panel, String title) {
         int idx = tabbedPane.indexOfComponent(panel);
-        if (idx >= 0 && tabbedPane.getTabComponentAt(idx) instanceof JPanel header
-                && header.getComponentCount() > 0 && header.getComponent(0) instanceof JLabel label) {
+        JLabel label = idx >= 0 ? tabLabel(idx) : null;
+        if (label != null) {
             label.setText(title);
-            header.revalidate();
+            label.getParent().revalidate();
         }
     }
 
@@ -540,7 +562,7 @@ public final class MainFrame extends JFrame {
 
     /** Opens {@code file} in a new tab with auto-detect parser. Called via IPC or CLI args. */
     public void openFile(Path file) {
-        if (parsers.isEmpty()) {
+        if (parsers().isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     Messages.get("error.no.parsers.message"),
                     Messages.get("error.no.parsers.title"),
@@ -556,7 +578,7 @@ public final class MainFrame extends JFrame {
      */
     public void openFiles(List<Path> files) {
         if (files.isEmpty()) return;
-        if (parsers.isEmpty()) {
+        if (parsers().isEmpty()) {
             openFile(files.get(0));     // says there are no parsers
             return;
         }
@@ -585,7 +607,7 @@ public final class MainFrame extends JFrame {
                     MessageFormat.format(Messages.get("zip.error.read"), zip.getFileName(), e.getMessage()),
                     Messages.get("filechooser.error.title"), JOptionPane.ERROR_MESSAGE);
             AppPrefs.removeRecentFile(zip);
-            refreshRecentMenu();
+            manager.refreshRecentMenus();
             return;
         }
         if (entries.isEmpty()) {
@@ -617,34 +639,50 @@ public final class MainFrame extends JFrame {
         for (ZipLogs.Entry entry : chosen) openLog(zip, entry.name(), parser);
     }
 
-    /** Opens a log in a new tab, or selects the tab that already shows it. */
+    /**
+     * Opens a log in a new tab, or selects the tab that already shows it, in whichever
+     * window that is (UC-16).
+     */
     private void openLog(Path file, String zipEntry, Optional<LogParser> parser) {
         Path abs = file.toAbsolutePath();
-        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp && abs.equals(lp.getFile())
-                    && java.util.Objects.equals(zipEntry, lp.getZipEntry())) {
-                tabbedPane.setSelectedIndex(i);
-                return;
-            }
+        Optional<LogPanel> open = manager.findTab(abs, zipEntry);
+        if (open.isPresent()) {
+            owner(open.get()).selectTab(open.get());
+            return;
         }
         AppPrefs.addRecentFile(file);
-        refreshRecentMenu();
-        LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
+        manager.refreshRecentMenus();
+        LogPanel panel = newLogPanel();
         ZoneId savedTz = AppPrefs.getSourceTimezone(abs);
         if (savedTz != null) panel.setSourceTimezone(savedTz);
         String title = zipEntry == null ? file.getFileName().toString()
                 : new ZipLogs.Entry(zipEntry, -1).fileName();
         addLogTab(title, abs, panel);
-        panel.setCloseAction(() -> removeTab(panel));
-        panel.setCreateParserAction(samples -> new ParserEditorDialog(this, () -> {
-            reloadParsers();
-            panel.retryWithParsers(parsers);
+        panel.setCloseAction(() -> owner(panel).removeTab(panel));
+        panel.setCreateParserAction(samples -> new ParserEditorDialog(owner(panel), () -> {
+            manager.reloadParsers();
+            panel.retryWithParsers(parsers());
         }, samples).setVisible(true));
         panel.load(file, zipEntry, parser, () -> {
             AppPrefs.removeRecentFile(file);
-            refreshRecentMenu();
-            removeTab(panel);
+            manager.refreshRecentMenus();
+            owner(panel).removeTab(panel);
         });
+    }
+
+    /** The window that holds {@code panel} now, or this one if it's in none. */
+    private MainFrame owner(LogPanel panel) {
+        MainFrame w = WindowManager.windowOf(panel);
+        return w != null ? w : this;
+    }
+
+    /** Selects {@code panel}'s tab and brings this window to the front. */
+    void selectTab(LogPanel panel) {
+        int idx = tabbedPane.indexOfComponent(panel);
+        if (idx >= 0) tabbedPane.setSelectedIndex(idx);
+        if ((getExtendedState() & ICONIFIED) != 0) setExtendedState(getExtendedState() & ~ICONIFIED);
+        toFront();
+        requestFocus();
     }
 
     /** Closes a tab without asking. */
@@ -658,9 +696,9 @@ public final class MainFrame extends JFrame {
     }
 
     private void openSsh() {
-        new SshConnectionDialog(this, parsers).showDialog().ifPresent(r -> {
+        new SshConnectionDialog(this, parsers()).showDialog().ifPresent(r -> {
             log.info("Opening SSH: {}", r.config().displayName());
-            LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
+            LogPanel panel = newLogPanel();
             addLogTab(sshTabTitle(r.config()), null, panel, sshTabTooltip(r.config()));
             panel.loadSource(new SshLogSource(r.config()), r.parser());
         });
@@ -668,13 +706,13 @@ public final class MainFrame extends JFrame {
 
     private void rebuildSourceMenu(JMenu menu) {
         menu.removeAll();
-        if (sourceProviders.isEmpty()) {
+        if (manager.sourceProviders().isEmpty()) {
             JMenuItem none = menuItem(Messages.get("menu.file.source.none"));
             none.setEnabled(false);
             menu.add(none);
             return;
         }
-        for (LogSourceProvider provider : sourceProviders) {
+        for (LogSourceProvider provider : manager.sourceProviders()) {
             String name;
             try {
                 name = provider.getName();
@@ -700,9 +738,9 @@ public final class MainFrame extends JFrame {
                     Messages.get("source.error.title"), JOptionPane.ERROR_MESSAGE);
             return;
         }
-        new SourceSettingsDialog(this, provider, settings, parsers).showDialog().ifPresent(r -> {
+        new SourceSettingsDialog(this, provider, settings, parsers()).showDialog().ifPresent(r -> {
             log.info("Opening source '{}'", name);
-            LogPanel panel = new LogPanel(parsers, formatters, syntaxHighlighters);
+            LogPanel panel = newLogPanel();
             addLogTab(name, null, panel);
             panel.loadSource(r.source(), r.parser());
         });
@@ -730,9 +768,14 @@ public final class MainFrame extends JFrame {
     }
 
     private void addLogTab(String title, Path file, LogPanel panel, String tooltip) {
-        tabbedPane.addTab(null, panel);
-        int idx = tabbedPane.getTabCount() - 1;
-        JPanel header = buildTabHeader(title, file, panel);
+        insertLogTab(title, tooltip, panel, -1);
+    }
+
+    /** Adds {@code panel} as a tab at {@code index} (-1: at the end) and selects it. */
+    private void insertLogTab(String title, String tooltip, LogPanel panel, int index) {
+        int idx = index < 0 || index > tabbedPane.getTabCount() ? tabbedPane.getTabCount() : index;
+        tabbedPane.insertTab(null, null, panel, null, idx);
+        JPanel header = buildTabHeader(title, panel);
         if (tooltip != null) {
             for (Component c : header.getComponents()) {
                 if (c instanceof JLabel label) label.setToolTipText(tooltip);
@@ -743,7 +786,73 @@ public final class MainFrame extends JFrame {
         updateCard();
     }
 
-    private JPanel buildTabHeader(String title, Path file, LogPanel panel) {
+    /** The label of the tab header at {@code idx}, or null. */
+    private JLabel tabLabel(int idx) {
+        if (tabbedPane.getTabComponentAt(idx) instanceof JPanel header
+                && header.getComponentCount() > 0 && header.getComponent(0) instanceof JLabel label) {
+            return label;
+        }
+        return null;
+    }
+
+    private String tabTitle(int idx) {
+        JLabel label = tabLabel(idx);
+        return label != null ? label.getText() : "";
+    }
+
+    // ── Moving tabs between windows (UC-16) ───────────────────────────────────
+
+    /**
+     * Moves {@code panel} into {@code target} at {@code index} (-1: at the end). The panel
+     * itself moves, so loading, following and Find carry on and nothing is re-read. A window
+     * left with no tabs closes.
+     */
+    private void moveTabTo(LogPanel panel, MainFrame target, int index) {
+        int idx = tabbedPane.indexOfComponent(panel);
+        if (idx < 0 || target == this) return;
+        JLabel label = tabLabel(idx);
+        String title = label != null ? label.getText() : "";
+        String tooltip = label != null ? label.getToolTipText() : null;
+        tabbedPane.removeTabAt(idx);
+        updateCard();
+        target.insertLogTab(title, tooltip, panel, index);
+        target.selectTab(panel);
+        log.info("Moved tab {} to window {}", title, manager.numberOf(target));
+        if (tabbedPane.getTabCount() == 0) closeWindow();
+    }
+
+    private void moveToNewWindow(LogPanel panel) {
+        moveTabTo(panel, manager.newWindow(this), -1);
+    }
+
+    /**
+     * A tab dragged and released at {@code screen}: over this window it stays (the drag has
+     * already reordered it); over another Clouseau window it moves there, at the tab under
+     * the cursor; anywhere else it opens in a new window at the cursor.
+     */
+    private void dropTab(LogPanel panel, Point screen) {
+        if (getBounds().contains(screen)) return;
+        Optional<MainFrame> target = manager.windowAt(screen, this);
+        if (target.isPresent()) {
+            moveTabTo(panel, target.get(), target.get().tabIndexAt(screen));
+            return;
+        }
+        Dimension size = (getExtendedState() & MAXIMIZED_BOTH) != 0
+                ? new Dimension(Math.max(800, getWidth() * 3 / 4), Math.max(500, getHeight() * 3 / 4))
+                : getSize();
+        // Put the new window's tab strip under the cursor.
+        MainFrame window = manager.newWindowAt(new Rectangle(screen.x - 60, screen.y - 15, size.width, size.height));
+        moveTabTo(panel, window, -1);
+    }
+
+    /** The index of the tab under a point on the screen, or -1 if it isn't over a tab. */
+    private int tabIndexAt(Point screen) {
+        Point p = new Point(screen);
+        SwingUtilities.convertPointFromScreen(p, tabbedPane);
+        return tabbedPane.indexAtLocation(p.x, p.y);
+    }
+
+    private JPanel buildTabHeader(String title, LogPanel panel) {
         JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         header.setOpaque(false);
 
@@ -776,7 +885,13 @@ public final class MainFrame extends JFrame {
             @Override public void mouseReleased(java.awt.event.MouseEvent e) {
                 if (e.isPopupTrigger()) { showTabContextMenu(e, panel); return; }
                 tabbedPane.setCursor(Cursor.getDefaultCursor());
-                if (ghost[0] != null) { ghost[0].dispose(); ghost[0] = null; }
+                if (ghost[0] != null) {
+                    ghost[0].dispose();
+                    ghost[0] = null;
+                    // After the release is handled, so the header isn't removed under it.
+                    Point screen = e.getLocationOnScreen();
+                    SwingUtilities.invokeLater(() -> dropTab(panel, screen));
+                }
             }
             @Override public void mouseDragged(java.awt.event.MouseEvent e) {
                 int src = tabbedPane.indexOfTabComponent(header);
@@ -809,9 +924,27 @@ public final class MainFrame extends JFrame {
         menu.add(tzItem);
 
         JMenuItem tzAllItem = new JMenuItem(Messages.get("tab.context.source.timezone.all"));
-        tzAllItem.setEnabled(tabbedPane.getTabCount() > 1);
+        tzAllItem.setEnabled(manager.allPanels().size() > 1);
         tzAllItem.addActionListener(ev -> showSourceTimezoneAllTabsDialog(panel.getSourceTimezone()));
         menu.add(tzAllItem);
+
+        // Moving between windows (UC-16). Moving a window's only tab to a new window would
+        // just swap one window for another, so that item needs a second tab.
+        menu.addSeparator();
+        JMenuItem newWindow = new JMenuItem(Messages.get("tab.context.move.new.window"));
+        newWindow.setEnabled(tabbedPane.getTabCount() > 1);
+        newWindow.addActionListener(ev -> moveToNewWindow(panel));
+        menu.add(newWindow);
+        JMenu moveTo = new JMenu(Messages.get("tab.context.move.to"));
+        for (MainFrame w : manager.windows()) {
+            if (w == this) continue;
+            JMenuItem item = new JMenuItem(MessageFormat.format(Messages.get("tab.context.move.to.window"),
+                    manager.numberOf(w), w.selectedTabTitle()));
+            item.addActionListener(ev -> moveTabTo(panel, w, -1));
+            moveTo.add(item);
+        }
+        moveTo.setEnabled(moveTo.getItemCount() > 0);
+        menu.add(moveTo);
 
         // A merged tab lists its files, each with its own offset and timezone (D-17).
         List<String> sources = panel.mergedSourceNames();
@@ -854,11 +987,7 @@ public final class MainFrame extends JFrame {
         SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
         if (sel == null) return;
         ZoneId zone = sel.zone();
-        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp) {
-                lp.applySourceTimezone(zone);
-            }
-        }
+        for (LogPanel lp : manager.allPanels()) lp.applySourceTimezone(zone);  // every window's tabs
     }
 
     private JWindow createGhostWindow(JPanel tabHeader) {

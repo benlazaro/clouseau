@@ -43,16 +43,16 @@ public final class ClouseauApp {
         Runtime.getRuntime().addShutdownHook(new Thread(pluginManager::stopAll, "plugin-shutdown"));
 
         // Use an array so the IPC lambda can capture the reference set later on the EDT.
-        MainFrame[] frameRef = new MainFrame[1];
+        WindowManager[] windowsRef = new WindowManager[1];
         // Files the OS asked us to open before the window existed (EDT only).
         List<Path> pendingOpens = new java.util.ArrayList<>();
-        installOpenFileHandler(frameRef, pendingOpens);
+        installOpenFileHandler(windowsRef, pendingOpens);
 
         if (splash != null) splash.setStatus("Starting...");
         boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePath ->
                 SwingUtilities.invokeLater(() -> {
-                    MainFrame frame = frameRef[0];
-                    if (frame != null && frame.isVisible()) frame.openFile(Path.of(filePath));
+                    WindowManager windows = windowsRef[0];
+                    if (windows != null && windows.isShown()) windows.openFile(Path.of(filePath));
                     else pendingOpens.add(Path.of(filePath));   // window not shown yet
                 }));
 
@@ -78,13 +78,14 @@ public final class ClouseauApp {
                 () -> com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir()), "cache-cleanup"));
 
         SwingUtilities.invokeLater(() -> {
-            MainFrame frame = new MainFrame(pluginManager);
-            frameRef[0] = frame;
+            WindowManager windows = new WindowManager(pluginManager);
+            MainFrame frame = windows.createFirstWindow();
+            windowsRef[0] = windows;
 
             Runnable show = () -> {
                 frame.setVisible(true);
-                frame.openFiles(java.util.Arrays.stream(args).map(Path::of).toList());
-                pendingOpens.forEach(frame::openFile);
+                windows.openFiles(java.util.Arrays.stream(args).map(Path::of).toList());
+                pendingOpens.forEach(windows::openFile);
                 pendingOpens.clear();
             };
 
@@ -119,15 +120,15 @@ public final class ClouseauApp {
      * Dock icon) arrive as an "open files" event instead of command-line arguments.
      * Other platforms don't support this action and pass files as arguments.
      */
-    private static void installOpenFileHandler(MainFrame[] frameRef, List<Path> pending) {
+    private static void installOpenFileHandler(WindowManager[] windowsRef, List<Path> pending) {
         if (!java.awt.Desktop.isDesktopSupported()) return;
         java.awt.Desktop desktop = java.awt.Desktop.getDesktop();
         if (!desktop.isSupported(java.awt.Desktop.Action.APP_OPEN_FILE)) return;
         desktop.setOpenFileHandler(e -> {
             List<Path> files = e.getFiles().stream().map(java.io.File::toPath).toList();
             SwingUtilities.invokeLater(() -> {
-                MainFrame frame = frameRef[0];
-                if (frame != null && frame.isVisible()) files.forEach(frame::openFile);
+                WindowManager windows = windowsRef[0];
+                if (windows != null && windows.isShown()) files.forEach(windows::openFile);
                 else pending.addAll(files);
             });
         });
