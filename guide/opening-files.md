@@ -119,3 +119,35 @@ again brings its window to the front and selects its tab.
 Closing a window closes its tabs. Clouseau asks first, as it does for a tab, unless you
 turned that question off. Closing the last window quits Clouseau, without asking, as
 before.
+
+## Picking up where you left off
+
+When you quit Clouseau and start it again, it reopens what you had open: every window
+in its place, with the same tabs in the same order and the same tab selected. Each tab
+comes back as you left it: the same file or files, parser, timezone, time offsets,
+follow mode, columns and filters. This works for files, merged views, review bundles,
+SSH connections and plugin sources, and it is saved as you work, so it survives a crash
+or a restart for updates too.
+
+- **Only the tabs in front load straight away.** The others say *"Opens when you select
+  this tab"* and load when you select them, so a large session starts quickly.
+- **Restored filters are announced.** A tab whose filters came back shows a strip above
+  the filter bar, for example *"Filters restored from your last session: levels, 1
+  logger."*, with **Clear filters** to show everything again. It also warns when a time
+  range will hide new lines of a log you're following. The strip goes away when you
+  change a filter or close it.
+- **Passwords aren't saved in sessions.** An SSH tab reconnects by itself if it needs no
+  password, or if you saved its password with an SSH connection to the same host, port
+  and user. Otherwise it shows **Reconnect…**, which opens the SSH dialog filled in so
+  you only type the password. Plugin sources work the same way.
+- **Nothing disappears.** A file that isn't there any more (a drive that isn't connected,
+  a log that was deleted) gets a tab that says so, with **Try Again**.
+- **A missing monitor is fine.** A window that was on a monitor that isn't connected
+  opens on your main screen instead. It goes back to the other monitor the next time it's
+  connected, unless you moved the window in the meantime.
+- **File → Exit saves every window.** Closing windows one at a time takes each one out
+  of the session, so only the last one comes back.
+
+Files you open with "Open with" or on the command line open alongside the restored
+session. To start with an empty window instead, choose **Start empty** under
+[Settings → On startup](settings.md#settings).

@@ -32,6 +32,7 @@ public final class AppPrefs {
     private static final String KEY_HIGHLIGHT_CLEAR_ALL_CONFIRM  = "highlight.clear.all.confirm";
     private static final String KEY_ANNOTATION_DELETE_CONFIRM    = "annotation.delete.confirm";
     private static final String KEY_FOLLOW_BY_DEFAULT  = "follow.by.default";
+    private static final String KEY_STARTUP_RESTORE    = "startup.restore";
     private static final String KEY_MULTI_OPEN         = "open.several";
     private static final String KEY_DETAIL_FONT_SIZE   = "detail.font.size";
     private static final String KEY_DETAIL_WRAP_LINES  = "detail.wrap.lines";
@@ -186,6 +187,15 @@ public final class AppPrefs {
 
     public static void setFollowByDefault(boolean value) {
         putBool(KEY_FOLLOW_BY_DEFAULT, value);
+    }
+
+    /** Whether Clouseau reopens the last session at startup (UC-17); on by default. */
+    public static boolean isRestoreSession() {
+        return getBool(KEY_STARTUP_RESTORE, true);
+    }
+
+    public static void setRestoreSession(boolean value) {
+        putBool(KEY_STARTUP_RESTORE, value);
     }
 
     /** What opening several files at once does (D-17). */

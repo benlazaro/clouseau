@@ -28,8 +28,11 @@ import java.util.stream.Collectors;
 @Slf4j
 final class SourceSettingsDialog extends JDialog {
 
-    /** The created source and the parser the user picked (empty = auto-detect). */
-    record Result(LogSource source, Optional<LogParser> parser) {}
+    /**
+     * The created source, the parser the user picked (empty = auto-detect), and the
+     * settings without secrets, which a session keeps (D-19).
+     */
+    record Result(LogSource source, Optional<LogParser> parser, Map<String, String> sessionValues) {}
 
     private final LogSourceProvider provider;
     private final List<SourceSetting> settings;
@@ -170,7 +173,9 @@ final class SourceSettingsDialog extends JDialog {
 
         AppPrefs.saveSourceSettings(providerId(), checked.values(), secretKeys());
         int idx = parserCombo.getSelectedIndex();
-        result = new Result(source, idx > 0 ? Optional.of(parsers.get(idx - 1)) : Optional.empty());
+        Map<String, String> kept = new LinkedHashMap<>(checked.values());
+        kept.keySet().removeAll(secretKeys());
+        result = new Result(source, idx > 0 ? Optional.of(parsers.get(idx - 1)) : Optional.empty(), kept);
         dispose();
     }
 

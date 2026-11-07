@@ -35,6 +35,7 @@ final class SettingsDialog extends JDialog {
     // Files settings
     private final JSpinner recentMaxSpinner;
     private final JComboBox<String> multiOpenCombo;
+    private final JComboBox<String> startupCombo;
 
     // Memory settings
     private final JSpinner maxEntriesSpinner;
@@ -61,6 +62,9 @@ final class SettingsDialog extends JDialog {
                 Messages.get("settings.multi.open.ask"), Messages.get("settings.multi.open.merge"),
                 Messages.get("settings.multi.open.separate") });
         multiOpenCombo.setSelectedIndex(AppPrefs.getMultiOpen().ordinal());
+        startupCombo = new JComboBox<>(new String[] {
+                Messages.get("settings.startup.restore"), Messages.get("settings.startup.empty") });
+        startupCombo.setSelectedIndex(AppPrefs.isRestoreSession() ? 0 : 1);
         maxEntriesSpinner      = new JSpinner(new SpinnerNumberModel(AppPrefs.getMaxEntriesPerTab(), 10_000, 2_000_000, 10_000));
 
         timezoneCombo = buildTimezoneCombo(AppPrefs.getDisplayTimezone());
@@ -108,6 +112,8 @@ final class SettingsDialog extends JDialog {
         content.add(recentMaxSpinner, SPINNER);
         content.add(new JLabel(Messages.get("settings.multi.open")));
         content.add(multiOpenCombo, "growx");
+        content.add(new JLabel(Messages.get("settings.startup")));
+        content.add(startupCombo, "growx");
 
         // ── Appearance section ────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.appearance")), "span 2, gaptop 12, gapbottom 4");
@@ -169,6 +175,7 @@ final class SettingsDialog extends JDialog {
         AppPrefs.setFollowByDefault(followByDefaultCheckBox.isSelected());
         AppPrefs.setRecentFilesMax((int) recentMaxSpinner.getValue());
         AppPrefs.setMultiOpen(AppPrefs.MultiOpen.values()[multiOpenCombo.getSelectedIndex()]);
+        AppPrefs.setRestoreSession(startupCombo.getSelectedIndex() == 0);
         AppPrefs.setMaxEntriesPerTab((int) maxEntriesSpinner.getValue());
         String selTheme = (String) themeCombo.getSelectedItem();
         if (selTheme != null) AppPrefs.setTheme(selTheme);

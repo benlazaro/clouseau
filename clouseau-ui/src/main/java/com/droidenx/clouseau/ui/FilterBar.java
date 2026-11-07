@@ -198,6 +198,8 @@ final class FilterBar extends JPanel {
         updateLoggerButtonLabel();
         allFieldValues.clear();
         excludedFieldValues.clear();
+        // Field filters restored from a session apply again to the reloaded rows (D-19).
+        pendingFieldValues.forEach((k, v) -> excludedFieldValues.put(k, new LinkedHashSet<>(v)));
         fieldsButton.setVisible(false);
         updateFieldsButtonLabel();
         setSources(List.of());
@@ -205,13 +207,95 @@ final class FilterBar extends JPanel {
 
     /**
      * The files of a merged view (D-17), in the tab's order, for the Sources picker; an
-     * empty list (one file) hides it. Clears what was hidden.
+     * empty list (one file) hides it. Clears what was hidden, except files a restored
+     * session hides (D-19).
      */
     void setSources(List<String> names) {
         allSources = List.copyOf(names);
         excludedSources.clear();
+        if (!names.isEmpty()) {
+            pendingSources.stream().filter(i -> i < names.size()).forEach(excludedSources::add);
+            pendingSources.clear();
+        }
         sourcesButton.setVisible(allSources.size() > 1);
         updateSourcesButtonLabel();
+    }
+
+    // ── Sessions (UC-17, D-19) ────────────────────────────────────────────────
+
+    /*
+     * Filters restored from a session name loggers, field values and merged files that the
+     * tab hasn't read yet, and the filter bar otherwise forgets exclusions for loggers it
+     * doesn't know. So they wait here: a pending logger joins excludedLoggers when it first
+     * appears, pending sources apply when the merged view names its files, and pending
+     * field values are put back after every reset. buildFilter includes them meanwhile, so
+     * the rows they hide are never shown. Clear All Filters drops them.
+     */
+    private final Set<String> pendingLoggers = new LinkedHashSet<>();
+    private final Map<String, Set<String>> pendingFieldValues = new LinkedHashMap<>();
+    private final Set<Integer> pendingSources = new LinkedHashSet<>();
+
+    /** The filters as a session keeps them, or null when they show everything. */
+    com.droidenx.clouseau.core.Session.Filters state() {
+        List<String> levels = new ArrayList<>();
+        levelButtons.forEach((level, btn) -> { if (btn.isSelected()) levels.add(level.name()); });
+        Set<String> loggers = new LinkedHashSet<>(excludedLoggers);
+        loggers.addAll(pendingLoggers);
+        Map<String, List<String>> fields = new LinkedHashMap<>();
+        excludedFieldValues.forEach((k, v) -> { if (!v.isEmpty()) fields.put(k, List.copyOf(v)); });
+        Set<Integer> sources = new java.util.TreeSet<>(excludedSources);
+        sources.addAll(pendingSources);
+        var state = new com.droidenx.clouseau.core.Session.Filters(levels, List.copyOf(loggers), fields,
+                fromField.getText().trim(), toField.getText().trim(), searchField.getText(), List.copyOf(sources));
+        return isDefault(state) ? null : state;
+    }
+
+    /** Whether {@code f} shows everything: every level but UNKNOWN, and nothing else set. */
+    static boolean isDefault(com.droidenx.clouseau.core.Session.Filters f) {
+        Set<String> defaultLevels = new HashSet<>();
+        for (LogLevel l : LEVELS) if (l != LogLevel.UNKNOWN) defaultLevels.add(l.name());
+        return new HashSet<>(f.levels()).equals(defaultLevels) && f.excludedLoggers().isEmpty()
+                && f.excludedFields().values().stream().allMatch(List::isEmpty)
+                && f.from().isBlank() && f.to().isBlank() && f.text().isEmpty() && f.hiddenSources().isEmpty();
+    }
+
+    /** Sets the filters a session saved. Call before the tab loads (it also works after). */
+    void restore(com.droidenx.clouseau.core.Session.Filters f) {
+        Set<String> levels = new HashSet<>(f.levels());
+        levelButtons.forEach((level, btn) -> btn.setSelected(levels.contains(level.name())));
+        Set<String> known = new HashSet<>(allLoggers);
+        for (String logger : f.excludedLoggers()) {
+            if (known.contains(logger)) excludedLoggers.add(logger);
+            else pendingLoggers.add(logger);
+        }
+        updateLoggerButtonLabel();
+        f.excludedFields().forEach((k, v) -> {
+            pendingFieldValues.put(k, new LinkedHashSet<>(v));
+            excludedFieldValues.put(k, new LinkedHashSet<>(v));
+        });
+        updateFieldsButtonLabel();
+        if (allSources.size() > 1) {
+            f.hiddenSources().stream().filter(i -> i < allSources.size()).forEach(excludedSources::add);
+            updateSourcesButtonLabel();
+        } else {
+            pendingSources.addAll(f.hiddenSources());
+        }
+        fromField.setText(f.from());
+        toField.setText(f.to());
+        searchField.setText(f.text());
+        onChanged.run();
+    }
+
+    /** Pending loggers that have now appeared become ordinary exclusions. */
+    private void adoptPendingLoggers(Set<String> known) {
+        if (pendingLoggers.isEmpty()) return;
+        for (var it = pendingLoggers.iterator(); it.hasNext(); ) {
+            String logger = it.next();
+            if (known.contains(logger)) {
+                excludedLoggers.add(logger);
+                it.remove();
+            }
+        }
     }
 
     /**
@@ -239,6 +323,7 @@ final class FilterBar extends JPanel {
         if (changed) {
             allLoggers = known.stream().sorted().toList();
             excludedLoggers.retainAll(known);
+            adoptPendingLoggers(known);
             updateLoggerButtonLabel();
         }
 
@@ -289,6 +374,7 @@ final class FilterBar extends JPanel {
             .sorted()
             .toList();
         excludedLoggers.retainAll(new HashSet<>(allLoggers));
+        adoptPendingLoggers(new HashSet<>(allLoggers));
 
         entries.stream()
             .filter(e -> e.timestamp() != null)
@@ -302,16 +388,29 @@ final class FilterBar extends JPanel {
     EntryFilter buildFilter() {
         EnumSet<LogLevel> allowed = EnumSet.noneOf(LogLevel.class);
         levelButtons.forEach((level, btn) -> { if (btn.isSelected()) allowed.add(level); });
-        boolean noLoggers = !excludedLoggers.isEmpty() && excludedLoggers.containsAll(allLoggers);
-        return new CombinedFilter(allowed, excludedLoggers, noLoggers, excludedFieldValues,
+        Set<String> loggers = excludedLoggers;
+        if (!pendingLoggers.isEmpty()) {
+            loggers = new LinkedHashSet<>(excludedLoggers);
+            loggers.addAll(pendingLoggers);
+        }
+        Set<Integer> sources = excludedSources;
+        if (!pendingSources.isEmpty()) {
+            sources = new LinkedHashSet<>(excludedSources);
+            sources.addAll(pendingSources);
+        }
+        boolean noLoggers = !loggers.isEmpty() && !allLoggers.isEmpty() && loggers.containsAll(allLoggers);
+        return new CombinedFilter(allowed, loggers, noLoggers, excludedFieldValues,
                 parseTimestamp(fromField.getText().trim()), parseTimestamp(toField.getText().trim()),
-                searchField.getText(), excludedSources);
+                searchField.getText(), sources);
     }
 
     /** Resets all filters to their default (pass-through) state. */
     void clear() {
         levelButtons.forEach((level, btn) -> btn.setSelected(level != LogLevel.UNKNOWN));
         excludedLoggers.clear();
+        pendingLoggers.clear();
+        pendingFieldValues.clear();
+        pendingSources.clear();
         updateLoggerButtonLabel();
         excludedFieldValues.values().forEach(Set::clear);
         updateFieldsButtonLabel();
@@ -492,6 +591,7 @@ final class FilterBar extends JPanel {
                 cb.addActionListener(e -> {
                     if (cb.isSelected()) excluded.remove(value);
                     else                 excluded.add(value);
+                    pendingFieldValues.clear();   // the user has taken over field filters
                     updateFieldsButtonLabel();
                     onChanged.run();
                 });
@@ -513,6 +613,7 @@ final class FilterBar extends JPanel {
         allBtn.addActionListener(e -> {
             excludedFieldValues.values().forEach(Set::clear);
             allBoxes.forEach(cb -> cb.setSelected(true));
+            pendingFieldValues.clear();   // the user has taken over field filters
             updateFieldsButtonLabel();
             onChanged.run();
         });
@@ -520,6 +621,7 @@ final class FilterBar extends JPanel {
             allFieldValues.forEach((k, vals) ->
                     excludedFieldValues.computeIfAbsent(k, key -> new LinkedHashSet<>()).addAll(vals));
             allBoxes.forEach(cb -> cb.setSelected(false));
+            pendingFieldValues.clear();   // the user has taken over field filters
             updateFieldsButtonLabel();
             onChanged.run();
         });

@@ -451,8 +451,8 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `plugins/` | Installed plugin JARs |
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
-| `session.json` | *Planned (D-19).* The last session: windows, tabs, and each tab's sources, layout and filters. Never passwords. |
-| `sessions/` | *Planned (D-19).* Named sessions, one `<name>.json` each, in the `session.json` format. |
+| `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |
+| `sessions/` | *Planned (D-19, named sessions).* Named sessions, one `<name>.json` each, in the `session.json` format. |
 | `<logfile>.annotations` | **Next to the log, not in the data folder.** Annotations for that file. |
 | `annotations/` | Annotations for logs whose own folder is read-only, named after a hash of the log's path (D-9). |
 | `cache/` | Decompressed copies of the compressed logs open in tabs (D-16), named `<hash of path and entry>-<unique>.log`. Not persistent: a copy is deleted when its tab closes, and the folder is emptied at startup (by the running instance only) and at exit. |
@@ -1315,23 +1315,30 @@ to the window used last; closing a window closes its tabs; no main window; short
 on the front window; "one tab per file" counts every window; closing the last window quits
 without asking; a window emptied by a move closes; File → New Window.
 
-### D-19 · Sessions · Accepted
+### D-19 · Sessions · Adopted (last session); named sessions accepted
 
 UC-17 reopens what was open: automatically at startup, and as named sessions.
 
 **What a session holds.** Every window (its usual place: bounds in screen coordinates
 and the screen's ID; maximized; selected tab) and its tabs in order. Each tab records what it shows and how:
 
-- a **file** (path, zip entry if any), its parser by name or automatic detection, source
-  timezone, and whether it was shown as plain text;
-- a **merged view**: each file with its parser, timezone and time offset (the same per-file
-  facts as a version 2 review bundle, 7.1);
-- a **review bundle**: the bundle's path, so it reopens as a bundle;
-- an **SSH source**: host, port, user, authentication mode, key file and remote path; or
-  a **plugin source**: the provider's ID and its settings;
+- a **file** (`FILE`: path, zip entry if any), its parser by name or automatic
+  detection, and source timezone. Plain text isn't recorded: the file is sniffed again
+  when it opens (UC-13);
+- a **merged view** (`MERGED`): each file with its parser, timezone and time offset (the
+  same per-file facts as a version 2 review bundle, 7.1);
+- a **review bundle** is a `FILE` or `MERGED` tab whose paths point into the zip, so it
+  needs no kind of its own;
+- an **SSH source** (`SSH`): host, port, user, authentication mode (`password`, `key`,
+  `none`), key file, whether the key has a passphrase, and remote path; or a **plugin
+  source** (`SOURCE`): the provider's class name, the tab's name and its settings;
 - for every tab: follow on or off, column layout (order, widths, visibility), and filters
-  (levels, excluded loggers, field filters, time range, text, and a merged view's hidden
-  sources).
+  (levels, excluded loggers, field filters, time range as typed, text, and a merged view's
+  hidden sources).
+
+The model is `Session` (core), plain records; `LogPanel.sessionTab()` and
+`MainFrame.sessionWindow()` build it, and `MainFrame.restoreTab` turns a tab back into a
+`LogPanel`.
 
 **Never in a session:** passwords, passphrases or `SourceSetting`s of type `PASSWORD`
 (section 7, rule 2). On restore a source looks for its secret where it does today (a
@@ -1359,13 +1366,15 @@ files:
       "bounds": { "x": 1920, "y": 0, "width": 1600, "height": 1000 },
       "screen": "\\Display2", "maximized": true, "selectedTab": 0,
       "tabs": [
-        { "kind": "file", "path": "C:/logs/api.log", "parser": "Log4j Pattern",
+        { "kind": "FILE", "path": "C:/logs/api.log", "parser": "Log4j Pattern",
           "timezone": "UTC", "follow": true,
-          "columns": { "…": "as a saved column layout" },
+          "columns": { "columns": [ { "model": 0, "visible": true, "width": 56 } ] },
           "filters": { "levels": ["ERROR", "WARN"], "excludedLoggers": ["org.hibernate"],
-                       "from": "2026-11-06T10:02:00Z", "to": null, "text": "" } },
-        { "kind": "ssh", "host": "db01", "port": 22, "user": "ops", "auth": "key",
-          "keyFile": "C:/Users/me/.ssh/id_ed25519", "remotePath": "/var/log/db.log" }
+                       "excludedFields": {}, "from": "2026-11-06 10:02", "to": "",
+                       "text": "", "hiddenSources": [] } },
+        { "kind": "SSH", "ssh": { "host": "db01", "port": 22, "user": "ops", "auth": "key",
+          "keyFile": "C:/Users/me/.ssh/id_ed25519", "keyPassphrase": false,
+          "remotePath": "/var/log/db.log" }, "follow": true }
       ]
     }
   ]
@@ -1382,17 +1391,19 @@ written at exit. A clean quit is the exception, not the rule: an overnight OS up
 logoff with Clouseau open (the JVM isn't reliably given time to save), a killed process, a
 crash or a power cut would otherwise restore an old session or none.
 
-- **Triggers:** only changes to what the session records: a window opened, closed,
-  moved, resized, maximized or restored; a tab opened, closed, moved between windows,
-  reordered or selected; a tab's filters, column layout, follow mode, parser, timezone or
-  time offset. New lines in a followed log, scrolling, row selection and load progress
-  aren't recorded, so they don't trigger a save. Notes and highlights are saved in their
-  sidecars (D-5, D-15), not here.
+- **Triggers:** anything that may change what the session records. As built
+  (`SessionManager`), that is every mouse or key release in Clouseau (an
+  `AWTEventListener`, which covers filters, column changes, closing and moving tabs, and
+  dialogs), plus a window moved, resized, maximized, restored or closed and a tab selected.
+  The comparison below makes the many triggers that change nothing free. New lines in a
+  followed log, load progress and other background work don't trigger a save. Notes and
+  highlights are saved in their sidecars (D-5, D-15), not here.
 - **Debounced:** each trigger restarts a timer of about 2 seconds, and the save runs when
   it fires, so a window drag (hundreds of move events) or typing a filter (an event per
   key) ends in one write. With no triggers, nothing runs: an idle Clouseau costs nothing.
-- **Compared before writing:** when the timer fires, the snapshot is taken on the EDT (it
-  reads components, a few dozen values per tab) and serialized off the EDT. The JSON is
+- **Compared before writing:** when the timer fires, the snapshot is taken and serialized
+  on the EDT (it reads components, a few dozen values per tab) and written off the EDT, on
+  one writer thread. The JSON, without the header (`SessionStore.toJson`), is
   compared with the last JSON written, and if they're equal nothing is written. Building
   the JSON is needed either way; the comparison costs microseconds in memory, while a
   write costs several file-system calls and, on Windows, usually a virus scan of the new
@@ -1403,12 +1414,13 @@ crash or a power cut would otherwise restore an old session or none.
   in one step, so an interruption leaves the previous complete file. A move that fails
   (a scanner holding the file) is retried briefly; if it still fails, that save is skipped
   and logged, and the next trigger tries again.
-- **Exit:** **File → Exit** cancels a pending save, writes the snapshot of every window
-  at once, then closes the windows without further saves, so closing them can't overwrite
-  that snapshot with an empty session. Closing a window yourself is an ordinary trigger:
-  the next save leaves that window out (UC-17).
+- **Exit:** **File → Exit**, or closing the last window, cancels a pending save, writes
+  the snapshot of every window if it changed, waits up to 5 s for the writer, and quits
+  without closing the windows one by one, so nothing can overwrite that snapshot with an
+  empty session. Closing a window that isn't the last is an ordinary trigger: the next
+  save leaves that window out (UC-17).
 - **Start empty:** with Settings → **On startup** set to **Start empty**, `session.json`
-  isn't written at all.
+  isn't written at all. Switching back to **Restore last session** starts saving again.
 - **Named sessions** are written only by **Save Session** and **Save Session As…**
   (UC-17: a snapshot), never by these automatic saves. The automatic save does record
   which named session is active (`activeSession`).
@@ -1427,19 +1439,27 @@ Rejected: saving only at exit (fails in the cases above), and saving every N sec
   saved size, shrunk to fit. Placed windows are cascaded, each about 30 px right and down
   from the last, starting near the top left, so no window hides another's title bar. A
   maximized window is maximized on the screen it's placed on, and un-maximizing it gives
-  the cascaded bounds.
+  the cascaded bounds. A window whose title bar is reachable but which is larger than its
+  screen is shrunk onto that screen. The rules are `WindowManager.placeRestored` and
+  `isReachable`, unit-tested without a display.
 - **A placed window keeps its usual place.** The saved bounds and screen stay in the
   session while the window is placed, so the next start with the monitor connected puts
-  it back there. They are replaced only when the user moves or resizes the window (or
-  maximizes or restores it); that new place becomes the usual one. The window's own
-  placement doesn't count as such a change.
+  it back there. They are replaced only when the user moves or resizes the window while
+  it isn't maximized, by more than a few pixels; that new place becomes the usual one.
+  Maximizing doesn't change the usual place, and the window's own placement doesn't count.
+- **Coordinates are Java's**, which on Windows with mixed scaling are per-monitor logical
+  pixels, not device pixels. That is fine for restoring on the same machine, which is all
+  sessions are for.
 - **Monitors changing while running** aren't handled by this rule. The OS moves windows
   off a screen that disappears (and Windows 11 can move them back when it returns).
   Clouseau can't reliably tell those moves from the user's, so it records them like any
   move.
 - Only each window's selected tab loads at once. The others are **pending tabs**: a
-  light placeholder holding the saved tab, replaced by a real `LogPanel` the first time
-  it is selected. Pending tabs count for "one tab per file" and are saved as they were.
+  `LogPanel` with its filters and layout set and its load held back
+  (`LogPanel.deferLoad`), started by a hierarchy listener the first time the tab is
+  shown. Windows are built before they are shown, so only the selected tabs start.
+  Pending tabs count for "one tab per file" (their file is preset) and are saved exactly
+  as they were restored.
 - A tab that can't open (file gone, plugin not installed, parser no longer defined) is a
   placeholder that says why, with **Try Again**, and stays in the session until closed. A
   parser that no longer exists falls back to automatic detection, and the filter strip
@@ -1448,8 +1468,13 @@ Rejected: saving only at exit (fails in the cases above), and saving every N sec
   filters differ from "show everything" shows the **filter strip**: what was restored
   (levels, loggers, fields, time range, text, sources), whether a time range will hide a
   followed file's new lines, and **Clear filters** (the filter bar's Clear All Filters).
-  The strip closes with its button or the first filter change. Excluded loggers and field
-  filters that match nothing in the file are kept, as the filter bar already keeps them.
+  The strip closes with its button or the first filter change. Excluded loggers, field
+  values and hidden sources the tab hasn't seen yet are kept by the filter bar as
+  **pending** exclusions: they are in the filter and in the saved state, and become
+  ordinary exclusions when that logger, field or file appears. (Before this, the filter bar
+  dropped excluded loggers it didn't know.) Clear filters drops them too.
+- A tab that waits for a password (an SSH tab without a saved secret, a plugin source
+  missing a required `PASSWORD` setting) keeps its saved state until the user reconnects.
 - **Opening a named session** while tabs are open asks *Close current windows* (default)
   / *Add to current* / *Cancel*. Closing them asks nothing more. Adding skips files that
   are already open (their tab stays where it is), and leaves the active session as it was.
@@ -1468,8 +1493,9 @@ saved, reapplied and announced by a strip; sessions aren't shared between machin
 
 Accepted in the use cases:
 
-- **UC-17, sessions** — D-19. Builds on UC-16's windows (D-18, now built): restoring the
-  last session first, then named sessions.
+- **UC-17, named sessions** — D-19. Restoring the last session is built; File →
+  Sessions (Save Session As…, Save Session, Manage Sessions…) is next. `SessionStore`
+  already reads and writes `sessions/<name>.json`.
 
 **Ideas, not yet accepted.** Raised while designing UC-16 and kept for later; each needs a
 use case before it is built.

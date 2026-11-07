@@ -87,6 +87,20 @@ public class SshConnectionDialog extends JDialog {
         return Optional.ofNullable(result);
     }
 
+    /**
+     * Fills the form with a restored tab's connection (UC-17, D-19), so Reconnect only asks
+     * for the password or passphrase a session never keeps.
+     */
+    void prefill(com.droidenx.clouseau.core.Session.Ssh ssh, String parserName) {
+        loadFavorite(new AppPrefs.SshFavorite(null, ssh.host(), ssh.port(), ssh.user(), ssh.auth(),
+                null, ssh.keyFile(), null, ssh.remotePath(), parserName));
+        if ("key".equals(ssh.auth()) && ssh.keyPassphrase()) {
+            noPassphraseBox.setSelected(false);
+            keyPassphraseField.setEnabled(true);
+        }
+        validateForm();
+    }
+
     // ── Layout ───────────────────────────────────────────────────────────────
 
     private JPanel buildContent() {

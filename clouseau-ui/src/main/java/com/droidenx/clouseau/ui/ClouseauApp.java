@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.core.SessionStore;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
 import com.droidenx.clouseau.ui.theme.ThemeManager;
 import com.formdev.flatlaf.FlatLaf;
@@ -79,14 +80,41 @@ public final class ClouseauApp {
 
         SwingUtilities.invokeLater(() -> {
             WindowManager windows = new WindowManager(pluginManager);
-            MainFrame frame = windows.createFirstWindow();
+            SessionManager sessions = new SessionManager(windows, SessionManager.lastSessionFile());
+            windows.setSessionManager(sessions);
+            // UC-17: reopen the last session's windows, or start with one empty window.
+            String damaged = null;
+            List<MainFrame> frames = List.of();
+            if (AppPrefs.isRestoreSession()) {
+                switch (SessionStore.read(sessions.file())) {
+                    case SessionStore.ReadResult.Read r -> {
+                        frames = windows.restore(r.session(), null);
+                        sessions.restored(r.session());
+                    }
+                    case SessionStore.ReadResult.Damaged d -> {
+                        SessionStore.setAside(sessions.file());
+                        damaged = d.reason();
+                    }
+                    case SessionStore.ReadResult.Missing m -> { }
+                }
+            }
+            if (frames.isEmpty()) frames = List.of(windows.createFirstWindow());
             windowsRef[0] = windows;
 
+            List<MainFrame> shown = frames;
+            String damagedReason = damaged;
             Runnable show = () -> {
-                frame.setVisible(true);
+                for (int i = shown.size() - 1; i >= 0; i--) shown.get(i).setVisible(true);
+                shown.get(0).toFront();
                 windows.openFiles(java.util.Arrays.stream(args).map(Path::of).toList());
                 pendingOpens.forEach(windows::openFile);
                 pendingOpens.clear();
+                if (AppPrefs.isRestoreSession()) sessions.start();
+                if (damagedReason != null) {
+                    log.warn("Last session could not be read ({}); set aside as session.json.bad", damagedReason);
+                    JOptionPane.showMessageDialog(shown.get(0), Messages.get("session.damaged.message"),
+                            Messages.get("session.damaged.title"), JOptionPane.WARNING_MESSAGE);
+                }
             };
 
             if (splash != null) {

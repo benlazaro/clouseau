@@ -5,6 +5,7 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.core.ParserList;
+import com.droidenx.clouseau.core.Session;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
 import lombok.extern.slf4j.Slf4j;
 
@@ -145,13 +146,121 @@ final class WindowManager {
     void closed(MainFrame window) {
         windows.remove(window);
         if (lastActive == window) lastActive = null;
+        sessionChanged();
         if (windows.isEmpty()) exit();
     }
 
-    /** Quits Clouseau: File → Exit, or closing the last window. */
+    /** Quits Clouseau: File → Exit, or closing the last window. Saves the session first. */
     void exit() {
         log.info("Exiting");
+        if (session != null) session.saveNow();
         System.exit(0);
+    }
+
+    // ── Session (UC-17, D-19) ─────────────────────────────────────────────────
+
+    private SessionManager session;
+
+    void setSessionManager(SessionManager session) { this.session = session; }
+
+    /** A window or tab changed; the session is saved shortly. */
+    void sessionChanged() {
+        if (session != null) session.changed();
+    }
+
+    /** Settings → On startup changed: keep saving the session only while it will be restored. */
+    void restoreSettingChanged() {
+        if (session == null) return;
+        if (AppPrefs.isRestoreSession()) {
+            session.start();
+            session.changed();
+        } else {
+            session.stop();
+        }
+    }
+
+    /**
+     * Opens a session's windows and tabs. Windows are built before they are shown, so only
+     * each one's selected tab loads now. A window whose usual place is on a monitor that
+     * isn't connected opens on the primary screen, cascaded; it keeps its usual place for
+     * next time unless the user moves it. Returns the windows, not shown yet.
+     */
+    List<MainFrame> restore(Session s, String sessionName) {
+        List<Rectangle> screens = screenBounds();
+        List<MainFrame> opened = new ArrayList<>();
+        int displaced = 0;
+        for (Session.Window sw : s.windows()) {
+            Session.Bounds b = sw.bounds();
+            Rectangle usual = b != null
+                    ? new Rectangle(b.x(), b.y(), Math.max(400, b.width()), Math.max(300, b.height()))
+                    : defaultBounds(screens);
+            Rectangle at = placeRestored(usual, screens, displaced);
+            if (!isReachable(usual, screens)) displaced++;
+            MainFrame window = new MainFrame(this);
+            window.placeRestored(at, usual, sw.screen());
+            for (Session.Tab t : sw.tabs()) {
+                try {
+                    window.restoreTab(t, sessionName);
+                } catch (RuntimeException e) {
+                    log.warn("Could not restore a {} tab", t.kind(), e);
+                }
+            }
+            window.selectRestoredTab(sw.selectedTab());
+            if (sw.maximized()) window.setExtendedState(Frame.MAXIMIZED_BOTH);
+            windows.add(window);
+            opened.add(window);
+        }
+        if (!opened.isEmpty()) lastActive = opened.get(0);
+        log.info("Restored {} window(s) with {} tab(s)", opened.size(), s.tabCount());
+        return opened;
+    }
+
+    /** How much of a window's top edge must be on a screen for it to be reachable. */
+    static final int GRAB_WIDTH = 100;
+    static final int GRAB_HEIGHT = 20;
+
+    /** Whether enough of {@code r}'s title bar is on some screen to grab it with the mouse. */
+    static boolean isReachable(Rectangle r, List<Rectangle> screens) {
+        Rectangle titleBar = new Rectangle(r.x, r.y, r.width, GRAB_HEIGHT);
+        for (Rectangle s : screens) {
+            Rectangle i = s.intersection(titleBar);
+            if (!i.isEmpty() && i.width >= GRAB_WIDTH && i.height >= GRAB_HEIGHT) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Where a restored window goes: its usual place if its title bar is on a screen (only
+     * shrunk to fit that screen), otherwise the primary screen ({@code screens.get(0)}),
+     * cascaded by {@code displaced}, the number of windows already moved there.
+     */
+    static Rectangle placeRestored(Rectangle usual, List<Rectangle> screens, int displaced) {
+        if (screens.isEmpty()) return new Rectangle(usual);
+        if (isReachable(usual, screens)) {
+            Rectangle screen = screens.stream().filter(s -> s.intersects(usual))
+                    .max(java.util.Comparator.comparingLong(s -> area(s.intersection(usual))))
+                    .orElse(screens.get(0));
+            if (usual.width <= screen.width && usual.height <= screen.height) return new Rectangle(usual);
+            return fitOnScreen(usual, List.of(screen));
+        }
+        Rectangle primary = screens.get(0);
+        int w = Math.min(usual.width, primary.width);
+        int h = Math.min(usual.height, primary.height);
+        int step = CASCADE * (displaced + 1);
+        Rectangle at = new Rectangle(primary.x + step, primary.y + step, w, h);
+        return fitOnScreen(at, List.of(primary));
+    }
+
+    /** A first window's place: 1280×800 centred on the primary screen. */
+    private static Rectangle defaultBounds(List<Rectangle> screens) {
+        if (screens.isEmpty()) return new Rectangle(0, 0, 1280, 800);
+        Rectangle p = screens.get(0);
+        int w = Math.min(1280, p.width), h = Math.min(800, p.height);
+        return new Rectangle(p.x + (p.width - w) / 2, p.y + (p.height - h) / 2, w, h);
+    }
+
+    private static long area(Rectangle r) {
+        return r.isEmpty() ? 0 : (long) r.width * r.height;
     }
 
     /** The Clouseau window under a point on the screen other than {@code except}, if any. */
@@ -205,11 +314,15 @@ final class WindowManager {
 
     // ── Placement ─────────────────────────────────────────────────────────────
 
-    /** The usable bounds (without task bars) of every screen. */
+    /** The usable bounds (without task bars) of every screen, the primary screen first. */
     static List<Rectangle> screenBounds() {
         List<Rectangle> screens = new ArrayList<>();
         if (GraphicsEnvironment.isHeadless()) return screens;
-        for (GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        List<GraphicsDevice> devices = new ArrayList<>(List.of(ge.getScreenDevices()));
+        GraphicsDevice primary = ge.getDefaultScreenDevice();
+        if (devices.remove(primary)) devices.add(0, primary);
+        for (GraphicsDevice d : devices) {
             GraphicsConfiguration gc = d.getDefaultConfiguration();
             Rectangle r = gc.getBounds();
             Insets in = Toolkit.getDefaultToolkit().getScreenInsets(gc);

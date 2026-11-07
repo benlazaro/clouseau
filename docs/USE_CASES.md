@@ -553,7 +553,7 @@ A tab dragged out of every window opens a new window at the drop point, kept on 
 A new window takes its size from the window it came from, offset down and right. Set
 Source Timezone for All Tabs applies to the tabs of every window. Design: DESIGN.md D-18.
 
-### UC-17 · Pick up where I left off ❌
+### UC-17 · Pick up where I left off 🟡
 
 **Actor:** Developer, Field engineer
 **Goal:** Close Clouseau at the end of the day and find the same logs open, in the same
@@ -613,8 +613,17 @@ switch between them.
 - **Sessions stay on this machine.** They hold paths and host names that mean nothing
   elsewhere. To hand logs to someone, export them for review (UC-8).
 
-**Current behavior:** Not built yet. Clouseau starts empty (with any files passed to it),
-and Recent Files lists the last opened files. Design: DESIGN.md D-19.
+**Current behavior:** Restoring the last session works as described, except for named
+sessions, which aren't built yet. Files, merged views, review bundles, SSH tabs and
+plugin sources all come back, each with its parser, timezone, time offsets, follow mode,
+column layout and filters. A time range comes back as it was typed. A tab that hasn't
+been selected yet says *"Opens when you select this tab."* A file that has gone shows
+its path and **Try Again**. An SSH tab connects by itself when it needs no password, or a
+saved SSH connection to the same host, port and user has it; otherwise it offers
+**Reconnect…**, which opens the SSH dialog filled in. A plugin source works the same way
+with the provider's saved settings. Plain-text files are recognized again when they
+open. If `session.json` can't be read, Clouseau starts empty, says so, and keeps the file
+as `session.json.bad`. Design: DESIGN.md D-19.
 
 ---
 

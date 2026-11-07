@@ -6,6 +6,7 @@ import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.core.Session;
 import com.droidenx.clouseau.core.AnnotationStore;
 import com.droidenx.clouseau.core.EntryIndex;
 import com.droidenx.clouseau.core.FileIndexer;
@@ -143,7 +144,10 @@ public final class LogPanel extends JPanel {
         this.formatters = formatters;
         this.syntaxHighlighters = syntaxHighlighters;
         FilterBar[] fbHolder = new FilterBar[1];
-        fbHolder[0] = new FilterBar(() -> logTableModel.applyFilter(fbHolder[0].buildFilter()));
+        fbHolder[0] = new FilterBar(() -> {
+            logTableModel.applyFilter(fbHolder[0].buildFilter());
+            dismissNoticeIfFiltersChanged();
+        });
         this.filterBar = fbHolder[0];
         filterBar.initFollow(follow, this::setFollow);
         logTableModel.setFilterProgressListener(percent -> {
@@ -165,11 +169,13 @@ public final class LogPanel extends JPanel {
         centerCards = new JPanel(new CardLayout());
         centerCards.add(split, CARD_CONTENT);
         centerCards.add(buildLoadingPanel(), CARD_LOADING);
+        centerCards.add(buildMessagePanel(), CARD_MESSAGE);
 
         statusBar = buildStatusBar();
         findBar = new FindBar(logTable, FindBar.searchIn(logTableModel));
         highlightNavBar = new HighlightNavBar(logTable, logTableModel);
 
+        add(buildNoticeStrip(), "growx, wrap, hidemode 3");
         add(filterBar, "growx, wrap, hidemode 3");
         add(findBar, "growx, wrap, hidemode 3");
         add(highlightNavBar, "growx, wrap, hidemode 3");
@@ -278,6 +284,7 @@ public final class LogPanel extends JPanel {
      * plain (or .gz) file.
      */
     public void load(Path file, String entry, Optional<LogParser> parser, Runnable onError) {
+        leaveMessage();
         mergedFiles = null;
         currentFile = file.toAbsolutePath();
         currentEntry = entry;
@@ -515,6 +522,7 @@ public final class LogPanel extends JPanel {
 
     /** Loads several files into one merged view (D-17); {@code listener} hears how it went. */
     public void loadMerged(List<MergeLoad.File> files, Optional<LogParser> parser, MergeListener listener) {
+        leaveMessage();
         mergeListener = listener;
         final java.util.function.Consumer<List<MergeLoad.Skipped>> onSkipped = listener::skipped;
         final Runnable onError = listener::failed;
@@ -644,6 +652,228 @@ public final class LogPanel extends JPanel {
         closeAction = action != null ? action : () -> {};
     }
 
+    // ── Sessions (UC-17, D-19) ────────────────────────────────────────────────
+
+    private static final String CARD_MESSAGE = "message";
+    /** How this tab was opened, so a session can open it again; null for a tab a session can't keep. */
+    private Session.Tab sessionOrigin;
+    /** The load a restored tab starts the first time it is shown, or null. */
+    private Runnable deferredLoad;
+    /** True while the tab shows a message (not loaded yet, file missing) instead of rows. */
+    private boolean showingMessage;
+    private JLabel messageLabel;
+    private JButton messageButton;
+    private Runnable messageAction;
+    private JPanel noticeStrip;
+    private JLabel noticeLabel;
+    private JButton noticeClear;
+    /** The filters a session restored, while the strip announcing them is up. */
+    private Session.Filters restoredFilters;
+
+    /** Records how this tab was opened (file, merged files, SSH or plugin source). */
+    void setSessionOrigin(Session.Tab origin) {
+        sessionOrigin = origin;
+    }
+
+    /**
+     * This tab as a session keeps it: how it was opened, plus its follow mode, timezone,
+     * merged files' settings, column layout and filters. A tab that hasn't loaded (not
+     * selected yet, or its file is missing) is kept exactly as it was restored. Null if the
+     * tab can't be reopened.
+     */
+    Session.Tab sessionTab() {
+        if (sessionOrigin == null) return null;
+        if (deferredLoad != null || showingMessage) return sessionOrigin;
+        Session.Tab t = sessionOrigin;
+        if (t.kind() == Session.Kind.MERGED && mergedFiles != null) {
+            List<Session.MergedFile> files = new ArrayList<>();
+            MergedEntries view = mergedView();
+            for (int s = 0; s < mergedFiles.size(); s++) {
+                MergeLoad.File f = mergedFiles.get(s);
+                long offset = view != null && s < view.sourceCount() ? view.offsetMillis(s) : mergedOffsets.getOrDefault(f, 0L);
+                LogParser own = mergedParsers.get(f);
+                files.add(new Session.MergedFile(f.path().toString(), f.entry(),
+                        own != null ? own.getName() : null, zoneOf(f).getId(), offset));
+            }
+            t = t.withFiles(files);
+        } else if (t.kind() != Session.Kind.MERGED) {
+            t = t.withTimezone(sourceTimezone.getId());
+        }
+        Session.Layout layout = toSession(tableView.sessionLayout());
+        return t.withState(follow, layout, plainMode ? null : filterBar.state());
+    }
+
+    /**
+     * Sets up a restored tab before it loads: follow mode, column layout and filters; the
+     * filter strip says which filters came back. {@code notes} are extra lines for the strip
+     * (a parser that no longer exists), and {@code sessionName} names a named session, or
+     * is null for the last session.
+     */
+    void restoreState(Session.Tab t, List<String> notes, String sessionName) {
+        sessionOrigin = t;
+        follow = t.follow();
+        filterBar.setFollowSelected(follow);
+        if (t.columns() != null) tableView.restoreLayout(fromSession(t.columns()));
+        List<String> lines = new ArrayList<>(notes);
+        if (t.filters() != null && !FilterBar.isDefault(t.filters())) {
+            filterBar.restore(t.filters());
+            restoredFilters = filterBar.state();
+            lines.add(0, describeRestored(t.filters(), sessionName));
+        }
+        if (!lines.isEmpty()) showNotice(String.join(" ", lines), restoredFilters != null);
+    }
+
+    /** Sets the file a not-yet-loaded tab will show, so "one tab per file" finds it. */
+    void presetFile(Path file, String entry) {
+        currentFile = file.toAbsolutePath();
+        currentEntry = entry;
+        String shown = entry == null ? currentFile.toString() : currentFile + " › " + entry;
+        statusBarPathLabel.setText(shown);
+        statusBarPathLabel.setToolTipText(shown);
+    }
+
+    /**
+     * Holds the tab's load until it is first shown, so a large session opens quickly: only
+     * each window's selected tab loads at once (D-19).
+     */
+    void deferLoad(Runnable load) {
+        deferredLoad = load;
+        showMessage(Messages.get("session.tab.pending"), null, null);
+        if (isShowing()) startDeferredLoad();
+    }
+
+    private void startDeferredLoad() {
+        Runnable load = deferredLoad;
+        if (load == null) return;
+        deferredLoad = null;
+        hideMessage();
+        load.run();
+    }
+
+    /** Whether the tab is waiting for its first showing before it loads. */
+    boolean isDeferred() { return deferredLoad != null; }
+
+    /**
+     * Shows a message instead of rows (a missing file, a source that needs a password),
+     * with a button that runs {@code action}, or none if {@code buttonText} is null.
+     */
+    void showMessage(String text, String buttonText, Runnable action) {
+        showingMessage = true;
+        messageLabel.setText("<html><div style='text-align:center'>" + escape(text).replace("\n", "<br>") + "</div></html>");
+        messageAction = action;
+        messageButton.setText(buttonText == null ? "" : buttonText);
+        messageButton.setVisible(buttonText != null);
+        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_MESSAGE);
+    }
+
+    private void hideMessage() {
+        if (!showingMessage) return;
+        showingMessage = false;
+        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
+    }
+
+    /** Leaves the message card for good: the tab is about to load or stream. */
+    private void leaveMessage() {
+        hideMessage();
+    }
+
+    private JPanel buildMessagePanel() {
+        JPanel p = new JPanel(new MigLayout("fill, wrap 1", "[center]", "push[]12[]push"));
+        messageLabel = new JLabel();
+        ClouseauColors.themedForeground(messageLabel, ClouseauColors::dimForeground);
+        messageButton = new JButton();
+        messageButton.setVisible(false);
+        messageButton.addActionListener(e -> { if (messageAction != null) messageAction.run(); });
+        p.add(messageLabel, "wmax 520");
+        p.add(messageButton, "hidemode 3");
+        // A restored tab loads the first time it is shown (selected in its window).
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && isShowing()) {
+                SwingUtilities.invokeLater(this::startDeferredLoad);
+            }
+        });
+        return p;
+    }
+
+    private JPanel buildNoticeStrip() {
+        noticeStrip = new JPanel(new MigLayout("insets 4 10 4 6, gap 8", "[][grow][][]", "[center]"));
+        ClouseauColors.themedBackground(noticeStrip, ClouseauColors::loadingBackground);   // like the plain-text banner
+        noticeLabel = new JLabel();
+        noticeClear = new JButton(Messages.get("session.notice.clear"));
+        noticeClear.addActionListener(e -> {
+            hideNotice();
+            filterBar.clear();
+        });
+        JButton close = new JButton("×");
+        close.setToolTipText(Messages.get("session.notice.close"));
+        close.setBorderPainted(false);
+        close.setContentAreaFilled(false);
+        close.setFocusable(false);
+        close.addActionListener(e -> hideNotice());
+        noticeStrip.add(new JLabel("ⓘ"));
+        noticeStrip.add(noticeLabel, "growx, wmin 0");
+        noticeStrip.add(noticeClear, "hidemode 3");
+        noticeStrip.add(close);
+        noticeStrip.setVisible(false);
+        return noticeStrip;
+    }
+
+    private void showNotice(String text, boolean offerClear) {
+        noticeLabel.setText(text);
+        noticeLabel.setToolTipText(text);
+        noticeClear.setVisible(offerClear);
+        noticeStrip.setVisible(true);
+        revalidate();
+    }
+
+    private void hideNotice() {
+        restoredFilters = null;
+        noticeStrip.setVisible(false);
+        revalidate();
+    }
+
+    /** The strip goes away once the user changes a filter. */
+    private void dismissNoticeIfFiltersChanged() {
+        if (restoredFilters != null && noticeStrip.isVisible()
+                && !java.util.Objects.equals(filterBar.state(), restoredFilters)) {
+            hideNotice();
+        }
+    }
+
+    /** "Filters restored from your last session: levels, 3 loggers, time range." and its warnings. */
+    private String describeRestored(Session.Filters f, String sessionName) {
+        List<String> parts = new ArrayList<>();
+        if (!FilterBar.isDefault(new Session.Filters(f.levels(), null, null, null, null, null, null))) parts.add(Messages.get("session.notice.levels"));
+        if (!f.excludedLoggers().isEmpty()) parts.add(java.text.MessageFormat.format(Messages.get("session.notice.loggers"), f.excludedLoggers().size()));
+        if (f.excludedFields().values().stream().anyMatch(v -> !v.isEmpty())) parts.add(Messages.get("session.notice.fields"));
+        if (!f.from().isBlank() || !f.to().isBlank()) parts.add(Messages.get("session.notice.time"));
+        if (!f.text().isEmpty()) parts.add(Messages.get("session.notice.text"));
+        if (!f.hiddenSources().isEmpty()) parts.add(java.text.MessageFormat.format(Messages.get("session.notice.sources"), f.hiddenSources().size()));
+        String what = String.join(", ", parts);
+        String text = sessionName == null
+                ? java.text.MessageFormat.format(Messages.get("session.notice.last"), what)
+                : java.text.MessageFormat.format(Messages.get("session.notice.named"), what, sessionName);
+        if (follow && !f.to().isBlank()) {
+            text += " " + java.text.MessageFormat.format(Messages.get("session.notice.to.hides"), f.to());
+        }
+        return text;
+    }
+
+    private static Session.Layout toSession(AppPrefs.ColumnLayout layout) {
+        if (layout == null || layout.columns().isEmpty()) return null;
+        return new Session.Layout(layout.columns().stream()
+                .map(c -> new Session.Column(c.modelIndex(), c.visible(), c.width())).toList());
+    }
+
+    private static AppPrefs.ColumnLayout fromSession(Session.Layout layout) {
+        return new AppPrefs.ColumnLayout(null, layout.columns().stream()
+                .map(c -> new AppPrefs.ColumnLayout.ColumnEntry(c.model(), c.visible(), c.width())).toList());
+    }
+
+    private static String escape(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     /**
      * Takes the window's parsers after the user saved one. A plain-text tab reloads with
      * auto-detection if one of them now recognizes the file, and says so if none does.
@@ -738,6 +968,7 @@ public final class LogPanel extends JPanel {
      * as they arrive. Closing the tab closes the source.
      */
     public void loadSource(LogSource source, Optional<LogParser> parser) {
+        leaveMessage();
         String name = sourceName(source);
         currentFile   = null;
         currentEntry  = null;

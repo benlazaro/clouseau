@@ -39,6 +39,7 @@ readable in any theme.
 | | Max entries per tab | How many lines an SSH or plugin-source tab keeps in memory (10,000 to 2,000,000; default 200,000). Files you open are never trimmed. |
 | Files | Max recent files | How many files **Open Recent** lists |
 | | When opening several files | **Ask each time**, **Merge them** into a [merged view](merged-views.md), or open **Separate tabs** |
+| | On startup | **Restore last session** (the default) reopens the windows and tabs you had open; **Start empty** opens one empty window. See [Picking up where you left off](opening-files.md#picking-up-where-you-left-off). |
 | Appearance | Theme | The theme, with a live preview (also in **View → Theme**) |
 | | Display timezone | The timezone timestamps are shown in. See [Timezones](reading-and-filtering.md#timezones). |
 
@@ -98,7 +99,7 @@ To raise it:
 
 ## The data folder
 
-Settings (`settings.json`), your parsers (`parsers.json`), installed themes, plugins,
+Settings (`settings.json`), your last session (`session.json`), your parsers (`parsers.json`), installed themes, plugins,
 [notes](annotations-and-review.md) for read-only folders, the cache for compressed files,
 Clouseau's own log, and saved passwords (encrypted) all live in one folder:
 

@@ -490,7 +490,26 @@ final class LogTableView {
         recalcFittedColumnsWidth();
     }
 
+    /** A layout restored from a session (D-19), applied once in place of the default when the load completes. */
+    private AppPrefs.ColumnLayout restoredLayout;
+
+    /** Sets the layout a session saved; it applies when the tab's rows are loaded and its columns known. */
+    void restoreLayout(AppPrefs.ColumnLayout layout) {
+        restoredLayout = layout;
+    }
+
+    /** The layout a session should keep for this tab: the restored one until it has been applied. */
+    AppPrefs.ColumnLayout sessionLayout() {
+        return restoredLayout != null ? restoredLayout : captureLayout(activeLayoutName);
+    }
+
     void applyDefaultLayoutIfSet() {
+        if (restoredLayout != null) {
+            AppPrefs.ColumnLayout layout = restoredLayout;
+            restoredLayout = null;
+            applyColumnLayout(layout);
+            return;
+        }
         String defaultName = AppPrefs.getDefaultColumnLayout();
         if (defaultName == null) return;
         AppPrefs.getColumnLayouts().stream()

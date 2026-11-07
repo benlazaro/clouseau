@@ -7,6 +7,7 @@ import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.MergeLoad;
 import com.droidenx.clouseau.core.ReviewBundle;
+import com.droidenx.clouseau.core.Session;
 import com.droidenx.clouseau.core.SshConfig;
 import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
@@ -90,6 +91,89 @@ public final class MainFrame extends JFrame {
                 KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(tabShortcuts);
             }
         });
+        addWindowStateListener(e -> manager.sessionChanged());
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            // Later: maximizing reports the new size before the new state.
+            @Override public void componentMoved(java.awt.event.ComponentEvent e)   { SwingUtilities.invokeLater(MainFrame.this::boundsChanged); }
+            @Override public void componentResized(java.awt.event.ComponentEvent e) { SwingUtilities.invokeLater(MainFrame.this::boundsChanged); }
+        });
+        tabbedPane.addChangeListener(e -> manager.sessionChanged());
+    }
+
+    // ── The window's place, for the session (UC-17, D-19) ─────────────────────
+
+    /** Differences smaller than this don't count as the user moving the window. */
+    private static final int MOVE_TOLERANCE = 8;
+    /** Where the window usually is when not maximized, and the screen that was on. */
+    private Rectangle home;
+    private String homeScreen;
+    /** Where restoring put the window when its usual place wasn't on a screen, or null. */
+    private Rectangle placed;
+
+    /**
+     * Puts a restored window at {@code bounds}, remembering {@code usual} (and its screen) as
+     * where it belongs: a window moved off a missing monitor goes back there next time,
+     * unless the user moves or resizes it first.
+     */
+    void placeRestored(Rectangle bounds, Rectangle usual, String usualScreen) {
+        setBounds(bounds);
+        home = new Rectangle(usual);
+        homeScreen = usualScreen;
+        placed = bounds.equals(usual) ? null : new Rectangle(bounds);
+    }
+
+    private void boundsChanged() {
+        if (!isVisible() || (getExtendedState() & (MAXIMIZED_BOTH | ICONIFIED)) != 0) return;
+        Rectangle now = getBounds();
+        Rectangle reference = placed != null ? placed : home;
+        if (reference == null || !close(now, reference)) {
+            home = now;
+            homeScreen = screenOf(now);
+            placed = null;
+            manager.sessionChanged();
+        }
+    }
+
+    private static boolean close(Rectangle a, Rectangle b) {
+        return Math.abs(a.x - b.x) <= MOVE_TOLERANCE && Math.abs(a.y - b.y) <= MOVE_TOLERANCE
+                && Math.abs(a.width - b.width) <= MOVE_TOLERANCE && Math.abs(a.height - b.height) <= MOVE_TOLERANCE;
+    }
+
+    /** The id of the screen that holds most of {@code r}, or null. */
+    private static String screenOf(Rectangle r) {
+        if (GraphicsEnvironment.isHeadless()) return null;
+        String best = null;
+        long bestArea = 0;
+        for (GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+            Rectangle i = d.getDefaultConfiguration().getBounds().intersection(r);
+            long area = i.isEmpty() ? 0 : (long) i.width * i.height;
+            if (area > bestArea) {
+                bestArea = area;
+                best = d.getIDstring();
+            }
+        }
+        return best;
+    }
+
+    /** This window as the session keeps it: its usual place, maximized or not, and its tabs. */
+    Session.Window sessionWindow() {
+        Rectangle b = home;
+        String screen = homeScreen;
+        if (b == null) {
+            b = getBounds();
+            screen = screenOf(b);
+        }
+        List<Session.Tab> tabs = new ArrayList<>();
+        int selected = 0;
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if (!(tabbedPane.getComponentAt(i) instanceof LogPanel lp)) continue;
+            Session.Tab t = lp.sessionTab();
+            if (t == null) continue;
+            if (i == tabbedPane.getSelectedIndex()) selected = tabs.size();
+            tabs.add(t);
+        }
+        return new Session.Window(new Session.Bounds(b.x, b.y, b.width, b.height), screen,
+                (getExtendedState() & MAXIMIZED_BOTH) == MAXIMIZED_BOTH, selected, tabs);
     }
 
     // ── Shared state, through the window manager ──────────────────────────────
@@ -387,6 +471,7 @@ public final class MainFrame extends JFrame {
         new SettingsDialog(this, activeLogPanel(), () -> {
             manager.refreshRecentMenus();
             manager.allPanels().forEach(LogPanel::refreshTimezone);
+            manager.restoreSettingChanged();
         }).setVisible(true);
     }
 
@@ -515,7 +600,16 @@ public final class MainFrame extends JFrame {
         if (savedTz != null) panel.setSourceTimezone(savedTz);
         String title = MessageFormat.format(Messages.get("merge.tab.title"), files.get(0).fileName(), files.size() - 1);
         addLogTab(title, null, panel);
+        panel.setSessionOrigin(Session.Tab.merged(files.stream()
+                .map(f -> new Session.MergedFile(f.path().toAbsolutePath().toString(), f.entry(), null, null, 0)).toList(),
+                parserName(parser)));
         panel.presetMerged(setup);
+        startMergedLoad(panel, files, parser, () -> owner(panel).removeTab(panel));
+    }
+
+    /** Loads a merged tab; {@code onFailed} runs if none of its files could be merged. */
+    private void startMergedLoad(LogPanel panel, List<MergeLoad.File> files, Optional<LogParser> parser,
+                                 Runnable onFailed) {
         // The tab may have moved to another window by the time these run (UC-16).
         panel.setCloseAction(() -> owner(panel).removeTab(panel));
         panel.loadMerged(files, parser, new LogPanel.MergeListener() {
@@ -527,7 +621,7 @@ public final class MainFrame extends JFrame {
                 for (MergeLoad.File f : mergeable) window.openLog(f.path(), f.entry(), parser);
             }
 
-            @Override public void failed() { owner(panel).removeTab(panel); }
+            @Override public void failed() { onFailed.run(); }
 
             @Override public void merged(List<MergeLoad.File> merged) {
                 owner(panel).setTabTitle(panel, MessageFormat.format(Messages.get("merge.tab.title"),
@@ -658,16 +752,242 @@ public final class MainFrame extends JFrame {
         String title = zipEntry == null ? file.getFileName().toString()
                 : new ZipLogs.Entry(zipEntry, -1).fileName();
         addLogTab(title, abs, panel);
-        panel.setCloseAction(() -> owner(panel).removeTab(panel));
-        panel.setCreateParserAction(samples -> new ParserEditorDialog(owner(panel), () -> {
-            manager.reloadParsers();
-            panel.retryWithParsers(parsers());
-        }, samples).setVisible(true));
+        panel.setSessionOrigin(Session.Tab.file(abs.toString(), zipEntry, parserName(parser), null));
+        setUpFileTab(panel);
         panel.load(file, zipEntry, parser, () -> {
             AppPrefs.removeRecentFile(file);
             manager.refreshRecentMenus();
             owner(panel).removeTab(panel);
         });
+    }
+
+    /** A file tab's close and "Create a parser" actions. */
+    private void setUpFileTab(LogPanel panel) {
+        panel.setCloseAction(() -> owner(panel).removeTab(panel));
+        panel.setCreateParserAction(samples -> new ParserEditorDialog(owner(panel), () -> {
+            manager.reloadParsers();
+            panel.retryWithParsers(parsers());
+        }, samples).setVisible(true));
+    }
+
+    private static String parserName(Optional<LogParser> parser) {
+        return parser.map(LogParser::getName).orElse(null);
+    }
+
+    // ── Restoring a session's tabs (UC-17, D-19) ──────────────────────────────
+
+    /**
+     * Adds a tab from a session, without selecting it. It loads the first time it is shown,
+     * so only each window's selected tab loads at start. {@code sessionName} names a named
+     * session for the filter strip, or is null for the last session.
+     */
+    void restoreTab(Session.Tab t, String sessionName) {
+        List<String> notes = new ArrayList<>();
+        Optional<LogParser> parser = parserNamed(t.parser(), notes);
+        LogPanel panel = newLogPanel();
+        if (t.timezone() != null) zone(t.timezone()).ifPresent(panel::setSourceTimezone);
+        switch (t.kind()) {
+            case FILE -> {
+                Path file = Path.of(t.path()).toAbsolutePath();
+                String title = t.entry() == null ? file.getFileName().toString()
+                        : new ZipLogs.Entry(t.entry(), -1).fileName();
+                insertLogTab(title, null, panel, -1, false);
+                panel.presetFile(file, t.entry());
+                setUpFileTab(panel);
+                panel.restoreState(t, notes, sessionName);
+                panel.deferLoad(() -> loadRestoredFile(panel, file, t.entry(), parser));
+            }
+            case MERGED -> {
+                List<MergeLoad.File> files = new ArrayList<>();
+                Map<MergeLoad.File, MergeLoad.PerFile> setup = new HashMap<>();
+                for (Session.MergedFile mf : t.files()) {
+                    MergeLoad.File f = new MergeLoad.File(Path.of(mf.path()), mf.entry());
+                    files.add(f);
+                    setup.put(f, new MergeLoad.PerFile(mf.timezone() == null ? null : zone(mf.timezone()).orElse(null),
+                            mf.offsetMillis(), parserNamed(mf.parser(), notes).orElse(null)));
+                }
+                String title = MessageFormat.format(Messages.get("merge.tab.title"), files.get(0).fileName(), files.size() - 1);
+                insertLogTab(title, null, panel, -1, false);
+                panel.presetMerged(setup);
+                panel.restoreState(t, notes, sessionName);
+                panel.deferLoad(() -> loadRestoredMerged(panel, files, parser));
+            }
+            case SSH -> {
+                Session.Ssh ssh = t.ssh();
+                SshConfig shown = new SshConfig(ssh.host(), ssh.port(), ssh.user(), null, ssh.keyFile(), null, ssh.remotePath());
+                insertLogTab(sshTabTitle(shown), sshTabTooltip(shown), panel, -1, false);
+                panel.restoreState(t, notes, sessionName);
+                panel.deferLoad(() -> connectRestoredSsh(panel, t, parser));
+            }
+            case SOURCE -> {
+                String name = t.source().name() != null ? t.source().name() : t.source().provider();
+                insertLogTab(name, null, panel, -1, false);
+                panel.restoreState(t, notes, sessionName);
+                panel.deferLoad(() -> openRestoredSource(panel, t, parser));
+            }
+        }
+    }
+
+    /** Selects a restored window's saved tab (or the first). */
+    void selectRestoredTab(int index) {
+        if (tabbedPane.getTabCount() == 0) return;
+        tabbedPane.setSelectedIndex(index >= 0 && index < tabbedPane.getTabCount() ? index : 0);
+    }
+
+    /** The parser called {@code name}, or automatic detection with a note for the strip if there's none. */
+    private Optional<LogParser> parserNamed(String name, List<String> notes) {
+        if (name == null) return Optional.empty();
+        Optional<LogParser> p = parsers().stream().filter(x -> name.equals(x.getName())).findFirst();
+        if (p.isEmpty()) {
+            String note = MessageFormat.format(Messages.get("session.notice.parser"), name);
+            if (!notes.contains(note)) notes.add(note);
+        }
+        return p;
+    }
+
+    private static Optional<ZoneId> zone(String id) {
+        try {
+            return Optional.of(ZoneId.of(id));
+        } catch (java.time.DateTimeException e) {
+            log.warn("Session names an unknown timezone {}", id);
+            return Optional.empty();
+        }
+    }
+
+    private void loadRestoredFile(LogPanel panel, Path file, String entry, Optional<LogParser> parser) {
+        if (!java.nio.file.Files.isRegularFile(file)) {
+            panel.showMessage(MessageFormat.format(Messages.get("session.tab.missing"), file),
+                    Messages.get("session.tab.retry"), () -> loadRestoredFile(panel, file, entry, parser));
+            return;
+        }
+        panel.load(file, entry, parser, () -> panel.showMessage(
+                MessageFormat.format(Messages.get("session.tab.failed"), file),
+                Messages.get("session.tab.retry"), () -> loadRestoredFile(panel, file, entry, parser)));
+    }
+
+    private void loadRestoredMerged(LogPanel panel, List<MergeLoad.File> files, Optional<LogParser> parser) {
+        List<String> missing = files.stream().map(MergeLoad.File::path).distinct()
+                .filter(p -> !java.nio.file.Files.isRegularFile(p)).map(Path::toString).toList();
+        if (!missing.isEmpty()) {
+            panel.showMessage(MessageFormat.format(Messages.get("session.tab.missing"), String.join(", ", missing)),
+                    Messages.get("session.tab.retry"), () -> loadRestoredMerged(panel, files, parser));
+            return;
+        }
+        startMergedLoad(panel, files, parser, () -> panel.showMessage(
+                Messages.get("session.tab.merge.failed"), Messages.get("session.tab.retry"),
+                () -> loadRestoredMerged(panel, files, parser)));
+    }
+
+    /**
+     * Connects a restored SSH tab if it needs no password, or one saved with a matching SSH
+     * favorite gives it; otherwise the tab offers Reconnect, so starting Clouseau never
+     * asks for passwords (D-19).
+     */
+    private void connectRestoredSsh(LogPanel panel, Session.Tab t, Optional<LogParser> parser) {
+        Optional<SshConfig> config = sshCredentials(t.ssh());
+        if (config.isPresent()) {
+            panel.loadSource(new SshLogSource(config.get()), parser);
+            return;
+        }
+        panel.showMessage(MessageFormat.format(Messages.get("session.tab.ssh.locked"), t.ssh().user(), t.ssh().host()),
+                Messages.get("session.tab.reconnect"), () -> reconnectSsh(panel, t));
+    }
+
+    /** The connection with the secret it needs, if it needs none or a saved favorite has it. */
+    static Optional<SshConfig> sshCredentials(Session.Ssh s) {
+        if ("none".equals(s.auth())) {
+            return Optional.of(new SshConfig(s.host(), s.port(), s.user(), null, null, null, s.remotePath()));
+        }
+        if ("key".equals(s.auth()) && !s.keyPassphrase()) {
+            return Optional.of(new SshConfig(s.host(), s.port(), s.user(), null, s.keyFile(), null, s.remotePath()));
+        }
+        for (AppPrefs.SshFavorite f : AppPrefs.getSshFavorites()) {
+            if (!s.host().equalsIgnoreCase(f.host()) || s.port() != f.port() || !Objects.equals(s.user(), f.user())) continue;
+            if ("key".equals(s.auth()) && "key".equals(f.authType()) && Objects.equals(s.keyFile(), f.keyFilePath())
+                    && f.keyPassphrase() != null && !f.keyPassphrase().isEmpty()) {
+                return Optional.of(new SshConfig(s.host(), s.port(), s.user(), null, s.keyFile(), f.keyPassphrase(), s.remotePath()));
+            }
+            if ("password".equals(s.auth()) && !"key".equals(f.authType()) && !"none".equals(f.authType())
+                    && f.password() != null && !f.password().isEmpty()) {
+                return Optional.of(new SshConfig(s.host(), s.port(), s.user(), f.password(), null, null, s.remotePath()));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Reconnect: the SSH dialog filled in from the session, asking only for the secret. */
+    private void reconnectSsh(LogPanel panel, Session.Tab t) {
+        SshConnectionDialog dialog = new SshConnectionDialog(owner(panel), parsers());
+        dialog.prefill(t.ssh(), t.parser());
+        dialog.showDialog().ifPresent(r -> {
+            panel.setSessionOrigin(Session.Tab.ssh(toSession(r.config()), parserName(r.parser()), t.timezone())
+                    .withState(t.follow(), t.columns(), t.filters()));
+            owner(panel).setTabTitle(panel, sshTabTitle(r.config()));
+            panel.loadSource(new SshLogSource(r.config()), r.parser());
+        });
+    }
+
+    static Session.Ssh toSession(SshConfig c) {
+        String auth = c.keyFilePath() != null ? "key" : c.password() != null ? "password" : "none";
+        return new Session.Ssh(c.host(), c.port(), c.user(), auth, c.keyFilePath(),
+                c.keyPassphrase() != null && !c.keyPassphrase().isBlank(), c.remotePath());
+    }
+
+    /**
+     * Opens a restored plugin source with its saved settings, taking secrets from the
+     * provider's saved settings (D-14); if one it needs isn't saved, or the plugin is gone,
+     * the tab says so instead.
+     */
+    private void openRestoredSource(LogPanel panel, Session.Tab t, Optional<LogParser> parser) {
+        Session.PluginSource ps = t.source();
+        Optional<LogSourceProvider> provider = manager.sourceProviders().stream()
+                .filter(p -> p.getClass().getName().equals(ps.provider())).findFirst();
+        if (provider.isEmpty()) {
+            panel.showMessage(MessageFormat.format(Messages.get("session.tab.plugin.missing"),
+                    ps.name() != null ? ps.name() : ps.provider()),
+                    Messages.get("session.tab.retry"), () -> openRestoredSource(panel, t, parser));
+            return;
+        }
+        try {
+            List<SourceSetting> settings = List.copyOf(provider.get().settings());
+            java.util.Set<String> secrets = new java.util.HashSet<>();
+            for (SourceSetting s : settings) if (s.type() == SourceSetting.Type.PASSWORD) secrets.add(s.key());
+            Map<String, String> values = new java.util.LinkedHashMap<>(ps.settings());
+            Map<String, String> saved = AppPrefs.getSourceSettings(ps.provider(), secrets);
+            boolean locked = false;
+            for (SourceSetting s : settings) {
+                if (s.type() != SourceSetting.Type.PASSWORD) continue;
+                String secret = saved.get(s.key());
+                if (secret != null && !secret.isEmpty()) values.put(s.key(), secret);
+                else if (s.required()) locked = true;
+            }
+            if (!locked) {
+                var source = provider.get().create(values);
+                if (source != null) {
+                    panel.loadSource(source, parser);
+                    return;
+                }
+            }
+        } catch (Exception | LinkageError e) {
+            log.warn("Could not reopen source '{}'", ps.name(), e);
+        }
+        panel.showMessage(MessageFormat.format(Messages.get("session.tab.source.locked"),
+                ps.name() != null ? ps.name() : ps.provider()),
+                Messages.get("session.tab.reconnect"), () -> reconnectSource(panel, t, provider.get()));
+    }
+
+    private void reconnectSource(LogPanel panel, Session.Tab t, LogSourceProvider provider) {
+        try {
+            List<SourceSetting> settings = List.copyOf(provider.settings());
+            new SourceSettingsDialog(owner(panel), provider, settings, parsers()).showDialog().ifPresent(r -> {
+                panel.setSessionOrigin(Session.Tab.source(new Session.PluginSource(provider.getClass().getName(),
+                                t.source().name(), r.sessionValues()), parserName(r.parser()), t.timezone())
+                        .withState(t.follow(), t.columns(), t.filters()));
+                panel.loadSource(r.source(), r.parser());
+            });
+        } catch (RuntimeException | LinkageError e) {
+            log.error("Source plugin failed in settings()", e);
+        }
     }
 
     /** The window that holds {@code panel} now, or this one if it's in none. */
@@ -700,6 +1020,7 @@ public final class MainFrame extends JFrame {
             log.info("Opening SSH: {}", r.config().displayName());
             LogPanel panel = newLogPanel();
             addLogTab(sshTabTitle(r.config()), null, panel, sshTabTooltip(r.config()));
+            panel.setSessionOrigin(Session.Tab.ssh(toSession(r.config()), parserName(r.parser()), null));
             panel.loadSource(new SshLogSource(r.config()), r.parser());
         });
     }
@@ -742,6 +1063,9 @@ public final class MainFrame extends JFrame {
             log.info("Opening source '{}'", name);
             LogPanel panel = newLogPanel();
             addLogTab(name, null, panel);
+            panel.setSessionOrigin(Session.Tab.source(
+                    new Session.PluginSource(provider.getClass().getName(), name, r.sessionValues()),
+                    parserName(r.parser()), null));
             panel.loadSource(r.source(), r.parser());
         });
     }
@@ -773,6 +1097,11 @@ public final class MainFrame extends JFrame {
 
     /** Adds {@code panel} as a tab at {@code index} (-1: at the end) and selects it. */
     private void insertLogTab(String title, String tooltip, LogPanel panel, int index) {
+        insertLogTab(title, tooltip, panel, index, true);
+    }
+
+    /** Adds {@code panel} as a tab at {@code index} (-1: at the end), selecting it if {@code select}. */
+    private void insertLogTab(String title, String tooltip, LogPanel panel, int index, boolean select) {
         int idx = index < 0 || index > tabbedPane.getTabCount() ? tabbedPane.getTabCount() : index;
         tabbedPane.insertTab(null, null, panel, null, idx);
         JPanel header = buildTabHeader(title, panel);
@@ -782,7 +1111,7 @@ public final class MainFrame extends JFrame {
             }
         }
         tabbedPane.setTabComponentAt(idx, header);
-        tabbedPane.setSelectedIndex(idx);
+        if (select) tabbedPane.setSelectedIndex(idx);
         updateCard();
     }
 
