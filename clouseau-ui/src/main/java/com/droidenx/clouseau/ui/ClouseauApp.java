@@ -49,24 +49,29 @@ public final class ClouseauApp {
         installOpenFileHandler(frameRef, pendingOpens);
 
         if (splash != null) splash.setStatus("Starting...");
-        boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePath ->
+        boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePaths ->
                 SwingUtilities.invokeLater(() -> {
+                    List<Path> files = filePaths.stream().map(Path::of).toList();
                     MainFrame frame = frameRef[0];
-                    if (frame != null && frame.isVisible()) frame.openFile(Path.of(filePath));
-                    else pendingOpens.add(Path.of(filePath));   // window not shown yet
+                    if (frame != null && frame.isVisible()) {
+                        // Raised first, so any message about the files shows in front too (#5).
+                        WindowActivator.bringToFront(frame);
+                        files.forEach(frame::openFile);
+                    } else {
+                        pendingOpens.addAll(files);   // window not shown yet; it comes up anyway
+                    }
                 }));
 
         if (!isPrimary) {
             // Forward any CLI file args to the running instance, then exit. Paths are made
-            // absolute here: the running instance has its own working directory.
-            if (args.length > 0) {
-                List<String> paths = java.util.Arrays.stream(args)
-                        .map(a -> Path.of(a).toAbsolutePath().toString())
-                        .toList();
-                if (!SingleInstanceManager.sendToPrimary(paths)) {
-                    showNotDelivered(splash, paths);
-                    System.exit(1);
-                }
+            // absolute here: the running instance has its own working directory. With no
+            // files, an empty message still brings the running window to the front.
+            List<String> paths = java.util.Arrays.stream(args)
+                    .map(a -> Path.of(a).toAbsolutePath().toString())
+                    .toList();
+            if (!SingleInstanceManager.sendToPrimary(paths) && !paths.isEmpty()) {
+                showNotDelivered(splash, paths);
+                System.exit(1);
             }
             log.info("Delegated to existing instance — exiting.");
             System.exit(0);
@@ -79,6 +84,7 @@ public final class ClouseauApp {
 
         SwingUtilities.invokeLater(() -> {
             MainFrame frame = new MainFrame(pluginManager);
+            WindowActivator.install(frame);
             frameRef[0] = frame;
 
             Runnable show = () -> {
@@ -127,8 +133,12 @@ public final class ClouseauApp {
             List<Path> files = e.getFiles().stream().map(java.io.File::toPath).toList();
             SwingUtilities.invokeLater(() -> {
                 MainFrame frame = frameRef[0];
-                if (frame != null && frame.isVisible()) files.forEach(frame::openFile);
-                else pending.addAll(files);
+                if (frame != null && frame.isVisible()) {
+                    WindowActivator.bringToFront(frame);
+                    files.forEach(frame::openFile);
+                } else {
+                    pending.addAll(files);
+                }
             });
         });
     }

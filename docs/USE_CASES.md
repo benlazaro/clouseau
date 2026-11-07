@@ -81,7 +81,8 @@ parser auto-detected, as with "Open with"; folders are ignored. The native insta
 and "Open with" work; `.gz` and `.zip` aren't claimed, since they're general archives.
 Releases publish only the portable zip, which registers nothing: there, "Open with" works
 if the user picks the Clouseau launcher manually. Either way the file goes to an
-already-running window if there is one. Static files are never trimmed by the entry limit. Every static file is
+already-running window if there is one, and that window comes to the front (restored if
+it was minimized); launching Clouseau again with no file just brings it forward. Static files are never trimmed by the entry limit. Every static file is
 indexed (D-16): the heap keeps about 29 bytes per line and text is read back from disk,
 so a 1M-line, 125 MB log uses under 50 MB of heap. Lines followed after the file opens
 (UC-6) are indexed the same way, so they are never dropped either. Compressed files are

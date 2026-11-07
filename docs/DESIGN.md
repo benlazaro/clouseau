@@ -356,7 +356,14 @@ double-clicking several files opens tabs in one window.
 - **Protocol:** one connection per launch, carrying every path as an absolute path (the
   running instance has its own working directory), one per line in UTF-8, until the
   connection closes. The listener queues up to 50 connections, so many launches at once
-  (selecting several files in Explorer and choosing "Open with") all get through.
+  (selecting several files in Explorer and choosing "Open with") all get through. A
+  connection with no paths is a launch without files; it only raises the window.
+- **Bringing the window forward:** after each launch the running instance restores its
+  window if it's minimized (maximized again if it was) and raises it
+  (`WindowActivator`). Windows doesn't let a background process take the foreground, so
+  a plain `toFront()` only flashes the taskbar button; the window is made always-on-top
+  for a moment instead, which moves it above Explorer without native code. Keyboard focus
+  may still stay with Explorer, since that rule also covers focus.
 - **Early arrivals:** paths that arrive before the main window is shown wait in the same
   list as macOS open-file events and open when it appears.
 - **No answer:** the sender retries for about a second. If the running instance still
