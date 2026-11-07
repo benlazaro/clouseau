@@ -187,6 +187,17 @@ within about 75 seconds and reports that the connection was lost, instead of sil
 showing nothing new. Closing an SSH tab returns at once, even when the connection
 has already gone quiet.
 
+**Connection state and Reconnect (SSH and plugin sources):** A live-source tab shows a
+dot next to its title: yellow while connecting, green once connected (signed in and
+streaming, or at the first line for a plugin source that doesn't report it), gray once
+the stream ended or failed, with the reason in its tooltip. **Reconnect** (the tab's
+right-click menu, **File → Reconnect**, `Ctrl+R`) empties the tab and opens a new
+connection with the same details, as if reopened: `tail -n N -F` sends its last lines
+again, so keeping the old rows would duplicate them. The tab keeps its title, parser,
+filters and column layout; notes on the old rows go with them. SSH signs in again with
+the password or key passphrase entered in the dialog, without asking; a plugin source is
+created again from the same setting values.
+
 **Signing in (SSH):** Password, private key (with or without a passphrase), or "No
 password" for accounts without one, common on embedded devices. "No password" works with
 servers that let such accounts in by any of the usual methods (none, an empty password,

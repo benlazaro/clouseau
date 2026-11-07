@@ -32,14 +32,14 @@ Documentation opens the guide.
 
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
-                    LogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
+                    LogSource, ConnectingLogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
 clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogReaders, LogFileReader, FileIndexer, IndexedFollow,
                     FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
                     AnnotationStore, Notes, MergedNotes, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
-                    MergedFollow, TimeOffset, FilePattern, Session, SessionStore
+                    MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -107,7 +107,7 @@ tags.
 - `LogEntry` (api) — immutable record: timestamp, level, logger, thread, message, rawLine,
   fields. Lines no parser accepts become `UNKNOWN` entries (continuation lines).
 - `LogParser` / `LogFormatter` / `LogSyntaxHighlighter` (api) — PF4J extension points.
-- `LogSource` (api) — pushes live lines; `LogSourceProvider` (extension point) creates one
+- `LogSource` (api) — pushes live lines; `ConnectingLogSource` (api) also reports when it is connected (D-20); `LogSourceProvider` (extension point) creates one
   from declared `SourceSetting`s, shown under File → Open Source by `SourceSettingsDialog`.
 - `RegexLogParser` (core) — the parser behind every JSON-defined format.
 - `FileTail` (core) — reads complete UTF-8 lines appended to a file, for follow mode.

@@ -141,7 +141,8 @@ or a restart for updates too.
 - **Passwords aren't saved in sessions.** An SSH tab reconnects by itself if it needs no
   password, or if you saved its password with an SSH connection to the same host, port
   and user. Otherwise it shows **Reconnect…**, which opens the SSH dialog filled in so
-  you only type the password. Plugin sources work the same way.
+  you only type the password; its connection dot is grey until then, and **Reconnect** on
+  the tab's menu or `Ctrl+R` does the same. Plugin sources work the same way.
 - **Nothing disappears.** A file that isn't there any more (a drive that isn't connected,
   a log that was deleted) gets a tab that says so, with **Try Again**.
 - **A missing monitor is fine.** A window that was on a monitor that isn't connected

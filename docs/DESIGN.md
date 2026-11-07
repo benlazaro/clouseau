@@ -48,7 +48,7 @@ clouseau-core ◀──────────┘   RegexLogParser, ParserList,
    │
    ▼
 clouseau-api                 LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
-   ▲                         LogSource, LogSourceProvider, SourceSetting
+   ▲                         LogSource, ConnectingLogSource, LogSourceProvider, SourceSetting
    │ compileOnly
 third-party plugins
 ```
@@ -130,6 +130,13 @@ tab.
   background thread and blocks until the stream ends or `close()` is called; `close()`
   comes from another thread, maybe more than once, maybe before `open` connects. This is
   what lets aggregator sources such as Loki or CloudWatch exist as plugins (UC-11, D-11).
+- A source with a connecting phase implements `ConnectingLogSource`, a sub-interface of
+  `LogSource` (D-20): it implements `open(Consumer<String>, Runnable onConnected)` and
+  runs `onConnected` at most once, from the thread running `open`, once the stream is
+  live (`SshLogSource` does, once `tail` has started), and not at all if connecting
+  fails; its `open(Consumer<String>)` is a default calling that with a no-op. Clouseau
+  calls the two-argument `open` on such a source and the plain `open` on any other,
+  which then counts as connected at its first line. `LogSource` itself didn't change.
 - `LogSourceProvider` is the discoverable part (D-14). PF4J shares one instance, so
   per-connection state lives in the `LogSource` it creates. `settings()` declares
   `SourceSetting`s (text, password, number, choice; required or optional; default);
@@ -173,7 +180,7 @@ refresh; open tabs keep the list they were created with.
 | **Load worker** (`SwingWorker`, one per tab) | Read and parse the file; `publish` entries in chunks. |
 | **Tail worker** (`SwingWorker`, one per tab) | Wait for the file to change, then read new lines while following; on an indexed tab, add them to the index. Holds the tab's tail lock, so a cancelled worker finishes before the next one starts. |
 | **Filter executor** (`clouseau-filter`, one per tab) | Re-run the active filter over all entries; a generation counter discards stale results. |
-| **Source worker** (`SwingWorker`, one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. |
+| **Source worker** (`SwingWorker`, one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. Marks the tab's `SourceConnection` connected; its changes reach the tab's dot through `invokeLater`. |
 | **Source close** (`source-close`, a daemon thread per close) | Run `LogSource.close` when a live tab is closed or reloaded. Closing can wait on the network or a plugin, so it never runs on the EDT (issue #1). |
 
 **Rules:**
@@ -279,6 +286,17 @@ refresh; open tabs keep the list they were created with.
   calls `open`, parses each line with `LineParser` (chosen parser or auto-detection), and appends
   live entries. Columns are sized after the first batch arrives, and again when a later
   line brings a new field. Closing the tab (or loading something else) calls `close()`.
+- **Connection state and Reconnect (D-20):** each run of a live source has a
+  `SourceConnection` (core): `CONNECTING` → `CONNECTED` (a `ConnectingLogSource` calling `onConnected`, or any other
+  source's first line) → `DISCONNECTED` (the worker's `done()`, with the error message it also
+  shows in a dialog, or a cancel). Its listener is posted to the EDT and ignored once a
+  newer run has replaced it. `MainFrame` puts a `SourceLed` in the tab header; it reads
+  `ClouseauColors.statusWarn/statusOk/offColor` at each paint, so it follows a theme
+  switch. `LogPanel.loadSource` takes a `Callable<LogSource>` that makes a fresh source
+  (`new SshLogSource(config)`, or the provider's `create` with the values
+  `SourceSettingsDialog` checked); `reconnect()` closes the old source, clears the
+  rows and starts the new one, keeping the parser, the logger and field filters and the
+  column layout.
 - **Memory bound:** A followed file on an indexed tab is never trimmed (D-16). Live
   entries held in memory (SSH and plugin sources, and following a file that couldn't be
   indexed) go through `LogTableModel.appendLive`, which keeps the tab at most at its cap
@@ -1484,7 +1502,9 @@ Rejected: saving only at exit (fails in the cases above), and saving every N sec
   ordinary exclusions when that logger, field or file appears. (Before this, the filter bar
   dropped excluded loggers it didn't know.) Clear filters drops them too.
 - A tab that waits for a password (an SSH tab without a saved secret, a plugin source
-  missing a required `PASSWORD` setting) keeps its saved state until the user reconnects.
+  missing a required `PASSWORD` setting) keeps its saved state until the user reconnects. Its connection dot
+  shows it disconnected, and Reconnect on the tab menu or `Ctrl+R` does the same as its
+  button (D-20).
 - **Opening a named session** while tabs are open asks *Close current windows* (default)
   / *Add to current* / *Cancel*. Closing them asks nothing more. Adding skips files that
   are already open (their tab stays where it is), and leaves the active session as it was.
@@ -1505,6 +1525,39 @@ modal dialog announcing restored filters (one per tab).
 **Questions settled in review (2026-11-06):** restore by default, configurable in
 Settings; named sessions in the same feature; a named session is a snapshot; filters are
 saved, reapplied and announced by a strip; sessions aren't shared between machines.
+
+### D-20 · Live tabs show their connection and reconnect by reopening · Adopted
+
+Issues #3 and #4: a remote tab that lost its connection looked like a quiet log, and
+getting it back meant opening it again from the dialog.
+
+- **Three states, one dot.** Connecting, connected, disconnected; a failure is
+  disconnected with the reason in the tooltip (and the error dialog, as before). No
+  automatic retry: a dropped connection often needs the user (VPN, expired password).
+- **"Connected" is reported by sources that have a connecting phase.** Only the source
+  knows when it's signed in, so the API gained `ConnectingLogSource extends LogSource`,
+  named after the capability (not every remote source has a connecting phase). Its
+  `open(Consumer<String>, Runnable onConnected)` takes the callback as an argument;
+  other sources count as connected at their first line. `LogSource` is unchanged, so
+  every existing plugin keeps compiling and running, and whether a source reports its
+  connection is visible in its type. Rejected: a default `open(lines, onConnected)` on
+  `LogSource` (every source would seem to offer it, while most would silently ignore the
+  callback); an `onConnected(Runnable)` setter (makes calling it before `open` part of
+  the contract); a listener interface or state enum (more surface than one callback
+  needs); and guessing from the first line alone (a quiet SSH log would stay yellow for
+  minutes).
+- **Reconnect clears the tab and opens a new source.** Sources are used once, so the tab
+  keeps a factory for a new one. `tail -n N -F` sends its last N lines again on
+  connect, so keeping the old rows would show them twice, and there is no reliable way
+  to tell where the old stream stopped. The tab keeps its title, parser, filters and
+  layout. SSH reuses the `SshConfig` from the dialog, password included, so reconnecting
+  doesn't prompt; nothing new is stored on disk.
+- **Restored tabs (D-19)** reconnect the same way: a restored SSH or plugin tab that
+  connected by itself keeps a factory like any other. One waiting for a password the
+  session didn't keep is marked disconnected, with the reason in the dot's tooltip, and
+  the tab menu's Reconnect and `Ctrl+R` run its **Reconnect…** button (`LogPanel.waitForReconnect`),
+  which asks for the password in the filled-in dialog. After that it reconnects without
+  asking, as a tab opened from the dialog does.
 
 ## 10. Planned features
 
@@ -1530,4 +1583,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes. `LogPanel` is still about 1,450 lines: the load and follow wiring for single files, merged views and live sources, the merged files' offset, timezone and parser dialogs, plain-text mode, and the status bar. | Reviewable, but still the biggest UI class. Next split if it grows: a merged tab's per-file settings (offsets, timezones and parsers, with their dialogs; about 200 lines). |
+| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes. `LogPanel` is still about 1,550 lines: the load and follow wiring for single files, merged views and live sources, the merged files' offset, timezone and parser dialogs, plain-text mode, and the status bar. | Reviewable, but still the biggest UI class. Next split if it grows: a merged tab's per-file settings (offsets, timezones and parsers, with their dialogs; about 200 lines). |

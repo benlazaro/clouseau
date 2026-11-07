@@ -48,6 +48,7 @@ public final class MainFrame extends JFrame {
     private final CardLayout cardLayout  = new CardLayout();
     private final JPanel contentArea     = new JPanel(cardLayout);
     private JMenuItem closeTabItem;
+    private JMenuItem reconnectItem;
     private JMenu recentMenu;
 
     private static final String CARD_WELCOME = "welcome";
@@ -334,6 +335,17 @@ public final class MainFrame extends JFrame {
         });
         fileMenu.add(sourceMenu);
 
+        // Enabled while the active tab streams a live source (issue #4).
+        reconnectItem = menuItem(Messages.get("menu.file.reconnect"));
+        reconnectItem.setEnabled(false);
+        reconnectItem.setAccelerator(reconnectKey());
+        reconnectItem.addActionListener(e -> {
+            LogPanel active = activeLogPanel();
+            if (active != null && active.canReconnect()) active.reconnect();
+        });
+        fileMenu.add(reconnectItem);
+        tabbedPane.addChangeListener(e -> updateReconnectItem());
+
         JMenuItem exportReviewItem = menuItem(Messages.get("menu.file.export.review"));
         exportReviewItem.addActionListener(e -> ReviewExporter.export(this, activeLogPanel()));
         fileMenu.add(exportReviewItem);
@@ -470,6 +482,7 @@ public final class MainFrame extends JFrame {
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.new.window"), "Ctrl+N");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.open"),      "Ctrl+O");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.close.tab"), "Ctrl+W");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.reconnect"), "Ctrl+R");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.settings"),  "Ctrl+,");
 
         addDialogSection(grid, Messages.get("shortcuts.section.tabs"), "gaptop 20");
@@ -951,11 +964,12 @@ public final class MainFrame extends JFrame {
     private void connectRestoredSsh(LogPanel panel, Session.Tab t, Optional<LogParser> parser) {
         Optional<SshConfig> config = sshCredentials(t.ssh());
         if (config.isPresent()) {
-            panel.loadSource(new SshLogSource(config.get()), parser);
+            SshConfig c = config.get();
+            panel.loadSource(new SshLogSource(c), () -> new SshLogSource(c), parser);
             return;
         }
-        panel.showMessage(MessageFormat.format(Messages.get("session.tab.ssh.locked"), t.ssh().user(), t.ssh().host()),
-                Messages.get("session.tab.reconnect"), () -> reconnectSsh(panel, t));
+        panel.waitForReconnect(MessageFormat.format(Messages.get("session.tab.ssh.locked"), t.ssh().user(), t.ssh().host()),
+                () -> reconnectSsh(panel, t));
     }
 
     /** The connection with the secret it needs, if it needs none or a saved favorite has it. */
@@ -988,7 +1002,8 @@ public final class MainFrame extends JFrame {
             panel.setSessionOrigin(Session.Tab.ssh(toSession(r.config()), parserName(r.parser()), t.timezone())
                     .withState(t.follow(), t.columns(), t.filters()));
             owner(panel).setTabTitle(panel, sshTabTitle(r.config()));
-            panel.loadSource(new SshLogSource(r.config()), r.parser());
+            SshConfig c = r.config();
+            panel.loadSource(new SshLogSource(c), () -> new SshLogSource(c), r.parser());
         });
     }
 
@@ -1029,16 +1044,16 @@ public final class MainFrame extends JFrame {
             if (!locked) {
                 var source = provider.get().create(values);
                 if (source != null) {
-                    panel.loadSource(source, parser);
+                    LogSourceProvider p = provider.get();
+                    panel.loadSource(source, () -> p.create(values), parser);
                     return;
                 }
             }
         } catch (Exception | LinkageError e) {
             log.warn("Could not reopen source '{}'", ps.name(), e);
         }
-        panel.showMessage(MessageFormat.format(Messages.get("session.tab.source.locked"),
-                ps.name() != null ? ps.name() : ps.provider()),
-                Messages.get("session.tab.reconnect"), () -> reconnectSource(panel, t, provider.get()));
+        panel.waitForReconnect(MessageFormat.format(Messages.get("session.tab.source.locked"),
+                ps.name() != null ? ps.name() : ps.provider()), () -> reconnectSource(panel, t, provider.get()));
     }
 
     private void reconnectSource(LogPanel panel, Session.Tab t, LogSourceProvider provider) {
@@ -1048,7 +1063,7 @@ public final class MainFrame extends JFrame {
                 panel.setSessionOrigin(Session.Tab.source(new Session.PluginSource(provider.getClass().getName(),
                                 t.source().name(), r.sessionValues()), parserName(r.parser()), t.timezone())
                         .withState(t.follow(), t.columns(), t.filters()));
-                panel.loadSource(r.source(), r.parser());
+                panel.loadSource(r.source(), () -> provider.create(r.values()), r.parser());
             });
         } catch (RuntimeException | LinkageError e) {
             log.error("Source plugin failed in settings()", e);
@@ -1084,9 +1099,11 @@ public final class MainFrame extends JFrame {
         new SshConnectionDialog(this, parsers()).showDialog().ifPresent(r -> {
             log.info("Opening SSH: {}", r.config().displayName());
             LogPanel panel = newLogPanel();
-            addLogTab(sshTabTitle(r.config()), null, panel, sshTabTooltip(r.config()));
-            panel.setSessionOrigin(Session.Tab.ssh(toSession(r.config()), parserName(r.parser()), null));
-            panel.loadSource(new SshLogSource(r.config()), r.parser());
+            SshConfig config = r.config();
+            addLogTab(sshTabTitle(config), null, panel, sshTabTooltip(config));
+            panel.setSessionOrigin(Session.Tab.ssh(toSession(config), parserName(r.parser()), null));
+            // Reconnect signs in again with the same config, password included, without asking.
+            panel.loadSource(new SshLogSource(config), () -> new SshLogSource(config), r.parser());
         });
     }
 
@@ -1131,7 +1148,8 @@ public final class MainFrame extends JFrame {
             panel.setSessionOrigin(Session.Tab.source(
                     new Session.PluginSource(provider.getClass().getName(), name, r.sessionValues()),
                     parserName(r.parser()), null));
-            panel.loadSource(r.source(), r.parser());
+            // Reconnect asks the provider for a new source from the same values (secrets included).
+            panel.loadSource(r.source(), () -> provider.create(r.values()), r.parser());
         });
     }
 
@@ -1260,7 +1278,15 @@ public final class MainFrame extends JFrame {
         close.setFont(close.getFont().deriveFont(Font.BOLD));
         close.addActionListener(e -> closeTab(tabbedPane.indexOfTabComponent(header)));
 
+        // Connection dot for live-source tabs (issue #3); hidden on file tabs.
+        SourceLed led = new SourceLed();
+        panel.setConnectionListener(() -> {
+            led.setState(panel.connectionState(), panel.connectionError());
+            if (panel == activeLogPanel()) updateReconnectItem();
+        });
+
         header.add(label);
+        header.add(led);
         header.add(close);
 
         // Select on click + drag-to-reorder with floating ghost
@@ -1306,12 +1332,23 @@ public final class MainFrame extends JFrame {
         header.addMouseMotionListener(tabMouseAdapter);
         label.addMouseListener(tabMouseAdapter);
         label.addMouseMotionListener(tabMouseAdapter);
+        // The dot has a tooltip, so it takes mouse events: let it select and drag too.
+        led.addMouseListener(tabMouseAdapter);
+        led.addMouseMotionListener(tabMouseAdapter);
 
         return header;
     }
 
     private void showTabContextMenu(java.awt.event.MouseEvent e, LogPanel panel) {
         JPopupMenu menu = new JPopupMenu();
+
+        if (panel.canReconnect()) {
+            JMenuItem reconnect = new JMenuItem(Messages.get("tab.context.reconnect"));
+            reconnect.setAccelerator(reconnectKey());
+            reconnect.addActionListener(ev -> panel.reconnect());
+            menu.add(reconnect);
+            menu.addSeparator();
+        }
 
         JMenuItem tzItem = new JMenuItem(Messages.get("tab.context.source.timezone"));
         tzItem.addActionListener(ev -> panel.showSourceTimezoneDialog(this));
@@ -1443,6 +1480,20 @@ public final class MainFrame extends JFrame {
         boolean hasTabs = tabbedPane.getTabCount() > 0;
         cardLayout.show(contentArea, hasTabs ? CARD_TABS : CARD_WELCOME);
         if (closeTabItem != null) closeTabItem.setEnabled(hasTabs);
+        updateReconnectItem();
+    }
+
+    /** Enables File → Reconnect when the active tab streams a live source. */
+    private void updateReconnectItem() {
+        if (reconnectItem == null) return;
+        LogPanel active = activeLogPanel();
+        reconnectItem.setEnabled(active != null && active.canReconnect());
+    }
+
+    /** Ctrl+R (Cmd+R on macOS): reconnect the active live-source tab. */
+    private static KeyStroke reconnectKey() {
+        return KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R,
+                java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx());
     }
 
     private LogPanel activeLogPanel() {

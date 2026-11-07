@@ -1,6 +1,6 @@
 package com.droidenx.clouseau.core;
 
-import com.droidenx.clouseau.api.LogSource;
+import com.droidenx.clouseau.api.ConnectingLogSource;
 import lombok.extern.slf4j.Slf4j;
 import net.schmizz.keepalive.KeepAliveProvider;
 import net.schmizz.sshj.DefaultConfig;
@@ -37,7 +37,7 @@ import java.util.function.Consumer;
  * replace with an OpenSSH known-hosts verifier or a GUI "trust this host?" prompt.
  */
 @Slf4j
-public class SshLogSource implements LogSource {
+public class SshLogSource implements ConnectingLogSource {
 
     /** Number of existing lines to fetch before streaming new ones. */
     private static final int TAIL_LINES = 1000;
@@ -80,14 +80,15 @@ public class SshLogSource implements LogSource {
 
     /**
      * Connects to the remote host, authenticates, and streams lines from
-     * {@link #tailCommand} to {@code lineConsumer}.
+     * {@link #tailCommand} to {@code lineConsumer}, running {@code onConnected} once
+     * signed in and the remote {@code tail} has started, before its first line arrives.
      * Blocks until the connection is closed or an error occurs.
      *
      * @throws UnreadableFileException if the remote file can't be read
      * @throws IOException if the connection is lost or {@code tail} fails
      */
     @Override
-    public void open(Consumer<String> lineConsumer) throws Exception {
+    public void open(Consumer<String> lineConsumer, Runnable onConnected) throws Exception {
         DefaultConfig sshConfig = new DefaultConfig();
         sshConfig.setKeepAliveProvider(KeepAliveProvider.KEEP_ALIVE);
         SSHClient client = new SSHClient(sshConfig);
@@ -115,6 +116,7 @@ public class SshLogSource implements LogSource {
         stderrReader.start();
 
         log.info("SSH tail started: {}", config.displayName());
+        onConnected.run();
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(Utf8Bom.skip(c.getInputStream()), StandardCharsets.UTF_8))) {
             String line;

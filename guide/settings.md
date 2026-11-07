@@ -53,6 +53,7 @@ window, and act on that window.
 | `Ctrl+N` | New window |
 | `Ctrl+O` | Open a file |
 | `Ctrl+W` | Close the tab |
+| `Ctrl+R` | Reconnect an SSH or source-plugin tab |
 | `Ctrl+,` | Settings |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab (also `Ctrl+PageDown` / `Ctrl+PageUp`) |
 | `Ctrl+1` … `Ctrl+8` | Go to tab 1 to 8 |

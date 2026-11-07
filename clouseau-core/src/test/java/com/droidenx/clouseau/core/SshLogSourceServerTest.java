@@ -66,6 +66,32 @@ class SshLogSourceServerTest {
         assertThat(firstLine(noPassword(startServer(UserAuthKeyboardInteractiveFactory.INSTANCE)))).isEqualTo("hello");
     }
 
+    /** Issue #3: the tab's dot turns green once the tail runs, before any line arrives. */
+    @Test
+    @Timeout(30)
+    void reportsConnectedBeforeTheFirstLine() throws Exception {
+        SshLogSource source = new SshLogSource(noPassword(startServer(UserAuthPasswordFactory.INSTANCE)));
+        BlockingQueue<String> events = new LinkedBlockingQueue<>();
+        CountDownLatch ended = new CountDownLatch(1);
+        Thread t = new Thread(() -> {
+            try {
+                source.open(events::add, () -> events.add("<connected>"));
+            } catch (Exception ignored) {
+            } finally {
+                ended.countDown();
+            }
+        }, "ssh-test-open");
+        t.setDaemon(true);
+        t.start();
+        try {
+            assertThat(events.poll(20, TimeUnit.SECONDS)).isEqualTo("<connected>");
+            assertThat(events.poll(20, TimeUnit.SECONDS)).isEqualTo("hello");
+        } finally {
+            source.close();
+            assertThat(ended.await(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
     private static SshConfig noPassword(int port) {
         return new SshConfig("127.0.0.1", port, "root", null, null, null, "/var/log/app.log");
     }

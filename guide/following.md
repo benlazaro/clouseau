@@ -56,6 +56,20 @@ instead of the tab quietly going still. Closing an SSH tab is immediate, even if
 dropped. Save connections you use often with the **★**
 button next to **Favorites**, and pick them from that list next time.
 
+### Connection dot and Reconnect
+
+SSH and source-plugin tabs show a dot next to the title:
+
+- **Yellow**: connecting.
+- **Green**: connected.
+- **Gray**: disconnected. The stream ended or failed; point at the dot to see why.
+
+To connect again, right-click the tab and choose **Reconnect**, or press `Ctrl+R`
+(**File → Reconnect**) on the tab. Reconnecting empties the tab and streams the log again
+from the last lines, as if you had just opened it, so no line is shown twice. The tab
+keeps its title, parser, filters and columns; notes on its lines are not kept. It signs
+in with the same details you entered, without asking again.
+
 An SSH tab keeps its lines in memory, at most **Max entries per tab** (200,000 by default,
 in [Settings](settings.md)); past that, the oldest lines are dropped. The status bar shows
 how many were trimmed.
@@ -65,7 +79,8 @@ how many were trimmed.
 Plugins can bring in lines from other places, such as a log service or a message queue.
 Installed source plugins appear under **File → Open Source**. Each shows a form for its
 settings; Clouseau checks required fields, remembers the values, and stores passwords
-encrypted. Lines stream into a new tab, with the same limit as SSH tabs.
+encrypted. Lines stream into a new tab, with the same limit, connection dot and
+**Reconnect** as SSH tabs.
 
 See [Plugins](settings.md#plugins) to install one, or [For developers](developers.md) to
 write one.

@@ -25,6 +25,7 @@ import com.droidenx.clouseau.core.MergedFollow;
 import com.droidenx.clouseau.core.MergedNotes;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.core.ReviewBundle;
+import com.droidenx.clouseau.core.SourceConnection;
 import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
@@ -72,6 +73,12 @@ public final class LogPanel extends JPanel {
     private volatile SwingWorker<Void, LogEntry> tailWorker;
     /** The live source streaming into this tab (SSH or a plugin), or null. */
     private volatile LogSource liveSource;
+    /** Creates a fresh source for Reconnect (UC-6); null on tabs that don't show a live source. */
+    private java.util.concurrent.Callable<LogSource> sourceFactory;
+    /** The live source's current run (connecting, connected, disconnected), or null. EDT only. */
+    private SourceConnection connection;
+    /** Told on the EDT when {@link #connection} changes state; set by the window. */
+    private Runnable connectionListener = () -> {};
     private Path currentFile;
     /** The file inside a .zip that this tab shows, or null for a plain file (G-6). */
     private String currentEntry;
@@ -942,6 +949,7 @@ public final class LogPanel extends JPanel {
         LogSource s = liveSource;
         liveSource = null;
         if (s != null) closeInBackground(s);
+        if (connection != null) connection.disconnected(null);
     }
 
     /**
@@ -966,9 +974,87 @@ public final class LogPanel extends JPanel {
      * runs on a background worker, and each line is parsed with {@code parser} (or
      * auto-detected) and appended as a live entry, subject to the entry cap. Rows appear
      * as they arrive. Closing the tab closes the source.
+     *
+     * <p>{@code factory} creates a new source for {@link #reconnect}, since a source is
+     * used once; null if the tab can't reconnect.
      */
-    public void loadSource(LogSource source, Optional<LogParser> parser) {
+    public void loadSource(LogSource source, java.util.concurrent.Callable<LogSource> factory,
+                           Optional<LogParser> parser) {
         leaveMessage();
+        restoredReconnect = null;
+        sourceFactory = factory;
+        startSource(source, parser, false);
+    }
+
+    /**
+     * A restored live tab that can't connect without the user (a password sessions don't
+     * keep, D-19): shows {@code text} with a Reconnect button, marks the tab disconnected so
+     * its dot says so (D-20), and makes the tab menu's Reconnect and Ctrl+R run
+     * {@code action} too, so there is one way to reconnect it.
+     */
+    void waitForReconnect(String text, Runnable action) {
+        restoredReconnect = action;
+        showMessage(text, Messages.get("session.tab.reconnect"), action);
+        SourceConnection waiting = new SourceConnection(changed -> {});
+        waiting.disconnected(text);
+        connection = waiting;
+        connectionListener.run();
+    }
+
+    /** What Reconnect does on a restored tab that is waiting for the user, or null. */
+    private Runnable restoredReconnect;
+
+    /** True if this tab streams a live source that {@link #reconnect} can open again. */
+    public boolean canReconnect() {
+        return sourceFactory != null || restoredReconnect != null;
+    }
+
+    /** The live source's state, or null on a tab that shows no live source. */
+    public SourceConnection.State connectionState() {
+        return connection == null ? null : connection.state();
+    }
+
+    /** Why the live source failed, or null. */
+    public String connectionError() {
+        return connection == null ? null : connection.error();
+    }
+
+    /** Run on the EDT whenever the live source's state changes. */
+    public void setConnectionListener(Runnable listener) {
+        connectionListener = listener != null ? listener : () -> {};
+    }
+
+    /**
+     * Closes the live source and streams a new one into the emptied tab, as if reopened
+     * (UC-6): the tab keeps its title, parser, filters and columns. A plain
+     * {@code tail -F} source fetches its last lines again, so rows aren't kept, or
+     * they would be duplicated.
+     */
+    public void reconnect() {
+        if (sourceFactory == null && restoredReconnect != null) {
+            restoredReconnect.run();   // asks for what the session didn't keep
+            return;
+        }
+        if (sourceFactory == null) return;
+        LogSource fresh;
+        try {
+            fresh = sourceFactory.call();
+            if (fresh == null) throw new IllegalStateException("create() returned null");
+        } catch (Exception | LinkageError e) {
+            log.error("Couldn't create a source to reconnect", e);
+            String message = e.getMessage() != null ? e.getMessage() : e.toString();
+            cancelLoad();
+            if (connection != null) connection.disconnected(message);
+            JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(this),
+                    java.text.MessageFormat.format(Messages.get("source.reconnect.failed"), message),
+                    Messages.get("source.error.title"), JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        log.info("Reconnecting {}", sourceName(fresh));
+        startSource(fresh, currentParser, true);
+    }
+
+    private void startSource(LogSource source, Optional<LogParser> parser, boolean reconnecting) {
         String name = sourceName(source);
         currentFile   = null;
         currentEntry  = null;
@@ -984,14 +1070,22 @@ public final class LogPanel extends JPanel {
         dropMergedTailer();
 
         logTableModel.clear();
-        filterBar.clearLoggers();
-        tableView.resetColumns();
+        if (!reconnecting) {
+            // Reconnecting keeps the logger and field filters and the column layout.
+            filterBar.clearLoggers();
+            tableView.resetColumns();
+        }
         logTableModel.setCustomFields(parser.map(com.droidenx.clouseau.api.LogParser::customFields).orElse(List.of()));
         logTableModel.beginBatchLoad();
 
         ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
 
         liveSource = source;
+        SourceConnection run = new SourceConnection(changed -> SwingUtilities.invokeLater(() -> {
+            if (changed == connection) connectionListener.run();   // ignore a replaced run
+        }));
+        connection = run;
+        connectionListener.run();   // connecting
 
         SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
             boolean firstBatch = true;
@@ -999,7 +1093,7 @@ public final class LogPanel extends JPanel {
             @Override
             protected Void doInBackground() throws Exception {
                 LineParser lineParser = new LineParser(parser, parsers, null);
-                source.open(line -> {
+                run.open(source, line -> {
                     if (line == null || line.isBlank() || isCancelled()) return;
                     publish(lineParser.parse(line));
                 });
@@ -1017,8 +1111,12 @@ public final class LogPanel extends JPanel {
                     firstBatch = false;
                     logTableModel.endBatchLoad();
                     ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
-                    tableView.applyDefaultLayoutIfSet();
-                    tableView.autoResizeColumns();
+                    if (!reconnecting) {
+                        tableView.applyDefaultLayoutIfSet();
+                        tableView.autoResizeColumns();
+                    } else if (logTableModel.getColumnCount() != columnsBefore) {
+                        tableView.autoResizeColumns();
+                    }
                 } else if (logTableModel.getColumnCount() != columnsBefore) {
                     tableView.autoResizeColumns();   // a later line brought a new field column
                 }
@@ -1032,18 +1130,22 @@ public final class LogPanel extends JPanel {
                 if (isCancelled()) return;
                 try {
                     get();
+                    run.disconnected(null);   // the stream ended
                 } catch (java.util.concurrent.ExecutionException ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     log.error("Source error for {}", name, cause);
                     String message = cause instanceof SshLogSource.UnreadableFileException u
                             ? java.text.MessageFormat.format(Messages.get("ssh.error.unreadable"), u.path())
                             : cause.getMessage() != null ? cause.getMessage() : cause.toString();
+                    run.disconnected(message);
                     JOptionPane.showMessageDialog(
                             SwingUtilities.getWindowAncestor(LogPanel.this),
                             message,
                             Messages.get("source.error.title"),
                             JOptionPane.ERROR_MESSAGE);
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    run.disconnected(null);
+                }
             }
         };
         currentWorker = worker;
