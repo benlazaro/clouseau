@@ -1203,6 +1203,8 @@ as a reusable "workspace".
      Timezone…" sets it for every file, and the status bar shows "per file" when they
      differ. Changing a file's timezone saves it and reloads the tab. Offsets are kept
      by the tab across reloads, not saved (the review bundle carries them, step 7).
+     `MergedFileSettings` (ui) holds each file's offset, timezone and parser for its
+     tab, with the dialogs that change them.
    - **Offsets** live in `MergedEntries`, swapped together with the order. `get` and
      `scan` return entries with the corrected timestamp (the raw line is untouched), and
      `testIndex` passes the offset to `EntryFilter.testIndex(index, row, offset)`, so
@@ -1583,4 +1585,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes. `LogPanel` is still about 1,550 lines: the load and follow wiring for single files, merged views and live sources, the merged files' offset, timezone and parser dialogs, plain-text mode, and the status bar. | Reviewable, but still the biggest UI class. Next split if it grows: a merged tab's per-file settings (offsets, timezones and parsers, with their dialogs; about 200 lines). |
+| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). `LogPanel` is still about 1,680 lines: the load and follow wiring for single files, merged views and live sources, a restored tab's message card and filter notice (D-19), plain-text mode, and the status bar. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. Next split if `LogPanel` grows: a restored tab's message card and filter notice (about 220 lines). |

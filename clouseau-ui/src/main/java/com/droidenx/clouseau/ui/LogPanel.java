@@ -88,14 +88,21 @@ public final class LogPanel extends JPanel {
     private List<MergeLoad.File> mergedFiles;
     /** Unpacked copies of a merged view's compressed files, deleted with the view. */
     private List<Path> mergedCopies = List.of();
-    /** Time offsets the user set on a merged tab's files; kept across reloads (D-17). */
-    private final Map<MergeLoad.File, Long> mergedOffsets = new HashMap<>();
-    /** Parsers chosen for single files of a merged tab (G-10); kept across reloads. Others use the tab's. */
-    private final Map<MergeLoad.File, LogParser> mergedParsers = new HashMap<>();
-    /** Source timezones a review bundle gave a merged tab's files; they win over saved ones. */
-    private final Map<MergeLoad.File, ZoneId> mergedZones = new HashMap<>();
-    /** Counts offset changes, so only the last one's re-merge is shown. */
-    private long offsetChanges;
+    /** How each file of a merged tab is read: offset, timezone, parser (D-17, G-9); kept across reloads. */
+    private final MergedFileSettings mergedSettings = new MergedFileSettings(new MergedFileSettings.Host() {
+        @Override public List<MergeLoad.File> files() { return mergedFiles; }
+        @Override public MergedEntries view() { return mergedView(); }
+        @Override public ZoneId tabZone() { return sourceTimezone; }
+        @Override public Optional<LogParser> tabParser() { return currentParser; }
+        @Override public List<LogParser> parsers() { return parsers; }
+        @Override public void reload() { LogPanel.this.reload(); }
+        @Override public void zonesChanged() { updateSourceTimezoneLabel(); }
+        @Override public void reordered(MergedEntries view, MergeOrder before, MergeOrder after) {
+            showReordered(before, after, 0);
+            tableView.widenColumnToFit(Messages.get("table.col.source"), sourceLabels(view));
+            logTable.repaint();
+        }
+    });
     /** Follows a merged tab's files (D-17 step 5); null on other tabs. */
     private MergedTailer mergedTailer;
     private Optional<LogParser> currentParser = Optional.empty();
@@ -254,11 +261,7 @@ public final class LogPanel extends JPanel {
      * timezone (if not null), a time offset and a parser (if not null), as a review bundle gives them (D-17).
      */
     public void presetMerged(Map<MergeLoad.File, MergeLoad.PerFile> setup) {
-        setup.forEach((f, p) -> {
-            if (p.zone() != null) mergedZones.put(f, p.zone());
-            if (p.offsetMillis() != 0) mergedOffsets.put(f, p.offsetMillis());
-            if (p.parser() != null) mergedParsers.put(f, p.parser());
-        });
+        mergedSettings.preset(setup);
     }
 
     /**
@@ -271,9 +274,9 @@ public final class LogPanel extends JPanel {
         List<ReviewBundle.Part> parts = new ArrayList<>();
         for (int s = 0; s < view.sourceCount(); s++) {
             MergeLoad.File f = mergedFiles.get(s);
-            String parserName = parserOf(f).map(LogParser::getName).orElse(null);
+            String parserName = mergedSettings.parserOf(f).map(LogParser::getName).orElse(null);
             parts.add(new ReviewBundle.Part(f.path(), f.entry(), notes.stores().get(s).toJson(), parserName,
-                    zoneOf(f).getId(), view.offsetMillis(s)));
+                    mergedSettings.zoneOf(f).getId(), view.offsetMillis(s)));
         }
         return parts;
     }
@@ -558,9 +561,7 @@ public final class LogPanel extends JPanel {
 
         // Each file is read in its own source timezone (and parser, if it has one) and placed with its own offset.
         final Map<MergeLoad.File, MergeLoad.PerFile> setup = new HashMap<>();
-        for (MergeLoad.File f : files) {
-            setup.put(f, new MergeLoad.PerFile(zoneOf(f), mergedOffsets.getOrDefault(f, 0L), mergedParsers.get(f)));
-        }
+        for (MergeLoad.File f : files) setup.put(f, mergedSettings.perFile(f));
         final MemoryGuard memory = new MemoryGuard();
         final List<LogParser> tabParsers = parsers;
         SwingWorker<MergeLoad.Result, LogEntry> worker = new SwingWorker<>() {
@@ -697,10 +698,10 @@ public final class LogPanel extends JPanel {
             MergedEntries view = mergedView();
             for (int s = 0; s < mergedFiles.size(); s++) {
                 MergeLoad.File f = mergedFiles.get(s);
-                long offset = view != null && s < view.sourceCount() ? view.offsetMillis(s) : mergedOffsets.getOrDefault(f, 0L);
-                LogParser own = mergedParsers.get(f);
+                long offset = view != null && s < view.sourceCount() ? view.offsetMillis(s) : mergedSettings.offsetOf(f);
+                LogParser own = mergedSettings.ownParser(f);
                 files.add(new Session.MergedFile(f.path().toString(), f.entry(),
-                        own != null ? own.getName() : null, zoneOf(f).getId(), offset));
+                        own != null ? own.getName() : null, mergedSettings.zoneOf(f).getId(), offset));
             }
             t = t.withFiles(files);
         } else if (t.kind() != Session.Kind.MERGED) {
@@ -1305,150 +1306,24 @@ public final class LogPanel extends JPanel {
         return names;
     }
 
-    /** The source timezone a merged file is read in: its own saved one, or the tab's. */
-    private ZoneId zoneOf(MergeLoad.File f) {
-        ZoneId preset = mergedZones.get(f);
-        if (preset != null) return preset;
-        ZoneId saved = AppPrefs.getSourceTimezone(f.path());
-        return saved != null ? saved : sourceTimezone;
-    }
-
     /** Asks for a new time offset for one file of a merged tab, then re-merges. */
     public void showTimeOffsetDialog(int source) {
-        MergedEntries view = mergedView();
-        if (view == null || source < 0 || source >= view.sourceCount()) return;
-        Long millis = TimeOffsetDialog.ask(SwingUtilities.getWindowAncestor(this),
-                view.sourceName(source), view.offsetMillis(source));
-        if (millis != null) applyTimeOffset(source, millis);
+        mergedSettings.showTimeOffsetDialog(SwingUtilities.getWindowAncestor(this), source);
     }
 
-    /**
-     * Sets one merged file's time offset and re-merges the whole order in the background;
-     * the rows followed meanwhile are placed too before the new order is shown.
-     */
+    /** Sets one merged file's time offset and re-merges in the background. */
     void applyTimeOffset(int source, long millis) {
-        MergedEntries view = mergedView();
-        if (view == null) return;
-        mergedOffsets.put(mergedFiles.get(source), millis);
-        long[] offsets = new long[view.sourceCount()];
-        for (int s = 0; s < offsets.length; s++) offsets[s] = mergedOffsets.getOrDefault(mergedFiles.get(s), 0L);
-        int[] counts = view.rowCounts();
-        long change = ++offsetChanges;
-        new SwingWorker<MergeOrder, Void>() {
-            @Override
-            protected MergeOrder doInBackground() {
-                return MergeOrder.build(view.inputs(counts, offsets), this::isCancelled, n -> {});
-            }
-
-            @Override
-            protected void done() {
-                if (change != offsetChanges || mergedView() != view) return;
-                MergeOrder built;
-                try {
-                    built = get();
-                } catch (Exception ex) {
-                    log.error("Re-merging {} failed", view, ex);
-                    return;
-                }
-                if (built == null) return;
-                MergeOrder before = view.order();
-                MergeOrder after = built.extend(view.inputs(view.rowCounts(), offsets));
-                view.setOrder(after, offsets);
-                showReordered(before, after, 0);
-                tableView.widenColumnToFit(Messages.get("table.col.source"), sourceLabels(view));
-                logTable.repaint();
-            }
-        }.execute();
+        mergedSettings.applyTimeOffset(source, millis);
     }
 
     /** Asks for the source timezone of one file of a merged tab, saves it, and reloads. */
     public void showSourceTimezoneDialog(Component parent, int source) {
-        if (mergedFiles == null || source < 0 || source >= mergedFiles.size()) return;
-        MergeLoad.File f = mergedFiles.get(source);
-        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(zoneOf(f));
-        JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
-        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
-        String title = java.text.MessageFormat.format(Messages.get("merge.timezone.title"), mergedSourceNames().get(source));
-        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note, titleSpacer(title) };
-        int res = JOptionPane.showConfirmDialog(parent, message, title,
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (res != JOptionPane.OK_OPTION) return;
-        SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
-        if (sel == null) return;
-        if (mergedZones.containsKey(f)) mergedZones.put(f, sel.zone());   // from a bundle: this tab only
-        else AppPrefs.setSourceTimezone(f.path(), sel.zone());
-        updateSourceTimezoneLabel();
-        reload();
+        mergedSettings.showSourceTimezoneDialog(parent, source);
     }
 
-    /**
-     * An invisible strut that keeps a small dialog wide enough to show its whole title, which
-     * names a file and can be long. The extra room is for the window's icon and close button.
-     */
-    private static Component titleSpacer(String title) {
-        Font font = UIManager.getFont("TitlePane.font");
-        if (font == null) font = UIManager.getFont("Label.font");
-        return Box.createHorizontalStrut(new JLabel().getFontMetrics(font).stringWidth(title) + 80);
-    }
-
-    /** The parser a merged file is read with: its own, else the tab's (empty: per-line detection). */
-    private Optional<LogParser> parserOf(MergeLoad.File f) {
-        LogParser own = mergedParsers.get(f);
-        return own != null ? Optional.of(own) : currentParser;
-    }
-
-    /**
-     * Asks which parser one file of a merged tab is read with (G-10), and reloads. A parser
-     * that doesn't recognize the file's first lines is refused: the file would be left out.
-     */
+    /** Asks which parser one file of a merged tab is read with (G-10), and reloads. */
     public void showParserDialog(Component parent, int source) {
-        if (mergedFiles == null || source < 0 || source >= mergedFiles.size()) return;
-        MergeLoad.File f = mergedFiles.get(source);
-        String name = mergedSourceNames().get(source);
-        String tabChoice = currentParser.map(LogParser::getName).orElse(Messages.get("filechooser.parser.autodetect"));
-        JComboBox<Object> combo = new JComboBox<>();
-        String same = java.text.MessageFormat.format(Messages.get("merge.parser.tab"), tabChoice);
-        combo.addItem(same);
-        parsers.forEach(combo::addItem);
-        combo.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                                                          boolean isSelected, boolean cellHasFocus) {
-                return super.getListCellRendererComponent(list, value instanceof LogParser p ? p.getName() : value,
-                        index, isSelected, cellHasFocus);
-            }
-        });
-        LogParser own = mergedParsers.get(f);
-        combo.setSelectedItem(own != null ? own : same);
-        JLabel note = new JLabel(Messages.get("merge.parser.note"));
-        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
-        String title = java.text.MessageFormat.format(Messages.get("merge.parser.title"), name);
-        Object[] message = { new JLabel(Messages.get("merge.parser.label")), combo, note, titleSpacer(title) };
-        int res = JOptionPane.showConfirmDialog(parent, message, title,
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (res != JOptionPane.OK_OPTION) return;
-        LogParser chosen = combo.getSelectedItem() instanceof LogParser p ? p : null;
-        if (chosen == own) return;
-        if (chosen != null) {
-            boolean recognized;
-            try {
-                recognized = LogSniffer.detect(LogSniffer.read(f.path(), f.entry()).lines(),
-                        Optional.of(chosen), parsers).isPresent();
-            } catch (IOException e) {
-                log.warn("Can't read the first lines of {}", f, e);
-                recognized = false;
-            }
-            if (!recognized) {
-                JOptionPane.showMessageDialog(parent, java.text.MessageFormat.format(
-                                Messages.get("merge.parser.unrecognized"), chosen.getName(), name),
-                        title, JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            mergedParsers.put(f, chosen);
-        } else {
-            mergedParsers.remove(f);
-        }
-        reload();
+        mergedSettings.showParserDialog(parent, source);
     }
 
     public void dispose() {
@@ -1516,7 +1391,7 @@ public final class LogPanel extends JPanel {
         this.sourceTimezone = zone;
         if (currentFile != null) AppPrefs.setSourceTimezone(currentFile, zone);
         else if (mergedFiles != null) {
-            mergedZones.clear();
+            mergedSettings.clearZones();
             mergedFiles.forEach(f -> AppPrefs.setSourceTimezone(f.path(), zone));
         }
         updateSourceTimezoneLabel();
@@ -1542,7 +1417,7 @@ public final class LogPanel extends JPanel {
     private void updateSourceTimezoneLabel() {
         if (sourceTzLabel == null) return;
         String id = sourceTimezone.getId();
-        if (mergedFiles != null && mergedFiles.stream().map(this::zoneOf).distinct().count() > 1) {
+        if (mergedSettings.zonesDiffer()) {
             id = Messages.get("merge.timezone.perfile");     // a merged tab whose files differ
         }
         sourceTzLabel.setText("[src: " + id + "]  ");
