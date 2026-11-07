@@ -24,31 +24,13 @@ public final class ClouseauApp {
         log.info("Starting Clouseau Log Viewer");
         log.info("Data dir: {}{}", AppDirs.dataDir(), AppDirs.isPortable() ? " (portable)" : "");
 
-        FlatLaf.registerCustomDefaultsSource("com.droidenx.clouseau.ui.theme");
-        ThemeManager.applyTheme(AppPrefs.getTheme());
-
-        SplashWindow splash = SplashWindow.createAndShow();
-
-        // Plugin parsers — loaded from the plugins directory; may be empty if dir not found
-        String pluginsDirProp = System.getProperty("clouseau.plugins.dir");
-        Path pluginsDir = pluginsDirProp != null
-                ? Path.of(pluginsDirProp)
-                : AppDirs.dataDir().resolve("plugins");
-
-        if (splash != null) splash.setStatus("Loading plugins...");
-        ClouseauPluginManager pluginManager = new ClouseauPluginManager(pluginsDir);
-        pluginManager.loadAll();
-        log.info("Plugin manager loaded");
-
-        Runtime.getRuntime().addShutdownHook(new Thread(pluginManager::stopAll, "plugin-shutdown"));
-
         // Use an array so the IPC lambda can capture the reference set later on the EDT.
         MainFrame[] frameRef = new MainFrame[1];
         // Files the OS asked us to open before the window existed (EDT only).
         List<Path> pendingOpens = new java.util.ArrayList<>();
-        installOpenFileHandler(frameRef, pendingOpens);
 
-        if (splash != null) splash.setStatus("Starting...");
+        // Checked before the theme, splash and plugins, so a launch that only hands its files
+        // to the running window shows nothing of its own and hands them over quickly.
         boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePaths ->
                 SwingUtilities.invokeLater(() -> {
                     List<Path> files = filePaths.stream().map(Path::of).toList();
@@ -70,12 +52,31 @@ public final class ClouseauApp {
                     .map(a -> Path.of(a).toAbsolutePath().toString())
                     .toList();
             if (!SingleInstanceManager.sendToPrimary(paths) && !paths.isEmpty()) {
-                showNotDelivered(splash, paths);
+                showNotDelivered(paths);
                 System.exit(1);
             }
             log.info("Delegated to existing instance — exiting.");
             System.exit(0);
         }
+
+        applyTheme();
+        installOpenFileHandler(frameRef, pendingOpens);
+        SplashWindow splash = SplashWindow.createAndShow();
+
+        // Plugin parsers — loaded from the plugins directory; may be empty if dir not found
+        String pluginsDirProp = System.getProperty("clouseau.plugins.dir");
+        Path pluginsDir = pluginsDirProp != null
+                ? Path.of(pluginsDirProp)
+                : AppDirs.dataDir().resolve("plugins");
+
+        if (splash != null) splash.setStatus("Loading plugins...");
+        ClouseauPluginManager pluginManager = new ClouseauPluginManager(pluginsDir);
+        pluginManager.loadAll();
+        log.info("Plugin manager loaded");
+
+        Runtime.getRuntime().addShutdownHook(new Thread(pluginManager::stopAll, "plugin-shutdown"));
+
+        if (splash != null) splash.setStatus("Starting...");
 
         // Only the running instance may do this: copies in use belong to its open tabs.
         com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir());
@@ -102,16 +103,19 @@ public final class ClouseauApp {
         });
     }
 
+    /** Sets up FlatLaf and the user's theme. Call once, before the first window. */
+    private static void applyTheme() {
+        FlatLaf.registerCustomDefaultsSource("com.droidenx.clouseau.ui.theme");
+        ThemeManager.applyTheme(AppPrefs.getTheme());
+    }
+
     /** Tells the user that the running instance couldn't be reached, so the files didn't open. */
-    private static void showNotDelivered(SplashWindow splash, List<String> paths) {
+    private static void showNotDelivered(List<String> paths) {
         String message = java.text.MessageFormat.format(Messages.get("app.instance.unreachable.message"),
                 String.valueOf(SingleInstanceManager.PORT), String.join("\n", paths));
+        applyTheme();
         try {
             SwingUtilities.invokeAndWait(() -> {
-                if (splash != null) {
-                    splash.setVisible(false);
-                    splash.dispose();
-                }
                 JOptionPane.showMessageDialog(null, message,
                         Messages.get("app.instance.unreachable.title"), JOptionPane.ERROR_MESSAGE);
             });

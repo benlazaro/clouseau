@@ -351,7 +351,9 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
 
 `SingleInstanceManager` binds a localhost socket (port 54823). If another Clouseau is
 already running, a new launch forwards its file arguments to it and exits, so
-double-clicking several files opens tabs in one window.
+double-clicking several files opens tabs in one window. The check is the first thing
+startup does after logging, before the theme, the splash and plugin loading, so a launch
+that hands its files over shows no window of its own and finishes quickly.
 
 - **Protocol:** one connection per launch, carrying every path as an absolute path (the
   running instance has its own working directory), one per line in UTF-8, until the
