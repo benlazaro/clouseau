@@ -99,7 +99,7 @@ To raise it:
 
 ## The data folder
 
-Settings (`settings.json`), your last session (`session.json`), your parsers (`parsers.json`), installed themes, plugins,
+Settings (`settings.json`), your last session (`session.json`) and named sessions (`sessions/`), your parsers (`parsers.json`), installed themes, plugins,
 [notes](annotations-and-review.md) for read-only folders, the cache for compressed files,
 Clouseau's own log, and saved passwords (encrypted) all live in one folder:
 

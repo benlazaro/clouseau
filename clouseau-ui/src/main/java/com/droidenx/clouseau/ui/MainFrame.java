@@ -8,6 +8,7 @@ import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.MergeLoad;
 import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.Session;
+import com.droidenx.clouseau.core.SessionStore;
 import com.droidenx.clouseau.core.SshConfig;
 import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
@@ -53,7 +54,7 @@ public final class MainFrame extends JFrame {
     private static final String CARD_TABS    = "tabs";
 
     MainFrame(WindowManager manager) {
-        super(Messages.get("app.title"));
+        super(manager.windowTitle());
         this.manager = manager;
         this.pluginManager = manager.pluginManager();
         // Closing is decided in requestClose: the last window quits, others ask first.
@@ -227,10 +228,63 @@ public final class MainFrame extends JFrame {
 
     /** Closes this window and its tabs without asking. */
     private void closeWindow() {
+        disposeWindow();
+        manager.closed(this);
+    }
+
+    /**
+     * Closes this window and its tabs for opening a named session in its place: without
+     * asking, and without quitting if it was the last one.
+     */
+    void closeForSession() {
+        disposeWindow();
+        manager.forget(this);
+    }
+
+    private void disposeWindow() {
         for (LogPanel lp : panels()) lp.dispose();
         tabbedPane.removeAll();
         dispose();
-        manager.closed(this);
+    }
+
+    // ── File → Sessions (UC-17) ───────────────────────────────────────────────
+
+    private void rebuildSessionsMenu(JMenu menu) {
+        menu.removeAll();
+        SessionManager sessions = manager.sessions();
+        String active = sessions.active();
+        boolean anyTabs = !manager.allPanels().isEmpty();
+
+        JMenuItem save = menuItem(active == null ? Messages.get("menu.file.sessions.save")
+                : MessageFormat.format(Messages.get("menu.file.sessions.save.named"), active));
+        save.setEnabled(active != null && anyTabs);
+        save.addActionListener(e -> sessions.saveActive(this));
+        menu.add(save);
+
+        JMenuItem saveAs = menuItem(Messages.get("menu.file.sessions.save.as"));
+        saveAs.setEnabled(anyTabs);
+        saveAs.addActionListener(e -> sessions.saveAs(this));
+        menu.add(saveAs);
+        menu.addSeparator();
+
+        List<SessionStore.Named> named = sessions.named();
+        if (named.isEmpty()) {
+            JMenuItem none = menuItem(Messages.get("menu.file.sessions.none"));
+            none.setEnabled(false);
+            menu.add(none);
+        }
+        for (SessionStore.Named n : named) {
+            JMenuItem item = new JRadioButtonMenuItem(n.name(), n.name().equalsIgnoreCase(String.valueOf(active)));
+            item.setMargin(new Insets(7, 6, 7, 6));
+            item.addActionListener(e -> manager.openNamedSession(n, this));
+            menu.add(item);
+        }
+        menu.addSeparator();
+
+        JMenuItem manage = menuItem(Messages.get("menu.file.sessions.manage"));
+        manage.setEnabled(!named.isEmpty());
+        manage.addActionListener(e -> new ManageSessionsDialog(this, manager).setVisible(true));
+        menu.add(manage);
     }
 
     // ── Menu bar ─────────────────────────────────────────────────────────────
@@ -291,6 +345,16 @@ public final class MainFrame extends JFrame {
         fileMenu.add(closeTabItem);
 
         fileMenu.addSeparator();
+
+        // Named sessions (UC-17); rebuilt each time it opens.
+        JMenu sessionsMenu = new JMenu(Messages.get("menu.file.sessions"));
+        sessionsMenu.setMargin(new Insets(7, mh, 7, mh));
+        sessionsMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildSessionsMenu(sessionsMenu); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        });
+        fileMenu.add(sessionsMenu);
 
         // KeyStroke.getKeyStroke(char, int) casts char to int → ',' (44) == VK_COMMA,
         // so getKeyText renders "Comma". The string form with "typed" creates a true

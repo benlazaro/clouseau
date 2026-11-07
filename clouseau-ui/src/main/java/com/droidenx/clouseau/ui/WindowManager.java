@@ -6,6 +6,7 @@ import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.core.ParserList;
 import com.droidenx.clouseau.core.Session;
+import com.droidenx.clouseau.core.SessionStore;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
 import lombok.extern.slf4j.Slf4j;
 
@@ -186,10 +187,20 @@ final class WindowManager {
      * next time unless the user moves it. Returns the windows, not shown yet.
      */
     List<MainFrame> restore(Session s, String sessionName) {
+        return restore(s, sessionName, false);
+    }
+
+    /**
+     * As {@link #restore(Session, String)}; with {@code skipOpen}, files already open in a
+     * window are left where they are, and a window left with no tabs isn't opened.
+     */
+    private List<MainFrame> restore(Session s, String sessionName, boolean skipOpen) {
         List<Rectangle> screens = screenBounds();
         List<MainFrame> opened = new ArrayList<>();
         int displaced = 0;
-        for (Session.Window sw : s.windows()) {
+        for (Session.Window saved : s.windows()) {
+            Session.Window sw = skipOpen ? withoutOpenFiles(saved) : saved;
+            if (sw == null) continue;
             Session.Bounds b = sw.bounds();
             Rectangle usual = b != null
                     ? new Rectangle(b.x(), b.y(), Math.max(400, b.width()), Math.max(300, b.height()))
@@ -213,6 +224,85 @@ final class WindowManager {
         if (!opened.isEmpty()) lastActive = opened.get(0);
         log.info("Restored {} window(s) with {} tab(s)", opened.size(), s.tabCount());
         return opened;
+    }
+
+    /** {@code w} without the file tabs already open somewhere, or null if none is left. */
+    private Session.Window withoutOpenFiles(Session.Window w) {
+        List<Session.Tab> kept = new ArrayList<>();
+        int selected = 0;
+        for (int i = 0; i < w.tabs().size(); i++) {
+            Session.Tab t = w.tabs().get(i);
+            if (t.kind() == Session.Kind.FILE && findTab(Path.of(t.path()), t.entry()).isPresent()) continue;
+            if (i == w.selectedTab()) selected = kept.size();
+            kept.add(t);
+        }
+        return kept.isEmpty() ? null : new Session.Window(w.bounds(), w.screen(), w.maximized(), selected, kept);
+    }
+
+    SessionManager sessions() { return session; }
+
+    /** A window's title: the app's name, and the named session in use if there is one. */
+    String windowTitle() {
+        String active = session != null ? session.active() : null;
+        return active == null ? Messages.get("app.title")
+                : java.text.MessageFormat.format(Messages.get("app.title.session"), Messages.get("app.title"), active);
+    }
+
+    void updateTitles() {
+        String title = windowTitle();
+        windows.forEach(w -> w.setTitle(title));
+    }
+
+    /** Takes a window closed for a named session out of the list, without quitting. */
+    void forget(MainFrame window) {
+        windows.remove(window);
+        if (lastActive == window) lastActive = null;
+    }
+
+    /**
+     * Opens a named session (UC-17). With tabs open, asks first: close the current windows
+     * (the default) and make it the session in use, add its windows to the current ones
+     * (skipping files already open, the session in use unchanged), or cancel.
+     */
+    void openNamedSession(SessionStore.Named named, Component parent) {
+        boolean replace = true;
+        if (!allPanels().isEmpty()) {
+            Object[] options = { Messages.get("session.open.close"), Messages.get("session.open.add"),
+                    Messages.get("session.open.cancel") };
+            int answer = JOptionPane.showOptionDialog(parent,
+                    java.text.MessageFormat.format(Messages.get("session.open.message"), named.name()),
+                    Messages.get("session.open.title"), JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+                    null, options, options[0]);
+            if (answer != 0 && answer != 1) return;
+            replace = answer == 0;
+        }
+        Session s;
+        if (SessionStore.read(named.file()) instanceof SessionStore.ReadResult.Read r) {
+            s = r.session();
+        } else {
+            JOptionPane.showMessageDialog(parent,
+                    java.text.MessageFormat.format(Messages.get("session.open.failed"), named.name()),
+                    Messages.get("session.open.title"), JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        List<MainFrame> old = windows();
+        if (replace) old.forEach(MainFrame::closeForSession);
+        List<MainFrame> opened = restore(s, named.name(), !replace);
+        if (opened.isEmpty() && replace) opened = List.of(createFirstWindow());
+        if (opened.isEmpty()) {
+            JOptionPane.showMessageDialog(parent,
+                    java.text.MessageFormat.format(Messages.get("session.open.nothing"), named.name()),
+                    Messages.get("session.open.title"), JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (replace) session.setActive(named.name());
+        for (int i = opened.size() - 1; i >= 0; i--) {
+            opened.get(i).setTitle(windowTitle());
+            opened.get(i).setVisible(true);
+        }
+        opened.get(0).toFront();
+        log.info("Opened session '{}' ({})", named.name(), replace ? "replacing" : "added");
+        session.changed();
     }
 
     /** How much of a window's top edge must be on a screen for it to be reachable. */

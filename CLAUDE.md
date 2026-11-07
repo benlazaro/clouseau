@@ -152,9 +152,10 @@ tags.
 - `ReviewBundle` (core) — D-10: writes and recognizes the review bundle `.zip` (manifest, log,
   annotations; version 2 holds every file of a merged view, D-17); `ReviewExporter` (ui) is
   `File → Export for Review…`. `FilePattern` (core) expands `app.log*` for Open Merged.
-- `Session`, `SessionStore` (core), `SessionManager` (ui) — UC-17, D-19: the session model, reading
+- `Session`, `SessionStore` (core), `SessionManager`, `ManageSessionsDialog` (ui) — UC-17, D-19: the session model, reading
   and writing `session.json` (atomic, `.bad` if damaged) and named sessions, and the autosave
-  (debounced, compared before writing). `WindowManager.restore` reopens it at startup.
+  (debounced, compared before writing). `WindowManager.restore` reopens it at startup;
+  `WindowManager.openNamedSession` opens a named session (File → Sessions).
 - `FilterBar`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`, `AppDirs` (ui) — filters,
   parser editor, themes, settings, data folder.
 

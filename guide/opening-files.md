@@ -151,3 +151,20 @@ or a restart for updates too.
 Files you open with "Open with" or on the command line open alongside the restored
 session. To start with an empty window instead, choose **Start empty** under
 [Settings → On startup](settings.md#settings).
+
+### Named sessions
+
+Keep one set of open logs per project or incident, and switch between them:
+
+1. Open the logs you need, in as many windows as you like.
+2. Choose **File → Sessions → Save Session As…** and give it a name, for example
+   *Payments*. Every window's title now ends in "— Payments".
+3. Another day, pick *Payments* from **File → Sessions**. If logs are already open,
+   Clouseau asks whether to **Close current windows** (the default) or **Add to current**;
+   adding leaves files that are already open where they are.
+
+A named session is a snapshot: opening or closing tabs afterwards doesn't change it. To
+update it with what is open now, choose **File → Sessions → Save Session "Payments"**.
+**File → Sessions → Manage Sessions…** opens, renames and deletes saved sessions;
+deleting one never touches the log files themselves. The session in use is remembered
+when you quit, so its name is back in the titles next time.

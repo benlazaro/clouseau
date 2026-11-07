@@ -10,6 +10,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.text.MessageFormat;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -56,6 +58,65 @@ final class SessionManager {
     /** Records the session just read, so restoring it doesn't count as a change. */
     void restored(Session session) {
         written = SessionStore.toJson(session);
+        active = session.activeSession();
+        windows.updateTitles();
+    }
+
+    // ── Named sessions (UC-17) ────────────────────────────────────────────────
+
+    /** The named session in use, shown in window titles, or null. */
+    private String active;
+
+    String active() { return active; }
+
+    /** Makes {@code name} (or none) the named session in use. */
+    void setActive(String name) {
+        active = name;
+        windows.updateTitles();
+        changed();
+    }
+
+    static Path sessionsDir() {
+        return AppDirs.dataDir().resolve("sessions");
+    }
+
+    List<SessionStore.Named> named() {
+        return SessionStore.list(sessionsDir());
+    }
+
+    /** File → Sessions → Save Session: updates the active session with what is open now. */
+    void saveActive(Component owner) {
+        if (active != null) saveNamed(owner, active);
+    }
+
+    /** File → Sessions → Save Session As…: asks for a name and saves what is open now under it. */
+    void saveAs(Component owner) {
+        String name = (String) JOptionPane.showInputDialog(owner, Messages.get("session.save.as.message"),
+                Messages.get("session.save.as.title"), JOptionPane.PLAIN_MESSAGE, null, null,
+                active != null ? active : "");
+        if (name == null || name.isBlank()) return;
+        name = name.strip();
+        var existing = SessionStore.find(sessionsDir(), name);
+        if (existing.isPresent() && !existing.get().name().equalsIgnoreCase(String.valueOf(active))) {
+            int answer = JOptionPane.showConfirmDialog(owner,
+                    MessageFormat.format(Messages.get("session.save.replace.message"), existing.get().name()),
+                    Messages.get("session.save.as.title"), JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (answer != JOptionPane.YES_OPTION) return;
+        }
+        if (saveNamed(owner, name)) setActive(name);
+    }
+
+    private boolean saveNamed(Component owner, String name) {
+        try {
+            SessionStore.save(sessionsDir(), name, snapshot(), AppPrefs.getAppVersion());
+            return true;
+        } catch (IOException e) {
+            log.warn("Could not save session '{}'", name, e);
+            JOptionPane.showMessageDialog(owner,
+                    MessageFormat.format(Messages.get("session.save.failed"), name, e.getMessage()),
+                    Messages.get("session.save.as.title"), JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
     }
 
     /**
@@ -87,7 +148,7 @@ final class SessionManager {
 
     /** What the windows show now. */
     Session snapshot() {
-        return new Session(null, windows.windows().stream().map(MainFrame::sessionWindow).toList());
+        return new Session(active, windows.windows().stream().map(MainFrame::sessionWindow).toList());
     }
 
     /** Saves in the background if the session changed since the last write. */

@@ -452,7 +452,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
 | `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |
-| `sessions/` | *Planned (D-19, named sessions).* Named sessions, one `<name>.json` each, in the `session.json` format. |
+| `sessions/` | Named sessions (D-19), one `<name>.json` each, in the `session.json` format. |
 | `<logfile>.annotations` | **Next to the log, not in the data folder.** Annotations for that file. |
 | `annotations/` | Annotations for logs whose own folder is read-only, named after a hash of the log's path (D-9). |
 | `cache/` | Decompressed copies of the compressed logs open in tabs (D-16), named `<hash of path and entry>-<unique>.log`. Not persistent: a copy is deleted when its tab closes, and the folder is emptied at startup (by the running instance only) and at exit. |
@@ -1315,7 +1315,7 @@ to the window used last; closing a window closes its tabs; no main window; short
 on the front window; "one tab per file" counts every window; closing the last window quits
 without asking; a window emptied by a move closes; File → New Window.
 
-### D-19 · Sessions · Adopted (last session); named sessions accepted
+### D-19 · Sessions · Adopted
 
 UC-17 reopens what was open: automatically at startup, and as named sessions.
 
@@ -1479,6 +1479,13 @@ Rejected: saving only at exit (fails in the cases above), and saving every N sec
   / *Add to current* / *Cancel*. Closing them asks nothing more. Adding skips files that
   are already open (their tab stays where it is), and leaves the active session as it was.
   The active session's name is in every window's title.
+- **As built:** `WindowManager.openNamedSession` reads the file first, so a session that
+  can't be read changes nothing. Closing the current windows disposes them
+  (`MainFrame.closeForSession`, which doesn't quit even for the last window) before the
+  session's windows are built, so the same file is never loaded twice and memory is freed
+  first. Adding skips `FILE` tabs whose file is open ("one tab per file"); merged, SSH and
+  source tabs are always added. `SessionManager` holds the active name (`saveActive`,
+  `saveAs`), and `ManageSessionsDialog` renames and deletes through `SessionStore`.
 
 **Rejected:** saving sessions in `settings.json` (rewritten often; a damaged session
 would cost the user their settings), live named sessions that save every change (easy to
@@ -1491,11 +1498,7 @@ saved, reapplied and announced by a strip; sessions aren't shared between machin
 
 ## 10. Planned features
 
-Accepted in the use cases:
-
-- **UC-17, named sessions** — D-19. Restoring the last session is built; File →
-  Sessions (Save Session As…, Save Session, Manage Sessions…) is next. `SessionStore`
-  already reads and writes `sessions/<name>.json`.
+Accepted in the use cases: none at the moment (UC-17, sessions, is built).
 
 **Ideas, not yet accepted.** Raised while designing UC-16 and kept for later; each needs a
 use case before it is built.
