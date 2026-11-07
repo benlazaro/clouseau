@@ -128,3 +128,29 @@ public class DemoStreamSource implements LogSourceProvider {
 The `LogSource` it returns does the work: `open(consumer)` runs on a background thread
 and blocks, pushing each line to the consumer, until the stream ends or `close()` is
 called (from another thread, when the user closes the tab).
+
+The tab shows a dot for the connection: yellow while connecting, green when connected,
+gray once the stream ended or failed. To turn it green as soon as you're connected,
+rather than at the first line (a quiet stream may send none for a while), implement
+`ConnectingLogSource` instead of `LogSource`. Its `open(consumer, onConnected)` is the one
+Clouseau calls; run `onConnected` once you're signed in and streaming, at most once and
+from the thread running `open`. If connecting fails, throw and don't call it. The
+one-argument `open` is already implemented for you. A plain `LogSource` still works and
+turns green at its first line.
+
+```java
+public class MySource implements ConnectingLogSource {
+    @Override public void open(Consumer<String> lines, Runnable onConnected) throws Exception {
+        connectAndSignIn();     // throws if it fails
+        onConnected.run();      // dot turns green
+        while (...) lines.accept(next());
+    }
+    // getName(), close() as for any LogSource
+}
+```
+
+The example plugin's `DemoStreamSource` does this.
+
+A source is used once. **Reconnect** on the tab closes it and calls your provider's
+`create` again with the same values, so keep connection state in the source, not the
+provider.

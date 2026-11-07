@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.example;
 
+import com.droidenx.clouseau.api.ConnectingLogSource;
 import com.droidenx.clouseau.api.LogSource;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +32,18 @@ class DemoStreamSourceTest {
             assertThat(parser.parse(line).logger()).isEqualTo("api");
         });
         assertThat(parser.parse(lines.get(2)).fields()).containsEntry("seq", "3");
+    }
+
+    @Test
+    void reportsItsConnectionBeforeTheFirstLine() throws Exception {
+        LogSource created = provider.create(Map.of("service", "api", "interval", "10", "mix", "noisy", "count", "2"));
+        assertThat(created).isInstanceOf(ConnectingLogSource.class);
+        ConnectingLogSource source = (ConnectingLogSource) created;
+        List<String> events = new CopyOnWriteArrayList<>();
+
+        source.open(events::add, () -> events.add("<connected>"));
+
+        assertThat(events).hasSize(3).first().isEqualTo("<connected>");
     }
 
     @Test

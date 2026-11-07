@@ -28,8 +28,11 @@ import java.util.stream.Collectors;
 @Slf4j
 final class SourceSettingsDialog extends JDialog {
 
-    /** The created source and the parser the user picked (empty = auto-detect). */
-    record Result(LogSource source, Optional<LogParser> parser) {}
+    /**
+     * The created source, the parser the user picked (empty = auto-detect), and the checked
+     * values it was created from, so Reconnect can create a new source the same way.
+     */
+    record Result(LogSource source, Optional<LogParser> parser, Map<String, String> values) {}
 
     private final LogSourceProvider provider;
     private final List<SourceSetting> settings;
@@ -170,7 +173,8 @@ final class SourceSettingsDialog extends JDialog {
 
         AppPrefs.saveSourceSettings(providerId(), checked.values(), secretKeys());
         int idx = parserCombo.getSelectedIndex();
-        result = new Result(source, idx > 0 ? Optional.of(parsers.get(idx - 1)) : Optional.empty());
+        result = new Result(source, idx > 0 ? Optional.of(parsers.get(idx - 1)) : Optional.empty(),
+                java.util.Collections.unmodifiableMap(new HashMap<>(checked.values())));
         dispose();
     }
 

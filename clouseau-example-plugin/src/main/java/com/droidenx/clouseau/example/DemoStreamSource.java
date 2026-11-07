@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.example;
 
+import com.droidenx.clouseau.api.ConnectingLogSource;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.SourceSetting;
@@ -51,7 +52,7 @@ public class DemoStreamSource implements LogSourceProvider {
     }
 
     /** One running stream. Holds all per-connection state; the provider holds none. */
-    static final class Stream implements LogSource {
+    static final class Stream implements ConnectingLogSource {
 
         private static final String[] MESSAGES = {
                 "request handled", "cache refreshed", "order created", "payment authorised",
@@ -76,9 +77,14 @@ public class DemoStreamSource implements LogSourceProvider {
             return "demo: " + service;
         }
 
-        /** Writes a line every interval until {@link #close} or {@code count} lines. */
+        /**
+         * Reports the connection at once (a real source would do it once signed in), then
+         * writes a line every interval until {@link #close} or {@code count} lines.
+         */
         @Override
-        public void open(Consumer<String> lineConsumer) throws InterruptedException {
+        public void open(Consumer<String> lineConsumer, Runnable onConnected) throws InterruptedException {
+            if (closed.getCount() == 0) return;
+            onConnected.run();   // the tab's dot turns green before the first line
             for (long n = 1; n <= count; n++) {
                 if (closed.getCount() == 0) return;   // closed before or while starting
                 lineConsumer.accept(line(n));

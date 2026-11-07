@@ -30,7 +30,7 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 - **Detail panel** — the full entry with its stack trace, and JSON payloads pretty-printed and syntax-highlighted. [More](guide/reading-and-filtering.md#the-detail-panel)
 - **Notes** — annotate lines while you investigate; notes are saved next to the log and come back whenever anyone opens it. [More](guide/annotations-and-review.md)
 - **Review bundles** — `File → Export for Review…` packs the log (or every file of a merged view) and its notes into one `.zip` for a colleague, who opens it like any log. [More](guide/annotations-and-review.md#exporting-for-review)
-- **Follow mode** — tail a live file like `tail -f`, locally or over SSH; survives log rotation without losing rows. [More](guide/following.md)
+- **Follow mode** — tail a live file like `tail -f`, locally or over SSH; survives log rotation without losing rows. Remote tabs show whether they are connected and reconnect with `Ctrl+R`. [More](guide/following.md)
 - **Columns and layouts** — hide, reorder and size columns, and save named layouts. [More](guide/reading-and-filtering.md#columns)
 - **Themes** — Dark and Light built in, plus any FlatLaf theme you install, switched live. [More](guide/settings.md#themes)
 - **Plugins** — add parsers, formatters, syntax highlighters or live log sources from a JAR, or install them from a Nexus or Maven Central repository. [More](guide/settings.md#plugins)
