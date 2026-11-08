@@ -1561,18 +1561,18 @@ getting it back meant opening it again from the dialog.
   which asks for the password in the filled-in dialog. After that it reconnects without
   asking, as a tab opened from the dialog does.
 
-### D-21 · A tab holds one content object per kind of source · Proposed
+### D-21 · A tab holds one content object per kind of source · Adopted
 
-Written to close G-9. `TabPanel` (called `LogPanel` until step 1) is one tab, but it
-also tells apart the three kinds of content a tab can show, all in one class: a **file** (indexing, unpacking, following,
+Written to close G-9 (closed by step 6). `TabPanel` (called `LogPanel` until step 1) was
+one tab, but it also told apart the three kinds of content a tab can show, all in one class: a **file** (indexing, unpacking, following,
 rotation, low-memory stop, falling back to plain text), a **merged view** (`MergeLoad`,
 `MergedTailer`, re-merging, per-file settings) and a **live source** (start, connection
-state, Reconnect). Their state sits side by side in about 25 fields (`currentFile`,
+state, Reconnect). Their state sat side by side in about 25 fields (`currentFile`,
 `cacheCopy`, `fileFollow`, `mergedFiles`, `mergedCopies`, `mergedTailer`, `liveSource`,
-`sourceFactory`, `connection`, …). Every load resets all of them, and methods such as
+`sourceFactory`, `connection`, …). Every load reset all of them, and methods such as
 `reload`, `startTailing`, `clearTable`, `applySourceTimezone`, `sessionTab` and
-`cancelLoad` branch on which ones are set. Each feature that touches every kind (sessions,
-Reconnect, timezones) adds one branch per kind, so splitting off leaf features doesn't
+`cancelLoad` branched on which ones were set. Each feature that touches every kind (sessions,
+Reconnect, timezones) added one branch per kind, so splitting off leaf features didn't
 make the class smaller for long.
 
 **The decision.** A tab is three things, each its own type in `clouseau-ui`:
@@ -1602,9 +1602,9 @@ TabPanel (JPanel)          the tab's component: layout, public methods, swaps co
       void setFollow(boolean on);
       void cleared();                      // the user cleared the table: follow on from here
       void dispose();                      // cancel workers, close the source, delete copies
+      default boolean loading();           // the first load is still running
       String path();  String pathTooltip(); // the status bar's left side
-      String statusNote();                 // " (partly loaded)", " (rotated)" or ""
-      Session.Tab sessionTab(Session.Tab origin);   // adds files, timezone
+      default String statusNote();         // " (partly loaded)" or ""
   }
   ```
 
@@ -1621,14 +1621,19 @@ TabPanel (JPanel)          the tab's component: layout, public methods, swaps co
       LogTableModel model();  FilterBar filterBar();  LogTableView tableView();
       List<LogParser> parsers();  ZoneId timezone();  boolean follow();  Window window();
       void reset(boolean keepFilters);    // clear rows, find matches, notes; loggers and columns unless kept
-      void showLoading();  void showRows();  void showPlain(JComponent view);
+      void showLoading();  void showRows();  void showPlain(PlainTextView view);
+      void setFollow(boolean on);         // as the user would, e.g. from the plain-text view
+      void createParser(List<String> samples);  // plain text's "Create a parser"
+      void pathChanged();                 // show the content's path again
       void loaded(Notes notes);           // set notes, show their highlights, repaint, refresh detail
-      void reordered(int from, IntUnaryOperator moved, int size);  // re-filter, keep selection and highlights
+      void reordered(MergeOrder before, MergeOrder after, int from);  // re-filter, keep selection and highlights
       void textLost();  void statusChanged();
       void connectionChanged();           // live only: the window's dot
       void close();                       // e.g. the user declined to open a binary file
   }
   ```
+
+  (Both sketches are as built; the steps below say where they differ from the first draft.)
 
   A content calls its `TabContext` only from the EDT (`process` and `done`, never
   `doInBackground`). It gets its `TabContext` and its own arguments (file, parser, source
@@ -1693,7 +1698,9 @@ TabPanel (JPanel)          the tab's component: layout, public methods, swaps co
 | status bar, timezone badge | `TabStatusBar` | ~110 |
 
 `TabPanel` should end near 300 lines (layout, public methods, swapping contents), and
-each other class between 100 and 400.
+each other class between 100 and 400. *As built:* `TabPanel` ended near 580 lines, most of
+them one-line delegates the window calls, and `SharedTabContext` near 470; the rest are
+between 90 and 400.
 
 **Rejected.**
 - *Keep splitting by feature* (as G-9 has so far): each split is small and safe, but the
@@ -1778,14 +1785,17 @@ each other class between 100 and 400.
      and following), then follow again.
    - `currentWorker`, `tailWorker`, `currentFile`, `currentEntry`, `cacheCopy`,
      `fileFollow`, `currentParser` and the plain-text fields are gone from `TabPanel`.
-6. Mark D-21 Adopted, close G-9, update CLAUDE.md's key classes.
+6. ✅ Mark D-21 Adopted, close G-9, update CLAUDE.md's key classes.
 
 The existing tab tests (`LiveSourceTabTest`, `MergedViewTest`, `IndexedLogTableModelTest`,
 `NavBarsTest`, `PlainTextViewTest`) use the tab's public methods, which stay, so after the
-rename they check every step without changes. After step 5, check in the app: a file
-(plain, compressed, followed through rotation, opened as plain text), a merged view
-(follow, offset, parser change), SSH and a plugin source (Reconnect), and a restored
-session.
+rename they check every step without changes. The plan was to check in the app after
+step 5: a file (plain, compressed, followed through rotation, opened as plain text), a
+merged view (follow, offset, parser change), SSH and a plugin source (Reconnect), and a
+restored session. *As checked:* a restored session with a plain file, a `.gz`, a file
+shown as plain text and a merged view, and a line appended to a file followed by two
+tabs, which each showed it once. Rotation, a merged view's offset and parser change, and
+Reconnect were left to the tests.
 
 ## 10. Planned features
 
@@ -1809,6 +1819,5 @@ use case before it is built.
 Places where the code differs from this design. Together they're the technical roadmap.
 Remove an entry once it's fixed.
 
-| ID | Gap | Impact |
-|---|---|---|
-| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). The status bar (`TabStatusBar`) and a restored tab's message card, deferred load and filter notice (`RestoredTab`, D-19) are too. A tab shows a `FileContent`, `MergedContent` or `LiveContent`, and its shared parts are a `SharedTabContext` (D-21 steps 3 to 5); `TabPanel` is about 580 lines. `MainFrame` (about 1,600 lines) is now the biggest UI class. | Reviewable. Step 6 of D-21 closes this entry once the app check passes. |
+None at the moment. G-9 (one tab class doing everything) was closed by D-21; `MainFrame`
+(about 1,600 lines) is now the biggest UI class.
