@@ -33,7 +33,7 @@ quality goals. The ones that shape the design most:
 ## 2. System overview
 
 ```
-clouseau-ui ─────────────┐   MainFrame, tabs, LogPanel, LogTableView, RowMenu,
+clouseau-ui ─────────────┐   MainFrame, tabs, TabPanel, LogTableView, RowMenu,
    │                     │   LogTableModel, FilterBar,
    │                     │   DetailPanel, annotations, dialogs, SSH source,
    │                     │   parser loader, settings, themes
@@ -202,7 +202,7 @@ refresh; open tabs keep the list they were created with.
    `<zip>!<entry>` next to the zip. A zip that `ReviewBundle.read` recognizes as a
    review bundle (D-10) skips the picker and opens the log the manifest names. A zip
    entry ending in `.gz` is unpacked as well.
-1. `LogPanel.load` clears the tab and starts a load worker. A plain file is indexed with
+1. `TabPanel.load` clears the tab and starts a load worker. A plain file is indexed with
    `LineScanner` into an `EntryIndex` and read back through `IndexedEntries` (D-16). A
    `.gz` or a zip entry is indexed the same way, through a decompressed copy written to
    `<data>/cache/` during the same pass. Only if that copy can't be made (no room for a
@@ -282,7 +282,7 @@ refresh; open tabs keep the list they were created with.
   its class name) in `settings.json`, with password values encrypted by
   `CredentialStore`. Exceptions from a plugin's `getName`, `settings` or `create` are
   logged and shown, never thrown into the UI.
-- **Live tabs:** SSH and plugin sources share `LogPanel.loadSource`: a source worker
+- **Live tabs:** SSH and plugin sources share `TabPanel.loadSource`: a source worker
   calls `open`, parses each line with `LineParser` (chosen parser or auto-detection), and appends
   live entries. Columns are sized after the first batch arrives, and again when a later
   line brings a new field. Closing the tab (or loading something else) calls `close()`.
@@ -292,7 +292,7 @@ refresh; open tabs keep the list they were created with.
   shows in a dialog, or a cancel). Its listener is posted to the EDT and ignored once a
   newer run has replaced it. `MainFrame` puts a `SourceLed` in the tab header; it reads
   `ClouseauColors.statusWarn/statusOk/offColor` at each paint, so it follows a theme
-  switch. `LogPanel.loadSource` takes a `Callable<LogSource>` that makes a fresh source
+  switch. `TabPanel.loadSource` takes a `Callable<LogSource>` that makes a fresh source
   (`new SshLogSource(config)`, or the provider's `create` with the values
   `SourceSettingsDialog` checked); `reconnect()` closes the old source, clears the
   rows and starts the new one, keeping the parser, the logger and field filters and the
@@ -443,7 +443,7 @@ after the drop completes, so a dialog never holds up the drag source.
   when more than 5% of the characters are control characters or U+FFFD.
   `LogSniffer.detect` is the open dialog's check as well, so the dialog and the tab agree.
   If the sample has a non-blank line and no parser (or not the chosen one) recognizes any
-  of them, the worker skips indexing and `LogPanel` switches to the plain-text card. A
+  of them, the worker skips indexing and `TabPanel` switches to the plain-text card. A
   binary sample asks first; declining closes the tab.
 - **Storing:** `TextLines` (core) keeps each line's byte offset and length (12 bytes per
   line, in fixed 64K-line chunks that never move, so the EDT can read while the loader
@@ -461,7 +461,7 @@ after the drop completes, so a dialog never holds up the drag source.
   table (line number, text) whose copy action copies only the text. The filter bar, the
   table's find bar and the highlight bar are hidden. **Create a Parser…** calls the hook
   `MainFrame` sets, which opens `ParserEditorDialog` with the samples. On save,
-  `LogPanel.retryWithParsers` reloads with auto-detection if a parser now recognizes the
+  `TabPanel.retryWithParsers` reloads with auto-detection if a parser now recognizes the
   sample, and otherwise updates the banner.
 
 ## 7. Persistence
@@ -746,7 +746,7 @@ factory, `LogSourceProvider`, and the source itself stays a plain interface.
   plugin could have used it, and no use case asks for plugin filters. It can come back
   with a use case behind it.
 - **SSH stays special.** Its dialog has auth modes, key files and saved connections, so
-  it keeps its own form, but it streams through the same `LogPanel.loadSource` path.
+  it keeps its own form, but it streams through the same `TabPanel.loadSource` path.
   `SshLogSource` lives in `clouseau-core`.
 
 ### D-15 · Highlights are saved with annotations · Adopted
@@ -769,13 +769,13 @@ local file extends its index.
 **Measured after step 2** (a 1M-line, 125 MB log in the sample format; heap after a full
 GC, whole app): 478 MB without the index, **81 MB with it**.
 
-**Measured after step 3** (the same log, about 1M lines, on a `LogPanel` off-screen): load
+**Measured after step 3** (the same log, about 1M lines, on a `TabPanel` off-screen): load
 2 s, heap after GC 47 MB. A level filter took 31 ms. A text filter took 1.6 s, and so did
 Find over every visible row; both showed progress, and the EDT never waited more than
 9 ms.
 
 **Measured after step 4** (a 1M-line `.gz`, 8 MB packed and 89 MB unpacked, on a
-`LogPanel` off-screen): load 2.5 s, heap after GC 49 MB, EDT never waited more than
+`TabPanel` off-screen): load 2.5 s, heap after GC 49 MB, EDT never waited more than
 3 ms. Closing the tab deleted the copy.
 
 **Why.** A loaded entry costs about 120 bytes of heap per line today (the D-12 benchmark:
@@ -898,7 +898,7 @@ run rather than read on the EDT (only up to 2,000 are caught up on the EDT).
 Find (`Ctrl+F`) runs on its own executor with the same scan. It reads the visible rows,
 and the continuation lines that follow them (from the index's level and timestamp
 columns), in one ordered pass: a continuation line that matches marks the visible
-entries it belongs to. It returns ordinals; `LogPanel` maps them to model rows and
+entries it belongs to. It returns ordinals; `TabPanel` maps them to model rows and
 orders them by the view.
 
 The generation counter and cancellation in section 6.1 are unchanged.
@@ -1144,7 +1144,7 @@ as a reusable "workspace".
      filter bar as they're indexed, so it learns loggers and field values. Low memory or
      a full disk stops the whole load and merges nothing; a partial timeline would
      mislead. `MergeLoadTest`, `MergedEntriesTest`, `MergedViewTest`.
-   - `LogPanel.loadMerged` shows it; `MergeListener` tells `MainFrame` which files were
+   - `TabPanel.loadMerged` shows it; `MergeListener` tells `MainFrame` which files were
      left out (offered in their own tabs), when fewer than two could be merged (the tab
      closes and the one file opens normally), and which files the view shows (the tab
      title, `app.log +2`). A reload merges only those.
@@ -1156,13 +1156,13 @@ as a reusable "workspace".
      `LogTableModel.SOURCE_COLUMN` (a name no parser can declare). The filter bar's
      **Sources** button hides whole files; `EntryFilter.testSource` carries that, and
      `MergedEntries.testIndex` checks it before the index columns.
-   - **Not yet (later steps):** single-file tabs keep their own loader (`LogPanel.load`; it now indexes through `FileIndexer`, question 4);
+   - **Not yet (later steps):** single-file tabs keep their own loader (`TabPanel.load`; it now indexes through `FileIndexer`, question 4);
      only the model reads both through `EntryRows`. Every file uses the tab's parser
      choice (chosen, or per-line detection). A merged tab can't be exported for review
      (step 7). A compressed file that can't be unpacked is left out rather than loaded
      into memory.
 4. ✅ Annotations and highlights per source, keyed by identity. As built: `Notes` (core)
-   is what `LogPanel`, the annotations panel and the highlight menus use; one file's
+   is what `TabPanel`, the annotations panel and the highlight menus use; one file's
    `AnnotationStore` implements it, and `MergedNotes` puts one store per source behind
    it, mapping merged ordinals to each store's own entry numbers through `MergeOrder`
    (`setOrder` takes a new order, for steps 5 and 6). `MergeLoad` loads and anchors each
@@ -1238,9 +1238,9 @@ as a reusable "workspace".
    - `ReviewBundle.writeMerged` writes version 2 (section 7, review bundle): log entries keep their
      names, with `2-app.log` for a name used twice; the first log's notes are
      `annotations.json`, the others `<log>.annotations.json`. `ReviewExporter` exports a
-     merged tab through it (`LogPanel.reviewParts`). Opening a version 2 bundle opens a
+     merged tab through it (`TabPanel.reviewParts`). Opening a version 2 bundle opens a
      merged view of its logs with their timezones and offsets
-     (`LogPanel.presetMerged`); a timezone changed there stays in that tab. Each file's
+     (`TabPanel.presetMerged`); a timezone changed there stays in that tab. Each file's
      parser is taken from the bundle by name (G-10); one this Clouseau doesn't have falls
      back to the tab's choice.
    - `FilePatternTest`, `ReviewBundleTest`, `MergedViewTest`.
@@ -1261,13 +1261,13 @@ as a reusable "workspace".
    1 s hold-back so it's rare.
 4. **Single-file tabs on the same path?** One path (a tab with one source) means the
    merged code is exercised by every tab, but the refactor touches all of
-   `LogPanel`'s loading. *Recommendation:* one path, with step 2 as a pure refactor so
+   `TabPanel`'s loading. *Recommendation:* one path, with step 2 as a pure refactor so
    any regression shows up before merging exists.
    *As built (closing G-11):* single-file tabs share the **per-file** machinery with every
    file of a merged view: `FileIndexer` (core) indexes one file, unpacking a compressed
    one and anchoring its notes, and `IndexedFollow` (core) follows one file into its
    index, keeping the position and the one-reader lock. `MergeLoad`, `MergedTailer` and
-   `LogPanel.load`/`startTailing` all go through them. A single-file tab doesn't go
+   `TabPanel.load`/`startTailing` all go through them. A single-file tab doesn't go
    through `MergeLoad` itself, because it deliberately behaves differently: rows appear
    while it loads, a load cut short by low memory is kept (marked "partly loaded"), a
    file no parser recognizes opens as plain text (UC-13), a compressed file with no room
@@ -1287,7 +1287,7 @@ process**, not by allowing several instances.
 - "Open with" and double-click would have to pick an instance, and a later feature that
   links windows (section 10, ideas) would need a protocol between processes.
 
-In one process, a tab is a `LogPanel` whichever window holds it, so moving it is a Swing
+In one process, a tab is a `TabPanel` whichever window holds it, so moving it is a Swing
 re-parent, not a reload, and everything shared stays shared.
 
 **Shape** (as built, 2026-11-06).
@@ -1307,7 +1307,7 @@ re-parent, not a reload, and everything shared stays shared.
   ("Close this window and its N tabs?", same "Don't ask again" preference), disposes its
   tabs and tells `WindowManager.closed`. **File → Exit** quits from any window. **File →
   New Window** (`Ctrl+N`; `Ctrl+Shift+N` is the notes list) opens an empty window.
-- **Moving a tab** (`MainFrame.moveTabTo`) removes the `LogPanel` from one `JTabbedPane`
+- **Moving a tab** (`MainFrame.moveTabTo`) removes the `TabPanel` from one `JTabbedPane`
   and inserts it into another; the target builds a new tab header with the same title and
   tooltip. Workers, follow, Find and the selection carry on, and nothing is re-read. A
   window left with no tabs by a move closes. **Move to New Window** (greyed out for a
@@ -1366,9 +1366,9 @@ and the screen's ID; maximized; selected tab) and its tabs in order. Each tab re
   (levels, excluded loggers, field filters, time range as typed, text, and a merged view's
   hidden sources).
 
-The model is `Session` (core), plain records; `LogPanel.sessionTab()` and
+The model is `Session` (core), plain records; `TabPanel.sessionTab()` and
 `MainFrame.sessionWindow()` build it, and `MainFrame.restoreTab` turns a tab back into a
-`LogPanel`.
+`TabPanel`.
 
 **Never in a session:** passwords, passphrases or `SourceSetting`s of type `PASSWORD`
 (section 7, rule 2). On restore a source looks for its secret where it does today (a
@@ -1485,8 +1485,8 @@ Rejected: saving only at exit (fails in the cases above), and saving every N sec
   Clouseau can't reliably tell those moves from the user's, so it records them like any
   move.
 - Only each window's selected tab loads at once. The others are **pending tabs**: a
-  `LogPanel` with its filters and layout set and its load held back
-  (`LogPanel.deferLoad`), started by a hierarchy listener the first time the tab is
+  `TabPanel` with its filters and layout set and its load held back
+  (`TabPanel.deferLoad`), started by a hierarchy listener the first time the tab is
   shown. Windows are built before they are shown, so only the selected tabs start.
   Pending tabs count for "one tab per file" (their file is preset) and are saved exactly
   as they were restored.
@@ -1557,9 +1557,177 @@ getting it back meant opening it again from the dialog.
 - **Restored tabs (D-19)** reconnect the same way: a restored SSH or plugin tab that
   connected by itself keeps a factory like any other. One waiting for a password the
   session didn't keep is marked disconnected, with the reason in the dot's tooltip, and
-  the tab menu's Reconnect and `Ctrl+R` run its **Reconnect…** button (`LogPanel.waitForReconnect`),
+  the tab menu's Reconnect and `Ctrl+R` run its **Reconnect…** button (`TabPanel.waitForReconnect`),
   which asks for the password in the filled-in dialog. After that it reconnects without
   asking, as a tab opened from the dialog does.
+
+### D-21 · A tab holds one content object per kind of source · Proposed
+
+Written to close G-9. `TabPanel` (called `LogPanel` until step 1) is one tab, but it
+also tells apart the three kinds of content a tab can show, all in one class: a **file** (indexing, unpacking, following,
+rotation, low-memory stop, falling back to plain text), a **merged view** (`MergeLoad`,
+`MergedTailer`, re-merging, per-file settings) and a **live source** (start, connection
+state, Reconnect). Their state sits side by side in about 25 fields (`currentFile`,
+`cacheCopy`, `fileFollow`, `mergedFiles`, `mergedCopies`, `mergedTailer`, `liveSource`,
+`sourceFactory`, `connection`, …). Every load resets all of them, and methods such as
+`reload`, `startTailing`, `clearTable`, `applySourceTimezone`, `sessionTab` and
+`cancelLoad` branch on which ones are set. Each feature that touches every kind (sessions,
+Reconnect, timezones) adds one branch per kind, so splitting off leaf features doesn't
+make the class smaller for long.
+
+**The decision.** A tab is three things, each its own type in `clouseau-ui`:
+
+```
+TabPanel (JPanel)          the tab's component: layout, public methods, swaps contents
+ ├── SharedTabContext      package-private: owns the shared parts and state, does the steps
+ └── TabContent (sealed)   FileContent | MergedContent | LiveContent, or none
+        └── TabContext     interface: all a content sees; withdrawn when it's replaced
+```
+
+- **`TabPanel`** was `LogPanel` (renamed in step 1): once the contents are split out it is no
+  longer "the log's panel" but the tab's component. It lays out the parts, keeps its
+  public methods (so `MainFrame`, `WindowManager`, `RowMenu`, `ReviewExporter` and the
+  tests don't change), and holds one content at a time, or none (a restored tab that
+  hasn't loaded yet).
+- **`SharedTabContext`** owns what every tab has, whatever it shows: the table and its
+  model, the filter, find and highlight bars, the detail pane, notes and the annotations
+  dialog, follow mode, the source timezone, and the cards (loading, rows, message). One
+  per `TabPanel`, for the tab's whole life; every content of the tab shares it. Nothing
+  outside the tab's package code names it.
+- **`TabContent`** is what the tab shows, the log itself:
+
+  ```java
+  sealed interface TabContent permits FileContent, MergedContent, LiveContent {
+      void start();                        // load the file(s) or open the source
+      void setFollow(boolean on);
+      void cleared();                      // the user cleared the table: follow on from here
+      void dispose();                      // cancel workers, close the source, delete copies
+      String path();  String pathTooltip(); // the status bar's left side
+      String statusNote();                 // " (partly loaded)", " (rotated)" or ""
+      Session.Tab sessionTab(Session.Tab origin);   // adds files, timezone
+  }
+  ```
+
+  "Content" rather than "log": a merged view is several logs, a live source is a stream,
+  and a file can end up as plain text.
+- **`TabContext`** is the tab as a content sees it, and its only way in. Each content gets
+  its own: a thin wrapper `TabPanel` makes around the `SharedTabContext`, which stops
+  working once that content is replaced. The shared parts that already have clear
+  contracts are handed out as they are; steps that touch several parts, or the tab's own
+  state, are methods:
+
+  ```java
+  interface TabContext {
+      LogTableModel model();  FilterBar filterBar();  LogTableView tableView();
+      List<LogParser> parsers();  ZoneId timezone();  boolean follow();  Window window();
+      void reset(boolean keepFilters);    // clear rows, find matches, notes; loggers and columns unless kept
+      void showLoading();  void showRows();  void showPlain(JComponent view);
+      void loaded(Notes notes);           // set notes, show their highlights, repaint, refresh detail
+      void reordered(int from, IntUnaryOperator moved, int size);  // re-filter, keep selection and highlights
+      void textLost();  void statusChanged();
+      void connectionChanged();           // live only: the window's dot
+      void close();                       // e.g. the user declined to open a binary file
+  }
+  ```
+
+  A content calls its `TabContext` only from the EDT (`process` and `done`, never
+  `doInBackground`). It gets its `TabContext` and its own arguments (file, parser, source
+  factory, merged settings) and nothing else; what the window must hear (a merged load's
+  `MergeListener`, a live tab's connection) is a constructor argument or a `TabContext`
+  method.
+
+  In the terms used here, the *state* is the rows, filters, columns, notes, follow mode and
+  timezone; the shared *parts* are the components that hold it; and the *context* in the
+  narrow sense is what the tab gets from outside (parsers, the window, app settings). To a
+  content all three are context, which is what the name says.
+- **One object per load.** Loading, reloading, reconnecting and leaving plain text each
+  create a new content and dispose the old one, instead of resetting fields. What must
+  survive a reload is passed to the new object: a merged tab's `MergedFileSettings`, and
+  on Reconnect the source factory and "keep the filters and columns".
+
+**How the rules are enforced.**
+- *By the compiler:* `TabPanel`'s and `SharedTabContext`'s fields are private and a
+  content only has its `TabContext`, an interface, so it can't reach anything else (not
+  even by casting: the wrapper isn't the `SharedTabContext`). `TabContent` is sealed, so a
+  `switch` over the kinds must cover all three.
+- *At run time, in each content's `TabContext`:* every call checks it is on the EDT (an
+  `assert`; Gradle runs tests with assertions on). Once its content is replaced, the step
+  methods do nothing and `model()`, `filterBar()` and `tableView()` throw
+  `IllegalStateException`, so a late `process` or `done` from an old worker can't write
+  into the new content's table, and fails loudly if it tries. This replaces today's
+  `currentWorker == this`, `entryRows() == view`, `indexedEntries() != indexed` and
+  `changed == connection` checks. Workers still stop early on `isCancelled()`, now only to
+  save work.
+- *By convention:* a content asks its `TabContext` for the shared parts each time and
+  never keeps them in a field, which would get round the check. A test per kind reloads
+  (or reconnects) during a load, lets the old worker finish, and checks that only the new
+  content's rows, notes, status and connection state are shown.
+- *Not enforced:* misusing a shared part while current (clearing the model during its
+  own load). That's the price of handing out the parts rather than wrapping them all.
+
+**Also:**
+- **Kind-specific calls** (a merged tab's offset, timezone and parser dialogs; Reconnect;
+  a file's path for "one tab per file"; review bundle parts) stay `TabPanel` methods for
+  now, so callers don't change. Each becomes one line:
+  `content instanceof MergedContent m ? m.parts() : null`. Later, callers can ask for the
+  content directly and the delegates can go.
+- **Plain text belongs to `FileContent`**, the only kind that falls back to it. It
+  creates the `PlainTextView`, asks its `TabContext` to show it as a card, and handles
+  follow and "retry with new parsers" while the tab is plain.
+- **Restored tabs** (D-19) are split out at the same time: the message card, the deferred
+  load and the "filters restored" notice go to a `RestoredTab` helper (about 220 lines),
+  and the status bar (path, timezone badge, counts) to a `TabStatusBar` component. Neither
+  depends on the kind of content.
+- **Threading doesn't change** (6.1). A content's methods run on the EDT; its workers are
+  the ones `TabPanel` runs today, moved as they are.
+
+**What moves where** (approximate lines):
+
+| From `TabPanel` | To | Lines |
+|---|---|---|
+| `load`, the file worker, `newCacheCopy`, `startTailing` for a file, `clearTable`'s re-index, plain text (`showPlainText`, `leavePlainMode`, `retryWithParsers`) | `FileContent` | ~380 |
+| `loadMerged`, `mergedHost`, `placeFollowed`, `sizeColumnsWhenRowsArrive`, review parts | `MergedContent` | ~240 |
+| `loadSource`, `startSource`, `reconnect`, `waitForReconnect`, connection state, `closeInBackground` | `LiveContent` | ~200 |
+| the shared parts' wiring, `clearTable`, `showReordered` (as `reordered`), notes, follow mode, timezone, the cards | `SharedTabContext` | ~300 |
+| message card, deferred load, notice strip, `describeRestored` | `RestoredTab` | ~220 |
+| status bar, timezone badge | `TabStatusBar` | ~110 |
+
+`TabPanel` should end near 300 lines (layout, public methods, swapping contents), and
+each other class between 100 and 400.
+
+**Rejected.**
+- *Keep splitting by feature* (as G-9 has so far): each split is small and safe, but the
+  per-kind branching stays in `TabPanel`, and the next feature adds to it.
+- *A subclass of `TabPanel` per kind*: a tab doesn't keep its kind (a file falls back to
+  plain text; a restored tab has no kind until it loads), and `MainFrame` creates the
+  panel before it knows how the load will go.
+- *`TabPanel` itself as the context* (contents get the panel, or a `Host` it implements):
+  a content could cast back to the panel and reach everything, and there would be no
+  per-content object to withdraw when the content is replaced.
+- *Moving the contents to `clouseau-core`*: their workers update Swing components, so
+  they'd need a second layer of listeners. What is UI-independent is already in core
+  (`FileIndexer`, `IndexedFollow`, `MergeLoad`, `MergedFollow`, `SourceConnection`).
+
+**Steps**, each its own commit with the tests passing and no visible change:
+
+1. ✅ Rename `LogPanel` to `TabPanel`, and nothing else (`git mv` and the references in
+   `clouseau-ui`, its tests, the core tests' comments, this file, CLAUDE.md and
+   `guide/developers.md`), so the file's history follows it and the diff is easy to read.
+2. `TabStatusBar` and `RestoredTab`, which don't depend on the content.
+3. `TabContent`, `TabContext`, `SharedTabContext`, and `LiveContent`, the most
+   self-contained kind, with the reconnect-during-load test.
+4. `MergedContent`, taking `MergedFileSettings` and `MergedTailer`'s host with it, with
+   the reload-during-load test.
+5. `FileContent`, with plain text and the reload-during-load test; the per-kind fields
+   and branches leave `TabPanel`.
+6. Mark D-21 Adopted, close G-9, update CLAUDE.md's key classes.
+
+The existing tab tests (`LiveSourceTabTest`, `MergedViewTest`, `IndexedLogTableModelTest`,
+`NavBarsTest`, `PlainTextViewTest`) use the tab's public methods, which stay, so after the
+rename they check every step without changes. After step 5, check in the app: a file
+(plain, compressed, followed through rotation, opened as plain text), a merged view
+(follow, offset, parser change), SSH and a plugin source (Reconnect), and a restored
+session.
 
 ## 10. Planned features
 
@@ -1585,4 +1753,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). `LogPanel` is still about 1,680 lines: the load and follow wiring for single files, merged views and live sources, a restored tab's message card and filter notice (D-19), plain-text mode, and the status bar. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. Next split if `LogPanel` grows: a restored tab's message card and filter notice (about 220 lines). |
+| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). `TabPanel` is still about 1,680 lines: the load and follow wiring for single files, merged views and live sources, a restored tab's message card and filter notice (D-19), plain-text mode, and the status bar. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. Next split if `TabPanel` grows: a restored tab's message card and filter notice (about 220 lines). |

@@ -105,7 +105,7 @@ class PlainTextViewTest {
     void tabSwitchesToPlainTextAndBackOnceAParserRecognizesTheFile() throws Exception {
         Path file = dir.resolve("custom.log");
         Files.writeString(file, "@@ started\n@@ working\n");
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(parserFor("XX")), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(parserFor("XX")), List.of(), List.of()));
         AtomicReference<List<String>> samples = new AtomicReference<>();
         try {
             onEdt(() -> {
@@ -131,7 +131,7 @@ class PlainTextViewTest {
         Path file = dir.resolve("other.log");
         Files.writeString(file, "@@ hello\n");
         LogParser xx = parserFor("XX");
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(xx, parserFor("@@")), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(xx, parserFor("@@")), List.of(), List.of()));
         try {
             onEdt(() -> {
                 panel.setFollow(false);

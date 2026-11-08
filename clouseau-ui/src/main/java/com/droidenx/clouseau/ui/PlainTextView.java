@@ -41,7 +41,7 @@ import java.util.function.IntConsumer;
 @Slf4j
 final class PlainTextView extends JPanel {
 
-    /** Follow mode's backstop poll, as in {@code LogPanel}. */
+    /** Follow mode's backstop poll, as in {@code TabPanel}. */
     private static final long FOLLOW_SAFETY_POLL_MS = 2_000;
     /** Widest the text column gets, in pixels; longer lines are cut off. */
     private static final int MAX_TEXT_WIDTH = 40_000;

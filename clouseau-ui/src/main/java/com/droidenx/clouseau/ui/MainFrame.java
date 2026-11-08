@@ -169,7 +169,7 @@ public final class MainFrame extends JFrame {
         List<Session.Tab> tabs = new ArrayList<>();
         int selected = 0;
         for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-            if (!(tabbedPane.getComponentAt(i) instanceof LogPanel lp)) continue;
+            if (!(tabbedPane.getComponentAt(i) instanceof TabPanel lp)) continue;
             Session.Tab t = lp.sessionTab();
             if (t == null) continue;
             if (i == tabbedPane.getSelectedIndex()) selected = tabs.size();
@@ -185,15 +185,15 @@ public final class MainFrame extends JFrame {
     private List<LogFormatter> formatters()                 { return manager.formatters(); }
     private List<LogSyntaxHighlighter> syntaxHighlighters() { return manager.syntaxHighlighters(); }
 
-    private LogPanel newLogPanel() {
-        return new LogPanel(parsers(), formatters(), syntaxHighlighters());
+    private TabPanel newTabPanel() {
+        return new TabPanel(parsers(), formatters(), syntaxHighlighters());
     }
 
     /** This window's log tabs, in tab order. */
-    List<LogPanel> panels() {
-        List<LogPanel> list = new ArrayList<>();
+    List<TabPanel> panels() {
+        List<TabPanel> list = new ArrayList<>();
         for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-            if (tabbedPane.getComponentAt(i) instanceof LogPanel lp) list.add(lp);
+            if (tabbedPane.getComponentAt(i) instanceof TabPanel lp) list.add(lp);
         }
         return list;
     }
@@ -244,7 +244,7 @@ public final class MainFrame extends JFrame {
     }
 
     private void disposeWindow() {
-        for (LogPanel lp : panels()) lp.dispose();
+        for (TabPanel lp : panels()) lp.dispose();
         tabbedPane.removeAll();
         dispose();
     }
@@ -340,14 +340,14 @@ public final class MainFrame extends JFrame {
         reconnectItem.setEnabled(false);
         reconnectItem.setAccelerator(reconnectKey());
         reconnectItem.addActionListener(e -> {
-            LogPanel active = activeLogPanel();
+            TabPanel active = activeTabPanel();
             if (active != null && active.canReconnect()) active.reconnect();
         });
         fileMenu.add(reconnectItem);
         tabbedPane.addChangeListener(e -> updateReconnectItem());
 
         JMenuItem exportReviewItem = menuItem(Messages.get("menu.file.export.review"));
-        exportReviewItem.addActionListener(e -> ReviewExporter.export(this, activeLogPanel()));
+        exportReviewItem.addActionListener(e -> ReviewExporter.export(this, activeTabPanel()));
         fileMenu.add(exportReviewItem);
 
         closeTabItem = menuItem(Messages.get("menu.file.close.tab"));
@@ -546,9 +546,9 @@ public final class MainFrame extends JFrame {
     }
 
     private void openSettings() {
-        new SettingsDialog(this, activeLogPanel(), () -> {
+        new SettingsDialog(this, activeTabPanel(), () -> {
             manager.refreshRecentMenus();
-            manager.allPanels().forEach(LogPanel::refreshTimezone);
+            manager.allPanels().forEach(TabPanel::refreshTimezone);
             manager.restoreSettingChanged();
         }).setVisible(true);
     }
@@ -673,7 +673,7 @@ public final class MainFrame extends JFrame {
                             Map<MergeLoad.File, MergeLoad.PerFile> setup) {
         files.forEach(f -> AppPrefs.addRecentFile(f.path()));
         manager.refreshRecentMenus();
-        LogPanel panel = newLogPanel();
+        TabPanel panel = newTabPanel();
         ZoneId savedTz = AppPrefs.getSourceTimezone(files.get(0).path());
         if (savedTz != null) panel.setSourceTimezone(savedTz);
         String title = MessageFormat.format(Messages.get("merge.tab.title"), files.get(0).fileName(), files.size() - 1);
@@ -686,11 +686,11 @@ public final class MainFrame extends JFrame {
     }
 
     /** Loads a merged tab; {@code onFailed} runs if none of its files could be merged. */
-    private void startMergedLoad(LogPanel panel, List<MergeLoad.File> files, Optional<LogParser> parser,
+    private void startMergedLoad(TabPanel panel, List<MergeLoad.File> files, Optional<LogParser> parser,
                                  Runnable onFailed) {
         // The tab may have moved to another window by the time these run (UC-16).
         panel.setCloseAction(() -> owner(panel).removeTab(panel));
-        panel.loadMerged(files, parser, new LogPanel.MergeListener() {
+        panel.loadMerged(files, parser, new TabPanel.MergeListener() {
             @Override public void skipped(List<MergeLoad.Skipped> skipped) { owner(panel).offerSkipped(skipped, parser); }
 
             @Override public void notMerged(List<MergeLoad.File> mergeable) {
@@ -709,7 +709,7 @@ public final class MainFrame extends JFrame {
     }
 
     /** Renames the tab showing {@code panel}. */
-    private void setTabTitle(LogPanel panel, String title) {
+    private void setTabTitle(TabPanel panel, String title) {
         int idx = tabbedPane.indexOfComponent(panel);
         JLabel label = idx >= 0 ? tabLabel(idx) : null;
         if (label != null) {
@@ -817,14 +817,14 @@ public final class MainFrame extends JFrame {
      */
     private void openLog(Path file, String zipEntry, Optional<LogParser> parser) {
         Path abs = file.toAbsolutePath();
-        Optional<LogPanel> open = manager.findTab(abs, zipEntry);
+        Optional<TabPanel> open = manager.findTab(abs, zipEntry);
         if (open.isPresent()) {
             owner(open.get()).selectTab(open.get());
             return;
         }
         AppPrefs.addRecentFile(file);
         manager.refreshRecentMenus();
-        LogPanel panel = newLogPanel();
+        TabPanel panel = newTabPanel();
         ZoneId savedTz = AppPrefs.getSourceTimezone(abs);
         if (savedTz != null) panel.setSourceTimezone(savedTz);
         String title = zipEntry == null ? file.getFileName().toString()
@@ -840,7 +840,7 @@ public final class MainFrame extends JFrame {
     }
 
     /** A file tab's close and "Create a parser" actions. */
-    private void setUpFileTab(LogPanel panel) {
+    private void setUpFileTab(TabPanel panel) {
         panel.setCloseAction(() -> owner(panel).removeTab(panel));
         panel.setCreateParserAction(samples -> new ParserEditorDialog(owner(panel), () -> {
             manager.reloadParsers();
@@ -862,7 +862,7 @@ public final class MainFrame extends JFrame {
     void restoreTab(Session.Tab t, String sessionName) {
         List<String> notes = new ArrayList<>();
         Optional<LogParser> parser = parserNamed(t.parser(), notes);
-        LogPanel panel = newLogPanel();
+        TabPanel panel = newTabPanel();
         if (t.timezone() != null) zone(t.timezone()).ifPresent(panel::setSourceTimezone);
         switch (t.kind()) {
             case FILE -> {
@@ -932,7 +932,7 @@ public final class MainFrame extends JFrame {
         }
     }
 
-    private void loadRestoredFile(LogPanel panel, Path file, String entry, Optional<LogParser> parser) {
+    private void loadRestoredFile(TabPanel panel, Path file, String entry, Optional<LogParser> parser) {
         if (!java.nio.file.Files.isRegularFile(file)) {
             panel.showMessage(MessageFormat.format(Messages.get("session.tab.missing"), file),
                     Messages.get("session.tab.retry"), () -> loadRestoredFile(panel, file, entry, parser));
@@ -943,7 +943,7 @@ public final class MainFrame extends JFrame {
                 Messages.get("session.tab.retry"), () -> loadRestoredFile(panel, file, entry, parser)));
     }
 
-    private void loadRestoredMerged(LogPanel panel, List<MergeLoad.File> files, Optional<LogParser> parser) {
+    private void loadRestoredMerged(TabPanel panel, List<MergeLoad.File> files, Optional<LogParser> parser) {
         List<String> missing = files.stream().map(MergeLoad.File::path).distinct()
                 .filter(p -> !java.nio.file.Files.isRegularFile(p)).map(Path::toString).toList();
         if (!missing.isEmpty()) {
@@ -961,7 +961,7 @@ public final class MainFrame extends JFrame {
      * favorite gives it; otherwise the tab offers Reconnect, so starting Clouseau never
      * asks for passwords (D-19).
      */
-    private void connectRestoredSsh(LogPanel panel, Session.Tab t, Optional<LogParser> parser) {
+    private void connectRestoredSsh(TabPanel panel, Session.Tab t, Optional<LogParser> parser) {
         Optional<SshConfig> config = sshCredentials(t.ssh());
         if (config.isPresent()) {
             SshConfig c = config.get();
@@ -995,7 +995,7 @@ public final class MainFrame extends JFrame {
     }
 
     /** Reconnect: the SSH dialog filled in from the session, asking only for the secret. */
-    private void reconnectSsh(LogPanel panel, Session.Tab t) {
+    private void reconnectSsh(TabPanel panel, Session.Tab t) {
         SshConnectionDialog dialog = new SshConnectionDialog(owner(panel), parsers());
         dialog.prefill(t.ssh(), t.parser());
         dialog.showDialog().ifPresent(r -> {
@@ -1018,7 +1018,7 @@ public final class MainFrame extends JFrame {
      * provider's saved settings (D-14); if one it needs isn't saved, or the plugin is gone,
      * the tab says so instead.
      */
-    private void openRestoredSource(LogPanel panel, Session.Tab t, Optional<LogParser> parser) {
+    private void openRestoredSource(TabPanel panel, Session.Tab t, Optional<LogParser> parser) {
         Session.PluginSource ps = t.source();
         Optional<LogSourceProvider> provider = manager.sourceProviders().stream()
                 .filter(p -> p.getClass().getName().equals(ps.provider())).findFirst();
@@ -1056,7 +1056,7 @@ public final class MainFrame extends JFrame {
                 ps.name() != null ? ps.name() : ps.provider()), () -> reconnectSource(panel, t, provider.get()));
     }
 
-    private void reconnectSource(LogPanel panel, Session.Tab t, LogSourceProvider provider) {
+    private void reconnectSource(TabPanel panel, Session.Tab t, LogSourceProvider provider) {
         try {
             List<SourceSetting> settings = List.copyOf(provider.settings());
             new SourceSettingsDialog(owner(panel), provider, settings, parsers()).showDialog().ifPresent(r -> {
@@ -1071,13 +1071,13 @@ public final class MainFrame extends JFrame {
     }
 
     /** The window that holds {@code panel} now, or this one if it's in none. */
-    private MainFrame owner(LogPanel panel) {
+    private MainFrame owner(TabPanel panel) {
         MainFrame w = WindowManager.windowOf(panel);
         return w != null ? w : this;
     }
 
     /** Selects {@code panel}'s tab and brings this window to the front. */
-    void selectTab(LogPanel panel) {
+    void selectTab(TabPanel panel) {
         int idx = tabbedPane.indexOfComponent(panel);
         if (idx >= 0) tabbedPane.setSelectedIndex(idx);
         if ((getExtendedState() & ICONIFIED) != 0) setExtendedState(getExtendedState() & ~ICONIFIED);
@@ -1086,7 +1086,7 @@ public final class MainFrame extends JFrame {
     }
 
     /** Closes a tab without asking. */
-    private void removeTab(LogPanel panel) {
+    private void removeTab(TabPanel panel) {
         int idx = tabbedPane.indexOfComponent(panel);
         if (idx >= 0) {
             panel.dispose();
@@ -1098,7 +1098,7 @@ public final class MainFrame extends JFrame {
     private void openSsh() {
         new SshConnectionDialog(this, parsers()).showDialog().ifPresent(r -> {
             log.info("Opening SSH: {}", r.config().displayName());
-            LogPanel panel = newLogPanel();
+            TabPanel panel = newTabPanel();
             SshConfig config = r.config();
             addLogTab(sshTabTitle(config), null, panel, sshTabTooltip(config));
             panel.setSessionOrigin(Session.Tab.ssh(toSession(config), parserName(r.parser()), null));
@@ -1143,7 +1143,7 @@ public final class MainFrame extends JFrame {
         }
         new SourceSettingsDialog(this, provider, settings, parsers()).showDialog().ifPresent(r -> {
             log.info("Opening source '{}'", name);
-            LogPanel panel = newLogPanel();
+            TabPanel panel = newTabPanel();
             addLogTab(name, null, panel);
             panel.setSessionOrigin(Session.Tab.source(
                     new Session.PluginSource(provider.getClass().getName(), name, r.sessionValues()),
@@ -1170,21 +1170,21 @@ public final class MainFrame extends JFrame {
                         config.user(), config.host(), config.remotePath(), String.valueOf(config.port()));
     }
 
-    private void addLogTab(String title, Path file, LogPanel panel) {
+    private void addLogTab(String title, Path file, TabPanel panel) {
         addLogTab(title, file, panel, null);
     }
 
-    private void addLogTab(String title, Path file, LogPanel panel, String tooltip) {
+    private void addLogTab(String title, Path file, TabPanel panel, String tooltip) {
         insertLogTab(title, tooltip, panel, -1);
     }
 
     /** Adds {@code panel} as a tab at {@code index} (-1: at the end) and selects it. */
-    private void insertLogTab(String title, String tooltip, LogPanel panel, int index) {
+    private void insertLogTab(String title, String tooltip, TabPanel panel, int index) {
         insertLogTab(title, tooltip, panel, index, true);
     }
 
     /** Adds {@code panel} as a tab at {@code index} (-1: at the end), selecting it if {@code select}. */
-    private void insertLogTab(String title, String tooltip, LogPanel panel, int index, boolean select) {
+    private void insertLogTab(String title, String tooltip, TabPanel panel, int index, boolean select) {
         int idx = index < 0 || index > tabbedPane.getTabCount() ? tabbedPane.getTabCount() : index;
         tabbedPane.insertTab(null, null, panel, null, idx);
         JPanel header = buildTabHeader(title, panel);
@@ -1219,7 +1219,7 @@ public final class MainFrame extends JFrame {
      * itself moves, so loading, following and Find carry on and nothing is re-read. A window
      * left with no tabs closes.
      */
-    private void moveTabTo(LogPanel panel, MainFrame target, int index) {
+    private void moveTabTo(TabPanel panel, MainFrame target, int index) {
         int idx = tabbedPane.indexOfComponent(panel);
         if (idx < 0 || target == this) return;
         JLabel label = tabLabel(idx);
@@ -1233,7 +1233,7 @@ public final class MainFrame extends JFrame {
         if (tabbedPane.getTabCount() == 0) closeWindow();
     }
 
-    private void moveToNewWindow(LogPanel panel) {
+    private void moveToNewWindow(TabPanel panel) {
         moveTabTo(panel, manager.newWindow(this), -1);
     }
 
@@ -1242,7 +1242,7 @@ public final class MainFrame extends JFrame {
      * already reordered it); over another Clouseau window it moves there, at the tab under
      * the cursor; anywhere else it opens in a new window at the cursor.
      */
-    private void dropTab(LogPanel panel, Point screen) {
+    private void dropTab(TabPanel panel, Point screen) {
         if (getBounds().contains(screen)) return;
         Optional<MainFrame> target = manager.windowAt(screen, this);
         if (target.isPresent()) {
@@ -1264,7 +1264,7 @@ public final class MainFrame extends JFrame {
         return tabbedPane.indexAtLocation(p.x, p.y);
     }
 
-    private JPanel buildTabHeader(String title, LogPanel panel) {
+    private JPanel buildTabHeader(String title, TabPanel panel) {
         JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         header.setOpaque(false);
 
@@ -1282,7 +1282,7 @@ public final class MainFrame extends JFrame {
         SourceLed led = new SourceLed();
         panel.setConnectionListener(() -> {
             led.setState(panel.connectionState(), panel.connectionError());
-            if (panel == activeLogPanel()) updateReconnectItem();
+            if (panel == activeTabPanel()) updateReconnectItem();
         });
 
         header.add(label);
@@ -1339,7 +1339,7 @@ public final class MainFrame extends JFrame {
         return header;
     }
 
-    private void showTabContextMenu(java.awt.event.MouseEvent e, LogPanel panel) {
+    private void showTabContextMenu(java.awt.event.MouseEvent e, TabPanel panel) {
         JPopupMenu menu = new JPopupMenu();
 
         if (panel.canReconnect()) {
@@ -1418,7 +1418,7 @@ public final class MainFrame extends JFrame {
         SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
         if (sel == null) return;
         ZoneId zone = sel.zone();
-        for (LogPanel lp : manager.allPanels()) lp.applySourceTimezone(zone);  // every window's tabs
+        for (TabPanel lp : manager.allPanels()) lp.applySourceTimezone(zone);  // every window's tabs
     }
 
     private JWindow createGhostWindow(JPanel tabHeader) {
@@ -1471,7 +1471,7 @@ public final class MainFrame extends JFrame {
             if (result != JOptionPane.YES_OPTION) return;
         }
         Component comp = tabbedPane.getComponentAt(idx);
-        if (comp instanceof LogPanel lp) lp.dispose();
+        if (comp instanceof TabPanel lp) lp.dispose();
         tabbedPane.removeTabAt(idx);
         updateCard();
     }
@@ -1486,7 +1486,7 @@ public final class MainFrame extends JFrame {
     /** Enables File → Reconnect when the active tab streams a live source. */
     private void updateReconnectItem() {
         if (reconnectItem == null) return;
-        LogPanel active = activeLogPanel();
+        TabPanel active = activeTabPanel();
         reconnectItem.setEnabled(active != null && active.canReconnect());
     }
 
@@ -1496,9 +1496,9 @@ public final class MainFrame extends JFrame {
                 java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx());
     }
 
-    private LogPanel activeLogPanel() {
+    private TabPanel activeTabPanel() {
         Component c = tabbedPane.getSelectedComponent();
-        return c instanceof LogPanel lp ? lp : null;
+        return c instanceof TabPanel lp ? lp : null;
     }
 
     // ── Welcome panel ─────────────────────────────────────────────────────────

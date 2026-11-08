@@ -35,7 +35,7 @@ clouseau/
 ├── clouseau-api/             # Plugin contract — interfaces only (LogParser, LogSource, LogSourceProvider, …)
 ├── clouseau-core/            # Engine, no Swing — parsing, indexing, following, merging, annotations, review bundles, SSH source
 ├── clouseau-plugin/          # PF4J plugin loader and lifecycle
-├── clouseau-ui/              # Swing UI — MainFrame, LogPanel, LogTableView, FilterBar, dialogs
+├── clouseau-ui/              # Swing UI — MainFrame, TabPanel, LogTableView, FilterBar, dialogs
 └── clouseau-example-plugin/  # Example plugin (logfmt parser, demo source) — a template for your own
 ```
 

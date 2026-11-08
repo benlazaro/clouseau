@@ -128,7 +128,7 @@ tags.
 - `WindowManager` (ui) — UC-16, D-18: every window, the one used last, and what they share
   (parser/formatter/highlighter/source lists, "one tab per file" across windows).
 - `MainFrame` (ui) — one window: its menus and tabs, and moving tabs between windows.
-- `LogPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.
+- `TabPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.
 - `LogTableView`, `RowMenu` (ui) — G-9: a tab's table (renderer, header menu, column sizing,
   visibility and saved layouts) and its rows' right-click menu (highlights, notes, merged-file items).
   `MergedFileSettings` (ui) holds a merged tab's per-file offsets, timezones and parsers, with their dialogs.
@@ -141,7 +141,7 @@ tags.
 - `MergeOrder`, `EntryRows`, `MergedEntries`, `MergeLoad` (core) — UC-12, D-17: several files
   in one timeline. `MergeOrder` is the merged order, `EntryRows` what the table model reads
   (one `IndexedEntries` or a `MergedEntries`), `MergeLoad` checks, indexes and merges the
-  files in the background; `LogPanel.loadMerged` shows them. `MergedFollow` (core) and
+  files in the background; `TabPanel.loadMerged` shows them. `MergedFollow` (core) and
   `MergedTailer` (ui) follow its files: hold-back, late rows, re-merge (D-17 step 5).
   `TimeOffsetDialog` (ui) and `TimeOffset` (core) correct a file's clock (step 6).
 - `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row

@@ -80,7 +80,7 @@ class LiveSourceTabTest {
         FakeSource second = new FakeSource(true, true);
         AtomicInteger created = new AtomicInteger();
         AtomicInteger notified = new AtomicInteger();
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
         LogTableModel model = (LogTableModel) panel.getLogTable().getModel();
         try {
             onEdt(() -> {
@@ -119,7 +119,7 @@ class LiveSourceTabTest {
             @Override public void open(Consumer<String> lines) throws Exception { quiet.open(lines); }
             @Override public void close() { quiet.close(); }
         };
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
         try {
             onEdt(() -> { panel.loadSource(plain, null, Optional.of(PARSER)); return null; });
             assertThat(onEdt(panel::canReconnect)).isFalse();
@@ -134,7 +134,7 @@ class LiveSourceTabTest {
 
     @Test
     void aTabWithoutALiveSourceHasNoConnectionState() throws Exception {
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
         assertThat(onEdt(panel::canReconnect)).isFalse();
         assertThat(onEdt(panel::connectionState)).isNull();
         onEdt(() -> { panel.dispose(); return null; });

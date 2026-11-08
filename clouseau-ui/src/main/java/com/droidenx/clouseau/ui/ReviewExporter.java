@@ -22,7 +22,7 @@ final class ReviewExporter {
     private ReviewExporter() {}
 
     /** Exports the log shown in {@code panel} (null if no tab is open). Call on the EDT. */
-    static void export(Component parent, LogPanel panel) {
+    static void export(Component parent, TabPanel panel) {
         String title = Messages.get("export.review.title");
         if (panel != null && panel.isMerged()) {
             exportMerged(parent, panel, title);
@@ -54,7 +54,7 @@ final class ReviewExporter {
      * Exports a merged tab (D-17): every file with its notes, timezone and offset, in a
      * version 2 bundle named after the first file.
      */
-    private static void exportMerged(Component parent, LogPanel panel, String title) {
+    private static void exportMerged(Component parent, TabPanel panel, String title) {
         List<ReviewBundle.Part> parts = panel.reviewParts();
         if (parts == null) {
             JOptionPane.showMessageDialog(parent, Messages.get("export.review.loading"), title,

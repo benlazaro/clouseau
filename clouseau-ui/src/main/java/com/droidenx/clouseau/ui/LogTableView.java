@@ -24,7 +24,7 @@ import java.util.Map;
  * A tab's log table (G-9): the {@link JTable} over its {@link LogTableModel}, the row
  * renderer (levels, highlights, Find matches, the note marker), the header menu, column
  * sizing (fitted columns, with Message stretched to fill), column visibility and saved
- * column layouts. {@link LogPanel} owns one and reaches back through {@link Host}.
+ * column layouts. {@link TabPanel} owns one and reaches back through {@link Host}.
  * EDT only.
  */
 final class LogTableView {

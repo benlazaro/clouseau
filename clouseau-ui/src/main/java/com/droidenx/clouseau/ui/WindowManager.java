@@ -367,14 +367,14 @@ final class WindowManager {
     // ── Tabs across windows ───────────────────────────────────────────────────
 
     /** Every log tab in every window. */
-    List<LogPanel> allPanels() {
-        List<LogPanel> all = new ArrayList<>();
+    List<TabPanel> allPanels() {
+        List<TabPanel> all = new ArrayList<>();
         for (MainFrame w : windows) all.addAll(w.panels());
         return all;
     }
 
     /** The tab that shows {@code file} (and {@code zipEntry}), in any window ("one tab per file"). */
-    Optional<LogPanel> findTab(Path file, String zipEntry) {
+    Optional<TabPanel> findTab(Path file, String zipEntry) {
         Path abs = file.toAbsolutePath();
         return allPanels().stream()
                 .filter(lp -> abs.equals(lp.getFile()) && Objects.equals(zipEntry, lp.getZipEntry()))

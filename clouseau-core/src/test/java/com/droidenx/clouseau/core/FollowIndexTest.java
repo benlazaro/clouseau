@@ -68,7 +68,7 @@ class FollowIndexTest {
         Files.writeString(file, text, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
-    /** Indexes {@code file} as a load does, then follows it as a tab does (LogPanel). */
+    /** Indexes {@code file} as a load does, then follows it as a tab does (TabPanel). */
     private void loadAndFollow(Path file) throws IOException {
         index = new EntryIndex();
         long end;

@@ -16,7 +16,7 @@ final class SettingsDialog extends JDialog {
     /** One width for every spinner, wide enough for "2,000,000" plus the arrows. */
     private static final String SPINNER = "w 120!";
 
-    private final LogPanel logPanel;
+    private final TabPanel tabPanel;
     private final Runnable onApply;
 
     // Table settings
@@ -45,9 +45,9 @@ final class SettingsDialog extends JDialog {
     private final String originalThemeName;
     private final JComboBox<TimezoneEntry> timezoneCombo;
 
-    SettingsDialog(Frame owner, LogPanel logPanel, Runnable onApply) {
+    SettingsDialog(Frame owner, TabPanel tabPanel, Runnable onApply) {
         super(owner, Messages.get("settings.title"), true);
-        this.logPanel = logPanel;
+        this.tabPanel = tabPanel;
         this.onApply  = onApply;
 
         rowHeightSpinner       = new JSpinner(new SpinnerNumberModel(AppPrefs.getRowHeight(), 14, 64, 1));
@@ -164,11 +164,11 @@ final class SettingsDialog extends JDialog {
     }
 
     private void applySettings() {
-        JTable logTable = logPanel != null ? logPanel.getLogTable() : null;
+        JTable logTable = tabPanel != null ? tabPanel.getLogTable() : null;
         if (logTable != null) logTable.setRowHeight((int) rowHeightSpinner.getValue());
         int fontSize = (int) detailFontSizeSpinner.getValue();
         AppPrefs.setDetailFontSize(fontSize);
-        if (logPanel != null) logPanel.applyDetailFontSize(fontSize);
+        if (tabPanel != null) tabPanel.applyDetailFontSize(fontSize);
         AppPrefs.setTabCloseConfirm(confirmCloseCheckBox.isSelected());
         AppPrefs.setHighlightClearAllConfirm(confirmHighlightClearAllCheckBox.isSelected());
         AppPrefs.setAnnotationDeleteConfirm(confirmAnnotationDeleteCheckBox.isSelected());

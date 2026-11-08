@@ -49,7 +49,7 @@ class CompressedIndexTest {
         return file;
     }
 
-    /** Indexes {@code file} as LogPanel does, checking each row is readable as soon as it's indexed. */
+    /** Indexes {@code file} as TabPanel does, checking each row is readable as soon as it's indexed. */
     private static EntryIndex indexThroughCopy(Path file, String entry, Path copy) throws IOException {
         EntryIndex index = new EntryIndex(4);
         try (IndexedEntries rows = IndexedEntries.open(copy, index, PARSER);

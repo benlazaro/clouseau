@@ -44,7 +44,7 @@ class MergedViewTest {
     }
 
     /** Records what the merged load tells the window. */
-    private static final class Listener implements LogPanel.MergeListener {
+    private static final class Listener implements TabPanel.MergeListener {
         final List<MergeLoad.Skipped> skipped = new ArrayList<>();
         List<MergeLoad.File> notMerged;
         boolean failed;
@@ -66,7 +66,7 @@ class MergedViewTest {
                 """);
         MergeLoad.File db = write("db.log", "2026-11-04 10:00:02 WARN db slow\n");
         MergeLoad.File notes = write("notes.txt", "no format here\n");
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
         Listener listener = new Listener();
         try {
             onEdt(() -> {
@@ -115,7 +115,7 @@ class MergedViewTest {
     void followsEveryFileAndPlacesLateLinesInTime() throws Exception {
         MergeLoad.File app = write("app.log", "2026-11-04 10:00:01 INFO app 1\n");
         MergeLoad.File db = write("db.log", "2026-11-04 10:00:02 INFO db 2\n");
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
         try {
             onEdt(() -> {
                 panel.setFollow(true);
@@ -152,7 +152,7 @@ class MergedViewTest {
                 2026-11-04 10:00:05 INFO app 5
                 """);
         MergeLoad.File db = write("db.log", "2026-11-04 10:00:02 INFO db 2\n");
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
         try {
             onEdt(() -> {
                 panel.setFollow(false);
@@ -197,7 +197,7 @@ class MergedViewTest {
             files.add(f);
             setup.put(f, new MergeLoad.PerFile(java.time.ZoneId.of(s.timezone()), s.offsetMillis()));
         }
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
         try {
             onEdt(() -> {
                 panel.setFollow(false);
@@ -226,7 +226,7 @@ class MergedViewTest {
                 2026-11-04 10:00:03 INFO app 3
                 """);
         MergeLoad.File dev = write("device.log", "2026-11-04 10:00:02|INFO|device 2\n");
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER, pipes), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER, pipes), List.of(), List.of()));
         try {
             onEdt(() -> {
                 panel.setFollow(false);
@@ -249,7 +249,7 @@ class MergedViewTest {
     void oneMergeableFileIsHandedBackToOpenOnItsOwn() throws Exception {
         MergeLoad.File app = write("app.log", "2026-11-04 10:00:01 INFO app starts\n");
         MergeLoad.File notes = write("notes.txt", "no format here\n");
-        LogPanel panel = onEdt(() -> new LogPanel(List.of(PARSER), List.of(), List.of()));
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
         Listener listener = new Listener();
         try {
             onEdt(() -> {

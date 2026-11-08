@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The find bar and highlight navigation bar, split out of LogPanel (G-9). */
+/** The find bar and highlight navigation bar, split out of TabPanel (G-9). */
 class NavBarsTest {
 
     private LogTableModel model;

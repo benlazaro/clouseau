@@ -26,7 +26,7 @@ class AnnotationStoreTest {
         return log;
     }
 
-    /** Reads the log the way LogPanel does: load the store, feed every line, finish. */
+    /** Reads the log the way TabPanel does: load the store, feed every line, finish. */
     private AnnotationStore open(String... lines) {
         AnnotationStore store = AnnotationStore.load(log, fallbackDir);
         AnnotationStore.Anchoring anchoring = store.startAnchoring();

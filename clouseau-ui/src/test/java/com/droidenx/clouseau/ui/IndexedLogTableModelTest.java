@@ -68,7 +68,7 @@ class IndexedLogTableModelTest {
         }
     }
 
-    /** Indexes {@code lines} the way LogPanel does: index first, then hand the entries over. */
+    /** Indexes {@code lines} the way TabPanel does: index first, then hand the entries over. */
     private void loadIndexed(List<String> lines) throws Exception {
         loadIndexed(lines, NO_PARSERS);
     }

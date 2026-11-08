@@ -16,7 +16,7 @@ import java.util.Map;
 /**
  * The menu shown when the user right-clicks rows of a tab's table (G-9): highlight colors
  * and clearing them (D-15), adding, editing and removing a note, the row's file on a merged
- * tab (offset, timezone, parser), the notes panel, reload and clear. {@link LogPanel}
+ * tab (offset, timezone, parser), the notes panel, reload and clear. {@link TabPanel}
  * builds one and reaches back through {@link Host}. EDT only.
  */
 final class RowMenu {

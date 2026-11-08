@@ -55,7 +55,7 @@ import java.util.Optional;
  * Owns its own LogTableModel, table and detail pane.
  */
 @Slf4j
-public final class LogPanel extends JPanel {
+public final class TabPanel extends JPanel {
 
     /** Replaced by {@link #retryWithParsers} after the user creates a parser. */
     private List<LogParser> parsers;
@@ -95,7 +95,7 @@ public final class LogPanel extends JPanel {
         @Override public ZoneId tabZone() { return sourceTimezone; }
         @Override public Optional<LogParser> tabParser() { return currentParser; }
         @Override public List<LogParser> parsers() { return parsers; }
-        @Override public void reload() { LogPanel.this.reload(); }
+        @Override public void reload() { TabPanel.this.reload(); }
         @Override public void zonesChanged() { updateSourceTimezoneLabel(); }
         @Override public void reordered(MergedEntries view, MergeOrder before, MergeOrder after) {
             showReordered(before, after, 0);
@@ -152,7 +152,7 @@ public final class LogPanel extends JPanel {
     private JLabel statusBarPathLabel;
     private JLabel sourceTzLabel;
 
-    public LogPanel(List<LogParser> parsers, List<LogFormatter> formatters, List<LogSyntaxHighlighter> syntaxHighlighters) {
+    public TabPanel(List<LogParser> parsers, List<LogFormatter> formatters, List<LogSyntaxHighlighter> syntaxHighlighters) {
         super(new MigLayout("fill, insets 0, gapy 0", "[grow]", ""));
         this.parsers    = parsers;
         this.formatters = formatters;
@@ -447,7 +447,7 @@ public final class LogPanel extends JPanel {
                                 : java.text.MessageFormat.format(Messages.get("load.lowmemory.message"),
                                         file.getFileName().toString(), stoppedAtLine, memory.maxMiB());
                         JOptionPane.showMessageDialog(
-                                SwingUtilities.getWindowAncestor(LogPanel.this),
+                                SwingUtilities.getWindowAncestor(TabPanel.this),
                                 message,
                                 Messages.get("load.lowmemory.title"),
                                 JOptionPane.WARNING_MESSAGE);
@@ -460,7 +460,7 @@ public final class LogPanel extends JPanel {
                     log.error("Failed to load {}", file, ex);
                     onError.run();
                     JOptionPane.showMessageDialog(
-                            SwingUtilities.getWindowAncestor(LogPanel.this),
+                            SwingUtilities.getWindowAncestor(TabPanel.this),
                             ex.getMessage(),
                             Messages.get("filechooser.error.title"),
                             JOptionPane.ERROR_MESSAGE);
@@ -588,7 +588,7 @@ public final class LogPanel extends JPanel {
                 } catch (java.util.concurrent.ExecutionException ex) {
                     log.error("Failed to merge {}", files, ex.getCause());
                     onError.run();
-                    JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(LogPanel.this),
+                    JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(TabPanel.this),
                             String.valueOf(ex.getCause().getMessage()), Messages.get("filechooser.error.title"),
                             JOptionPane.ERROR_MESSAGE);
                     return;
@@ -601,7 +601,7 @@ public final class LogPanel extends JPanel {
                 }
                 if (r.stopped()) {
                     onError.run();
-                    JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(LogPanel.this),
+                    JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(TabPanel.this),
                             r.diskFull()
                                     ? java.text.MessageFormat.format(Messages.get("merge.diskfull.message"),
                                             AppDirs.cacheDir().toString())
@@ -1140,7 +1140,7 @@ public final class LogPanel extends JPanel {
                             : cause.getMessage() != null ? cause.getMessage() : cause.toString();
                     run.disconnected(message);
                     JOptionPane.showMessageDialog(
-                            SwingUtilities.getWindowAncestor(LogPanel.this),
+                            SwingUtilities.getWindowAncestor(TabPanel.this),
                             message,
                             Messages.get("source.error.title"),
                             JOptionPane.ERROR_MESSAGE);
@@ -1452,7 +1452,7 @@ public final class LogPanel extends JPanel {
         sourceTzLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         sourceTzLabel.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
-                showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(LogPanel.this));
+                showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(TabPanel.this));
             }
         });
         updateSourceTimezoneLabel();
@@ -1580,21 +1580,21 @@ public final class LogPanel extends JPanel {
                     annotationsPanel.refresh();
             }
 
-            @Override public MergedEntries mergedView() { return LogPanel.this.mergedView(); }
-            @Override public void showTimeOffsetDialog(int source) { LogPanel.this.showTimeOffsetDialog(source); }
+            @Override public MergedEntries mergedView() { return TabPanel.this.mergedView(); }
+            @Override public void showTimeOffsetDialog(int source) { TabPanel.this.showTimeOffsetDialog(source); }
 
             @Override public void showSourceTimezoneDialog(int source) {
-                LogPanel.this.showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(LogPanel.this), source);
+                TabPanel.this.showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(TabPanel.this), source);
             }
 
             @Override public void showParserDialog(int source) {
-                LogPanel.this.showParserDialog(SwingUtilities.getWindowAncestor(LogPanel.this), source);
+                TabPanel.this.showParserDialog(SwingUtilities.getWindowAncestor(TabPanel.this), source);
             }
 
-            @Override public void showAnnotationsDialog() { LogPanel.this.showAnnotationsDialog(); }
+            @Override public void showAnnotationsDialog() { TabPanel.this.showAnnotationsDialog(); }
             @Override public boolean canReload() { return currentFile != null; }
-            @Override public void reload() { LogPanel.this.reload(); }
-            @Override public void clearTable() { LogPanel.this.clearTable(); }
+            @Override public void reload() { TabPanel.this.reload(); }
+            @Override public void clearTable() { TabPanel.this.clearTable(); }
         });
         return tableView.scrollPane();
     }
