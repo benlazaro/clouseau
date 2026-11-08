@@ -268,6 +268,9 @@ final class MergedContent implements TabContent {
     /** The loaded view while the tab shows it, or null (loading, failed or cleared). */
     MergedEntries view() { return shown() && !loading ? view : null; }
 
+    @Override
+    public boolean loading() { return loading; }
+
     /**
      * The files as a review bundle takes them (D-17): each file, its notes and how it is
      * read; null while loading, or if nothing is shown.

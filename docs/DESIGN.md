@@ -1754,8 +1754,30 @@ each other class between 100 and 400.
      too, for the same reason as step 3: the old worker is cancelled on the EDT, so its
      `done()` runs at once. The `currentWorker != this` and `entryRows() == view` checks
      are gone; the revocable context and the content's own `shown()` replace them.
-5. `FileContent`, with plain text and the reload-during-load test; the per-kind fields
-   and branches leave `TabPanel`, and the shared steps move to `SharedTabContext`.
+5. ✅ `FileContent`, with plain text and the reload-during-load test (`FileTabTest`); the
+   per-kind fields and branches leave `TabPanel`, and the shared parts and steps move to
+   `SharedTabContext`. As built:
+   - **`TabPanel` (about 580 lines)** lays out the parts, keeps the window's methods as
+     delegates, swaps contents and makes their `ContentContext`s, and holds what isn't
+     the shared parts' or a content's: the restored-tab helper, the merged-file settings,
+     a live tab's connection listener and restored Reconnect, the session origin, and the
+     file a restored tab will show before it loads (for "one tab per file").
+   - **`SharedTabContext` (about 470 lines)** builds and owns the parts and does the
+     steps; it reaches the tab through a `Host` (the content, the merged-file dialogs,
+     reload, follow), like `LogTableView` and `RowMenu`.
+   - **`FileContent` (about 390 lines)** owns a file's load, follower, unpacked copy,
+     partial-load state and its own `PlainTextView`; the shared parts only show the view
+     as a card and hide the row bars. A new view is made per load instead of one reused
+     per tab.
+   - **`TabContent` gained `loading()` and `statusNote()`** (defaults: false, ""), so
+     the shared parts no longer track a load or a partial load themselves;
+     **`TabContext` gained `timezone`, `showPlain`, `setFollow`, `createParser` and
+     `close`.**
+   - **Clearing the table** is a shared step: stop following, empty the model, then the
+     content's `cleared()` (a file re-indexes from its end; a merged view stops showing
+     and following), then follow again.
+   - `currentWorker`, `tailWorker`, `currentFile`, `currentEntry`, `cacheCopy`,
+     `fileFollow`, `currentParser` and the plain-text fields are gone from `TabPanel`.
 6. Mark D-21 Adopted, close G-9, update CLAUDE.md's key classes.
 
 The existing tab tests (`LiveSourceTabTest`, `MergedViewTest`, `IndexedLogTableModelTest`,
@@ -1789,4 +1811,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). The status bar (`TabStatusBar`) and a restored tab's message card, deferred load and filter notice (`RestoredTab`, D-19) are too. A live source is a `LiveContent` and a merged view a `MergedContent` (D-21 steps 3 and 4). `TabPanel` is still about 1,260 lines: the load and follow wiring for single files, plain-text mode, and the per-content context. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. D-21 splits the rest by kind of content. |
+| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). The status bar (`TabStatusBar`) and a restored tab's message card, deferred load and filter notice (`RestoredTab`, D-19) are too. A tab shows a `FileContent`, `MergedContent` or `LiveContent`, and its shared parts are a `SharedTabContext` (D-21 steps 3 to 5); `TabPanel` is about 580 lines. `MainFrame` (about 1,600 lines) is now the biggest UI class. | Reviewable. Step 6 of D-21 closes this entry once the app check passes. |

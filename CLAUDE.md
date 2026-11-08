@@ -128,14 +128,16 @@ tags.
 - `WindowManager` (ui) — UC-16, D-18: every window, the one used last, and what they share
   (parser/formatter/highlighter/source lists, "one tab per file" across windows).
 - `MainFrame` (ui) — one window: its menus and tabs, and moving tabs between windows.
-- `TabPanel` (ui) — one tab: wires the load/follow workers, table, filters, menus, find bar, annotations.
+- `TabPanel` (ui) — one tab (D-21): lays out its parts, keeps the window's methods, and swaps what it shows. `SharedTabContext` (ui)
+  owns what every tab has (table, model, bars, detail pane, notes, follow mode, timezone, status bar, cards) and its steps.
 - `LogTableView`, `RowMenu` (ui) — G-9: a tab's table (renderer, header menu, column sizing,
   visibility and saved layouts) and its rows' right-click menu (highlights, notes, merged-file items).
   `MergedFileSettings` (ui) holds a merged tab's per-file offsets, timezones and parsers, with their dialogs.
   `TabStatusBar` (ui) is a tab's path, timezone badge and row counts; `RestoredTab` (ui) its session message card,
   deferred load and "filters restored" strip (D-19).
   `TabContent` (ui) is what a tab shows, one object per load, reaching the tab only through its own `TabContext`,
-  withdrawn when it is replaced (D-21); `LiveContent` streams an SSH or plugin source, with its connection state,
+  withdrawn when it is replaced (D-21): `FileContent` is one file (load, follow, unpacked copy, plain text),
+  `LiveContent` streams an SSH or plugin source, with its connection state,
   and `MergedContent` is a merged view (its load, copies, notes and followed files).
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar

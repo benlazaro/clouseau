@@ -1,209 +1,120 @@
 package com.droidenx.clouseau.ui;
 
-import com.droidenx.clouseau.api.LogSyntaxHighlighter;
-import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
-import com.droidenx.clouseau.ui.theme.ClouseauColors;
-import com.droidenx.clouseau.core.Session;
+import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.core.AnnotationStore;
-import com.droidenx.clouseau.core.EntryIndex;
-import com.droidenx.clouseau.core.FileIndexer;
-import com.droidenx.clouseau.core.IndexedEntries;
-import com.droidenx.clouseau.core.IndexedFollow;
-import com.droidenx.clouseau.core.LineParser;
-import com.droidenx.clouseau.core.LogCache;
-import com.droidenx.clouseau.core.LogFileReader;
-import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.LogSniffer;
-import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.MergeLoad;
 import com.droidenx.clouseau.core.MergeOrder;
 import com.droidenx.clouseau.core.MergedEntries;
-import com.droidenx.clouseau.core.MergedNotes;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.core.ReviewBundle;
+import com.droidenx.clouseau.core.Session;
 import com.droidenx.clouseau.core.SourceConnection;
-import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
-import javax.swing.event.TableModelEvent;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
- * Self-contained panel representing one open log file tab.
- * Owns its own LogTableModel, table and detail pane.
+ * One tab (D-21): its layout, the methods the window calls, and what it shows. What every
+ * tab has (table, bars, detail pane, notes, follow mode, timezone, status bar) is its
+ * {@link SharedTabContext}; what it shows is one {@link TabContent} at a time (a file, a
+ * merged view or a live source), or none yet (a restored tab that hasn't loaded). Each
+ * content reaches the tab only through its own {@link TabContext}, withdrawn when the
+ * content is replaced.
  */
 @Slf4j
 public final class TabPanel extends JPanel {
 
-    /** Replaced by {@link #retryWithParsers} after the user creates a parser. */
-    private List<LogParser> parsers;
-    private final List<LogFormatter> formatters;
-    private final List<LogSyntaxHighlighter> syntaxHighlighters;
-    private final LogTableModel   logTableModel = new LogTableModel();
-    private final FilterBar       filterBar;
-    private JTable logTable;
-    private DetailPanel detailPanel;
-    /** The table, its columns and layouts (G-9). */
-    private LogTableView tableView;
-    /** The rows' right-click menu (G-9). */
-    private RowMenu rowMenu;
-    private volatile SwingWorker<?, ?> currentWorker;
-    private volatile SwingWorker<Void, LogEntry> tailWorker;
-    private Path currentFile;
-    /** The file inside a .zip that this tab shows, or null for a plain file (G-6). */
-    private String currentEntry;
-    /** The decompressed copy of a compressed log this tab reads rows from, or null (D-16). */
-    private Path cacheCopy;
+    private final SharedTabContext shared;
+    /** A restored tab's message card, deferred load and filter notice (D-19, G-9). */
+    private final RestoredTab restored;
     /**
      * How each file of a merged tab is read: offset, timezone, parser (D-17, G-9). The
      * tab's, not the content's, so it is kept across reloads.
      */
-    private final MergedFileSettings mergedSettings = new MergedFileSettings(new MergedFileSettings.Host() {
-        @Override public List<MergeLoad.File> files() { return getMergedFiles(); }
-        @Override public MergedEntries view() { return mergedView(); }
-        @Override public ZoneId tabZone() { return sourceTimezone; }
-        @Override public Optional<LogParser> tabParser() { return currentParser; }
-        @Override public List<LogParser> parsers() { return parsers; }
-        @Override public void reload() { TabPanel.this.reload(); }
-        @Override public void zonesChanged() { updateSourceTimezoneLabel(); }
-        @Override public void reordered(MergedEntries view, MergeOrder before, MergeOrder after) {
-            showReordered(before, after, 0);
-            tableView.widenColumnToFit(Messages.get("table.col.source"), MergedContent.sourceLabels(view));
-            logTable.repaint();
-        }
-    });
-    private Optional<LogParser> currentParser = Optional.empty();
-    /** Follows a single-file tab's file and keeps its position (G-11); null on other tabs. */
-    private IndexedFollow fileFollow;
-    /** True once the followed file was truncated in place, so older rows lost their text (D-16). */
-    private boolean rotatedTextLost = false;
-    private boolean follow  = AppPrefs.isFollowByDefault();
-    private boolean loading = false;
-    /** True when the last static load stopped early because memory ran low (UC-1). */
-    private boolean partialLoad = false;
-    /** Why the load was partial: the disk filled while unpacking, rather than low memory. */
-    private boolean partialDiskFull = false;
-    /**
-     * Follow mode reads as soon as the OS reports a change; this is only the backstop for
-     * file systems that send no notifications (some network drives).
-     */
-    private static final long FOLLOW_SAFETY_POLL_MS = 2_000;
-    /** The running filter's progress while it reads text from the file, or -1. */
-    private int filterPercent = -1;
-    /** One file's {@link AnnotationStore}, or a merged view's {@link MergedNotes} (D-17). */
-    private Notes            annotationStore   = AnnotationStore.inMemory();
-    /** True once this tab has told the user its annotations couldn't be saved. */
-    private boolean          annotationSaveWarned;
-    private JDialog          annotationsDialog;
-    private AnnotationsPanel annotationsPanel;
-    /** Built after the table, which they act on; the renderer checks for null. */
-    private FindBar         findBar;
-    private HighlightNavBar highlightNavBar;
-    private JPanel centerCards;
-    private static final String CARD_CONTENT = "content";
-    private static final String CARD_LOADING = "loading";
-    private static final String CARD_PLAIN   = "plain";
-    /** Shows a file no parser recognizes (UC-13); built the first time it's needed. */
-    private PlainTextView plainView;
-    /** True while the tab shows {@link #plainView} instead of the table. */
-    private boolean plainMode;
-    /** The first lines of the file shown as plain text, offered as samples for a new parser. */
-    private List<String> plainSamples = List.of();
-    /** Opens the parser editor for the plain-text file's samples; set by the window. */
-    private java.util.function.Consumer<List<String>> createParserAction;
+    private final MergedFileSettings mergedSettings;
+
+    /** What the tab shows, or null (a restored tab that hasn't loaded yet). */
+    private TabContent content;
+    /** The context {@link #content} was made with; withdrawn when the content is replaced. */
+    private ContentContext contentContext;
+
+    /** The file a restored tab will show before it loads, for "one tab per file"; null once something is shown. */
+    private Path presetFile;
+    private String presetEntry;
+    /** Opens the parser editor for a plain-text file's samples; set by the window. */
+    private Consumer<List<String>> createParserAction;
     /** Closes this tab; set by the window. */
     private Runnable closeAction = () -> {};
-    private ZoneId sourceTimezone = ZoneId.systemDefault();
-    /** Path, timezone badge and row counts (G-9); built after the table. */
-    private TabStatusBar statusBar;
-    /** A restored tab's message card, deferred load and filter notice (D-19, G-9). */
-    private RestoredTab restored;
 
     public TabPanel(List<LogParser> parsers, List<LogFormatter> formatters, List<LogSyntaxHighlighter> syntaxHighlighters) {
         super(new MigLayout("fill, insets 0, gapy 0", "[grow]", ""));
-        this.parsers    = parsers;
-        this.formatters = formatters;
-        this.syntaxHighlighters = syntaxHighlighters;
-        FilterBar[] fbHolder = new FilterBar[1];
-        fbHolder[0] = new FilterBar(() -> {
-            logTableModel.applyFilter(fbHolder[0].buildFilter());
-            if (restored != null) restored.filtersChanged();
-        });
-        this.filterBar = fbHolder[0];
-        filterBar.initFollow(follow, this::setFollow);
-        logTableModel.setFilterProgressListener(percent -> {
-            filterPercent = percent;
-            if (statusBar != null) updateStatusBar();
-        });
-        logTableModel.applyFilter(filterBar.buildFilter());
-
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildLogTable(),
-                detailPanel = new DetailPanel(formatters, syntaxHighlighters, this::currentDetail));
-        split.setResizeWeight(0.70);
-        split.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override public void componentResized(java.awt.event.ComponentEvent e) {
-                split.removeComponentListener(this);
-                split.setDividerLocation(0.70);
+        mergedSettings = new MergedFileSettings(new MergedFileSettings.Host() {
+            @Override public List<MergeLoad.File> files() { return getMergedFiles(); }
+            @Override public MergedEntries view() { return shared.mergedView(); }
+            @Override public ZoneId tabZone() { return shared.timezone(); }
+            @Override public Optional<LogParser> tabParser() {
+                return content instanceof MergedContent merged ? merged.parser() : Optional.empty();
+            }
+            @Override public List<LogParser> parsers() { return shared.parsers(); }
+            @Override public void reload() { TabPanel.this.reload(); }
+            @Override public void zonesChanged() { shared.updateTimezoneBadge(); }
+            @Override public void reordered(MergedEntries view, MergeOrder before, MergeOrder after) {
+                shared.reordered(before, after, 0);
+                shared.tableView().widenColumnToFit(Messages.get("table.col.source"), MergedContent.sourceLabels(view));
+                shared.table().repaint();
             }
         });
-
-        centerCards = new JPanel(new CardLayout());
-        centerCards.add(split, CARD_CONTENT);
-        centerCards.add(buildLoadingPanel(), CARD_LOADING);
-        restored = new RestoredTab(this, filterBar, show ->
-                ((CardLayout) centerCards.getLayout()).show(centerCards, show ? CARD_MESSAGE : CARD_CONTENT));
-        centerCards.add(restored.messagePanel(), CARD_MESSAGE);
-
-        statusBar = new TabStatusBar(() -> showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(this)));
-        updateSourceTimezoneLabel();
-        findBar = new FindBar(logTable, FindBar.searchIn(logTableModel));
-        highlightNavBar = new HighlightNavBar(logTable, logTableModel);
+        shared = new SharedTabContext(this, new SharedTabContext.Host() {
+            @Override public TabContent content() { return content; }
+            @Override public void setFollow(boolean on) { TabPanel.this.setFollow(on); }
+            @Override public void filtersChanged() { if (restored != null) restored.filtersChanged(); }
+            @Override public boolean zonesDiffer() { return mergedSettings.zonesDiffer(); }
+            @Override public void showTimezoneDialog() {
+                TabPanel.this.showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(TabPanel.this));
+            }
+            @Override public void showTimeOffsetDialog(int source) { TabPanel.this.showTimeOffsetDialog(source); }
+            @Override public void showSourceTimezoneDialog(int source) {
+                TabPanel.this.showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(TabPanel.this), source);
+            }
+            @Override public void showParserDialog(int source) {
+                TabPanel.this.showParserDialog(SwingUtilities.getWindowAncestor(TabPanel.this), source);
+            }
+            @Override public boolean canReload() { return content instanceof FileContent; }
+            @Override public void reload() { TabPanel.this.reload(); }
+        }, parsers, formatters, syntaxHighlighters);
+        restored = new RestoredTab(this, shared.filterBar(), shared::showMessageCard);
+        shared.addMessageCard(restored.messagePanel());
 
         add(restored.noticeStrip(), "growx, wrap, hidemode 3");
-        add(filterBar, "growx, wrap, hidemode 3");
-        add(findBar, "growx, wrap, hidemode 3");
-        add(highlightNavBar, "growx, wrap, hidemode 3");
-        add(centerCards, "grow, pushy, wrap");
-        add(statusBar, "growx");
-
-        logTableModel.addTableModelListener(e -> {
-            if (follow && !loading && e.getType() == TableModelEvent.INSERT)
-                SwingUtilities.invokeLater(tableView::scrollToBottom);
-            updateStatusBar();
-        });
-
-        logTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                refreshDetail();
-                highlightNavBar.updatePosition();
-            }
-        });
+        add(shared.filterBar(), "growx, wrap, hidemode 3");
+        add(shared.findBar(), "growx, wrap, hidemode 3");
+        add(shared.highlightNavBar(), "growx, wrap, hidemode 3");
+        add(shared.centerCards(), "grow, pushy, wrap");
+        add(shared.statusBar(), "growx");
 
         // Ctrl+F: show find bar and focus the field
         getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                 .put(KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK), "showFind");
         getActionMap().put("showFind", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) {
-                if (plainMode) plainView.openFind();
-                else findBar.open();
-            }
+            @Override public void actionPerformed(ActionEvent e) { shared.openFind(); }
         });
 
         // Ctrl+Shift+N: open the annotations panel
@@ -214,49 +125,105 @@ public final class TabPanel extends JPanel {
         });
     }
 
-    public boolean isFollow() { return follow; }
+    public boolean isFollow() { return shared.follow(); }
 
     public void setFollow(boolean follow) {
-        this.follow = follow;
-        filterBar.setFollowSelected(follow);
-        if (plainMode) {
-            plainView.setFollow(follow);
-        } else if (follow) {
-            startTailing();
-        } else {
-            stopTailing();
-        }
+        shared.setFollow(follow);
+        if (content != null) content.setFollow(follow);
     }
 
-    // ── File loading ─────────────────────────────────────────────────────────
+    // ── Content (D-21) ────────────────────────────────────────────────────────
 
-    public Path getFile() { return currentFile; }
+    /** Replaces what the tab shows with the content {@code make} creates, and starts it. */
+    private void show(Function<TabContext, TabContent> make) {
+        restored.hideMessage();
+        dropContent();
+        presetFile = null;
+        presetEntry = null;
+        ContentContext context = new ContentContext();
+        TabContent next = make.apply(context);
+        context.owner = next;
+        contentContext = context;
+        content = next;
+        shared.statusBar().setPath(next.path(), next.pathTooltip());
+        next.start();
+    }
+
+    /** Disposes the current content and withdraws its context: the tab shows something else. */
+    private void dropContent() {
+        if (content == null) return;
+        content.dispose();
+        contentContext.revoke();
+        content = null;
+        contentContext = null;
+    }
+
+    /**
+     * One content's way into the tab (D-21): forwards to the shared parts until
+     * {@link #revoke}d, then the steps do nothing and the parts can't be had. EDT only.
+     */
+    private final class ContentContext implements TabContext {
+        /** The content this context was made for. */
+        private TabContent owner;
+        private boolean revoked;
+
+        void revoke() { revoked = true; }
+
+        /** True if the content is still the tab's; checks the thread either way. */
+        private boolean current() {
+            assert SwingUtilities.isEventDispatchThread() : "TabContext used off the EDT";
+            return !revoked;
+        }
+
+        private void requireCurrent() {
+            if (!current()) throw new IllegalStateException("This content was replaced; its tab context is withdrawn");
+        }
+
+        @Override public LogTableModel model() { requireCurrent(); return shared.model(); }
+        @Override public FilterBar filterBar() { requireCurrent(); return shared.filterBar(); }
+        @Override public LogTableView tableView() { requireCurrent(); return shared.tableView(); }
+        @Override public List<LogParser> parsers() { current(); return shared.parsers(); }
+        @Override public boolean follow() { current(); return shared.follow(); }
+        @Override public ZoneId timezone() { current(); return shared.timezone(); }
+        @Override public Window window() { current(); return shared.window(); }
+
+        @Override public void reset(boolean keepFilters) { if (current()) shared.reset(keepFilters); }
+        @Override public void showLoading() { if (current()) shared.showLoading(); }
+        @Override public void showRows() { if (current()) shared.showRows(); }
+        @Override public void showPlain(PlainTextView view) { if (current()) shared.showPlain(view); }
+        @Override public void setFollow(boolean on) { if (current()) TabPanel.this.setFollow(on); }
+
+        @Override public void createParser(List<String> samples) {
+            if (current() && createParserAction != null) createParserAction.accept(samples);
+        }
+
+        @Override public void close() { if (current()) closeAction.run(); }
+
+        @Override public void pathChanged() {
+            if (current()) shared.statusBar().setPath(owner.path(), owner.pathTooltip());
+        }
+
+        @Override public void loaded(Notes notes) { if (current()) shared.loaded(notes); }
+        @Override public void reordered(MergeOrder before, MergeOrder after, int from) {
+            if (current()) shared.reordered(before, after, from);
+        }
+        @Override public void textLost() { if (current()) shared.textLost(); }
+        @Override public void statusChanged() { if (current()) shared.statusChanged(); }
+        @Override public void connectionChanged() { if (current()) connectionListener.run(); }
+    }
+
+    // ── Files (D-16, G-11) ────────────────────────────────────────────────────
+
+    /** The file this tab shows (or, before a restored tab loads, will show); null for other tabs. */
+    public Path getFile() {
+        if (content instanceof FileContent file) return file.file();
+        return content == null ? presetFile : null;
+    }
 
     /** The entry of the zip this tab shows, or null for a plain file. */
-    public String getZipEntry() { return currentEntry; }
-
-    /**
-     * The tab's annotations and highlights in the sidecar format, for a review bundle
-     * (D-10), or null while the file is still loading (its notes aren't read yet).
-     */
-    public String annotationsJson() {
-        return loading || !(annotationStore instanceof AnnotationStore s) ? null : s.toJson();
-    }
-
-    /**
-     * Sets how a merged load reads its files before {@link #loadMerged}: per file, a
-     * timezone (if not null), a time offset and a parser (if not null), as a review bundle gives them (D-17).
-     */
-    public void presetMerged(Map<MergeLoad.File, MergeLoad.PerFile> setup) {
-        mergedSettings.preset(setup);
-    }
-
-    /**
-     * A merged tab's files as a review bundle takes them (D-17): each file, its notes and
-     * how it is read; null if this isn't a merged tab or it is still loading.
-     */
-    public List<ReviewBundle.Part> reviewParts() {
-        return content instanceof MergedContent merged ? merged.reviewParts() : null;
+    public String getZipEntry() {
+        if (content instanceof FileContent file) return file.entry();
+        return content == null ? presetEntry : null;
     }
 
     public void load(Path file, Optional<LogParser> parser) {
@@ -272,184 +239,50 @@ public final class TabPanel extends JPanel {
      * plain (or .gz) file.
      */
     public void load(Path file, String entry, Optional<LogParser> parser, Runnable onError) {
-        leaveMessage();
-        dropContent();
-        currentFile = file.toAbsolutePath();
-        currentEntry = entry;
-        currentParser = parser;
-        String shown = entry == null ? currentFile.toString() : currentFile + " › " + entry;
-        statusBar.setPath(shown, shown);
-        final Path annotationKey = entry == null ? currentFile : ZipLogs.entryKey(currentFile, entry);
-        final IndexedFollow follower = fileFollow = new IndexedFollow(currentFile, 0);
-        stopTailing();
-        SwingWorker<?, ?> old = currentWorker;
-        if (old != null) old.cancel(true);
-        leavePlainMode();
-        loading = true;
-        annotationStore = AnnotationStore.inMemory();
-        annotationSaveWarned = false;
-        partialLoad = false;
-        rotatedTextLost = false;
-        logTableModel.clear();
-        deleteCacheCopy();
-        filterBar.clearLoggers();
-        tableView.resetColumns();
-        logTableModel.setCustomFields(parser.map(com.droidenx.clouseau.api.LogParser::customFields).orElse(List.of()));
-        logTableModel.beginBatchLoad();
-
-        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
-
-        final ZoneId srcTz = this.sourceTimezone; // capture before worker starts
-
-        final MemoryGuard memory = new MemoryGuard();
-
-        // D-16: the file is indexed instead of held in memory. A compressed one is unpacked
-        // to a copy in the cache folder during the same pass, and rows are read from that.
-        final boolean compressed = entry != null || LogReaders.isCompressed(file);
-        final Path copy = compressed ? newCacheCopy(file, entry) : null;
-        final Path rowSource = compressed ? copy : file;
-        final EntryIndex index = new EntryIndex();
-        if (rowSource != null) {
-            try {
-                logTableModel.beginIndexedLoad(IndexedEntries.open(rowSource, index,
-                        new LineParser(parser, parsers, srcTz), Messages.get("table.rotated.text")));
-                cacheCopy = copy;
-            } catch (IOException ex) {
-                log.warn("Can't open {} for indexing; it will be loaded into memory", rowSource, ex);
-                LogCache.delete(copy);
-            }
-        }
-        final boolean indexed = logTableModel.isIndexed();
-
-        SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
-            /** Lines read before loading stopped for lack of memory or disk, or -1 if it didn't. */
-            volatile long stoppedAtLine = -1;
-            /** True if loading stopped because the unpacked copy filled the disk. */
-            volatile boolean diskFull;
-            /** Annotations read and anchored by the worker; handed to the tab in done(). */
-            volatile AnnotationStore loadedAnnotations;
-            /** Bytes of a plain file the index covers, where following resumes; -1 if not indexed. */
-            volatile long indexedTo = -1;
-            /** The file's first lines, when no parser recognizes them: it opens as plain text (UC-13). */
-            volatile LogSniffer.Sample unrecognized;
-
-            @Override
-            protected Void doInBackground() throws Exception {
-                LogSniffer.Sample sample = LogSniffer.read(file, entry);
-                if (!sample.empty() && LogSniffer.detect(sample.lines(), parser, parsers).isEmpty()) {
-                    unrecognized = sample;
-                    return null;
-                }
-                // A review bundle's log starts from the bundle's notes until its own sidecar exists (D-10).
-                AnnotationStore annotations = ReviewBundle.loadAnnotations(file, entry, annotationKey, AppDirs.annotationsDir());
-                LineParser lineParser = new LineParser(parser, parsers, srcTz);
-                if (indexed) {
-                    indexFile(lineParser, annotations);
-                    loadedAnnotations = annotations;
-                    return null;
-                }
-                AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
-                try (BufferedReader reader = LogReaders.open(file, entry)) {
-                    LogFileReader.Result result = LogFileReader.read(reader, lineParser,
-                            LogFileReader.DEFAULT_CHECK_INTERVAL, memory::isLow, this::isCancelled,
-                            e -> {
-                                if (anchoring != null) anchoring.accept(e.rawLine());
-                                publish(e);
-                            });
-                    if (result.partial()) {
-                        stoppedAtLine = result.stoppedAtLine();
-                        log.warn("Low memory: stopped loading {} after {} lines (max heap {} MiB)",
-                                file, stoppedAtLine, memory.maxMiB());
-                    }
-                }
-                if (anchoring != null) anchoring.finish();
-                loadedAnnotations = annotations;
-                return null;
-            }
-
-            /**
-             * Reads the file once into the index, as every file of a merged view is read
-             * (G-11). Each entry is still published, so the table can filter it and the
-             * filter bar can learn its logger, but only the index keeps it.
-             */
-            private void indexFile(LineParser lineParser, AnnotationStore annotations) throws IOException {
-                FileIndexer.Result r = FileIndexer.index(file, entry, compressed ? rowSource : null, lineParser,
-                        index, annotations, this::publish, memory::isLow, this::isCancelled);
-                // Follow from exactly where the index ends, not the size at the end of the
-                // load: lines written in between would be skipped.
-                if (!compressed) indexedTo = r.end();
-                if (r.partial()) {
-                    diskFull = r.diskFull();
-                    stoppedAtLine = r.lines();
-                    if (!diskFull) {
-                        log.warn("Low memory: stopped indexing {} after {} entries (max heap {} MiB)",
-                                file, stoppedAtLine, memory.maxMiB());
-                    }
-                }
-            }
-
-            @Override
-            protected void process(List<LogEntry> chunk) {
-                if (isCancelled()) return;
-                logTableModel.appendBatch(chunk);
-                filterBar.addBatch(chunk);
-            }
-
-            @Override
-            protected void done() {
-                loading = false;
-                logTableModel.endBatchLoad();
-                ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
-                if (isCancelled()) return;
-                try {
-                    get();
-                    if (unrecognized != null) {
-                        showPlainText(unrecognized, parser);
-                        return;
-                    }
-                    if (loadedAnnotations != null) annotationStore = loadedAnnotations;
-                    applySavedHighlights();
-                    tableView.autoResizeColumns();
-                    tableView.applyDefaultLayoutIfSet();
-                    logTable.repaint();
-                    if (stoppedAtLine >= 0) {
-                        // Partial content: following would append after a gap, so don't.
-                        partialLoad = true;
-                        partialDiskFull = diskFull;
-                        updateStatusBar();
-                        String message = diskFull
-                                ? java.text.MessageFormat.format(Messages.get("load.diskfull.message"),
-                                        file.getFileName().toString(), stoppedAtLine, AppDirs.cacheDir().toString())
-                                : java.text.MessageFormat.format(Messages.get("load.lowmemory.message"),
-                                        file.getFileName().toString(), stoppedAtLine, memory.maxMiB());
-                        JOptionPane.showMessageDialog(
-                                SwingUtilities.getWindowAncestor(TabPanel.this),
-                                message,
-                                Messages.get("load.lowmemory.title"),
-                                JOptionPane.WARNING_MESSAGE);
-                        return;
-                    }
-                    if (indexedTo >= 0) follower.setPosition(indexedTo);
-                    else try { follower.setPosition(Files.size(currentFile)); } catch (IOException ignored) {}
-                    if (follow) startTailing();
-                } catch (Exception ex) {
-                    log.error("Failed to load {}", file, ex);
-                    onError.run();
-                    JOptionPane.showMessageDialog(
-                            SwingUtilities.getWindowAncestor(TabPanel.this),
-                            ex.getMessage(),
-                            Messages.get("filechooser.error.title"),
-                            JOptionPane.ERROR_MESSAGE);
-                }
-            }
-        };
-        currentWorker = worker;
-        worker.execute();
+        show(context -> new FileContent(context, file, entry, parser, onError));
     }
 
     public void reload() {
         if (content instanceof MergedContent merged) loadMerged(merged.files(), merged.parser(), merged.listener());
-        else if (currentFile != null) load(currentFile, currentEntry, currentParser, () -> {});
+        else if (content instanceof FileContent file) load(file.file(), file.entry(), file.parser(), () -> {});
+    }
+
+    /**
+     * The tab's annotations and highlights in the sidecar format, for a review bundle
+     * (D-10), or null while the file is still loading (its notes aren't read yet).
+     */
+    public String annotationsJson() {
+        if (content != null && content.loading()) return null;
+        return shared.notes() instanceof AnnotationStore s ? s.toJson() : null;
+    }
+
+    // ── Plain text (UC-13) ────────────────────────────────────────────────────
+
+    /** True while the tab shows its file as plain text because no parser recognizes it. */
+    public boolean isPlainText() { return shared.isPlain(); }
+
+    /** What "Create a parser" does: open the parser editor with these sample lines. */
+    public void setCreateParserAction(Consumer<List<String>> action) {
+        createParserAction = action;
+    }
+
+    /** Closes this tab without asking, e.g. when the user declines to open a binary file. */
+    public void setCloseAction(Runnable action) {
+        closeAction = action != null ? action : () -> {};
+    }
+
+    /**
+     * Takes the window's parsers after the user saved one. A plain-text tab reloads with
+     * auto-detection if one of them now recognizes the file, and says so if none does.
+     */
+    public void retryWithParsers(List<LogParser> newParsers) {
+        shared.setParsers(newParsers);
+        if (!(content instanceof FileContent file) || !file.isPlain()) return;
+        if (LogSniffer.detect(file.plainSamples(), Optional.empty(), newParsers).isPresent()) {
+            load(file.file(), file.entry(), Optional.empty(), () -> {});
+        } else {
+            file.stillUnrecognized();
+        }
     }
 
     // ── Merged view (UC-12, D-17) ─────────────────────────────────────────────
@@ -482,288 +315,52 @@ public final class TabPanel extends JPanel {
 
     /** Loads several files into one merged view (D-17); {@code listener} hears how it went. */
     public void loadMerged(List<MergeLoad.File> files, Optional<LogParser> parser, MergeListener listener) {
-        leaveMessage();
-        currentParser = parser;
         show(context -> new MergedContent(context, files, parser, mergedSettings, listener));
     }
 
-    // ── Plain text (UC-13) ────────────────────────────────────────────────────
-
-    /** True while the tab shows its file as plain text because no parser recognizes it. */
-    public boolean isPlainText() { return plainMode; }
-
-    /** What "Create a parser" does: open the parser editor with these sample lines. */
-    public void setCreateParserAction(java.util.function.Consumer<List<String>> action) {
-        createParserAction = action;
-    }
-
-    /** Closes this tab without asking, e.g. when the user declines to open a binary file. */
-    public void setCloseAction(Runnable action) {
-        closeAction = action != null ? action : () -> {};
-    }
-
-    // ── Sessions (UC-17, D-19) ────────────────────────────────────────────────
-
-    private static final String CARD_MESSAGE = "message";
-    /** How this tab was opened, so a session can open it again; null for a tab a session can't keep. */
-    private Session.Tab sessionOrigin;
-
-    /** Records how this tab was opened (file, merged files, SSH or plugin source). */
-    void setSessionOrigin(Session.Tab origin) {
-        sessionOrigin = origin;
+    /**
+     * Sets how a merged load reads its files before {@link #loadMerged}: per file, a
+     * timezone (if not null), a time offset and a parser (if not null), as a review bundle gives them (D-17).
+     */
+    public void presetMerged(Map<MergeLoad.File, MergeLoad.PerFile> setup) {
+        mergedSettings.preset(setup);
     }
 
     /**
-     * This tab as a session keeps it: how it was opened, plus its follow mode, timezone,
-     * merged files' settings, column layout and filters. A tab that hasn't loaded (not
-     * selected yet, or its file is missing) is kept exactly as it was restored. Null if the
-     * tab can't be reopened.
+     * A merged tab's files as a review bundle takes them (D-17): each file, its notes and
+     * how it is read; null if this isn't a merged tab or it is still loading.
      */
-    Session.Tab sessionTab() {
-        if (sessionOrigin == null) return null;
-        if (restored.keepsOrigin()) return sessionOrigin;
-        Session.Tab t = sessionOrigin;
-        if (t.kind() == Session.Kind.MERGED && content instanceof MergedContent merged) {
-            t = t.withFiles(merged.sessionFiles());
-        } else if (t.kind() != Session.Kind.MERGED) {
-            t = t.withTimezone(sourceTimezone.getId());
-        }
-        Session.Layout layout = RestoredTab.toSession(tableView.sessionLayout());
-        return t.withState(follow, layout, plainMode ? null : filterBar.state());
+    public List<ReviewBundle.Part> reviewParts() {
+        return content instanceof MergedContent merged ? merged.reviewParts() : null;
     }
 
-    /**
-     * Sets up a restored tab before it loads: follow mode, column layout and filters; the
-     * filter strip says which filters came back. {@code notes} are extra lines for the strip
-     * (a parser that no longer exists), and {@code sessionName} names a named session, or
-     * is null for the last session.
-     */
-    void restoreState(Session.Tab t, List<String> notes, String sessionName) {
-        sessionOrigin = t;
-        follow = t.follow();
-        filterBar.setFollowSelected(follow);
-        if (t.columns() != null) tableView.restoreLayout(RestoredTab.fromSession(t.columns()));
-        restored.restoreFilters(t.filters(), notes, sessionName, follow);
+    /** The names of a merged tab's files, as the Source column shows them; empty on other tabs. */
+    public List<String> mergedSourceNames() {
+        MergedEntries view = shared.mergedView();
+        if (view == null) return List.of();
+        List<String> names = new ArrayList<>();
+        for (int s = 0; s < view.sourceCount(); s++) names.add(view.sourceName(s));
+        return names;
     }
 
-    /** Sets the file a not-yet-loaded tab will show, so "one tab per file" finds it. */
-    void presetFile(Path file, String entry) {
-        currentFile = file.toAbsolutePath();
-        currentEntry = entry;
-        String shown = entry == null ? currentFile.toString() : currentFile + " › " + entry;
-        statusBar.setPath(shown, shown);
+    /** Asks for a new time offset for one file of a merged tab, then re-merges. */
+    public void showTimeOffsetDialog(int source) {
+        mergedSettings.showTimeOffsetDialog(SwingUtilities.getWindowAncestor(this), source);
     }
 
-    /**
-     * Holds the tab's load until it is first shown, so a large session opens quickly: only
-     * each window's selected tab loads at once (D-19).
-     */
-    void deferLoad(Runnable load) {
-        restored.deferLoad(load);
+    /** Sets one merged file's time offset and re-merges in the background. */
+    void applyTimeOffset(int source, long millis) {
+        mergedSettings.applyTimeOffset(source, millis);
     }
 
-    /** Whether the tab is waiting for its first showing before it loads. */
-    boolean isDeferred() { return restored.isDeferred(); }
-
-    /**
-     * Shows a message instead of rows (a missing file, a source that needs a password),
-     * with a button that runs {@code action}, or none if {@code buttonText} is null.
-     */
-    void showMessage(String text, String buttonText, Runnable action) {
-        restored.showMessage(text, buttonText, action);
+    /** Asks for the source timezone of one file of a merged tab, saves it, and reloads. */
+    public void showSourceTimezoneDialog(Component parent, int source) {
+        mergedSettings.showSourceTimezoneDialog(parent, source);
     }
 
-    /** Leaves the message card for good: the tab is about to load or stream. */
-    private void leaveMessage() {
-        restored.hideMessage();
-    }
-
-    /**
-     * Takes the window's parsers after the user saved one. A plain-text tab reloads with
-     * auto-detection if one of them now recognizes the file, and says so if none does.
-     */
-    public void retryWithParsers(List<LogParser> newParsers) {
-        parsers = newParsers;
-        if (!plainMode || currentFile == null) return;
-        if (LogSniffer.detect(plainSamples, Optional.empty(), parsers).isPresent()) {
-            load(currentFile, currentEntry, Optional.empty(), () -> {});
-        } else {
-            plainView.setBanner(Messages.get("plain.banner.still"));
-        }
-    }
-
-    /** Swaps the (empty) table for the plain-text view, after asking first for a binary file. */
-    private void showPlainText(LogSniffer.Sample sample, Optional<LogParser> parser) {
-        if (sample.binary()) {
-            String name = currentEntry != null ? currentEntry : currentFile.getFileName().toString();
-            int answer = JOptionPane.showConfirmDialog(SwingUtilities.getWindowAncestor(this),
-                    java.text.MessageFormat.format(Messages.get("plain.binary.message"), name),
-                    Messages.get("plain.binary.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (answer != JOptionPane.YES_OPTION) {
-                closeAction.run();
-                return;
-            }
-        }
-        log.info("No parser recognizes {}; showing it as plain text", currentFile);
-        plainSamples = sample.lines();
-        logTableModel.clear();          // closes the index; the unpacked copy is reused below
-        filterBar.clearLoggers();
-        findBar.cancel();
-        filterBar.setVisible(false);
-        findBar.setVisible(false);
-        highlightNavBar.setVisible(false);
-        if (plainView == null) {
-            plainView = new PlainTextView(
-                    () -> { if (createParserAction != null) createParserAction.accept(plainSamples); },
-                    this::setFollow,
-                    this::updateStatusBar);
-            centerCards.add(plainView, CARD_PLAIN);
-        }
-        plainMode = true;               // only now: the status bar asks plainView for its line count
-        String banner = parser.map(p -> java.text.MessageFormat.format(Messages.get("plain.banner.chosen"), p.getName()))
-                .orElse(Messages.get("plain.banner.auto"));
-        plainView.load(currentFile, currentEntry, cacheCopy, follow, banner);
-        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_PLAIN);
-        plainView.table().requestFocusInWindow();   // so Ctrl+F and copy reach the view
-        updateStatusBar();
-    }
-
-    /** Back to the table, before loading the file again. */
-    private void leavePlainMode() {
-        if (!plainMode) return;
-        plainMode = false;
-        plainView.stop();
-        filterBar.setVisible(true);
-        highlightNavBar.refresh();
-        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
-    }
-
-    // ── Content (D-21) ────────────────────────────────────────────────────────
-
-    /** What the tab shows, if it is a {@link TabContent} yet (live sources, merged views); null otherwise. */
-    private TabContent content;
-    /** The context {@link #content} was made with; withdrawn when the content is replaced. */
-    private ContentContext contentContext;
-
-    /** Replaces what the tab shows with the content {@code make} creates, and starts it. */
-    private void show(java.util.function.Function<TabContext, TabContent> make) {
-        dropContent();
-        ContentContext context = new ContentContext();
-        TabContent next = make.apply(context);
-        context.owner = next;
-        contentContext = context;
-        content = next;
-        statusBar.setPath(next.path(), next.pathTooltip());
-        next.start();
-    }
-
-    /** Disposes the current content and withdraws its context: the tab shows something else. */
-    private void dropContent() {
-        if (content == null) return;
-        content.dispose();
-        contentContext.revoke();
-        content = null;
-        contentContext = null;
-    }
-
-    /**
-     * Empties the tab for a content's load (D-21): what any earlier load left behind, rows,
-     * notes, and, unless {@code keepFilters}, the logger filter and column layout.
-     */
-    private void resetForContent(boolean keepFilters) {
-        stopTailing();
-        SwingWorker<?, ?> old = currentWorker;
-        if (old != null) old.cancel(true);
-        currentWorker = null;
-        leavePlainMode();
-        currentFile = null;
-        currentEntry = null;
-        fileFollow = null;
-        loading = false;
-        partialLoad = false;
-        rotatedTextLost = false;
-        annotationStore = AnnotationStore.inMemory();
-        annotationSaveWarned = false;
-        logTableModel.clear();
-        deleteCacheCopy();
-        if (!keepFilters) {
-            filterBar.clearLoggers();
-            tableView.resetColumns();
-        }
-    }
-
-    /**
-     * One content's way into the tab (D-21): forwards to the tab until {@link #revoke}d,
-     * then the steps do nothing and the parts can't be had. EDT only.
-     */
-    private final class ContentContext implements TabContext {
-        /** The content this context was made for. */
-        private TabContent owner;
-        private boolean revoked;
-
-        void revoke() { revoked = true; }
-
-        /** True if the content is still the tab's; checks the thread either way. */
-        private boolean current() {
-            assert SwingUtilities.isEventDispatchThread() : "TabContext used off the EDT";
-            return !revoked;
-        }
-
-        private void requireCurrent() {
-            if (!current()) throw new IllegalStateException("This content was replaced; its tab context is withdrawn");
-        }
-
-        @Override public LogTableModel model() { requireCurrent(); return logTableModel; }
-        @Override public FilterBar filterBar() { requireCurrent(); return filterBar; }
-        @Override public LogTableView tableView() { requireCurrent(); return tableView; }
-        @Override public List<LogParser> parsers() { current(); return parsers; }
-        @Override public boolean follow() { current(); return follow; }
-        @Override public Window window() { current(); return SwingUtilities.getWindowAncestor(TabPanel.this); }
-
-        @Override public void reset(boolean keepFilters) {
-            if (current()) resetForContent(keepFilters);
-        }
-
-        @Override public void showLoading() {
-            if (current()) ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
-        }
-
-        @Override public void showRows() {
-            if (current()) ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
-        }
-
-        @Override public void pathChanged() {
-            if (current()) statusBar.setPath(owner.path(), owner.pathTooltip());
-        }
-
-        @Override public void loaded(Notes notes) {
-            if (!current()) return;
-            annotationStore = notes;
-            applySavedHighlights();
-        }
-
-        @Override public void reordered(MergeOrder before, MergeOrder after, int from) {
-            if (current()) showReordered(before, after, from);
-        }
-
-        @Override public void textLost() {
-            if (!current()) return;
-            rotatedTextLost = true;
-            logTable.repaint();
-            refreshDetail();
-            updateStatusBar();
-        }
-
-        @Override public void statusChanged() {
-            if (!current()) return;
-            logTable.repaint();
-            updateStatusBar();
-            updateSourceTimezoneLabel();
-        }
-
-        @Override public void connectionChanged() {
-            if (current()) connectionListener.run();
-        }
+    /** Asks which parser one file of a merged tab is read with (G-10), and reloads. */
+    public void showParserDialog(Component parent, int source) {
+        mergedSettings.showParserDialog(parent, source);
     }
 
     // ── Live sources (UC-6, D-20) ─────────────────────────────────────────────
@@ -782,12 +379,9 @@ public final class TabPanel extends JPanel {
      * <p>{@code factory} creates a new source for {@link #reconnect}, since a source is
      * used once; null if the tab can't reconnect.
      */
-    public void loadSource(LogSource source, java.util.concurrent.Callable<LogSource> factory,
-                           Optional<LogParser> parser) {
-        leaveMessage();
+    public void loadSource(LogSource source, Callable<LogSource> factory, Optional<LogParser> parser) {
         restoredReconnect = null;
         restoredWaiting = null;
-        currentParser = parser;
         show(context -> new LiveContent(context, source, factory, parser, false));
     }
 
@@ -854,202 +448,100 @@ public final class TabPanel extends JPanel {
         show(context -> new LiveContent(context, fresh, live.factory(), live.parser(), true));
     }
 
-    private void startTailing() {
-        stopTailing();
-        if (content != null) {
-            content.setFollow(true);
-            return;
-        }
-        final IndexedFollow follower = fileFollow;
-        if (currentFile == null || follower == null || LogReaders.isCompressed(currentFile)) return;
-        final Optional<LogParser> parser = currentParser;
-        final ZoneId srcTz = this.sourceTimezone; // capture before worker starts
-        // D-16: on an indexed tab, followed lines extend the index and are never trimmed.
-        final IndexedEntries indexed = logTableModel.indexedEntries();
-        tailWorker = new SwingWorker<>() {
-            @Override
-            protected Void doInBackground() {
-                follower.run(indexed, new LineParser(parser, parsers, srcTz), new IndexedFollow.Listener() {
-                    @Override
-                    public void entry(LogEntry e) {
-                        publish(e);
-                    }
+    // ── Sessions (UC-17, D-19) ────────────────────────────────────────────────
 
-                    @Override
-                    public void textLost() {
-                        SwingUtilities.invokeLater(() -> {
-                            if (logTableModel.indexedEntries() != indexed) return;   // cleared
-                            rotatedTextLost = true;
-                            logTable.repaint();
-                            refreshDetail();
-                            updateStatusBar();
-                        });
-                    }
-                }, this::isCancelled, FOLLOW_SAFETY_POLL_MS);
-                return null;
-            }
+    /** How this tab was opened, so a session can open it again; null for a tab a session can't keep. */
+    private Session.Tab sessionOrigin;
 
-            @Override
-            protected void process(List<LogEntry> entries) {
-                // Rows already in the index must reach the model even after a cancel, or
-                // the model's count would fall behind the index for good.
-                if (isCancelled() && indexed == null) return;
-                if (indexed != null && logTableModel.indexedEntries() != indexed) return;  // cleared
-                filterBar.addBatch(entries);
-                logTableModel.appendFollowed(entries);
-            }
-        };
-        tailWorker.execute();
-    }
-
-    private void stopTailing() {
-        SwingWorker<?, ?> w = tailWorker;
-        if (w != null) { w.cancel(true); tailWorker = null; }
-        if (content != null) content.setFollow(false);
+    /** Records how this tab was opened (file, merged files, SSH or plugin source). */
+    void setSessionOrigin(Session.Tab origin) {
+        sessionOrigin = origin;
     }
 
     /**
-     * Shows a merged tab whose order changed from {@code from} on ({@code before} still holds
-     * the old one): re-filters, and keeps highlights, notes and the selection on their entries.
+     * This tab as a session keeps it: how it was opened, plus its follow mode, timezone,
+     * merged files' settings, column layout and filters. A tab that hasn't loaded (not
+     * selected yet, or its file is missing) is kept exactly as it was restored. Null if the
+     * tab can't be reopened.
      */
-    private void showReordered(MergeOrder before, MergeOrder after, int from) {
-        java.util.function.IntUnaryOperator moved = o -> after.ordinalOf(before.source(o), before.row(o));
-        int viewRow = logTable.getSelectedRow();
-        int selected = viewRow >= 0 ? logTableModel.ordinalAt(logTable.convertRowIndexToModel(viewRow)) : -1;
-        boolean done = logTableModel.reorderTail(from, moved, after.size());
-        if (annotationStore instanceof MergedNotes notes) notes.setOrder(after);
-        findBar.clearMatches();
-        Runnable restore = () -> {
-            if (selected >= 0) {
-                int row = logTableModel.rowOfOrdinal(selected >= from ? moved.applyAsInt(selected) : selected);
-                int v = row >= 0 ? logTable.convertRowIndexToView(row) : -1;
-                if (v >= 0) {
-                    logTable.setRowSelectionInterval(v, v);
-                    if (!follow) logTable.scrollRectToVisible(logTable.getCellRect(v, 0, true));
-                }
-            }
-            if (follow) tableView.scrollToBottom();
-            refreshDetail();
-        };
-        if (done) restore.run();
-        else logTableModel.whenFiltered(restore);
-    }
-
-    // ── Merged files: time offsets and timezones (D-17 step 6) ────────────────
-
-    /** The merged view this tab shows, or null. */
-    private MergedEntries mergedView() {
-        return logTableModel.entryRows() instanceof MergedEntries m ? m : null;
-    }
-
-    /** The names of a merged tab's files, as the Source column shows them; empty on other tabs. */
-    public List<String> mergedSourceNames() {
-        MergedEntries view = mergedView();
-        if (view == null) return List.of();
-        List<String> names = new ArrayList<>();
-        for (int s = 0; s < view.sourceCount(); s++) names.add(view.sourceName(s));
-        return names;
-    }
-
-    /** Asks for a new time offset for one file of a merged tab, then re-merges. */
-    public void showTimeOffsetDialog(int source) {
-        mergedSettings.showTimeOffsetDialog(SwingUtilities.getWindowAncestor(this), source);
-    }
-
-    /** Sets one merged file's time offset and re-merges in the background. */
-    void applyTimeOffset(int source, long millis) {
-        mergedSettings.applyTimeOffset(source, millis);
-    }
-
-    /** Asks for the source timezone of one file of a merged tab, saves it, and reloads. */
-    public void showSourceTimezoneDialog(Component parent, int source) {
-        mergedSettings.showSourceTimezoneDialog(parent, source);
-    }
-
-    /** Asks which parser one file of a merged tab is read with (G-10), and reloads. */
-    public void showParserDialog(Component parent, int source) {
-        mergedSettings.showParserDialog(parent, source);
-    }
-
-    public void dispose() {
-        stopTailing();
-        SwingWorker<?, ?> w = currentWorker;
-        if (w != null) w.cancel(true);
-        if (content != null) {
-            content.dispose();          // kept, so the closed tab still reports its state
-            contentContext.revoke();
+    Session.Tab sessionTab() {
+        if (sessionOrigin == null) return null;
+        if (restored.keepsOrigin()) return sessionOrigin;
+        Session.Tab t = sessionOrigin;
+        if (t.kind() == Session.Kind.MERGED && content instanceof MergedContent merged) {
+            t = t.withFiles(merged.sessionFiles());
+        } else if (t.kind() != Session.Kind.MERGED) {
+            t = t.withTimezone(shared.timezone().getId());
         }
-        if (plainView != null) plainView.dispose();
-        logTableModel.dispose();
-        deleteCacheCopy();
+        Session.Layout layout = RestoredTab.toSession(shared.tableView().sessionLayout());
+        return t.withState(shared.follow(), layout, shared.isPlain() ? null : shared.filterBar().state());
     }
 
     /**
-     * Creates the file a compressed log is unpacked to, or returns null (the log is then
-     * loaded into memory, as before D-16) if its unpacked size is known and the disk
-     * doesn't have room for it, or the file can't be created.
+     * Sets up a restored tab before it loads: follow mode, column layout and filters; the
+     * filter strip says which filters came back. {@code notes} are extra lines for the strip
+     * (a parser that no longer exists), and {@code sessionName} names a named session, or
+     * is null for the last session.
      */
-    private static Path newCacheCopy(Path file, String entry) {
-        Path dir = AppDirs.cacheDir();
-        try {
-            long size = LogReaders.uncompressedSize(file, entry);
-            if (!LogCache.hasRoom(dir, size)) {
-                log.warn("Not enough free space in {} to unpack {} ({} bytes); loading it into memory",
-                        dir, file, size);
-                return null;
-            }
-            return LogCache.newCopy(dir, file, entry);
-        } catch (IOException ex) {
-            log.warn("Can't create a copy of {} in {}; loading it into memory", file, dir, ex);
-            return null;
-        }
+    void restoreState(Session.Tab t, List<String> notes, String sessionName) {
+        sessionOrigin = t;
+        shared.setFollow(t.follow());
+        if (t.columns() != null) shared.tableView().restoreLayout(RestoredTab.fromSession(t.columns()));
+        restored.restoreFilters(t.filters(), notes, sessionName, shared.follow());
+    }
+
+    /** Sets the file a not-yet-loaded tab will show, so "one tab per file" finds it. */
+    void presetFile(Path file, String entry) {
+        presetFile = file.toAbsolutePath();
+        presetEntry = entry;
+        String shown = entry == null ? presetFile.toString() : presetFile + " › " + entry;
+        shared.statusBar().setPath(shown, shown);
     }
 
     /**
-     * Deletes this tab's unpacked copy. Call after the model has closed its channel. The
-     * load worker may still be writing it; files are opened with delete sharing, so the
-     * copy goes when the last handle closes (and at the next start if it doesn't).
+     * Holds the tab's load until it is first shown, so a large session opens quickly: only
+     * each window's selected tab loads at once (D-19).
      */
-    private void deleteCacheCopy() {
-        LogCache.delete(cacheCopy);
-        cacheCopy = null;
+    void deferLoad(Runnable load) {
+        restored.deferLoad(load);
     }
 
-    public JTable getLogTable() { return logTable; }
+    /** Whether the tab is waiting for its first showing before it loads. */
+    boolean isDeferred() { return restored.isDeferred(); }
 
-    public void applyDetailFontSize(int size) {
-        refreshDetail();
-    }
-
-    public void applyWrapLines(boolean wrap) {
-        detailPanel.setWrapLines(wrap);
+    /**
+     * Shows a message instead of rows (a missing file, a source that needs a password),
+     * with a button that runs {@code action}, or none if {@code buttonText} is null.
+     */
+    void showMessage(String text, String buttonText, Runnable action) {
+        restored.showMessage(text, buttonText, action);
     }
 
     // ── Source timezone ───────────────────────────────────────────────────────
 
-    public ZoneId getSourceTimezone() { return sourceTimezone; }
+    public ZoneId getSourceTimezone() { return shared.timezone(); }
 
     /** Sets the source timezone field and updates the status bar badge. Does NOT reload. */
     public void setSourceTimezone(ZoneId zone) {
-        this.sourceTimezone = zone;
-        updateSourceTimezoneLabel();
+        shared.setTimezone(zone);
     }
 
     /** Sets the source timezone, persists it for the current file, then reloads. */
     public void applySourceTimezone(ZoneId zone) {
-        this.sourceTimezone = zone;
-        if (currentFile != null) AppPrefs.setSourceTimezone(currentFile, zone);
-        else if (content instanceof MergedContent merged) {
+        shared.setTimezone(zone);
+        if (content instanceof FileContent file) {
+            AppPrefs.setSourceTimezone(file.file(), zone);
+        } else if (content instanceof MergedContent merged) {
             mergedSettings.clearZones();
             merged.files().forEach(f -> AppPrefs.setSourceTimezone(f.path(), zone));
         }
-        updateSourceTimezoneLabel();
+        shared.updateTimezoneBadge();
         reload();
     }
 
     /** Shows a timezone picker dialog; on confirmation calls {@link #applySourceTimezone}. */
     public void showSourceTimezoneDialog(Component parent) {
-        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(sourceTimezone);
+        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(shared.timezone());
         JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
         note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
         Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note };
@@ -1063,197 +555,28 @@ public final class TabPanel extends JPanel {
         }
     }
 
-    private void updateSourceTimezoneLabel() {
-        if (statusBar != null) statusBar.setTimezone(sourceTimezone, mergedSettings.zonesDiffer());
-    }
+    // ── The rest of the window's calls ────────────────────────────────────────
 
-    public void clearTable() {
-        int confirm = JOptionPane.showConfirmDialog(
-                SwingUtilities.getWindowAncestor(this),
-                Messages.get("table.clear.confirm.message"),
-                Messages.get("table.clear.confirm.title"),
-                JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) return;
-        // A plain file stays indexed: what is followed from here on starts a new index.
-        boolean reindex = logTableModel.isIndexed() && cacheCopy == null && currentFile != null;
-        stopTailing();
-        if (fileFollow != null) {
-            try { fileFollow.setPosition(Files.size(currentFile)); } catch (IOException ignored) { fileFollow.setPosition(0); }
-        }
-        if (content != null) content.cleared();
-        logTableModel.clear();
-        rotatedTextLost = false;
-        if (reindex) {
-            try {
-                logTableModel.beginIndexedLoad(IndexedEntries.open(currentFile, new EntryIndex(),
-                        new LineParser(currentParser, parsers, sourceTimezone), Messages.get("table.rotated.text")));
-            } catch (IOException ex) {
-                log.warn("Can't open {} for indexing; followed lines will be held in memory", currentFile, ex);
-            }
-        }
-        refreshDetail();
-        findBar.clearMatches();
-        updateStatusBar();
-        if (follow) startTailing();
-    }
+    public JTable getLogTable() { return shared.table(); }
 
-    private void updateStatusBar() {
-        if (plainMode) {
-            statusBar.setPlainLines(plainView.lineCount());
-            return;
-        }
-        String note = "";
-        if (partialLoad) note += Messages.get(partialDiskFull ? "status.partial.diskfull" : "status.partial");
-        if (rotatedTextLost) note += Messages.get("status.rotated");
-        if (filterPercent >= 0) note += java.text.MessageFormat.format(Messages.get("status.filtering"), filterPercent);
-        statusBar.setRows(logTableModel.getRowCount(), logTableModel.getTotalCount(),
-                logTableModel.getTrimmedCount(), note);
-    }
+    public void clearTable() { shared.clearTable(); }
 
-    // ── Loading overlay ───────────────────────────────────────────────────────
+    public void showAnnotationsDialog() { shared.showAnnotationsDialog(); }
 
-    private JPanel buildLoadingPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        ClouseauColors.themedBackground(panel, ClouseauColors::loadingBackground);
+    void warnIfAnnotationsNotSaved(boolean saved) { shared.warnIfAnnotationsNotSaved(saved); }
 
-        JProgressBar bar = new JProgressBar();
-        bar.setIndeterminate(true);
-        bar.setBorderPainted(false);
-        ClouseauColors.themedForeground(bar, ClouseauColors::progressForeground);
-        ClouseauColors.themedBackground(bar, ClouseauColors::progressBackground);
-        bar.setPreferredSize(new Dimension(280, 4));
+    public void applyDetailFontSize(int size) { shared.refreshDetail(); }
 
-        JLabel label = new JLabel(Messages.get("loading.message"), SwingConstants.CENTER);
-        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
-        label.setFont(label.getFont().deriveFont(13f));
-
-        JPanel inner = new JPanel(new MigLayout("insets 0", "[280!]", "[]10[]"));
-        inner.setOpaque(false);
-        inner.add(bar,   "wrap, h 4!");
-        inner.add(label, "growx");
-
-        panel.add(inner, BorderLayout.CENTER);
-        return panel;
-    }
-
-    // ── Log table ────────────────────────────────────────────────────────────
-
-    private JScrollPane buildLogTable() {
-        tableView = new LogTableView(logTableModel, new LogTableView.Host() {
-            @Override public Notes notes() { return annotationStore; }
-
-            @Override public boolean isFindMatch(int modelRow) {
-                return findBar != null && findBar.isMatch(modelRow);
-            }
-
-            @Override public void showRowMenu(List<Integer> modelRows, int x, int y) {
-                rowMenu.show(modelRows, x, y);
-            }
-        });
-        logTable = tableView.table();
-        rowMenu = new RowMenu(logTableModel, logTable, new RowMenu.Host() {
-            @Override public Notes notes() { return annotationStore; }
-            @Override public void notesSaved(boolean saved) { warnIfAnnotationsNotSaved(saved); }
-
-            @Override public void highlightsChanged() {
-                refreshDetail();
-                highlightNavBar.refresh();
-            }
-
-            @Override public void notesChanged() {
-                logTable.repaint();
-                refreshDetail();
-                if (annotationsPanel != null && annotationsDialog != null && annotationsDialog.isVisible())
-                    annotationsPanel.refresh();
-            }
-
-            @Override public MergedEntries mergedView() { return TabPanel.this.mergedView(); }
-            @Override public void showTimeOffsetDialog(int source) { TabPanel.this.showTimeOffsetDialog(source); }
-
-            @Override public void showSourceTimezoneDialog(int source) {
-                TabPanel.this.showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(TabPanel.this), source);
-            }
-
-            @Override public void showParserDialog(int source) {
-                TabPanel.this.showParserDialog(SwingUtilities.getWindowAncestor(TabPanel.this), source);
-            }
-
-            @Override public void showAnnotationsDialog() { TabPanel.this.showAnnotationsDialog(); }
-            @Override public boolean canReload() { return currentFile != null; }
-            @Override public void reload() { TabPanel.this.reload(); }
-            @Override public void clearTable() { TabPanel.this.clearTable(); }
-        });
-        return tableView.scrollPane();
-    }
-
-    /** Shows the highlights saved with the file on the rows they attached to. */
-    private void applySavedHighlights() {
-        Color[] palette = ClouseauColors.highlightColors();
-        annotationStore.highlights().forEach((ord, slot) -> {
-            if (slot >= 0 && slot < palette.length) logTableModel.setHighlightAtOrdinal(ord, palette[slot]);
-        });
-        highlightNavBar.refresh();
-    }
-
-    /**
-     * Tells the user, once per opened file, that annotations couldn't be saved next to
-     * the log or in the data folder. They stay in memory until the tab closes.
-     */
-    void warnIfAnnotationsNotSaved(boolean saved) {
-        if (saved || annotationSaveWarned) return;
-        annotationSaveWarned = true;
-        JOptionPane.showMessageDialog(
-                SwingUtilities.getWindowAncestor(this),
-                java.text.MessageFormat.format(Messages.get("annotation.save.failed.message"),
-                        String.valueOf(annotationStore.getSavePath())),
-                Messages.get("annotation.save.failed.title"),
-                JOptionPane.WARNING_MESSAGE);
-    }
-
-    /** Opens (or brings to front) the non-modal annotations panel dialog. */
-    public void showAnnotationsDialog() {
-        Window owner = SwingUtilities.getWindowAncestor(this);
-        if (annotationsDialog == null || !annotationsDialog.isDisplayable()) {
-            annotationsPanel  = new AnnotationsPanel(
-                    () -> annotationStore, logTableModel, logTable,
-                    () -> annotationsDialog.setVisible(false),
-                    saved -> { warnIfAnnotationsNotSaved(saved); refreshDetail(); });
-            annotationsDialog = new JDialog(owner, Messages.get("annotations.dialog.title"),
-                    java.awt.Dialog.ModalityType.MODELESS);
-            annotationsDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-            annotationsDialog.add(annotationsPanel);
-            annotationsDialog.setSize(760, 280);
-            annotationsDialog.setLocationRelativeTo(owner);
-        } else {
-            annotationsPanel.refresh();
-        }
-        annotationsDialog.setVisible(true);
-        annotationsDialog.toFront();
-    }
-
-    // ── Detail panel ─────────────────────────────────────────────────────────
-
-    /** What the detail panel should show for the selected row, or null. */
-    private DetailPanel.Content currentDetail() {
-        int viewRow = logTable.getSelectedRow();
-        int modelRow = viewRow >= 0 ? logTable.convertRowIndexToModel(viewRow) : -1;
-        LogEntry entry = modelRow >= 0 ? logTableModel.getEntry(modelRow) : null;
-        if (entry == null) return null;
-        int ordinal = logTableModel.ordinalAt(modelRow);
-        MergedEntries merged = mergedView();
-        long shift = merged != null && ordinal >= 0 && ordinal < merged.size()
-                ? merged.offsetMillis(merged.sourceOf(ordinal)) : 0;
-        return new DetailPanel.Content(entry, logTableModel.getHighlight(modelRow),
-                annotationStore.at(ordinal), logTableModel.getContinuationLines(modelRow), shift);
-    }
-
-    private void refreshDetail() {
-        detailPanel.refresh();
-    }
+    public void applyWrapLines(boolean wrap) { shared.applyWrapLines(wrap); }
 
     /** Rebuilds timestamp formatters from the current preference and refreshes the table and detail panel. */
-    public void refreshTimezone() {
-        logTableModel.refreshTimezone();
-        detailPanel.refreshTimezone();
+    public void refreshTimezone() { shared.refreshTimezone(); }
+
+    public void dispose() {
+        if (content != null) {
+            content.dispose();          // kept, so the closed tab still reports its state
+            contentContext.revoke();
+        }
+        shared.dispose();
     }
 }

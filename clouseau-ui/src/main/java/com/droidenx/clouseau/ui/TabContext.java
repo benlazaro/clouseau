@@ -5,6 +5,7 @@ import com.droidenx.clouseau.core.MergeOrder;
 import com.droidenx.clouseau.core.Notes;
 
 import java.awt.*;
+import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -47,10 +48,25 @@ interface TabContext {
     /** Shows the rows. */
     void showRows();
 
+    /** The source timezone the tab reads timestamps in. */
+    ZoneId timezone();
+
+    /** Shows a file as plain text instead of the rows (UC-13); the content owns the view. */
+    void showPlain(PlainTextView view);
+
+    /** Turns follow mode on or off, as the user would (e.g. from the plain-text view). */
+    void setFollow(boolean on);
+
+    /** Opens the parser editor with these sample lines (UC-13's "Create a parser"). */
+    void createParser(List<String> samples);
+
+    /** Closes the tab, e.g. when the user declines to open a binary file. */
+    void close();
+
     /** The content's {@link TabContent#path} changed: show it in the status bar again. */
     void pathChanged();
 
-    /** The rows are loaded with these notes: show them and their highlights. */
+    /** The rows are loaded with these notes (null: keep the empty ones): show them and their highlights. */
     void loaded(Notes notes);
 
     /**
