@@ -26,7 +26,6 @@ import com.droidenx.clouseau.core.MergedNotes;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.SourceConnection;
-import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -69,14 +68,6 @@ public final class TabPanel extends JPanel {
     private RowMenu rowMenu;
     private volatile SwingWorker<?, ?> currentWorker;
     private volatile SwingWorker<Void, LogEntry> tailWorker;
-    /** The live source streaming into this tab (SSH or a plugin), or null. */
-    private volatile LogSource liveSource;
-    /** Creates a fresh source for Reconnect (UC-6); null on tabs that don't show a live source. */
-    private java.util.concurrent.Callable<LogSource> sourceFactory;
-    /** The live source's current run (connecting, connected, disconnected), or null. EDT only. */
-    private SourceConnection connection;
-    /** Told on the EDT when {@link #connection} changes state; set by the window. */
-    private Runnable connectionListener = () -> {};
     private Path currentFile;
     /** The file inside a .zip that this tab shows, or null for a plain file (G-6). */
     private String currentEntry;
@@ -296,6 +287,7 @@ public final class TabPanel extends JPanel {
      */
     public void load(Path file, String entry, Optional<LogParser> parser, Runnable onError) {
         leaveMessage();
+        dropContent();
         mergedFiles = null;
         currentFile = file.toAbsolutePath();
         currentEntry = entry;
@@ -533,6 +525,7 @@ public final class TabPanel extends JPanel {
     /** Loads several files into one merged view (D-17); {@code listener} hears how it went. */
     public void loadMerged(List<MergeLoad.File> files, Optional<LogParser> parser, MergeListener listener) {
         leaveMessage();
+        dropContent();
         mergeListener = listener;
         final java.util.function.Consumer<List<MergeLoad.Skipped>> onSkipped = listener::skipped;
         final Runnable onError = listener::failed;
@@ -806,38 +799,116 @@ public final class TabPanel extends JPanel {
         ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
     }
 
-    public void cancelLoad() {
-        stopTailing();
-        SwingWorker<?, ?> w = currentWorker;
-        if (w != null) w.cancel(true);
-        LogSource s = liveSource;
-        liveSource = null;
-        if (s != null) closeInBackground(s);
-        if (connection != null) connection.disconnected(null);
+    // ── Content (D-21) ────────────────────────────────────────────────────────
+
+    /** What the tab shows, if it is a {@link TabContent} yet (live sources); null otherwise. */
+    private TabContent content;
+    /** The context {@link #content} was made with; withdrawn when the content is replaced. */
+    private ContentContext contentContext;
+
+    /** Replaces what the tab shows with the content {@code make} creates, and starts it. */
+    private void show(java.util.function.Function<TabContext, TabContent> make) {
+        dropContent();
+        ContentContext context = new ContentContext();
+        TabContent next = make.apply(context);
+        contentContext = context;
+        content = next;
+        statusBar.setPath(next.path(), next.pathTooltip());
+        next.start();
+    }
+
+    /** Disposes the current content and withdraws its context: the tab shows something else. */
+    private void dropContent() {
+        if (content == null) return;
+        content.dispose();
+        contentContext.revoke();
+        content = null;
+        contentContext = null;
     }
 
     /**
-     * Closes a live source on its own daemon thread. Closing can wait on the network (an
-     * SSH connection that went silent) or on a plugin, and that must never freeze the
-     * window (issue #1). The tab doesn't need the source once its worker is cancelled.
+     * Empties the tab for a content's load (D-21): what any earlier load left behind, rows,
+     * notes, and, unless {@code keepFilters}, the logger filter and column layout.
      */
-    private static void closeInBackground(LogSource s) {
-        Thread t = new Thread(() -> {
-            try {
-                s.close();
-            } catch (Exception | LinkageError e) {
-                log.warn("Error closing source {}", s.getClass().getName(), e);
-            }
-        }, "source-close");
-        t.setDaemon(true);
-        t.start();
+    private void resetForContent(boolean keepFilters) {
+        stopTailing();
+        SwingWorker<?, ?> old = currentWorker;
+        if (old != null) old.cancel(true);
+        currentWorker = null;
+        leavePlainMode();
+        currentFile = null;
+        currentEntry = null;
+        fileFollow = null;
+        mergedFiles = null;
+        loading = false;
+        partialLoad = false;
+        rotatedTextLost = false;
+        annotationStore = AnnotationStore.inMemory();
+        annotationSaveWarned = false;
+        dropMergedTailer();
+        logTableModel.clear();
+        deleteCacheCopy();
+        if (!keepFilters) {
+            filterBar.clearLoggers();
+            tableView.resetColumns();
+        }
     }
 
     /**
-     * Streams a live source (SSH, or one from a plugin) into this tab: {@code source.open}
-     * runs on a background worker, and each line is parsed with {@code parser} (or
-     * auto-detected) and appended as a live entry, subject to the entry cap. Rows appear
-     * as they arrive. Closing the tab closes the source.
+     * One content's way into the tab (D-21): forwards to the tab until {@link #revoke}d,
+     * then the steps do nothing and the parts can't be had. EDT only.
+     */
+    private final class ContentContext implements TabContext {
+        private boolean revoked;
+
+        void revoke() { revoked = true; }
+
+        /** True if the content is still the tab's; checks the thread either way. */
+        private boolean current() {
+            assert SwingUtilities.isEventDispatchThread() : "TabContext used off the EDT";
+            return !revoked;
+        }
+
+        private void requireCurrent() {
+            if (!current()) throw new IllegalStateException("This content was replaced; its tab context is withdrawn");
+        }
+
+        @Override public LogTableModel model() { requireCurrent(); return logTableModel; }
+        @Override public FilterBar filterBar() { requireCurrent(); return filterBar; }
+        @Override public LogTableView tableView() { requireCurrent(); return tableView; }
+        @Override public List<LogParser> parsers() { current(); return parsers; }
+        @Override public boolean follow() { current(); return follow; }
+        @Override public Window window() { current(); return SwingUtilities.getWindowAncestor(TabPanel.this); }
+
+        @Override public void reset(boolean keepFilters) {
+            if (current()) resetForContent(keepFilters);
+        }
+
+        @Override public void showLoading() {
+            if (current()) ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
+        }
+
+        @Override public void showRows() {
+            if (current()) ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
+        }
+
+        @Override public void connectionChanged() {
+            if (current()) connectionListener.run();
+        }
+    }
+
+    // ── Live sources (UC-6, D-20) ─────────────────────────────────────────────
+
+    /** Told on the EDT when the live source's connection changes state; set by the window. */
+    private Runnable connectionListener = () -> {};
+    /** What Reconnect does on a restored tab that is waiting for the user, or null. */
+    private Runnable restoredReconnect;
+    /** Why a restored tab is waiting for the user, while {@link #restoredReconnect} is set. */
+    private String restoredWaiting;
+
+    /**
+     * Streams a live source (SSH, or one from a plugin) into this tab, as a {@link LiveContent}.
+     * Rows appear as they arrive; closing the tab closes the source.
      *
      * <p>{@code factory} creates a new source for {@link #reconnect}, since a source is
      * used once; null if the tab can't reconnect.
@@ -846,8 +917,9 @@ public final class TabPanel extends JPanel {
                            Optional<LogParser> parser) {
         leaveMessage();
         restoredReconnect = null;
-        sourceFactory = factory;
-        startSource(source, parser, false);
+        restoredWaiting = null;
+        currentParser = parser;
+        show(context -> new LiveContent(context, source, factory, parser, false));
     }
 
     /**
@@ -858,29 +930,26 @@ public final class TabPanel extends JPanel {
      */
     void waitForReconnect(String text, Runnable action) {
         restoredReconnect = action;
+        restoredWaiting = text;
         showMessage(text, Messages.get("session.tab.reconnect"), action);
-        SourceConnection waiting = new SourceConnection(changed -> {});
-        waiting.disconnected(text);
-        connection = waiting;
         connectionListener.run();
     }
 
-    /** What Reconnect does on a restored tab that is waiting for the user, or null. */
-    private Runnable restoredReconnect;
-
     /** True if this tab streams a live source that {@link #reconnect} can open again. */
     public boolean canReconnect() {
-        return sourceFactory != null || restoredReconnect != null;
+        return content instanceof LiveContent live && live.canReconnect() || restoredReconnect != null;
     }
 
     /** The live source's state, or null on a tab that shows no live source. */
     public SourceConnection.State connectionState() {
-        return connection == null ? null : connection.state();
+        if (content instanceof LiveContent live) return live.state();
+        return restoredReconnect != null ? SourceConnection.State.DISCONNECTED : null;
     }
 
     /** Why the live source failed, or null. */
     public String connectionError() {
-        return connection == null ? null : connection.error();
+        if (content instanceof LiveContent live) return live.error();
+        return restoredReconnect != null ? restoredWaiting : null;
     }
 
     /** Run on the EDT whenever the live source's state changes. */
@@ -895,135 +964,25 @@ public final class TabPanel extends JPanel {
      * they would be duplicated.
      */
     public void reconnect() {
-        if (sourceFactory == null && restoredReconnect != null) {
-            restoredReconnect.run();   // asks for what the session didn't keep
+        if (!(content instanceof LiveContent live) || !live.canReconnect()) {
+            if (restoredReconnect != null) restoredReconnect.run();   // asks for what the session didn't keep
             return;
         }
-        if (sourceFactory == null) return;
         LogSource fresh;
         try {
-            fresh = sourceFactory.call();
+            fresh = live.factory().call();
             if (fresh == null) throw new IllegalStateException("create() returned null");
         } catch (Exception | LinkageError e) {
             log.error("Couldn't create a source to reconnect", e);
             String message = e.getMessage() != null ? e.getMessage() : e.toString();
-            cancelLoad();
-            if (connection != null) connection.disconnected(message);
+            live.stop(message);
             JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(this),
                     java.text.MessageFormat.format(Messages.get("source.reconnect.failed"), message),
                     Messages.get("source.error.title"), JOptionPane.ERROR_MESSAGE);
             return;
         }
-        log.info("Reconnecting {}", sourceName(fresh));
-        startSource(fresh, currentParser, true);
-    }
-
-    private void startSource(LogSource source, Optional<LogParser> parser, boolean reconnecting) {
-        String name = sourceName(source);
-        currentFile   = null;
-        currentEntry  = null;
-        fileFollow    = null;
-        currentParser = parser;
-        statusBar.setPath(name, name);
-        cancelLoad();   // closes any prior source, cancels in-flight workers
-        leavePlainMode();
-        partialLoad = false;
-        annotationStore = AnnotationStore.inMemory();
-
-        dropMergedTailer();
-
-        logTableModel.clear();
-        if (!reconnecting) {
-            // Reconnecting keeps the logger and field filters and the column layout.
-            filterBar.clearLoggers();
-            tableView.resetColumns();
-        }
-        logTableModel.setCustomFields(parser.map(com.droidenx.clouseau.api.LogParser::customFields).orElse(List.of()));
-        logTableModel.beginBatchLoad();
-
-        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
-
-        liveSource = source;
-        SourceConnection run = new SourceConnection(changed -> SwingUtilities.invokeLater(() -> {
-            if (changed == connection) connectionListener.run();   // ignore a replaced run
-        }));
-        connection = run;
-        connectionListener.run();   // connecting
-
-        SwingWorker<Void, LogEntry> worker = new SwingWorker<>() {
-            boolean firstBatch = true;
-
-            @Override
-            protected Void doInBackground() throws Exception {
-                LineParser lineParser = new LineParser(parser, parsers, null);
-                run.open(source, line -> {
-                    if (line == null || line.isBlank() || isCancelled()) return;
-                    publish(lineParser.parse(line));
-                });
-                return null;
-            }
-
-            @Override
-            protected void process(List<LogEntry> chunk) {
-                if (isCancelled()) return;
-                int columnsBefore = logTableModel.getColumnCount();
-                logTableModel.appendLive(chunk);
-                if (firstBatch) {
-                    // Size columns once the first rows (and their fields) are in, so the
-                    // fit uses real content and field columns aren't pushed off-screen.
-                    firstBatch = false;
-                    logTableModel.endBatchLoad();
-                    ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
-                    if (!reconnecting) {
-                        tableView.applyDefaultLayoutIfSet();
-                        tableView.autoResizeColumns();
-                    } else if (logTableModel.getColumnCount() != columnsBefore) {
-                        tableView.autoResizeColumns();
-                    }
-                } else if (logTableModel.getColumnCount() != columnsBefore) {
-                    tableView.autoResizeColumns();   // a later line brought a new field column
-                }
-                filterBar.addBatch(chunk);
-                if (follow) tableView.scrollToBottom();
-            }
-
-            @Override
-            protected void done() {
-                ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
-                if (isCancelled()) return;
-                try {
-                    get();
-                    run.disconnected(null);   // the stream ended
-                } catch (java.util.concurrent.ExecutionException ex) {
-                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    log.error("Source error for {}", name, cause);
-                    String message = cause instanceof SshLogSource.UnreadableFileException u
-                            ? java.text.MessageFormat.format(Messages.get("ssh.error.unreadable"), u.path())
-                            : cause.getMessage() != null ? cause.getMessage() : cause.toString();
-                    run.disconnected(message);
-                    JOptionPane.showMessageDialog(
-                            SwingUtilities.getWindowAncestor(TabPanel.this),
-                            message,
-                            Messages.get("source.error.title"),
-                            JOptionPane.ERROR_MESSAGE);
-                } catch (Exception e) {
-                    run.disconnected(null);
-                }
-            }
-        };
-        currentWorker = worker;
-        worker.execute();
-    }
-
-    /** The source's name, or its class name if a plugin's {@code getName} fails. */
-    private static String sourceName(LogSource source) {
-        try {
-            String name = source.getName();
-            if (name != null && !name.isBlank()) return name;
-        } catch (RuntimeException e) {
-            log.warn("getName() failed for source {}", source.getClass().getName(), e);
-        }
-        return source.getClass().getSimpleName();
+        log.info("Reconnecting {}", LiveContent.sourceName(fresh));
+        show(context -> new LiveContent(context, fresh, live.factory(), live.parser(), true));
     }
 
     private void startTailing() {
@@ -1189,7 +1148,13 @@ public final class TabPanel extends JPanel {
     }
 
     public void dispose() {
-        cancelLoad();
+        stopTailing();
+        SwingWorker<?, ?> w = currentWorker;
+        if (w != null) w.cancel(true);
+        if (content != null) {
+            content.dispose();          // kept, so the closed tab still reports its state
+            contentContext.revoke();
+        }
         if (plainView != null) plainView.dispose();
         logTableModel.dispose();
         deleteCacheCopy();

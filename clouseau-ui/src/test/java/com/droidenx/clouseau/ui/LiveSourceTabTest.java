@@ -38,6 +38,8 @@ class LiveSourceTabTest {
     private static final class FakeSource implements ConnectingLogSource {
         final CountDownLatch go = new CountDownLatch(1);
         final CountDownLatch closed = new CountDownLatch(1);
+        /** Counted down when {@code open} returns or throws. */
+        final CountDownLatch exited = new CountDownLatch(1);
         final boolean reports;
         final boolean ends;
 
@@ -49,10 +51,14 @@ class LiveSourceTabTest {
         @Override public String getName() { return "fake"; }
 
         @Override public void open(Consumer<String> lines, Runnable onConnected) throws Exception {
-            go.await();
-            if (reports) onConnected.run();
-            LINES.forEach(lines);
-            if (!ends) closed.await();
+            try {
+                go.await();
+                if (reports) onConnected.run();
+                LINES.forEach(lines);
+                if (!ends) closed.await();
+            } finally {
+                exited.countDown();
+            }
         }
 
         @Override public void close() { closed.countDown(); }
@@ -109,6 +115,57 @@ class LiveSourceTabTest {
         } finally {
             onEdt(() -> { panel.dispose(); return null; });
         }
+    }
+
+    /**
+     * D-21: Reconnect while the old source is still connecting. However the old run ends,
+     * it must not touch the new run's tab: show the rows before the new source sent any,
+     * add rows, or change the connection state.
+     */
+    @Test
+    void reconnectingWhileConnectingIgnoresTheOldRun() throws Exception {
+        FakeSource first = new FakeSource(true, true);
+        FakeSource second = new FakeSource(true, false);
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
+        LogTableModel model = (LogTableModel) panel.getLogTable().getModel();
+        try {
+            onEdt(() -> { panel.loadSource(first, () -> second, Optional.of(PARSER)); return null; });
+            assertThat(onEdt(() -> loadingCardShown(panel))).isTrue();
+
+            onEdt(() -> { panel.reconnect(); return null; });
+            assertThat(first.exited.await(5, TimeUnit.SECONDS)).as("the old run ends").isTrue();
+            onEdt(() -> null);   // let the old worker's done() run
+            onEdt(() -> null);
+
+            assertThat(onEdt(() -> loadingCardShown(panel))).as("still loading the new run").isTrue();
+            assertThat(onEdt(panel::connectionState)).isEqualTo(State.CONNECTING);
+            assertThat(onEdt(model::getTotalCount)).isZero();
+
+            second.go.countDown();
+            await(() -> panel.connectionState() == State.CONNECTED && model.getTotalCount() == 2);
+            assertThat(onEdt(() -> loadingCardShown(panel))).isFalse();
+        } finally {
+            onEdt(() -> { panel.dispose(); return null; });
+        }
+    }
+
+    /** Whether the tab shows its loading card: the card holding the progress bar is the visible one. */
+    private static boolean loadingCardShown(TabPanel panel) {
+        JProgressBar bar = find(panel, JProgressBar.class);
+        java.awt.Component card = bar;
+        while (!(card.getParent().getLayout() instanceof java.awt.CardLayout)) card = card.getParent();
+        return card.isVisible();
+    }
+
+    private static <T> T find(java.awt.Container root, Class<T> type) {
+        for (java.awt.Component c : root.getComponents()) {
+            if (type.isInstance(c)) return type.cast(c);
+            if (c instanceof java.awt.Container inner) {
+                T found = find(inner, type);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     @Test

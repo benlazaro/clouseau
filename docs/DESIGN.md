@@ -1714,12 +1714,30 @@ each other class between 100 and 400.
    `clouseau-ui`, its tests, the core tests' comments, this file, CLAUDE.md and
    `guide/developers.md`), so the file's history follows it and the diff is easy to read.
 2. ✅ `TabStatusBar` and `RestoredTab`, which don't depend on the content.
-3. `TabContent`, `TabContext`, `SharedTabContext`, and `LiveContent`, the most
-   self-contained kind, with the reconnect-during-load test.
+3. ✅ `TabContent`, `TabContext`, and `LiveContent`, the most self-contained kind, with
+   the reconnect-during-load test. As built:
+   - **No `SharedTabContext` yet.** While file and merged tabs still use `TabPanel`'s
+     fields, the shared steps stay `TabPanel` methods (`resetForContent`, the cards), and
+     each content's revocable context is a private inner class (`ContentContext`) that
+     forwards to them. `SharedTabContext` is pulled out in step 5, once those fields go.
+   - **`TabContent` and `TabContext` hold only what live tabs use** (`start`, `dispose`,
+     `path`; `reset`, `showLoading`, `showRows`, `connectionChanged` and the getters), and
+     grow with each kind.
+   - **A restored tab waiting for a password** (D-19) has no content yet, so it no longer
+     makes a stand-in `SourceConnection`; the tab reports it disconnected, with the
+     reason as the error.
+   - **A failed Reconnect** (the factory throws) marks a source that was still up
+     disconnected with that error, for the dot's tooltip; before, it was first marked
+     disconnected without one, and the error was dropped. A source that had already
+     dropped keeps its first state, as before.
+   - The new test passes on the old code too: a worker cancelled on the EDT runs its
+     `done()` at once, before the new run starts, so live tabs had no stale-worker bug.
+     It stays as a guard, and file and merged loads, whose workers publish rows, are
+     where the checks matter.
 4. `MergedContent`, taking `MergedFileSettings` and `MergedTailer`'s host with it, with
    the reload-during-load test.
 5. `FileContent`, with plain text and the reload-during-load test; the per-kind fields
-   and branches leave `TabPanel`.
+   and branches leave `TabPanel`, and the shared steps move to `SharedTabContext`.
 6. Mark D-21 Adopted, close G-9, update CLAUDE.md's key classes.
 
 The existing tab tests (`LiveSourceTabTest`, `MergedViewTest`, `IndexedLogTableModelTest`,
@@ -1753,4 +1771,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). The status bar (`TabStatusBar`) and a restored tab's message card, deferred load and filter notice (`RestoredTab`, D-19) are too. `TabPanel` is still about 1,480 lines: the load and follow wiring for single files, merged views and live sources, and plain-text mode. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. D-21 splits the rest by kind of content. |
+| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). The status bar (`TabStatusBar`) and a restored tab's message card, deferred load and filter notice (`RestoredTab`, D-19) are too. A live source is a `LiveContent` (D-21 step 3). `TabPanel` is still about 1,450 lines: the load and follow wiring for single files and merged views, plain-text mode, and the per-content context. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. D-21 splits the rest by kind of content. |

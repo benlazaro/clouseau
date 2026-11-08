@@ -134,6 +134,8 @@ tags.
   `MergedFileSettings` (ui) holds a merged tab's per-file offsets, timezones and parsers, with their dialogs.
   `TabStatusBar` (ui) is a tab's path, timezone badge and row counts; `RestoredTab` (ui) its session message card,
   deferred load and "filters restored" strip (D-19).
+  `TabContent` (ui) is what a tab shows, one object per load, reaching the tab only through its own `TabContext`,
+  withdrawn when it is replaced (D-21); `LiveContent` streams an SSH or plugin source, with its connection state.
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.

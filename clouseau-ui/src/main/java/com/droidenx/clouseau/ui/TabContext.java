@@ -1,0 +1,50 @@
+package com.droidenx.clouseau.ui;
+
+import com.droidenx.clouseau.api.LogParser;
+
+import java.awt.*;
+import java.util.List;
+
+/**
+ * The tab as a {@link TabContent} sees it, and its only way in (D-21): the shared parts,
+ * what the tab knows (parsers, follow mode, its window), and the steps that touch several
+ * parts at once.
+ *
+ * <p>Each content gets its own, which is withdrawn once the content is replaced: then the
+ * steps do nothing and {@link #model}, {@link #filterBar} and {@link #tableView} throw
+ * {@link IllegalStateException}, so a late {@code process} or {@code done} from an old
+ * worker can't touch the new content's rows. Call it on the EDT only, and ask for the parts
+ * each time rather than keeping them.
+ */
+interface TabContext {
+
+    LogTableModel model();
+
+    FilterBar filterBar();
+
+    LogTableView tableView();
+
+    /** The parsers the tab offers, for per-line detection. */
+    List<LogParser> parsers();
+
+    /** Whether the tab follows new rows. */
+    boolean follow();
+
+    /** The window the tab is in, for dialogs; null if it isn't in one. */
+    Window window();
+
+    /**
+     * Empties the tab for a new load: rows, notes, plain-text mode, and what an earlier load
+     * left behind; also the logger filter and the column layout unless {@code keepFilters}.
+     */
+    void reset(boolean keepFilters);
+
+    /** Shows the loading card instead of the rows. */
+    void showLoading();
+
+    /** Shows the rows. */
+    void showRows();
+
+    /** The live source's connection changed, so the window's dot may too (D-20). */
+    void connectionChanged();
+}
