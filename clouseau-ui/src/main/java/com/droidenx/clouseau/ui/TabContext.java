@@ -1,6 +1,8 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogParser;
+import com.droidenx.clouseau.core.MergeOrder;
+import com.droidenx.clouseau.core.Notes;
 
 import java.awt.*;
 import java.util.List;
@@ -44,6 +46,24 @@ interface TabContext {
 
     /** Shows the rows. */
     void showRows();
+
+    /** The content's {@link TabContent#path} changed: show it in the status bar again. */
+    void pathChanged();
+
+    /** The rows are loaded with these notes: show them and their highlights. */
+    void loaded(Notes notes);
+
+    /**
+     * The rows' order changed from {@code from} on ({@code before} still holds the old
+     * order): re-filter, and keep highlights, notes and the selection on their entries.
+     */
+    void reordered(MergeOrder before, MergeOrder after, int from);
+
+    /** A followed file was truncated in place, so older rows lost their text (D-16). */
+    void textLost();
+
+    /** Counts, notes or timezones changed: repaint the rows and update the status bar. */
+    void statusChanged();
 
     /** The live source's connection changed, so the window's dot may too (D-20). */
     void connectionChanged();

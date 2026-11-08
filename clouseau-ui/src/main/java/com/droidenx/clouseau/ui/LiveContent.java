@@ -121,6 +121,14 @@ final class LiveContent implements TabContent {
         worker.execute();
     }
 
+    /** Rows stream in whatever follow mode says; the tab scrolls to them when following. */
+    @Override
+    public void setFollow(boolean on) {}
+
+    /** The stream goes on into the emptied table. */
+    @Override
+    public void cleared() {}
+
     @Override
     public void dispose() {
         stop(null);

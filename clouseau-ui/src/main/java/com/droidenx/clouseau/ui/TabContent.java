@@ -5,13 +5,19 @@ package com.droidenx.clouseau.ui;
  * the tab only through the {@link TabContext} it was made with, which stops working once
  * it is replaced. EDT only.
  *
- * <p>Single files and merged views still live in {@link TabPanel}; they become
- * {@code FileContent} and {@code MergedContent} in D-21's next steps.
+ * <p>Single files still live in {@link TabPanel}; they become {@code FileContent} in
+ * D-21's next step.
  */
-sealed interface TabContent permits LiveContent {
+sealed interface TabContent permits LiveContent, MergedContent {
 
     /** Loads or opens what this content shows into the tab. */
     void start();
+
+    /** Follow mode turned on or off: start or stop following what this content reads. */
+    void setFollow(boolean on);
+
+    /** The user cleared the table: stop showing and following what was loaded. */
+    void cleared();
 
     /** Stops for good: cancels workers, closes sources. The tab is about to show something else, or close. */
     void dispose();

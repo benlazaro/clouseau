@@ -1144,7 +1144,7 @@ as a reusable "workspace".
      filter bar as they're indexed, so it learns loggers and field values. Low memory or
      a full disk stops the whole load and merges nothing; a partial timeline would
      mislead. `MergeLoadTest`, `MergedEntriesTest`, `MergedViewTest`.
-   - `TabPanel.loadMerged` shows it; `MergeListener` tells `MainFrame` which files were
+   - `TabPanel.loadMerged` shows it (as a `MergedContent`, D-21); `MergeListener` tells `MainFrame` which files were
      left out (offered in their own tabs), when fewer than two could be merged (the tab
      closes and the one file opens normally), and which files the view shows (the tab
      title, `app.log +2`). A reload merges only those.
@@ -1734,8 +1734,26 @@ each other class between 100 and 400.
      `done()` at once, before the new run starts, so live tabs had no stale-worker bug.
      It stays as a guard, and file and merged loads, whose workers publish rows, are
      where the checks matter.
-4. `MergedContent`, taking `MergedFileSettings` and `MergedTailer`'s host with it, with
-   the reload-during-load test.
+4. ✅ `MergedContent`, with `MergedTailer`'s host, and the reload-during-load test. As
+   built:
+   - **`MergedFileSettings` stays the tab's.** It must outlive a reload, so `TabPanel`
+     owns it (and its host) and hands it to each new `MergedContent`.
+   - **Shared, so kept in `TabPanel`:** `showReordered` (now also the context's
+     `reordered(before, after, from)`, which takes the orders rather than a mapping, since
+     the notes need the new order) and `mergedView()`, which the detail pane and row menu
+     read from the model.
+   - **`TabContent` gained `setFollow` and `cleared`; `TabContext` gained `pathChanged`
+     (the path names only the files that could be merged once loaded), `loaded(notes)`,
+     `reordered`, `textLost` and `statusChanged`.** Session and review-bundle data stay
+     `TabPanel` methods that ask a `MergedContent` (`sessionFiles`, `reviewParts`) rather
+     than a `TabContent.sessionTab`, until file tabs move too.
+   - **`MergedContent.dispose`** stops the tailer, removes the one-shot column-sizing
+     listener (before, a reload ahead of the first rows left it for the next load),
+     clears the model if it still shows this view, then deletes the unpacked copies.
+   - The test (reload during a load, then once more, then follow) passes on the old code
+     too, for the same reason as step 3: the old worker is cancelled on the EDT, so its
+     `done()` runs at once. The `currentWorker != this` and `entryRows() == view` checks
+     are gone; the revocable context and the content's own `shown()` replace them.
 5. `FileContent`, with plain text and the reload-during-load test; the per-kind fields
    and branches leave `TabPanel`, and the shared steps move to `SharedTabContext`.
 6. Mark D-21 Adopted, close G-9, update CLAUDE.md's key classes.
@@ -1771,4 +1789,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). The status bar (`TabStatusBar`) and a restored tab's message card, deferred load and filter notice (`RestoredTab`, D-19) are too. A live source is a `LiveContent` (D-21 step 3). `TabPanel` is still about 1,450 lines: the load and follow wiring for single files and merged views, plain-text mode, and the per-content context. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. D-21 splits the rest by kind of content. |
+| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). The status bar (`TabStatusBar`) and a restored tab's message card, deferred load and filter notice (`RestoredTab`, D-19) are too. A live source is a `LiveContent` and a merged view a `MergedContent` (D-21 steps 3 and 4). `TabPanel` is still about 1,260 lines: the load and follow wiring for single files, plain-text mode, and the per-content context. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. D-21 splits the rest by kind of content. |

@@ -51,7 +51,8 @@ class MergedViewTest {
         @Override public void skipped(List<MergeLoad.Skipped> s) { skipped.addAll(s); }
         @Override public void notMerged(List<MergeLoad.File> m) { notMerged = m; }
         @Override public void failed() { failed = true; }
-        @Override public void merged(List<MergeLoad.File> m) {}
+        int mergedCalls;
+        @Override public void merged(List<MergeLoad.File> m) { mergedCalls++; }
     }
 
     private MergeLoad.File write(String name, String text) throws Exception {
@@ -260,6 +261,41 @@ class MergedViewTest {
             assertThat(listener.notMerged).containsExactly(app);
             assertThat(listener.skipped).hasSize(1);
             assertThat(listener.failed).isFalse();
+        } finally {
+            onEdt(() -> { panel.dispose(); return null; });
+        }
+    }
+
+    /**
+     * D-21: reloading while the first load is still running. Only the second load's rows
+     * show, its listener alone hears the outcome, and only its follow runs (a stale one would
+     * add followed lines twice).
+     */
+    @Test
+    void reloadingDuringALoadShowsOnlyTheNewLoad() throws Exception {
+        MergeLoad.File app = write("app.log", "2026-11-04 10:00:01 INFO app 1\n");
+        MergeLoad.File db = write("db.log", "2026-11-04 10:00:02 INFO db 2\n");
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
+        Listener first = new Listener();
+        Listener second = new Listener();
+        try {
+            onEdt(() -> {
+                panel.setFollow(true);
+                panel.loadMerged(List.of(app, db), Optional.empty(), first);
+                panel.loadMerged(List.of(app, db), Optional.empty(), second);
+                return null;
+            });
+            LogTableModel model = (LogTableModel) panel.getLogTable().getModel();
+            await(() -> second.mergedCalls == 1 && model.getRowCount() == 2);
+            onEdt(() -> { panel.reload(); return null; });   // and once more after loading
+            await(() -> second.mergedCalls == 2 && model.getRowCount() == 2);
+            assertThat(first.mergedCalls).isZero();
+            assertThat(first.failed).isFalse();
+
+            append(db, "2026-11-04 10:00:04 INFO db 4");
+            await(() -> model.getRowCount() == 3);
+            Thread.sleep(300);   // a second follower would have added it again by now
+            assertThat(messages(model)).containsExactly("app 1", "db 2", "db 4");
         } finally {
             onEdt(() -> { panel.dispose(); return null; });
         }

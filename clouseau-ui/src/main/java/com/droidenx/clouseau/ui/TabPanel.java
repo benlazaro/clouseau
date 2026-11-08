@@ -21,7 +21,6 @@ import com.droidenx.clouseau.core.MemoryGuard;
 import com.droidenx.clouseau.core.MergeLoad;
 import com.droidenx.clouseau.core.MergeOrder;
 import com.droidenx.clouseau.core.MergedEntries;
-import com.droidenx.clouseau.core.MergedFollow;
 import com.droidenx.clouseau.core.MergedNotes;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.core.ReviewBundle;
@@ -42,7 +41,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -73,13 +71,12 @@ public final class TabPanel extends JPanel {
     private String currentEntry;
     /** The decompressed copy of a compressed log this tab reads rows from, or null (D-16). */
     private Path cacheCopy;
-    /** The files of a merged view (D-17), or null for a single-file tab. */
-    private List<MergeLoad.File> mergedFiles;
-    /** Unpacked copies of a merged view's compressed files, deleted with the view. */
-    private List<Path> mergedCopies = List.of();
-    /** How each file of a merged tab is read: offset, timezone, parser (D-17, G-9); kept across reloads. */
+    /**
+     * How each file of a merged tab is read: offset, timezone, parser (D-17, G-9). The
+     * tab's, not the content's, so it is kept across reloads.
+     */
     private final MergedFileSettings mergedSettings = new MergedFileSettings(new MergedFileSettings.Host() {
-        @Override public List<MergeLoad.File> files() { return mergedFiles; }
+        @Override public List<MergeLoad.File> files() { return getMergedFiles(); }
         @Override public MergedEntries view() { return mergedView(); }
         @Override public ZoneId tabZone() { return sourceTimezone; }
         @Override public Optional<LogParser> tabParser() { return currentParser; }
@@ -88,12 +85,10 @@ public final class TabPanel extends JPanel {
         @Override public void zonesChanged() { updateSourceTimezoneLabel(); }
         @Override public void reordered(MergedEntries view, MergeOrder before, MergeOrder after) {
             showReordered(before, after, 0);
-            tableView.widenColumnToFit(Messages.get("table.col.source"), sourceLabels(view));
+            tableView.widenColumnToFit(Messages.get("table.col.source"), MergedContent.sourceLabels(view));
             logTable.repaint();
         }
     });
-    /** Follows a merged tab's files (D-17 step 5); null on other tabs. */
-    private MergedTailer mergedTailer;
     private Optional<LogParser> currentParser = Optional.empty();
     /** Follows a single-file tab's file and keeps its position (G-11); null on other tabs. */
     private IndexedFollow fileFollow;
@@ -261,16 +256,7 @@ public final class TabPanel extends JPanel {
      * how it is read; null if this isn't a merged tab or it is still loading.
      */
     public List<ReviewBundle.Part> reviewParts() {
-        MergedEntries view = mergedView();
-        if (loading || view == null || !(annotationStore instanceof MergedNotes notes)) return null;
-        List<ReviewBundle.Part> parts = new ArrayList<>();
-        for (int s = 0; s < view.sourceCount(); s++) {
-            MergeLoad.File f = mergedFiles.get(s);
-            String parserName = mergedSettings.parserOf(f).map(LogParser::getName).orElse(null);
-            parts.add(new ReviewBundle.Part(f.path(), f.entry(), notes.stores().get(s).toJson(), parserName,
-                    mergedSettings.zoneOf(f).getId(), view.offsetMillis(s)));
-        }
-        return parts;
+        return content instanceof MergedContent merged ? merged.reviewParts() : null;
     }
 
     public void load(Path file, Optional<LogParser> parser) {
@@ -288,7 +274,6 @@ public final class TabPanel extends JPanel {
     public void load(Path file, String entry, Optional<LogParser> parser, Runnable onError) {
         leaveMessage();
         dropContent();
-        mergedFiles = null;
         currentFile = file.toAbsolutePath();
         currentEntry = entry;
         currentParser = parser;
@@ -305,7 +290,6 @@ public final class TabPanel extends JPanel {
         annotationSaveWarned = false;
         partialLoad = false;
         rotatedTextLost = false;
-        dropMergedTailer();
         logTableModel.clear();
         deleteCacheCopy();
         filterBar.clearLoggers();
@@ -464,7 +448,7 @@ public final class TabPanel extends JPanel {
     }
 
     public void reload() {
-        if (mergedFiles != null) loadMerged(mergedFiles, currentParser, mergeListener);
+        if (content instanceof MergedContent merged) loadMerged(merged.files(), merged.parser(), merged.listener());
         else if (currentFile != null) load(currentFile, currentEntry, currentParser, () -> {});
     }
 
@@ -488,154 +472,19 @@ public final class TabPanel extends JPanel {
         void merged(List<MergeLoad.File> files);
     }
 
-    private MergeListener mergeListener;
-
     /** True while this tab shows several files merged into one timeline. */
-    public boolean isMerged() { return mergedFiles != null; }
+    public boolean isMerged() { return content instanceof MergedContent; }
 
     /** The files of a merged view, in the order given, or null for a single-file tab. */
-    public List<MergeLoad.File> getMergedFiles() { return mergedFiles; }
-
-    private void showMergedPath(List<MergeLoad.File> files) {
-        statusBar.setPath(java.text.MessageFormat.format(Messages.get("merge.status.path"), files.size(),
-                        String.join(", ", files.stream().map(MergeLoad.File::fileName).toList())),
-                String.join("\n", files.stream().map(MergeLoad.File::toString).toList()));
-    }
-
-    /**
-     * Sizes the columns once the first filter result is in: a merged view's rows only
-     * appear when the background filter finishes, after loading.
-     */
-    private void sizeColumnsWhenRowsArrive() {
-        javax.swing.event.TableModelListener[] once = new javax.swing.event.TableModelListener[1];
-        once[0] = e -> {
-            if (logTableModel.getRowCount() == 0) return;
-            logTableModel.removeTableModelListener(once[0]);
-            SwingUtilities.invokeLater(() -> {
-                tableView.autoResizeColumns();
-                // Every file's name, not just those in the sampled rows.
-                MergedEntries view = mergedView();
-                if (view != null) tableView.widenColumnToFit(Messages.get("table.col.source"), sourceLabels(view));
-                tableView.applyDefaultLayoutIfSet();
-            });
-        };
-        logTableModel.addTableModelListener(once[0]);
+    public List<MergeLoad.File> getMergedFiles() {
+        return content instanceof MergedContent merged ? merged.files() : null;
     }
 
     /** Loads several files into one merged view (D-17); {@code listener} hears how it went. */
     public void loadMerged(List<MergeLoad.File> files, Optional<LogParser> parser, MergeListener listener) {
         leaveMessage();
-        dropContent();
-        mergeListener = listener;
-        final java.util.function.Consumer<List<MergeLoad.Skipped>> onSkipped = listener::skipped;
-        final Runnable onError = listener::failed;
-        stopTailing();
-        SwingWorker<?, ?> old = currentWorker;
-        if (old != null) old.cancel(true);
-        leavePlainMode();
-        currentFile = null;
-        currentEntry = null;
         currentParser = parser;
-        mergedFiles = List.copyOf(files);
-        fileFollow = null;
-        showMergedPath(files);
-        loading = true;
-        annotationStore = AnnotationStore.inMemory();
-        annotationSaveWarned = false;
-        partialLoad = false;
-        rotatedTextLost = false;
-        dropMergedTailer();
-        logTableModel.clear();
-        deleteCacheCopy();
-        filterBar.clearLoggers();
-        tableView.resetColumns();
-        logTableModel.setCustomFields(List.of());
-        ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_LOADING);
-
-        // Each file is read in its own source timezone (and parser, if it has one) and placed with its own offset.
-        final Map<MergeLoad.File, MergeLoad.PerFile> setup = new HashMap<>();
-        for (MergeLoad.File f : files) setup.put(f, mergedSettings.perFile(f));
-        final MemoryGuard memory = new MemoryGuard();
-        final List<LogParser> tabParsers = parsers;
-        SwingWorker<MergeLoad.Result, LogEntry> worker = new SwingWorker<>() {
-            @Override
-            protected MergeLoad.Result doInBackground() throws Exception {
-                return MergeLoad.run(files, parser, tabParsers, setup::get, AppDirs.cacheDir(),
-                        Messages.get("table.rotated.text"), AppDirs.annotationsDir(), memory::isLow, this::isCancelled, this::publish);
-            }
-
-            @Override
-            protected void process(List<LogEntry> chunk) {
-                if (!isCancelled()) filterBar.addBatch(chunk);
-            }
-
-            @Override
-            protected void done() {
-                if (currentWorker == this) loading = false;
-                ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
-                MergeLoad.Result r;
-                try {
-                    r = get();
-                } catch (java.util.concurrent.CancellationException | InterruptedException ex) {
-                    return;     // the worker cleans up what it made
-                } catch (java.util.concurrent.ExecutionException ex) {
-                    log.error("Failed to merge {}", files, ex.getCause());
-                    onError.run();
-                    JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(TabPanel.this),
-                            String.valueOf(ex.getCause().getMessage()), Messages.get("filechooser.error.title"),
-                            JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-                if (r == null) return;
-                if (isCancelled() || currentWorker != this) {
-                    if (r.entries() != null) r.entries().close();
-                    r.copies().forEach(LogCache::delete);
-                    return;
-                }
-                if (r.stopped()) {
-                    onError.run();
-                    JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(TabPanel.this),
-                            r.diskFull()
-                                    ? java.text.MessageFormat.format(Messages.get("merge.diskfull.message"),
-                                            AppDirs.cacheDir().toString())
-                                    : java.text.MessageFormat.format(Messages.get("merge.lowmemory.message"),
-                                            memory.maxMiB()),
-                            Messages.get("load.lowmemory.title"), JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                if (r.entries() == null) {
-                    // Fewer than two files can be merged: one opens as an ordinary tab.
-                    listener.notMerged(r.mergeable());
-                    if (!r.skipped().isEmpty()) onSkipped.accept(r.skipped());
-                    return;
-                }
-                mergedCopies = r.copies();
-                mergedFiles = r.mergeable();    // a reload doesn't check the skipped ones again
-                showMergedPath(mergedFiles);
-                listener.merged(mergedFiles);
-                updateSourceTimezoneLabel();
-                List<String> names = new ArrayList<>();
-                for (int i = 0; i < r.entries().sourceCount(); i++) names.add(r.entries().sourceName(i));
-                filterBar.setSources(names);
-                logTableModel.beginMergedLoad(r.entries(), r.entries().size(), r.fields());
-                // Each file's notes stay in its own store, saved next to that file (D-17).
-                annotationStore = new MergedNotes(r.notes(), names, r.entries().order());
-                applySavedHighlights();
-                mergedTailer = new MergedTailer(r.entries(),
-                        mergedFiles.stream().map(MergeLoad.File::path).toList(), r.ends(),
-                        mergedFiles.stream().map(f -> setup.get(f).zone()).toList(),
-                        mergedFiles.stream().map(f -> setup.get(f).parserOr(parser)).toList(),
-                        tabParsers, mergedHost(r.entries()));
-                if (follow) mergedTailer.start();
-                sizeColumnsWhenRowsArrive();
-                logTableModel.applyFilter(filterBar.buildFilter());
-                logTable.repaint();
-                updateStatusBar();
-                if (!r.skipped().isEmpty()) onSkipped.accept(r.skipped());
-            }
-        };
-        currentWorker = worker;
-        worker.execute();
+        show(context -> new MergedContent(context, files, parser, mergedSettings, listener));
     }
 
     // ── Plain text (UC-13) ────────────────────────────────────────────────────
@@ -674,17 +523,8 @@ public final class TabPanel extends JPanel {
         if (sessionOrigin == null) return null;
         if (restored.keepsOrigin()) return sessionOrigin;
         Session.Tab t = sessionOrigin;
-        if (t.kind() == Session.Kind.MERGED && mergedFiles != null) {
-            List<Session.MergedFile> files = new ArrayList<>();
-            MergedEntries view = mergedView();
-            for (int s = 0; s < mergedFiles.size(); s++) {
-                MergeLoad.File f = mergedFiles.get(s);
-                long offset = view != null && s < view.sourceCount() ? view.offsetMillis(s) : mergedSettings.offsetOf(f);
-                LogParser own = mergedSettings.ownParser(f);
-                files.add(new Session.MergedFile(f.path().toString(), f.entry(),
-                        own != null ? own.getName() : null, mergedSettings.zoneOf(f).getId(), offset));
-            }
-            t = t.withFiles(files);
+        if (t.kind() == Session.Kind.MERGED && content instanceof MergedContent merged) {
+            t = t.withFiles(merged.sessionFiles());
         } else if (t.kind() != Session.Kind.MERGED) {
             t = t.withTimezone(sourceTimezone.getId());
         }
@@ -766,7 +606,6 @@ public final class TabPanel extends JPanel {
         }
         log.info("No parser recognizes {}; showing it as plain text", currentFile);
         plainSamples = sample.lines();
-        dropMergedTailer();
         logTableModel.clear();          // closes the index; the unpacked copy is reused below
         filterBar.clearLoggers();
         findBar.cancel();
@@ -801,7 +640,7 @@ public final class TabPanel extends JPanel {
 
     // ── Content (D-21) ────────────────────────────────────────────────────────
 
-    /** What the tab shows, if it is a {@link TabContent} yet (live sources); null otherwise. */
+    /** What the tab shows, if it is a {@link TabContent} yet (live sources, merged views); null otherwise. */
     private TabContent content;
     /** The context {@link #content} was made with; withdrawn when the content is replaced. */
     private ContentContext contentContext;
@@ -811,6 +650,7 @@ public final class TabPanel extends JPanel {
         dropContent();
         ContentContext context = new ContentContext();
         TabContent next = make.apply(context);
+        context.owner = next;
         contentContext = context;
         content = next;
         statusBar.setPath(next.path(), next.pathTooltip());
@@ -839,13 +679,11 @@ public final class TabPanel extends JPanel {
         currentFile = null;
         currentEntry = null;
         fileFollow = null;
-        mergedFiles = null;
         loading = false;
         partialLoad = false;
         rotatedTextLost = false;
         annotationStore = AnnotationStore.inMemory();
         annotationSaveWarned = false;
-        dropMergedTailer();
         logTableModel.clear();
         deleteCacheCopy();
         if (!keepFilters) {
@@ -859,6 +697,8 @@ public final class TabPanel extends JPanel {
      * then the steps do nothing and the parts can't be had. EDT only.
      */
     private final class ContentContext implements TabContext {
+        /** The content this context was made for. */
+        private TabContent owner;
         private boolean revoked;
 
         void revoke() { revoked = true; }
@@ -890,6 +730,35 @@ public final class TabPanel extends JPanel {
 
         @Override public void showRows() {
             if (current()) ((CardLayout) centerCards.getLayout()).show(centerCards, CARD_CONTENT);
+        }
+
+        @Override public void pathChanged() {
+            if (current()) statusBar.setPath(owner.path(), owner.pathTooltip());
+        }
+
+        @Override public void loaded(Notes notes) {
+            if (!current()) return;
+            annotationStore = notes;
+            applySavedHighlights();
+        }
+
+        @Override public void reordered(MergeOrder before, MergeOrder after, int from) {
+            if (current()) showReordered(before, after, from);
+        }
+
+        @Override public void textLost() {
+            if (!current()) return;
+            rotatedTextLost = true;
+            logTable.repaint();
+            refreshDetail();
+            updateStatusBar();
+        }
+
+        @Override public void statusChanged() {
+            if (!current()) return;
+            logTable.repaint();
+            updateStatusBar();
+            updateSourceTimezoneLabel();
         }
 
         @Override public void connectionChanged() {
@@ -987,8 +856,8 @@ public final class TabPanel extends JPanel {
 
     private void startTailing() {
         stopTailing();
-        if (mergedTailer != null) {
-            mergedTailer.start();
+        if (content != null) {
+            content.setFollow(true);
             return;
         }
         final IndexedFollow follower = fileFollow;
@@ -1036,52 +905,7 @@ public final class TabPanel extends JPanel {
     private void stopTailing() {
         SwingWorker<?, ?> w = tailWorker;
         if (w != null) { w.cancel(true); tailWorker = null; }
-        if (mergedTailer != null) mergedTailer.stop();
-    }
-
-    /** Stops following a merged tab's files for good: the tab is about to show something else. */
-    private void dropMergedTailer() {
-        if (mergedTailer != null) mergedTailer.stop();
-        mergedTailer = null;
-    }
-
-    /** What a merged tab does with its followed rows (D-17 step 5). */
-    private MergedTailer.Host mergedHost(MergedEntries view) {
-        return new MergedTailer.Host() {
-            @Override
-            public void placed(MergedFollow.Placed p) {
-                if (logTableModel.entryRows() == view) placeFollowed(view, p);
-            }
-
-            @Override
-            public void read(List<LogEntry> entries) {
-                if (logTableModel.entryRows() == view) filterBar.addBatch(entries);
-            }
-
-            @Override
-            public void textLost() {
-                if (logTableModel.entryRows() != view) return;
-                rotatedTextLost = true;
-                logTable.repaint();
-                refreshDetail();
-                updateStatusBar();
-            }
-        };
-    }
-
-    /**
-     * Shows followed rows of a merged tab: appended, or, if the tail re-merged, re-filtered
-     * from where it changed, with highlights, notes and the selection kept on their entries.
-     */
-    private void placeFollowed(MergedEntries view, MergedFollow.Placed p) {
-        MergeOrder before = p.before(), after = p.after();
-        if (!p.moved()) {
-            List<LogEntry> added = new ArrayList<>(after.size() - p.from());
-            for (int o = p.from(); o < after.size(); o++) added.add(view.get(o));
-            logTableModel.appendFollowed(added);
-            return;
-        }
-        showReordered(before, after, p.from());
+        if (content != null) content.setFollow(false);
     }
 
     /**
@@ -1189,8 +1013,6 @@ public final class TabPanel extends JPanel {
     private void deleteCacheCopy() {
         LogCache.delete(cacheCopy);
         cacheCopy = null;
-        mergedCopies.forEach(LogCache::delete);
-        mergedCopies = List.of();
     }
 
     public JTable getLogTable() { return logTable; }
@@ -1217,9 +1039,9 @@ public final class TabPanel extends JPanel {
     public void applySourceTimezone(ZoneId zone) {
         this.sourceTimezone = zone;
         if (currentFile != null) AppPrefs.setSourceTimezone(currentFile, zone);
-        else if (mergedFiles != null) {
+        else if (content instanceof MergedContent merged) {
             mergedSettings.clearZones();
-            mergedFiles.forEach(f -> AppPrefs.setSourceTimezone(f.path(), zone));
+            merged.files().forEach(f -> AppPrefs.setSourceTimezone(f.path(), zone));
         }
         updateSourceTimezoneLabel();
         reload();
@@ -1258,7 +1080,7 @@ public final class TabPanel extends JPanel {
         if (fileFollow != null) {
             try { fileFollow.setPosition(Files.size(currentFile)); } catch (IOException ignored) { fileFollow.setPosition(0); }
         }
-        dropMergedTailer();
+        if (content != null) content.cleared();
         logTableModel.clear();
         rotatedTextLost = false;
         if (reindex) {
@@ -1362,13 +1184,6 @@ public final class TabPanel extends JPanel {
             @Override public void clearTable() { TabPanel.this.clearTable(); }
         });
         return tableView.scrollPane();
-    }
-
-    /** A merged view's Source column labels, with their offset marks. */
-    private static List<String> sourceLabels(MergedEntries view) {
-        List<String> labels = new ArrayList<>();
-        for (int s = 0; s < view.sourceCount(); s++) labels.add(view.sourceLabel(s));
-        return labels;
     }
 
     /** Shows the highlights saved with the file on the rows they attached to. */

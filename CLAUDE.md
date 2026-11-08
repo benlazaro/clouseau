@@ -135,7 +135,8 @@ tags.
   `TabStatusBar` (ui) is a tab's path, timezone badge and row counts; `RestoredTab` (ui) its session message card,
   deferred load and "filters restored" strip (D-19).
   `TabContent` (ui) is what a tab shows, one object per load, reaching the tab only through its own `TabContext`,
-  withdrawn when it is replaced (D-21); `LiveContent` streams an SSH or plugin source, with its connection state.
+  withdrawn when it is replaced (D-21); `LiveContent` streams an SSH or plugin source, with its connection state,
+  and `MergedContent` is a merged view (its load, copies, notes and followed files).
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.
@@ -145,7 +146,7 @@ tags.
 - `MergeOrder`, `EntryRows`, `MergedEntries`, `MergeLoad` (core) — UC-12, D-17: several files
   in one timeline. `MergeOrder` is the merged order, `EntryRows` what the table model reads
   (one `IndexedEntries` or a `MergedEntries`), `MergeLoad` checks, indexes and merges the
-  files in the background; `TabPanel.loadMerged` shows them. `MergedFollow` (core) and
+  files in the background; `TabPanel.loadMerged` shows them as a `MergedContent`. `MergedFollow` (core) and
   `MergedTailer` (ui) follow its files: hold-back, late rows, re-merge (D-17 step 5).
   `TimeOffsetDialog` (ui) and `TimeOffset` (core) correct a file's clock (step 6).
 - `LogTableModel` (ui) — entry store for a tab: filtering on a background executor, row
