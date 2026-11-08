@@ -277,7 +277,7 @@ public final class MainFrame extends JFrame {
         }
         for (SessionStore.Named n : named) {
             JMenuItem item = new JRadioButtonMenuItem(n.name(), n.name().equalsIgnoreCase(String.valueOf(active)));
-            item.setMargin(new Insets(7, 6, 7, 6));
+            item.setMargin(menuMargin());
             item.addActionListener(e -> manager.openNamedSession(n, this));
             menu.add(item);
         }
@@ -315,9 +315,7 @@ public final class MainFrame extends JFrame {
         fileMenu.add(openMergedItem);
 
         recentMenu = new JMenu(Messages.get("menu.file.recent"));
-        Insets menuDefaults = UIManager.getInsets("Menu.margin");
-        int mh = menuDefaults != null ? menuDefaults.left : 0;
-        recentMenu.setMargin(new Insets(7, mh, 7, mh));
+        recentMenu.setMargin(menuMargin());
         fileMenu.add(recentMenu);
         refreshRecentMenu();
 
@@ -327,7 +325,7 @@ public final class MainFrame extends JFrame {
 
         // Rebuilt each time it opens, so sources from newly installed plugins appear.
         JMenu sourceMenu = new JMenu(Messages.get("menu.file.source"));
-        sourceMenu.setMargin(new Insets(7, mh, 7, mh));
+        sourceMenu.setMargin(menuMargin());
         sourceMenu.addMenuListener(new javax.swing.event.MenuListener() {
             @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildSourceMenu(sourceMenu); }
             @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
@@ -361,7 +359,7 @@ public final class MainFrame extends JFrame {
 
         // Named sessions (UC-17); rebuilt each time it opens.
         JMenu sessionsMenu = new JMenu(Messages.get("menu.file.sessions"));
-        sessionsMenu.setMargin(new Insets(7, mh, 7, mh));
+        sessionsMenu.setMargin(menuMargin());
         sessionsMenu.addMenuListener(new javax.swing.event.MenuListener() {
             @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildSessionsMenu(sessionsMenu); }
             @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
@@ -392,7 +390,7 @@ public final class MainFrame extends JFrame {
         // Rebuilt each time it opens, so newly installed themes and a theme picked in
         // Settings show up.
         JMenu themeMenu = new JMenu(Messages.get("menu.view.theme"));
-        themeMenu.setMargin(new Insets(7, mh, 7, mh));
+        themeMenu.setMargin(menuMargin());
         themeMenu.addMenuListener(new javax.swing.event.MenuListener() {
             @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildThemeMenu(themeMenu); }
             @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
@@ -449,7 +447,7 @@ public final class MainFrame extends JFrame {
         ButtonGroup group = new ButtonGroup();
         for (ThemeManager.ThemeEntry theme : ThemeManager.getAllThemes()) {
             JRadioButtonMenuItem item = new JRadioButtonMenuItem(theme.name(), theme.name().equals(current));
-            item.setMargin(new Insets(7, 0, 7, 0));
+            item.setMargin(menuMargin());
             item.addActionListener(e -> selectTheme(theme.name()));
             group.add(item);
             menu.add(item);
@@ -538,10 +536,21 @@ public final class MainFrame extends JFrame {
                 icon64 != null ? new ImageIcon(icon64) : null);
     }
 
-    /** Creates a {@link JMenuItem} with VSCode-style vertical padding pre-applied. */
+    /**
+     * Padding for every menu-bar item: VSCode-style vertical padding, and a right margin
+     * that balances the left. FlatLaf always reserves an icon column (16px) and gap (6px)
+     * before the text, and only a gap plus a hidden arrow slot after it, so equal margins
+     * left the right side visibly narrower. One value for every item keeps text and
+     * accelerators aligned within a popup.
+     */
+    private static Insets menuMargin() {
+        return new Insets(7, 0, 7, 12);
+    }
+
+    /** Creates a {@link JMenuItem} with {@link #menuMargin()} applied. */
     private static JMenuItem menuItem(String text) {
         JMenuItem item = new JMenuItem(text);
-        item.setMargin(new Insets(7, 0, 7, 0));
+        item.setMargin(menuMargin());
         return item;
     }
 
