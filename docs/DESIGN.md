@@ -1713,7 +1713,7 @@ each other class between 100 and 400.
 1. ✅ Rename `LogPanel` to `TabPanel`, and nothing else (`git mv` and the references in
    `clouseau-ui`, its tests, the core tests' comments, this file, CLAUDE.md and
    `guide/developers.md`), so the file's history follows it and the diff is easy to read.
-2. `TabStatusBar` and `RestoredTab`, which don't depend on the content.
+2. ✅ `TabStatusBar` and `RestoredTab`, which don't depend on the content.
 3. `TabContent`, `TabContext`, `SharedTabContext`, and `LiveContent`, the most
    self-contained kind, with the reconnect-during-load test.
 4. `MergedContent`, taking `MergedFileSettings` and `MergedTailer`'s host with it, with
@@ -1753,4 +1753,4 @@ Remove an entry once it's fixed.
 
 | ID | Gap | Impact |
 |---|---|---|
-| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). `TabPanel` is still about 1,680 lines: the load and follow wiring for single files, merged views and live sources, a restored tab's message card and filter notice (D-19), plain-text mode, and the status bar. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. Next split if `TabPanel` grows: a restored tab's message card and filter notice (about 220 lines). |
+| **G-9** | Reading, parsing, indexing, following and annotation anchoring live in `clouseau-core` (`LogReaders`, `LineParser`, `FileIndexer`, `IndexedFollow`, `AnnotationStore`); the table and its columns (`LogTableView`), the row menu (`RowMenu`), the detail pane, find bar and highlight navigation bar (`DetailPanel`, `FindBar`, `HighlightNavBar`) are their own classes, and so are a merged tab's per-file offsets, timezones and parsers with their dialogs (`MergedFileSettings`). The status bar (`TabStatusBar`) and a restored tab's message card, deferred load and filter notice (`RestoredTab`, D-19) are too. `TabPanel` is still about 1,480 lines: the load and follow wiring for single files, merged views and live sources, and plain-text mode. `MainFrame` (about 1,600 lines) is nearly as big. | Reviewable, but still the biggest UI classes. D-21 splits the rest by kind of content. |

@@ -132,6 +132,8 @@ tags.
 - `LogTableView`, `RowMenu` (ui) — G-9: a tab's table (renderer, header menu, column sizing,
   visibility and saved layouts) and its rows' right-click menu (highlights, notes, merged-file items).
   `MergedFileSettings` (ui) holds a merged tab's per-file offsets, timezones and parsers, with their dialogs.
+  `TabStatusBar` (ui) is a tab's path, timezone badge and row counts; `RestoredTab` (ui) its session message card,
+  deferred load and "filters restored" strip (D-19).
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.
