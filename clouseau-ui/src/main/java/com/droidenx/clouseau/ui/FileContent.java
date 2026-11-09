@@ -185,9 +185,14 @@ final class FileContent implements TabContent {
             @Override
             protected void done() {
                 loading = false;
+                // Cancelled means replaced or closed: the tab is no longer this content's, and
+                // its context throws for the model. Don't touch it. A throw here is worse than
+                // it looks: Swing runs every worker's pending done() and process() calls in one
+                // batch, and an exception drops the rest of that batch, which can include the
+                // next load's rows (an empty tab after a reload during a load).
+                if (isCancelled()) return;
                 tab.model().endBatchLoad();
                 tab.showRows();
-                if (isCancelled()) return;
                 try {
                     get();
                     if (unrecognized != null) {
