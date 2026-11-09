@@ -38,6 +38,8 @@ class LiveSourceTabTest {
     private static final class FakeSource implements ConnectingLogSource {
         final CountDownLatch go = new CountDownLatch(1);
         final CountDownLatch closed = new CountDownLatch(1);
+        /** Counted down when {@code open} is called. */
+        final CountDownLatch entered = new CountDownLatch(1);
         /** Counted down when {@code open} returns or throws. */
         final CountDownLatch exited = new CountDownLatch(1);
         final boolean reports;
@@ -51,6 +53,7 @@ class LiveSourceTabTest {
         @Override public String getName() { return "fake"; }
 
         @Override public void open(Consumer<String> lines, Runnable onConnected) throws Exception {
+            entered.countDown();
             try {
                 go.await();
                 if (reports) onConnected.run();
@@ -131,6 +134,9 @@ class LiveSourceTabTest {
         try {
             onEdt(() -> { panel.loadSource(first, () -> second, Optional.of(PARSER)); return null; });
             assertThat(onEdt(() -> loadingCardShown(panel))).isTrue();
+            // Reconnect only once the old run is inside open(): a worker cancelled before it
+            // starts never calls open(), so it would never count down exited.
+            assertThat(first.entered.await(5, TimeUnit.SECONDS)).as("the old run starts").isTrue();
 
             onEdt(() -> { panel.reconnect(); return null; });
             assertThat(first.exited.await(5, TimeUnit.SECONDS)).as("the old run ends").isTrue();
