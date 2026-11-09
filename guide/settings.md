@@ -17,8 +17,13 @@ any you've installed. Picking one applies it at once to the whole window and eve
 including highlighted rows, and Clouseau remembers it.
 
 **Dark (revised)** is a proposed update to Dark, there to try side by side: calmer grays,
-a dark row selection, an amber underline on the active tab and an amber outline on the
-focused control, and log colors that stay readable on highlighted and selected rows.
+a dark row selection, brighter menus and tab titles, log colors that stay readable on
+highlighted and selected rows, and no lines between log rows. Fields and buttons are
+outlined, as in IntelliJ's settings; amber marks what is active: the tab underline, the
+focused control, ticked checkboxes, a set time range and a dialog's default button.
+
+Every theme uses the fonts that come with Clouseau: Inter for the interface and JetBrains
+Mono for log text, so it looks the same on every computer.
 
 **View → Theme → Manage Themes…** installs a FlatLaf theme file (`.properties`) or removes
 one. Removing the active theme switches back to the default.

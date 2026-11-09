@@ -62,7 +62,7 @@ There is no built-in parser plugin module: built-in parsers are regex definition
 
 | Concern | Library |
 |---|---|
-| Look & feel | FlatLaf 3.4.1 (built-in Dark and Light themes, plus user `.properties` themes) |
+| Look & feel | FlatLaf 3.4.1 (built-in Dark, Dark (revised) and Light themes, plus user `.properties` themes) |
 | Fonts | Inter 4.1 (interface) and JetBrains Mono 2.304 (log text, code), bundled via FlatLaf's font modules; see `ClouseauFonts` |
 | Layout | MigLayout 11.3 |
 | Detail panel text | RSyntaxTextArea 3.4.0 |
@@ -168,7 +168,13 @@ tags.
   (debounced, compared before writing). `WindowManager.restore` reopens it at startup;
   `WindowManager.openNamedSession` opens a named session (File → Sessions).
 - `FilterBar`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`, `AppDirs` (ui) — filters,
-  parser editor, themes, settings, data folder.
+  parser editor, themes, settings, data folder. `FilterBar`'s time range sits behind its
+  **Time** button (a From/To popup); `RowMenu` can set either end from a line.
+- `ClouseauColors`, `ClouseauFonts` (ui) — the theme's named colors, and the bundled fonts
+  (Inter for the interface, JetBrains Mono for log text and code). Use `ClouseauFonts.mono`
+  for code-like text, never the logical `Monospaced` font. Theme files are
+  `ClouseauDarkLaf.properties`, `ClouseauDarkRevisedLaf.properties` and Clouseau's additions to
+  Light in `FlatLightLaf.properties`, all in `ui/theme`.
 
 ## Coding conventions
 
@@ -180,7 +186,8 @@ tags.
 - User-visible strings go in `messages.properties` and are read with `Messages.get(...)`.
 - Color long-lived components (anything in a tab or the main window) with
   `ClouseauColors.themedForeground`/`themedBackground`, not `setForeground`, or the color
-  is lost on a live theme switch (DESIGN.md 6.8.1).
+  is lost on a live theme switch (DESIGN.md 6.8.1). State that holds theme colors itself
+  (a table model's highlights) refreshes in `ClouseauColors.onThemeChange`.
 - New persistent files go in the data folder (`AppDirs.dataDir()`); credentials only
   through `CredentialStore`.
 - Read text files as UTF-8 with malformed input replaced and a leading BOM skipped

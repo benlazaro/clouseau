@@ -118,4 +118,4 @@ shown in the status bar as `[src: …]`. Click that label, or right-click the ta
 it. Right-click a tab and choose **Set Source Timezone for All Tabs…** to change every tab.
 
 **Display timezone** in [Settings](settings.md) is a different thing: the timezone
-timestamps are *shown* in, and the one you type **From** and **To** times in.
+timestamps are *shown* in, and the one the **Time** filter's **From** and **To** use.
