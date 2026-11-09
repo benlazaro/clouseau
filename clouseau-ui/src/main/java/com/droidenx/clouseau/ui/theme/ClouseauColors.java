@@ -125,6 +125,15 @@ public final class ClouseauColors {
     /** Row selection background color. */
     public static Color selectionBackground()  { return get("Clouseau.selectionBackground", "Table.selectionBackground"); }
 
+    /** Text on a selected row without a highlight. Black unless the theme sets it. */
+    public static Color selectionForeground()  { return get("Clouseau.selectionForeground", null, Color.BLACK); }
+
+    /** Ring around a selected row without a highlight: the theme's, else a brighter selection color. */
+    public static Color selectionRing() {
+        Color c = UIManager.getColor("Clouseau.selectionRing");
+        return c != null ? c : selectionBackground().brighter();
+    }
+
     /** Background tint for find-bar matched rows. */
     public static Color searchMatchBackground(){ return get("Clouseau.searchMatchBg", "Table.background"); }
 
@@ -196,6 +205,7 @@ public final class ClouseauColors {
 
     private static final String THEMED_FOREGROUND = "Clouseau.themedForeground";
     private static final String THEMED_BACKGROUND = "Clouseau.themedBackground";
+    private static final String ON_THEME_CHANGE   = "Clouseau.onThemeChange";
 
     /**
      * Sets {@code c}'s foreground from {@code color} now, and again after every live theme
@@ -221,6 +231,15 @@ public final class ClouseauColors {
     }
 
     /**
+     * Runs {@code action} after every live theme switch, once the colors set with
+     * {@link #themedForeground} and {@link #themedBackground} are back. For state that holds
+     * theme colors itself, such as a table model's row highlights. One action per component.
+     */
+    public static void onThemeChange(JComponent c, Runnable action) {
+        c.putClientProperty(ON_THEME_CHANGE, action);
+    }
+
+    /**
      * Re-applies the colors set with {@link #themedForeground} and {@link #themedBackground}
      * to {@code root} and everything inside it. {@link ThemeManager#updateUI()} calls this for
      * every window after the look and feel has refreshed the components.
@@ -232,6 +251,7 @@ public final class ClouseauColors {
                 jc.setForeground(((java.util.function.Supplier<Color>) fg).get());
             if (jc.getClientProperty(THEMED_BACKGROUND) instanceof java.util.function.Supplier<?> bg)
                 jc.setBackground(((java.util.function.Supplier<Color>) bg).get());
+            if (jc.getClientProperty(ON_THEME_CHANGE) instanceof Runnable action) action.run();
         }
         if (root instanceof Container container) {
             for (Component child : container.getComponents()) reapplyThemed(child);

@@ -114,7 +114,7 @@ final class LogTableView {
 
                 // Ring border on any selected row
                 if (sel) {
-                    Color ring = hl != null ? hl.brighter().brighter() : ClouseauColors.selectionBackground().brighter();
+                    Color ring = hl != null ? hl.brighter().brighter() : ClouseauColors.selectionRing();
                     int lastCol = t.getColumnCount() - 1;
                     setBorder(BorderFactory.createCompoundBorder(
                             BorderFactory.createMatteBorder(2, c == 0 ? 2 : 0, 2, c == lastCol ? 2 : 0, ring),
@@ -126,7 +126,7 @@ final class LogTableView {
                 // Foreground + font
                 int modelCol = t.convertColumnIndexToModel(c);
                 if (sel && hl == null) {
-                    setForeground(Color.BLACK);
+                    setForeground(ClouseauColors.selectionForeground());
                 } else if (!sel) {
                     if (modelCol == 2 || modelCol == 5) {                  // Level + Message columns
                         LogEntry.LogLevel level = entry != null ? entry.level() : null;

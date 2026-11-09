@@ -404,6 +404,16 @@ outlive a switch (anything in a tab or the main window) set colors with
 built each time they open, cell renderers and styled text built per selection don't need
 it.
 
+State that holds theme colors itself registers `ClouseauColors.onThemeChange(component,
+action)`; `reapplyThemed` runs the action after that component's colors are back. Each tab
+uses it on its table to repaint row highlights in the new theme's palette: the table model
+holds colors, but the notes keep palette slots (D-15), so the tab clears the model's
+highlights and applies the saved slots again.
+
+The selected-row text and ring come from `Clouseau.selectionForeground` and
+`Clouseau.selectionRing`; a theme that doesn't set them gets black text and a brighter
+selection color, as before.
+
 ### 6.9 Tab switching shortcuts (UC-15)
 
 `TabShortcuts` is a `KeyEventDispatcher` registered with the `KeyboardFocusManager` by
@@ -757,7 +767,8 @@ into a review bundle (D-10) with the notes. Rejected: keeping them in memory onl
 on close), and saving them only in the data folder (private, so they can't be shared).
 
 A highlight stores its palette slot, not an RGB value: themes define the palette, so a
-colleague with another theme sees the same slots in their own colors.
+colleague with another theme sees the same slots in their own colors. A live theme switch
+repaints highlighted rows in the new palette (6.8.1).
 
 ### D-16 · How static files are indexed · Adopted
 

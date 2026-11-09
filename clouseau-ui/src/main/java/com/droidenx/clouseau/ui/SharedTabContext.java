@@ -156,6 +156,7 @@ final class SharedTabContext {
         updateTimezoneBadge();
         findBar = find[0] = new FindBar(table, FindBar.searchIn(model));
         highlightNavBar = nav[0] = new HighlightNavBar(table, model);
+        ClouseauColors.onThemeChange(table, this::reapplyHighlightsForTheme);
 
         model.addTableModelListener(e -> {
             TabContent content = host.content();
@@ -364,6 +365,15 @@ final class SharedTabContext {
     }
 
     // ── Notes and the detail pane ────────────────────────────────────────────
+
+    /**
+     * Repaints highlighted rows in the new theme's palette. The model holds colors, but notes
+     * store palette slots (DESIGN.md D-15), so the slots are applied again.
+     */
+    private void reapplyHighlightsForTheme() {
+        model.clearAllHighlights();
+        applySavedHighlights();
+    }
 
     /** Shows the highlights saved with the file on the rows they attached to. */
     private void applySavedHighlights() {

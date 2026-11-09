@@ -21,6 +21,8 @@ class ThemedColorsTest {
     void cleanUp() {
         UIManager.put("Test.themedColor", null);
         UIManager.put("Clouseau.level.ERROR", null);
+        UIManager.put("Clouseau.selectionForeground", null);
+        UIManager.put("Clouseau.selectionRing", null);
     }
 
     private static void onEdt(Runnable r) throws Exception {
@@ -82,5 +84,36 @@ class ThemedColorsTest {
             error.setSelected(true);
             assertThat(error.getForeground()).isEqualTo(BLUE);
         });
+    }
+    @Test
+    void onThemeChangeRunsAfterThemedColorsAreBack() throws Exception {
+        onEdt(() -> {
+            UIManager.put("Test.themedColor", RED);
+            JTable table = new JTable();
+            ClouseauColors.themedBackground(table, () -> UIManager.getColor("Test.themedColor"));
+            Color[] seen = new Color[1];
+            ClouseauColors.onThemeChange(table, () -> seen[0] = table.getBackground());
+            JScrollPane scroll = new JScrollPane(table);
+
+            UIManager.put("Test.themedColor", BLUE);
+            SwingUtilities.updateComponentTreeUI(scroll);
+            ClouseauColors.reapplyThemed(scroll);
+
+            assertThat(seen[0]).isEqualTo(BLUE);
+        });
+    }
+
+    @Test
+    void selectionTextIsBlackUnlessTheThemeSetsIt() {
+        assertThat(ClouseauColors.selectionForeground()).isEqualTo(Color.BLACK);
+        UIManager.put("Clouseau.selectionForeground", BLUE);
+        assertThat(ClouseauColors.selectionForeground()).isEqualTo(BLUE);
+    }
+
+    @Test
+    void selectionRingFallsBackToABrighterSelection() {
+        assertThat(ClouseauColors.selectionRing()).isEqualTo(ClouseauColors.selectionBackground().brighter());
+        UIManager.put("Clouseau.selectionRing", RED);
+        assertThat(ClouseauColors.selectionRing()).isEqualTo(RED);
     }
 }

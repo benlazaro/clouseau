@@ -455,7 +455,7 @@ file in plain text isn't followed.
 suit the room, or a theme that matches my other tools.
 
 1. From the main window, the user picks a theme from a list of the built-in themes
-   (Dark, Light) and any custom themes they've installed.
+   (Dark, Dark (revised), Light) and any custom themes they've installed.
 2. The theme applies immediately to the whole window and every open tab, with no
    restart.
 3. Clouseau remembers the choice for next time.

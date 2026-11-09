@@ -35,6 +35,7 @@ public final class ThemeManager {
 
     static {
         BUILTINS.put("Dark", () -> setup(new ClouseauDarkLaf()));
+        BUILTINS.put("Dark (revised)", () -> setup(new ClouseauDarkRevisedLaf()));
 //        BUILTINS.put("FlatLaf Dark",  () -> setup(new FlatDarkLaf()));
         BUILTINS.put("Light", () -> setup(new FlatLightLaf()));
 //        for (UIManager.LookAndFeelInfo info : FlatAllIJThemes.INFOS) {

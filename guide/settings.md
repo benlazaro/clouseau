@@ -12,9 +12,13 @@ nav_order: 7
 
 ## Themes
 
-**View → Theme** lists the built-in **Dark** and **Light** themes and any you've
-installed. Picking one applies it at once to the whole window and every tab, and
-Clouseau remembers it.
+**View → Theme** lists the built-in **Dark**, **Dark (revised)** and **Light** themes and
+any you've installed. Picking one applies it at once to the whole window and every tab,
+including highlighted rows, and Clouseau remembers it.
+
+**Dark (revised)** is a proposed update to Dark, there to try side by side: calmer grays,
+a dark row selection, an amber underline on the active tab and an amber outline on the
+focused control, and log colors that stay readable on highlighted and selected rows.
 
 **View → Theme → Manage Themes…** installs a FlatLaf theme file (`.properties`) or removes
 one. Removing the active theme switches back to the default.
