@@ -6,12 +6,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
-import java.util.Set;
-import java.util.TreeSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The revised dark theme sets every Clouseau color the current one does, so nothing falls back to a light-theme default. */
+/** The built-in themes: which there are, and the Clouseau colors Dark must set. */
 class BuiltinThemePropertiesTest {
 
     private static Properties load(String name) throws Exception {
@@ -23,25 +21,26 @@ class BuiltinThemePropertiesTest {
         return p;
     }
 
-    private static Set<String> clouseauKeys(Properties p) {
-        Set<String> keys = new TreeSet<>();
-        for (String k : p.stringPropertyNames()) if (k.startsWith("Clouseau.")) keys.add(k);
-        return keys;
+    @Test
+    void darkSetsTheColorsThatOtherwiseFallBackToLightThemeDefaults() throws Exception {
+        assertThat(load("ClouseauDarkLaf").stringPropertyNames()).contains(
+                "Clouseau.selectionBackground", "Clouseau.selectionForeground", "Clouseau.selectionRing",
+                "Clouseau.stripeBackground", "Clouseau.activeFilterForeground", "Clouseau.searchMatchBg",
+                "[style].logTable");
     }
 
     @Test
-    void revisedDarkCoversEveryClouseauKeyOfDark() throws Exception {
-        Set<String> dark = clouseauKeys(load("ClouseauDarkLaf"));
-        Set<String> revised = clouseauKeys(load("ClouseauDarkRevisedLaf"));
-        assertThat(revised).containsAll(dark);
-        assertThat(revised).contains("Clouseau.selectionForeground", "Clouseau.selectionRing");
-    }
-
-    @Test
-    void revisedDarkIsABuiltinTheme() {
+    void theBuiltinThemesAreDarkAndLight() {
         assertThat(ThemeManager.getAllThemes())
                 .filteredOn(ThemeManager.ThemeEntry::builtin)
                 .extracting(ThemeManager.ThemeEntry::name)
-                .containsSubsequence("Dark", "Dark (revised)", "Light");
+                .containsExactly("Dark", "Light");
+    }
+
+    @Test
+    void aSettingThatNamesTheFormerDarkRevisedMeansDark() {
+        assertThat(ThemeManager.canonicalName("Dark (revised)")).isEqualTo("Dark");
+        assertThat(ThemeManager.canonicalName("Light")).isEqualTo("Light");
+        assertThat(ThemeManager.canonicalName("my-theme")).isEqualTo("my-theme");
     }
 }

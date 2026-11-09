@@ -36,7 +36,6 @@ public final class ThemeManager {
     static {
         ClouseauFonts.install();
         BUILTINS.put("Dark", () -> setup(new ClouseauDarkLaf()));
-        BUILTINS.put("Dark (revised)", () -> setup(new ClouseauDarkRevisedLaf()));
 //        BUILTINS.put("FlatLaf Dark",  () -> setup(new FlatDarkLaf()));
         BUILTINS.put("Light", () -> setup(new FlatLightLaf()));
 //        for (UIManager.LookAndFeelInfo info : FlatAllIJThemes.INFOS) {
@@ -87,6 +86,7 @@ public final class ThemeManager {
      * Must be called on the EDT or before the UI is shown.
      */
     public static void applyTheme(String name) {
+        name = canonicalName(name);
         Runnable builtin = BUILTINS.get(name);
         if (builtin != null) {
             builtin.run();
@@ -105,6 +105,14 @@ public final class ThemeManager {
         }
         log.warn("Unknown theme '{}', applying default", name);
         setup(new ClouseauDarkLaf());
+    }
+
+    /**
+     * The theme's current name: "Dark (revised)", offered beside Dark while it was a
+     * proposal, became Dark, so a setting that still names it means Dark.
+     */
+    public static String canonicalName(String name) {
+        return "Dark (revised)".equals(name) ? DEFAULT_THEME : name;
     }
 
     /** Refreshes all open windows after a theme switch. Call on EDT only. */

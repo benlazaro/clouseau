@@ -12,15 +12,15 @@ nav_order: 7
 
 ## Themes
 
-**View → Theme** lists the built-in **Dark**, **Dark (revised)** and **Light** themes and
-any you've installed. Picking one applies it at once to the whole window and every tab,
+**View → Theme** lists the built-in **Dark** and **Light** themes and any you've
+installed. Picking one applies it at once to the whole window and every tab,
 including highlighted rows, and Clouseau remembers it.
 
-**Dark (revised)** is a proposed update to Dark, there to try side by side: calmer grays,
-a dark row selection, brighter menus and tab titles, log colors that stay readable on
-highlighted and selected rows, and no lines between log rows. Fields and buttons are
-outlined, as in IntelliJ's settings; amber marks what is active: the tab underline, the
-focused control, ticked checkboxes, a set time range and a dialog's default button.
+**Dark**, the default, uses calm neutral grays, a dark row selection, bright menus and tab
+titles, log colors that stay readable on highlighted and selected rows, and no lines
+between log rows. Fields and buttons are outlined, as in IntelliJ's settings; amber marks
+what is active: the tab underline, the focused control, ticked checkboxes, a set time
+range and a dialog's default button.
 
 Every theme uses the fonts that come with Clouseau: Inter for the interface and JetBrains
 Mono for log text, so it looks the same on every computer.

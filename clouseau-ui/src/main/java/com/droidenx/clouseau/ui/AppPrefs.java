@@ -273,7 +273,7 @@ public final class AppPrefs {
     }
 
     public static String getTheme() {
-        return getString(KEY_THEME, ThemeManager.DEFAULT_THEME);
+        return ThemeManager.canonicalName(getString(KEY_THEME, ThemeManager.DEFAULT_THEME));
     }
 
     public static void setTheme(String name) {
