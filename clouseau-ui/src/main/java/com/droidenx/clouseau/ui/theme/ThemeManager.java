@@ -37,7 +37,7 @@ public final class ThemeManager {
         ClouseauFonts.install();
         BUILTINS.put("Dark", () -> setup(new ClouseauDarkLaf()));
 //        BUILTINS.put("FlatLaf Dark",  () -> setup(new FlatDarkLaf()));
-        BUILTINS.put("Light", () -> setup(new FlatLightLaf()));
+        BUILTINS.put("Light", () -> setup(new ClouseauLightLaf()));
 //        for (UIManager.LookAndFeelInfo info : FlatAllIJThemes.INFOS) {
 //            String name      = info.getName();
 //            String className = info.getClassName();

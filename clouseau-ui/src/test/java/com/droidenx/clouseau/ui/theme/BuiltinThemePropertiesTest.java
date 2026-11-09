@@ -9,7 +9,7 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The built-in themes: which there are, and the Clouseau colors Dark must set. */
+/** The built-in themes: which there are, and the Clouseau colors they must set. */
 class BuiltinThemePropertiesTest {
 
     private static Properties load(String name) throws Exception {
@@ -27,6 +27,14 @@ class BuiltinThemePropertiesTest {
                 "Clouseau.selectionBackground", "Clouseau.selectionForeground", "Clouseau.selectionRing",
                 "Clouseau.stripeBackground", "Clouseau.activeFilterForeground", "Clouseau.searchMatchBg",
                 "[style].logTable");
+    }
+
+    @Test
+    void lightSetsEveryClouseauColorDarkDoes() throws Exception {
+        java.util.Set<String> dark = new java.util.TreeSet<>(), light = new java.util.TreeSet<>();
+        for (String k : load("ClouseauDarkLaf").stringPropertyNames()) if (k.startsWith("Clouseau.")) dark.add(k);
+        for (String k : load("ClouseauLightLaf").stringPropertyNames()) if (k.startsWith("Clouseau.")) light.add(k);
+        assertThat(light).containsAll(dark);
     }
 
     @Test

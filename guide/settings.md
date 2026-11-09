@@ -22,6 +22,10 @@ between log rows. Fields and buttons are outlined, as in IntelliJ's settings; am
 what is active: the tab underline, the focused control, ticked checkboxes, a set time
 range and a dialog's default button.
 
+**Light** is the same design on white: the same outlined controls and amber accent, a
+pale blue row selection, and log colors darkened so every level stays easy to read on
+white, highlighted and selected rows.
+
 Every theme uses the fonts that come with Clouseau: Inter for the interface and JetBrains
 Mono for log text, so it looks the same on every computer.
 

@@ -173,8 +173,8 @@ tags.
 - `ClouseauColors`, `ClouseauFonts` (ui) — the theme's named colors, and the bundled fonts
   (Inter for the interface, JetBrains Mono for log text and code). Use `ClouseauFonts.mono`
   for code-like text, never the logical `Monospaced` font. Theme files are
-  `ClouseauDarkLaf.properties` and Clouseau's additions to Light in `FlatLightLaf.properties`,
-  both in `ui/theme`.
+  `ClouseauDarkLaf.properties` and `ClouseauLightLaf.properties` in `ui/theme`, one per
+  `ClouseauDarkLaf` / `ClouseauLightLaf` class: the same keys and design, colors for each.
 
 ## Coding conventions
 
