@@ -1835,5 +1835,13 @@ use case before it is built.
 Places where the code differs from this design. Together they're the technical roadmap.
 Remove an entry once it's fixed.
 
-None at the moment. G-9 (one tab class doing everything) was closed by D-21; `MainFrame`
-(about 1,600 lines) is now the biggest UI class.
+G-9 (one tab class doing everything) was closed by D-21; `MainFrame` (about 1,600 lines)
+is now the biggest UI class.
+
+- **G-12 · Time range quick presets.** The filter bar's Time popup (6.4) takes typed
+  times, a span from the other end (`+5m`) and a line's time (Selected row, Show From /
+  Up to This Line), but has no presets. Planned: a Quick row in the popup with *Last 5
+  min*, *Last 15 min* and *Last hour*, counted back from the tab's last entry rather than
+  the clock (a static log ends in the past), and *±1 min of selected row*, disabled with
+  no selection. While following, "last" moves with the newest entry only when the preset
+  is applied again; a range that slides by itself would need its own decision.
