@@ -51,10 +51,21 @@ them.
 - **Fields**: for formats with extra fields, untick values to hide their lines. The button
   shows a dot while a field filter is active.
 - **Sources**: in a [merged view](merged-views.md), hide whole files.
-- **From** and **To**: a time range. Type `yyyy-MM-dd HH:mm:ss` (with or without
-  `.SSS` milliseconds), just a date (`yyyy-MM-dd`), or just a time (`HH:mm:ss`), which
-  means that time on the day the log starts.
-- **Filter message…**: show only lines containing the text, in any column.
+- **Time**: a time range. The quickest way is from the table: right-click a line and
+  choose **Show From This Line** or **Show Up to This Line**; do both to bracket an
+  incident. Or click **Time** and fill in **From**, **To** or both, then press **Apply**
+  or `Enter`; an empty field leaves that end open, and **Selected row** next to a field
+  fills in the selected line's time. You can type:
+  - just a time, `10:00` or `10:00:05` (with or without `.SSS` milliseconds), which means
+    that time on the day the log starts;
+  - a date and time, `yyyy-MM-dd HH:mm` or `yyyy-MM-dd HH:mm:ss`, or just a date;
+  - a span counted from the other end: `+5m` in **To** means five minutes after **From**,
+    and `-90s` in **From** means 90 seconds before **To** (`ms`, `s`, `m`, `h`, `d`).
+
+  While a range is set, the button shows it, for example **10:00:00 → 10:15:00**;
+  **Clear** in the same popup removes it.
+- **Filter message…**: show only lines containing the text, in any column. The **×** at
+  its right end clears it.
 
 ![Logger filter](../docs/screenshots/logger-filter.png)
 

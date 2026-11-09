@@ -317,6 +317,11 @@ entries arriving during a session are checked against the active filter as they 
 appended. Find (`Ctrl+F`) searches the visible rows, including their continuation lines,
 on its own executor (`LogTableModel.find`) and returns matching ordinals to the EDT.
 
+The time range is the one filter not typed into the bar: the **Time** button opens a popup with
+the From and To fields and applies them on **Apply** or `Enter`, so the most-used control, the
+message filter, gets the bar's width. The range is kept as typed (`Session.Filters.from`/`to`)
+and parsed in `buildFilter()`, as before.
+
 ### 6.5 Detail panel (UC-3)
 
 When a row is selected, the detail panel shows the entry and its continuation lines. Each

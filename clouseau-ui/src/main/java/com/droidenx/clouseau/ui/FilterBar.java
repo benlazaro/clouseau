@@ -5,6 +5,7 @@ import com.droidenx.clouseau.api.LogEntry.LogLevel;
 import com.droidenx.clouseau.core.CombinedFilter;
 import com.droidenx.clouseau.core.EntryFilter;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.formdev.flatlaf.icons.FlatSearchIcon;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
@@ -17,6 +18,8 @@ import javax.swing.tree.TreePath;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.*;
+import java.text.MessageFormat;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,7 +30,8 @@ import java.util.*;
 import java.util.List;
 
 /**
- * Per-tab filter bar: level toggles, logger picker, timestamp range, and text/regex search.
+ * Per-tab filter bar: level toggles, the logger, field and source pickers, the time range
+ * (a button that opens a From/To popup), and the message filter.
  * Call {@link #buildFilter()} to get the current combined filter.
  * Call {@link #updateLoggers(List)} after a file is loaded to populate the logger picker.
  */
@@ -43,18 +47,31 @@ final class FilterBar extends JPanel {
     private static final List<DateTimeFormatter> TS_FORMATS = List.of(
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"),
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
         DateTimeFormatter.ofPattern("yyyy-MM-dd"),
         DateTimeFormatter.ofPattern("HH:mm:ss.SSS"),
-        DateTimeFormatter.ofPattern("HH:mm:ss")
+        DateTimeFormatter.ofPattern("HH:mm:ss"),
+        DateTimeFormatter.ofPattern("HH:mm")
     );
+
+    /** How a row's time is written into the range ("Show From This Line", "Use selected row"). */
+    private static final DateTimeFormatter ROW_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+
+    /** A relative end, counted from the other end: "+5m" (To: 5 minutes after From), "-90s" (From: before To). */
+    private static final java.util.regex.Pattern RELATIVE =
+            java.util.regex.Pattern.compile("([+-])\\s*(\\d+)\\s*(ms|s|m|h|d)", java.util.regex.Pattern.CASE_INSENSITIVE);
 
     private final Map<LogLevel, JToggleButton> levelButtons = new EnumMap<>(LogLevel.class);
     private final JButton        loggerButton;
     private final JButton        fieldsButton;
     private final JButton        sourcesButton;
-    private final JTextField     fromField   = new JTextField(19);
-    private final JTextField     toField     = new JTextField(19);
+    private final JButton        timeButton;
     private final JTextField     searchField = new JTextField(16);
+    /** The time range as typed (empty: open end), set by the time popup's Apply. */
+    private String               fromText = "";
+    private String               toText   = "";
+    /** The selected row's time, for the popup's "Use selected row"; null when none is selected. */
+    private java.util.function.Supplier<Instant> selectedTime = () -> null;
     private final Runnable       onChanged;
     private JToggleButton        followBtn;
     private Timer debounceTimer;
@@ -87,8 +104,9 @@ final class FilterBar extends JPanel {
             JToggleButton btn = new JToggleButton(level.name());
             btn.setSelected(level != LogLevel.UNKNOWN);
             btn.setFocusPainted(false);
-            btn.setMargin(new Insets(2, 5, 2, 5));
-            btn.setFont(btn.getFont().deriveFont(11f));
+            // Full control height, so the row lines up; 12px text keeps seven of them compact.
+            btn.setMargin(new Insets(4, 7, 4, 7));
+            btn.setFont(btn.getFont().deriveFont(12f));
             // Read at each use, so the colors follow theme switches.
             java.util.function.Supplier<Color> fg = () -> btn.isSelected()
                     ? ClouseauColors.levelColor(level) : ClouseauColors.offColor();
@@ -116,77 +134,50 @@ final class FilterBar extends JPanel {
         add(new JSeparator(JSeparator.VERTICAL), "growy, gapx 4");
 
         // ── Source picker button (merged views only) ──────────────────────────
-        sourcesButton = new JButton(Messages.get("filter.sources.all"));
+        sourcesButton = new JButton(withArrow(Messages.get("filter.sources.all")));
         sourcesButton.addActionListener(e -> showSourcesPopup(sourcesButton));
         sourcesButton.setVisible(false);
         add(sourcesButton, "hidemode 3");
 
         // ── Logger picker button ──────────────────────────────────────────────
-        loggerButton = new JButton(Messages.get("filter.loggers.all"));
+        loggerButton = new JButton(withArrow(Messages.get("filter.loggers.all")));
         loggerButton.addActionListener(e -> showLoggerPopup(loggerButton));
         add(loggerButton);
 
         // ── Field value picker button ─────────────────────────────────────────
-        fieldsButton = new JButton(Messages.get("filter.fields.all"));
+        fieldsButton = new JButton(withArrow(Messages.get("filter.fields.all")));
         fieldsButton.addActionListener(e -> showFieldsPopup(fieldsButton));
         fieldsButton.setVisible(false);
-        // Like the Sources button: takes no room while hidden, so the time fields keep theirs.
         add(fieldsButton, "hidemode 3");
 
-        add(new JSeparator(JSeparator.VERTICAL), "growy, gapx 4");
-
-        // ── Timestamp range ───────────────────────────────────────────────────
-        fromField.putClientProperty("JTextField.placeholderText", Messages.get("filter.from.placeholder"));
-        toField.putClientProperty("JTextField.placeholderText",   Messages.get("filter.to.placeholder"));
-
-        DocumentListener tsDoc = docListener(() -> {
-            validateTimestamp(fromField);
-            validateTimestamp(toField);
-            scheduleChange();
-        });
-        fromField.getDocument().addDocumentListener(tsDoc);
-        toField.getDocument().addDocumentListener(tsDoc);
-
-        add(new JLabel(Messages.get("filter.from.label")));
-        add(fromField);
-        add(new JLabel(Messages.get("filter.to.label")));
-        add(toField);
+        // ── Time range: a button that opens the From/To popup ─────────────────
+        // The From/To fields took the most room in the bar and are the least used, so they
+        // live in a popup; the button shows the range, in the accent color, while one is set.
+        timeButton = new JButton();
+        timeButton.addActionListener(e -> showTimePopup(timeButton));
+        ClouseauColors.themedForeground(timeButton, this::timeButtonForeground);
+        updateTimeButton();
+        add(timeButton);
 
         add(new JSeparator(JSeparator.VERTICAL), "growy, gapx 4");
 
-        // ── Text / regex search ───────────────────────────────────────────────
+        // ── Message filter: the field that grows ──────────────────────────────
         searchField.putClientProperty("JTextField.placeholderText", Messages.get("filter.search.placeholder"));
-
-        JButton clearSearchBtn = new JButton("\u00d7");
-        clearSearchBtn.setVisible(false);
-        clearSearchBtn.setFont(clearSearchBtn.getFont().deriveFont(14f));
-        clearSearchBtn.setMargin(new Insets(0, 4, 0, 4));
-        clearSearchBtn.setBorderPainted(false);
-        clearSearchBtn.setContentAreaFilled(false);
-        clearSearchBtn.setFocusPainted(false);
-        clearSearchBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        clearSearchBtn.addActionListener(e -> { searchField.setText(""); searchField.requestFocusInWindow(); });
-        searchField.putClientProperty("JTextField.trailingComponent", clearSearchBtn);
-
-        searchField.getDocument().addDocumentListener(docListener(() -> {
-            clearSearchBtn.setVisible(!searchField.getText().isEmpty());
-            scheduleChange();
-        }));
-        add(searchField, "growx");
+        searchField.putClientProperty("JTextField.leadingIcon", new FlatSearchIcon());
+        searchField.putClientProperty("JTextField.showClearButton", true);
+        searchField.getDocument().addDocumentListener(docListener(this::scheduleChange));
+        add(searchField, "growx, pushx, wmin 200");
 
         // ── Clear button ──────────────────────────────────────────────────────
         JButton clearBtn = new JButton(Messages.get("filter.clear"));
         clearBtn.addActionListener(e -> clear());
         add(clearBtn);
 
-        add(new JSeparator(JSeparator.VERTICAL), "growy, gapx 4, pushx");
         add(new JSeparator(JSeparator.VERTICAL), "growy, gapx 4");
 
-        // ── Follow toggle ─────────────────────────────────────────────────────
+        // ── Follow toggle: the theme's own size, as on the plain-text tab ─────
         followBtn = new JToggleButton(Messages.get("toolbar.follow"));
         followBtn.setFocusPainted(false);
-        followBtn.setMargin(new Insets(2, 5, 2, 5));
-        followBtn.setFont(followBtn.getFont().deriveFont(11f));
         followBtn.setToolTipText(Messages.get("toolbar.follow.tooltip"));
         applyToggleStyle(followBtn);
         add(followBtn);
@@ -248,7 +239,7 @@ final class FilterBar extends JPanel {
         Set<Integer> sources = new java.util.TreeSet<>(excludedSources);
         sources.addAll(pendingSources);
         var state = new com.droidenx.clouseau.core.Session.Filters(levels, List.copyOf(loggers), fields,
-                fromField.getText().trim(), toField.getText().trim(), searchField.getText(), List.copyOf(sources));
+                fromText, toText, searchField.getText(), List.copyOf(sources));
         return isDefault(state) ? null : state;
     }
 
@@ -282,8 +273,9 @@ final class FilterBar extends JPanel {
         } else {
             pendingSources.addAll(f.hiddenSources());
         }
-        fromField.setText(f.from());
-        toField.setText(f.to());
+        fromText = f.from().trim();
+        toText = f.to().trim();
+        updateTimeButton();
         searchField.setText(f.text());
         onChanged.run();
     }
@@ -402,7 +394,7 @@ final class FilterBar extends JPanel {
         }
         boolean noLoggers = !loggers.isEmpty() && !allLoggers.isEmpty() && loggers.containsAll(allLoggers);
         return new CombinedFilter(allowed, loggers, noLoggers, excludedFieldValues,
-                parseTimestamp(fromField.getText().trim()), parseTimestamp(toField.getText().trim()),
+                rangeStart(), rangeEnd(),
                 searchField.getText(), sources);
     }
 
@@ -418,8 +410,9 @@ final class FilterBar extends JPanel {
         updateFieldsButtonLabel();
         excludedSources.clear();
         updateSourcesButtonLabel();
-        fromField.setText("");
-        toField.setText("");
+        fromText = "";
+        toText = "";
+        updateTimeButton();
         searchField.setText("");
         onChanged.run();
     }
@@ -639,6 +632,161 @@ final class FilterBar extends JPanel {
         popup.show(invoker, 0, invoker.getHeight());
     }
 
+    // ── Time range popup ──────────────────────────────────────────────────────
+
+    /** The default button's look, for Apply: a popup has no root pane default button of its own. */
+    private static final String DEFAULT_BUTTON_STYLE = "background: $Button.default.background; "
+            + "foreground: $Button.default.foreground; borderColor: $Button.default.borderColor; "
+            + "hoverBackground: $Button.default.hoverBackground; "
+            + "hoverBorderColor: $Button.default.hoverBorderColor; "
+            + "pressedBackground: $Button.default.pressedBackground; font: bold";
+
+    /**
+     * From and To, as the bar had them, in a popup under the Time button. Apply (or Enter in
+     * a field) sets the range; Clear removes it; Escape or a click outside closes it unchanged.
+     */
+    private void showTimePopup(JButton invoker) {
+        JPopupMenu popup = new JPopupMenu();
+        JPanel content = new JPanel(new MigLayout("insets 10, wrap 3, gapy 8", "[][grow, fill][]"));
+        JTextField from = new JTextField(fromText, 16);
+        JTextField to = new JTextField(toText, 16);
+        from.putClientProperty("JTextField.placeholderText", Messages.get("filter.from.placeholder"));
+        to.putClientProperty("JTextField.placeholderText", Messages.get("filter.to.placeholder"));
+
+        content.add(new JLabel(Messages.get("filter.time.title")), "span 3");
+        Instant selected = selectedTime.get();
+        content.add(new JLabel(Messages.get("filter.from.label")));
+        content.add(from);
+        content.add(useSelectedRowButton(from, selected));
+        content.add(new JLabel(Messages.get("filter.to.label")));
+        content.add(to);
+        content.add(useSelectedRowButton(to, selected));
+        // Two plain lines, not one wrapping HTML label: the popup is sized before an HTML label
+        // wraps, so its second line would push the buttons out of the popup.
+        for (String key : List.of("filter.time.hint", "filter.time.hint.open")) {
+            JLabel hint = new JLabel(Messages.get(key));
+            hint.setForeground(ClouseauColors.dimForeground());
+            hint.setFont(hint.getFont().deriveFont(11f));
+            content.add(hint, key.endsWith("open") ? "skip, span 2, gaptop -8" : "skip, span 2, gaptop -4");
+        }
+
+        JButton clearBtn = new JButton(Messages.get("filter.time.clear"));
+        JButton applyBtn = new JButton(Messages.get("filter.time.apply"));
+        applyBtn.putClientProperty("FlatLaf.style", DEFAULT_BUTTON_STYLE);
+        Runnable validate = () -> {
+            String f = from.getText().trim(), t = to.getText().trim();
+            boolean fromOk = readable(f), toOk = readable(t);
+            boolean ok = fromOk && toOk && range(f, t) != null;
+            // A relative end with no time at the other end to count from is the one at fault.
+            if (fromOk && toOk && !ok) {
+                fromOk = relative(f) == null;
+                toOk = relative(t) == null;
+            }
+            from.putClientProperty("JTextField.outline", fromOk ? null : "error");
+            to.putClientProperty("JTextField.outline", toOk ? null : "error");
+            applyBtn.setEnabled(ok);
+        };
+        from.getDocument().addDocumentListener(docListener(validate));
+        to.getDocument().addDocumentListener(docListener(validate));
+        validate.run();
+
+        Runnable apply = () -> {
+            if (!applyBtn.isEnabled()) return;
+            popup.setVisible(false);
+            setTimeRange(from.getText().trim(), to.getText().trim());
+        };
+        applyBtn.addActionListener(e -> apply.run());
+        from.addActionListener(e -> apply.run());
+        to.addActionListener(e -> apply.run());
+        clearBtn.addActionListener(e -> {
+            popup.setVisible(false);
+            setTimeRange("", "");
+        });
+        JPanel btnRow = new JPanel(new MigLayout("insets 0, gap 6", "push[][]"));
+        btnRow.setOpaque(false);
+        btnRow.add(clearBtn);
+        btnRow.add(applyBtn);
+        content.add(btnRow, "span 3, growx, gaptop 4");
+
+        popup.add(content);
+        popup.show(invoker, 0, invoker.getHeight());
+        from.requestFocusInWindow();
+    }
+
+    /** A small button that puts the selected row's time into {@code field}; disabled with no selection. */
+    private static JButton useSelectedRowButton(JTextField field, Instant selected) {
+        JButton b = new JButton(Messages.get("filter.time.use.selected"));
+        b.setToolTipText(Messages.get("filter.time.use.selected.tooltip"));
+        b.setFont(b.getFont().deriveFont(12f));
+        b.setEnabled(selected != null);
+        b.addActionListener(e -> {
+            field.setText(formatRowTime(selected));
+            field.requestFocusInWindow();
+        });
+        return b;
+    }
+
+    /** Where the popup's "Use selected row" reads the selected row's time; null with none. */
+    void setSelectedTime(java.util.function.Supplier<Instant> time) {
+        selectedTime = time != null ? time : () -> null;
+    }
+
+    /** Shows rows from {@code at} on, keeping the end of the range (the row menu's "Show From This Line"). */
+    void showFrom(Instant at) {
+        if (at != null) setTimeRange(formatRowTime(at), toText);
+    }
+
+    /** Shows rows up to {@code at}, keeping the start of the range (the row menu's "Show Up to This Line"). */
+    void showUpTo(Instant at) {
+        if (at != null) setTimeRange(fromText, formatRowTime(at));
+    }
+
+    /** A row's time as the range takes it, to the millisecond so the row itself stays in. */
+    static String formatRowTime(Instant at) {
+        return ROW_TIME.format(at.atZone(AppPrefs.getDisplayTimezone()));
+    }
+
+    /** Sets the time range as typed (empty: open end) and filters again if it changed. */
+    void setTimeRange(String from, String to) {
+        if (from.equals(fromText) && to.equals(toText)) return;
+        fromText = from;
+        toText = to;
+        updateTimeButton();
+        onChanged.run();
+    }
+
+    /** "Time", or the range: "10:00:00 → 10:15:00", "10:00:00 → …". Times only when both are on one day. */
+    private void updateTimeButton() {
+        String label;
+        if (fromText.isEmpty() && toText.isEmpty()) {
+            label = Messages.get("filter.time");
+            timeButton.setToolTipText(Messages.get("filter.time.tooltip"));
+        } else {
+            String a = fromText, b = toText;
+            if (a.length() > 11 && b.length() > 11 && a.charAt(10) == ' ' && a.startsWith(b.substring(0, 11))) {
+                a = a.substring(11);
+                b = b.substring(11);
+            }
+            label = MessageFormat.format(Messages.get("filter.time.range"),
+                    a.isEmpty() ? "\u2026" : a, b.isEmpty() ? "\u2026" : b);
+            timeButton.setToolTipText(MessageFormat.format(Messages.get("filter.time.range"),
+                    fromText.isEmpty() ? "\u2026" : fromText, toText.isEmpty() ? "\u2026" : toText));
+        }
+        timeButton.setText(withArrow(label));
+        timeButton.setForeground(timeButtonForeground());
+    }
+
+    private Color timeButtonForeground() {
+        return fromText.isEmpty() && toText.isEmpty()
+                ? UIManager.getColor("Button.foreground") : ClouseauColors.activeFilterForeground();
+    }
+
+    /** The Time button's label; for tests. */
+    String timeButtonText() { return timeButton.getText(); }
+
+    /** A picker button's label, with the ▾ that says it opens a popup. */
+    private static String withArrow(String label) { return label + "  \u25BE"; }
+
     // ── Source picker popup ───────────────────────────────────────────────────
 
     private void showSourcesPopup(JButton invoker) {
@@ -688,14 +836,66 @@ final class FilterBar extends JPanel {
 
     private void updateSourcesButtonLabel() {
         int total = allSources.size();
-        sourcesButton.setText(excludedSources.isEmpty() || total == 0
+        sourcesButton.setText(withArrow(excludedSources.isEmpty() || total == 0
             ? Messages.get("filter.sources.all")
-            : Messages.get("filter.sources.partial").formatted(total - excludedSources.size(), total));
+            : Messages.get("filter.sources.partial").formatted(total - excludedSources.size(), total)));
     }
 
     // Logger-tree depth colors read from UIManager via ClouseauColors at render time.
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** The range's start, or null for an open start or one that can't be read. */
+    private Instant rangeStart() {
+        Instant[] r = range(fromText, toText);
+        return r != null ? r[0] : parseTimestamp(fromText);
+    }
+
+    /** The range's end, or null for an open end or one that can't be read. */
+    private Instant rangeEnd() {
+        Instant[] r = range(fromText, toText);
+        return r != null ? r[1] : parseTimestamp(toText);
+    }
+
+    /**
+     * Both ends as instants (null: open), or null if they can't be read together. An end can
+     * be relative to the other, "+5m" or "-90s", which must then be a time itself.
+     */
+    private Instant[] range(String from, String to) {
+        Duration fromRel = relative(from), toRel = relative(to);
+        Instant f = fromRel == null ? parseTimestamp(from) : null;
+        Instant t = toRel == null ? parseTimestamp(to) : null;
+        if (!readable(from) || !readable(to) || (fromRel != null && toRel != null)) return null;
+        if (toRel != null) {
+            if (f == null) return null;
+            t = f.plus(toRel);
+        }
+        if (fromRel != null) {
+            if (t == null) return null;
+            f = t.plus(fromRel);
+        }
+        return new Instant[]{f, t};
+    }
+
+    /** True for an empty end, a time, or a relative end. */
+    private boolean readable(String text) {
+        return text.isEmpty() || relative(text) != null || parseTimestamp(text) != null;
+    }
+
+    /** "+5m", "-90s", "+1h", "+250ms", "+2d" as a signed duration, or null if it isn't one. */
+    static Duration relative(String text) {
+        java.util.regex.Matcher m = RELATIVE.matcher(text.trim());
+        if (!m.matches()) return null;
+        long n = Long.parseLong(m.group(2));
+        Duration d = switch (m.group(3).toLowerCase(Locale.ROOT)) {
+            case "ms" -> Duration.ofMillis(n);
+            case "s" -> Duration.ofSeconds(n);
+            case "m" -> Duration.ofMinutes(n);
+            case "h" -> Duration.ofHours(n);
+            default -> Duration.ofDays(n);
+        };
+        return m.group(1).equals("-") ? d.negated() : d;
+    }
 
     private Instant parseTimestamp(String text) {
         if (text.isEmpty()) return null;
@@ -710,25 +910,19 @@ final class FilterBar extends JPanel {
         return null;
     }
 
-    private void validateTimestamp(JTextField field) {
-        String text = field.getText().trim();
-        field.putClientProperty("JTextField.outline",
-            !text.isEmpty() && parseTimestamp(text) == null ? "error" : null);
-    }
-
     private void updateLoggerButtonLabel() {
         int total   = allLoggers.size();
         long active = allLoggers.stream().filter(l -> !excludedLoggers.contains(l)).count();
-        loggerButton.setText(excludedLoggers.isEmpty() || total == 0
+        loggerButton.setText(withArrow(excludedLoggers.isEmpty() || total == 0
             ? Messages.get("filter.loggers.all")
-            : Messages.get("filter.loggers.partial").formatted(active, total));
+            : Messages.get("filter.loggers.partial").formatted(active, total)));
     }
 
     private void updateFieldsButtonLabel() {
         boolean anyExcluded = excludedFieldValues.values().stream().anyMatch(s -> !s.isEmpty());
-        fieldsButton.setText(anyExcluded
+        fieldsButton.setText(withArrow(anyExcluded
             ? Messages.get("filter.fields.partial")
-            : Messages.get("filter.fields.all"));
+            : Messages.get("filter.fields.all")));
     }
 
     static void applyToggleStyle(JToggleButton btn) {

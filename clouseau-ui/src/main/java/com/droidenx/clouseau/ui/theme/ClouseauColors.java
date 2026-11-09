@@ -109,6 +109,14 @@ public final class ClouseauColors {
     /** Key label color in the detail pane. */
     public static Color detailKeyColor()     { return get("Clouseau.detailKeyColor", "Label.foreground"); }
 
+    /**
+     * Text of a picker button whose filter is on (the time range). The theme's
+     * {@code Clouseau.activeFilterForeground}, else its accent blue, else the label color.
+     */
+    public static Color activeFilterForeground() {
+        return get("Clouseau.activeFilterForeground", "Clouseau.accentBlue", "Label.foreground");
+    }
+
     /** Foreground for a de-selected / disabled toggle button. */
     public static Color offColor()           { return get("Clouseau.offColor", "Label.disabledForeground"); }
 

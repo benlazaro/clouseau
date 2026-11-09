@@ -129,6 +129,8 @@ final class SharedTabContext {
                     annotationsPanel.refresh();
             }
 
+            @Override public void showFrom(java.time.Instant at) { filterBar.showFrom(at); }
+            @Override public void showUpTo(java.time.Instant at) { filterBar.showUpTo(at); }
             @Override public MergedEntries mergedView() { return SharedTabContext.this.mergedView(); }
             @Override public void showTimeOffsetDialog(int source) { host.showTimeOffsetDialog(source); }
             @Override public void showSourceTimezoneDialog(int source) { host.showSourceTimezoneDialog(source); }
@@ -137,6 +139,13 @@ final class SharedTabContext {
             @Override public boolean canReload() { return host.canReload(); }
             @Override public void reload() { host.reload(); }
             @Override public void clearTable() { SharedTabContext.this.clearTable(); }
+        });
+
+        // The time popup's "Use selected row" reads the selected row's (corrected) time.
+        filterBar.setSelectedTime(() -> {
+            int viewRow = table.getSelectedRow();
+            LogEntry e = viewRow < 0 ? null : model.getEntry(table.convertRowIndexToModel(viewRow));
+            return e != null ? e.timestamp() : null;
         });
 
         detailPanel = new DetailPanel(formatters, highlighters, this::currentDetail);

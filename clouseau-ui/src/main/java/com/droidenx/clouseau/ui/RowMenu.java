@@ -15,7 +15,7 @@ import java.util.Map;
 
 /**
  * The menu shown when the user right-clicks rows of a tab's table (G-9): highlight colors
- * and clearing them (D-15), adding, editing and removing a note, the row's file on a merged
+ * and clearing them (D-15), the time range from a row, adding, editing and removing a note, the row's file on a merged
  * tab (offset, timezone, parser), the notes panel, reload and clear. {@link TabPanel}
  * builds one and reaches back through {@link Host}. EDT only.
  */
@@ -34,6 +34,12 @@ final class RowMenu {
 
         /** A note was added, changed or removed: repaint, refresh the detail panel and notes panel. */
         void notesChanged();
+
+        /** Shows rows from {@code at} on (the filter bar's time range start). */
+        void showFrom(java.time.Instant at);
+
+        /** Shows rows up to {@code at} (the filter bar's time range end). */
+        void showUpTo(java.time.Instant at);
 
         /** The merged view the tab shows, or null. */
         MergedEntries mergedView();
@@ -141,6 +147,21 @@ final class RowMenu {
             }
             menu.add(clearAllItem);
 
+            menu.addSeparator();
+        }
+
+        // ── Time range from this row ──────────────────────────────────────────
+        if (entries.size() == 1) {
+            LogEntry row = logTableModel.getEntry(entries.get(0));
+            java.time.Instant at = row != null ? row.timestamp() : null;
+            JMenuItem fromItem = new JMenuItem(Messages.get("table.context.show.from"));
+            JMenuItem upToItem = new JMenuItem(Messages.get("table.context.show.upto"));
+            fromItem.setEnabled(at != null);     // a continuation line has no time
+            upToItem.setEnabled(at != null);
+            fromItem.addActionListener(e -> host.showFrom(at));
+            upToItem.addActionListener(e -> host.showUpTo(at));
+            menu.add(fromItem);
+            menu.add(upToItem);
             menu.addSeparator();
         }
 
