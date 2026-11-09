@@ -1,0 +1,12 @@
+2026-03-27T08:15:01.902-05:00  INFO 4120 --- [gateway] [           main] c.e.gateway.GatewayApplication           : Routes loaded: /api/orders/** -> orders-service, /api/payments/** -> payments-service
+2026-03-27T08:15:02.114-05:00  INFO 4120 --- [gateway] [nio-8080-exec-3] c.e.gateway.filter.RequestLogFilter      : --> POST /api/orders/checkout requestId=req-7f3a91 user=u-20418
+2026-03-27T08:15:02.116-05:00 DEBUG 4120 --- [gateway] [nio-8080-exec-3] c.e.gateway.route.RouteResolver          : requestId=req-7f3a91 routed to orders-service (10.0.4.21:8443)
+2026-03-27T08:15:02.480-05:00  INFO 4120 --- [gateway] [nio-8080-exec-5] c.e.gateway.filter.RequestLogFilter      : --> GET /api/orders/ORD-20260327-00441 requestId=req-7f3a95 user=u-11873
+2026-03-27T08:15:02.512-05:00  INFO 4120 --- [gateway] [nio-8080-exec-5] c.e.gateway.filter.RequestLogFilter      : <-- 200 OK requestId=req-7f3a95 in 32ms
+2026-03-27T08:15:05.131-05:00  WARN 4120 --- [gateway] [nio-8080-exec-3] c.e.gateway.route.UpstreamClient         : requestId=req-7f3a91 orders-service slow to respond (3000ms), still waiting
+2026-03-27T08:15:07.140-05:00 ERROR 4120 --- [gateway] [nio-8080-exec-3] c.e.gateway.route.UpstreamClient         : requestId=req-7f3a91 upstream orders-service returned 502 Bad Gateway
+2026-03-27T08:15:07.141-05:00  INFO 4120 --- [gateway] [nio-8080-exec-3] c.e.gateway.filter.RequestLogFilter      : <-- 502 Bad Gateway requestId=req-7f3a91 in 5027ms
+2026-03-27T08:15:08.002-05:00  INFO 4120 --- [gateway] [nio-8080-exec-1] c.e.gateway.filter.RequestLogFilter      : --> POST /api/orders/checkout requestId=req-7f3aa0 user=u-20418
+2026-03-27T08:15:08.004-05:00 DEBUG 4120 --- [gateway] [nio-8080-exec-1] c.e.gateway.route.RouteResolver          : requestId=req-7f3aa0 routed to orders-service (10.0.4.22:8443)
+2026-03-27T08:15:08.395-05:00  INFO 4120 --- [gateway] [nio-8080-exec-1] c.e.gateway.filter.RequestLogFilter      : <-- 201 Created requestId=req-7f3aa0 in 393ms
+2026-03-27T08:15:09.250-05:00  WARN 4120 --- [gateway] [nio-8080-exec-6] c.e.gateway.ratelimit.RateLimiter        : Client 203.0.113.47 over limit (122/100 req/min), returning 429

@@ -1,0 +1,10 @@
+2026-03-27 08:15:01.204 [main] INFO  com.example.payments.PaymentsApplication - Started PaymentsApplication in 3.1s
+2026-03-27 08:15:02.147 [worker-3] INFO  com.example.payments.api.AuthorizeHandler - Authorize requestId=req-7f3a91 amount=149.97 EUR card=VISA ****4412
+2026-03-27 08:15:02.151 [worker-3] DEBUG com.example.payments.db.LedgerRepository - Acquiring ledger lock for account ACC-55102
+2026-03-27 08:15:04.160 [worker-3] WARN  com.example.payments.db.LedgerRepository - Ledger lock for ACC-55102 still held by worker-1 after 2000ms
+2026-03-27 08:15:05.150 [worker-4] INFO  com.example.payments.api.AuthorizeHandler - Authorize requestId=req-7f3a91 amount=149.97 EUR card=VISA ****4412 (retry)
+2026-03-27 08:15:06.170 [worker-3] ERROR com.example.payments.db.LedgerRepository - Gave up on ledger lock for ACC-55102 after 4000ms (held by worker-1, batch settlement SET-0327-02)
+2026-03-27 08:15:07.160 [worker-4] ERROR com.example.payments.api.AuthorizeHandler - requestId=req-7f3a91 client disconnected before authorization completed
+2026-03-27 08:15:07.902 [worker-1] INFO  com.example.payments.batch.Settlement - Batch settlement SET-0327-02 finished: 18,204 transactions in 6.7s, ledger lock released
+2026-03-27 08:15:08.030 [worker-2] INFO  com.example.payments.api.AuthorizeHandler - Authorize requestId=req-7f3aa0 amount=149.97 EUR card=VISA ****4412
+2026-03-27 08:15:08.370 [worker-2] INFO  com.example.payments.api.AuthorizeHandler - Authorized requestId=req-7f3aa0 auth=A7Q2K9 in 340ms

@@ -1,0 +1,18 @@
+> Task :clouseau-core:compileJava UP-TO-DATE
+> Task :clouseau-core:processResources NO-SOURCE
+> Task :clouseau-core:classes UP-TO-DATE
+> Task :clouseau-plugin:compileJava UP-TO-DATE
+> Task :clouseau-ui:compileJava
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+> Task :clouseau-ui:processResources
+> Task :clouseau-ui:classes
+
+> Task :clouseau-ui:test
+
+MergedViewTest > aFileReadWithItsOwnParserIsMergedAndExportedWithIt() PASSED
+PlainTextViewTest > showsEveryLineWithItsNumber() PASSED
+FileDropHandlerTest > opensEveryDroppedFile() PASSED
+
+BUILD SUCCESSFUL in 41s
+23 actionable tasks: 6 executed, 17 up-to-date

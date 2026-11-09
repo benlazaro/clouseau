@@ -1,0 +1,20 @@
+2026-03-27 08:15:01.550 [main] INFO  com.example.orders.OrdersApplication - Started OrdersApplication in 4.2s (pool max=20)
+2026-03-27 08:15:02.121 [http-nio-8443-exec-1] INFO  com.example.orders.web.CheckoutController - Checkout started requestId=req-7f3a91 cart=CRT-88120 items=3 total=149.97 EUR
+2026-03-27 08:15:02.133 [http-nio-8443-exec-1] DEBUG com.example.orders.service.InventoryService - Reserved 3 items for cart CRT-88120 (warehouse=AMS-2)
+2026-03-27 08:15:02.140 [http-nio-8443-exec-1] INFO  com.example.orders.client.PaymentsClient - Authorizing payment requestId=req-7f3a91 amount=149.97 EUR
+2026-03-27 08:15:02.488 [http-nio-8443-exec-4] DEBUG com.example.orders.web.OrderController - Fetching order ORD-20260327-00441 requestId=req-7f3a95
+2026-03-27 08:15:05.142 [http-nio-8443-exec-1] WARN  com.example.orders.client.PaymentsClient - requestId=req-7f3a91 payments-service has not answered after 3000ms, retrying (1/1)
+2026-03-27 08:15:07.137 [http-nio-8443-exec-1] ERROR com.example.orders.web.CheckoutController - Checkout failed requestId=req-7f3a91 cart=CRT-88120
+com.example.orders.client.PaymentsUnavailableException: payments-service timed out after 2 attempts (5000ms)
+	at com.example.orders.client.PaymentsClient.authorize(PaymentsClient.java:118)
+	at com.example.orders.service.CheckoutService.placeOrder(CheckoutService.java:74)
+	at com.example.orders.web.CheckoutController.checkout(CheckoutController.java:52)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.net.SocketTimeoutException: Read timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:278)
+	at com.example.orders.client.PaymentsClient.post(PaymentsClient.java:161)
+	... 3 more
+2026-03-27 08:15:07.139 [http-nio-8443-exec-1] INFO  com.example.orders.service.InventoryService - Released 3 items for cart CRT-88120
+2026-03-27 08:15:08.010 [http-nio-8443-exec-2] INFO  com.example.orders.web.CheckoutController - Checkout started requestId=req-7f3aa0 cart=CRT-88120 items=3 total=149.97 EUR
+2026-03-27 08:15:08.022 [http-nio-8443-exec-2] INFO  com.example.orders.client.PaymentsClient - Authorizing payment requestId=req-7f3aa0 amount=149.97 EUR
+2026-03-27 08:15:08.381 [http-nio-8443-exec-2] INFO  com.example.orders.service.CheckoutService - Order ORD-20260327-00457 placed requestId=req-7f3aa0

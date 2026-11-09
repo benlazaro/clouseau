@@ -28,6 +28,12 @@ cd clouseau
 `distZipImage` skips `-SNAPSHOT` versions, so pass a release version to build it locally.
 Running from source keeps its data in `clouseau-ui/data/`.
 
+To retake this guide's screenshots after a UI change, close any running Clouseau and run
+`./gradlew :clouseau-ui:screenshots`. It opens each scene from the logs in `samples/` (with
+its own empty data folder, so your settings aren't touched), saves them to
+`build/screenshots/`, and takes over the screen for about a minute. Check them, then copy
+them into `docs/screenshots/`.
+
 ## Project structure
 
 ```

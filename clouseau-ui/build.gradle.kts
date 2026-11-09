@@ -417,3 +417,28 @@ dependencies {
     compileOnly("org.pf4j:pf4j:${rootProject.extra["pf4jVersion"]}")
 }
 
+
+// Dev-only: recreates the user guide's screenshots (docs/screenshots) into build/screenshots,
+// with a throwaway data folder. The logs (samples/sample.log as app.log, and samples/screens)
+// are copied to build/screens first, so the status bar shows a neutral path. Takes over the
+// screen while it runs; close any running Clouseau first. The tool lives in the test sources
+// and is never shipped.
+tasks.register<JavaExec>("screenshots") {
+    group = "documentation"
+    description = "Captures the user guide screenshots into build/screenshots."
+    val samplesDir = rootProject.layout.projectDirectory.dir("samples").asFile
+    val screensDir = rootProject.layout.projectDirectory.dir("build/screens").asFile
+    val outDir = rootProject.layout.projectDirectory.dir("build/screenshots").asFile
+    val dataDir = layout.buildDirectory.dir("screenshot-data").get().asFile
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.droidenx.clouseau.ui.ScreenshotTool")
+    args(screensDir.absolutePath, outDir.absolutePath)
+    jvmArgs("-Dclouseau.data.dir=${dataDir.absolutePath}")
+    doFirst {
+        dataDir.deleteRecursively()
+        dataDir.mkdirs()
+        screensDir.deleteRecursively()
+        samplesDir.resolve("screens").copyRecursively(screensDir)
+        samplesDir.resolve("sample.log").copyTo(screensDir.resolve("app.log"))
+    }
+}
