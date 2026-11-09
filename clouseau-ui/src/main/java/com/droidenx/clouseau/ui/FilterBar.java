@@ -160,6 +160,7 @@ final class FilterBar extends JPanel {
         JButton clearSearchBtn = new JButton("\u00d7");
         clearSearchBtn.setVisible(false);
         clearSearchBtn.setFont(clearSearchBtn.getFont().deriveFont(14f));
+        clearSearchBtn.setMargin(new Insets(0, 4, 0, 4));
         clearSearchBtn.setBorderPainted(false);
         clearSearchBtn.setContentAreaFilled(false);
         clearSearchBtn.setFocusPainted(false);

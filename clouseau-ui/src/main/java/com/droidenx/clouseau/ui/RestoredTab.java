@@ -160,6 +160,7 @@ final class RestoredTab {
         });
         JButton close = new JButton("×");
         close.setToolTipText(Messages.get("session.notice.close"));
+        close.setMargin(new java.awt.Insets(0, 4, 0, 4));
         close.setBorderPainted(false);
         close.setContentAreaFilled(false);
         close.setFocusable(false);

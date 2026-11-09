@@ -1283,6 +1283,7 @@ public final class MainFrame extends JFrame {
 
         JButton close = new JButton("\u00d7"); // ×
         close.setPreferredSize(new Dimension(18, 18));
+        close.setMargin(new Insets(0, 0, 0, 0));   // a theme's button padding would squeeze out the ×
         close.setFocusable(false);
         close.setBorderPainted(false);
         close.setContentAreaFilled(false);

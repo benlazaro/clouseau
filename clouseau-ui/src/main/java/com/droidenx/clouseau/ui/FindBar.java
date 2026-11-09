@@ -85,6 +85,7 @@ final class FindBar extends JPanel {
         JButton clearFieldBtn = new JButton("\u00d7");
         clearFieldBtn.setVisible(false);
         clearFieldBtn.setFont(clearFieldBtn.getFont().deriveFont(14f));
+        clearFieldBtn.setMargin(new Insets(0, 4, 0, 4));
         clearFieldBtn.setBorderPainted(false);
         clearFieldBtn.setContentAreaFilled(false);
         clearFieldBtn.setFocusPainted(false);
