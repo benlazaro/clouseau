@@ -89,19 +89,19 @@ final class SettingsDialog extends JDialog {
         JPanel content = new JPanel(new MigLayout("insets 20, wrap 2, gapy 6", "[]24[grow]"));
 
         // ── Table section ────────────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.table")), "span 2, gaptop 0, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.table")), "span 2, growx, gaptop 0, gapbottom 4");
         content.add(new JLabel(Messages.get("settings.row.height")));
         content.add(rowHeightSpinner, SPINNER);
         content.add(stripesCheckBox, "span 2");
 
         // ── Detail panel section ─────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.detail")), "span 2, gaptop 12, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.detail")), "span 2, growx, gaptop 12, gapbottom 4");
         content.add(new JLabel(Messages.get("settings.detail.font.size")));
         content.add(detailFontSizeSpinner, SPINNER);
         content.add(wrapLinesCheckBox, "span 2");
 
         // ── Tabs section ──────────────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.tabs")), "span 2, gaptop 12, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.tabs")), "span 2, growx, gaptop 12, gapbottom 4");
         content.add(confirmCloseCheckBox, "span 2");
         content.add(confirmHighlightClearAllCheckBox, "span 2");
         content.add(confirmAnnotationDeleteCheckBox, "span 2");
@@ -110,7 +110,7 @@ final class SettingsDialog extends JDialog {
         content.add(maxEntriesSpinner, SPINNER);
 
         // ── Files section ─────────────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.files")), "span 2, gaptop 12, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.files")), "span 2, growx, gaptop 12, gapbottom 4");
         content.add(new JLabel(Messages.get("settings.recent.max")));
         content.add(recentMaxSpinner, SPINNER);
         content.add(new JLabel(Messages.get("settings.multi.open")));
@@ -119,7 +119,7 @@ final class SettingsDialog extends JDialog {
         content.add(startupCombo, "growx");
 
         // ── Appearance section ────────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.appearance")), "span 2, gaptop 12, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.appearance")), "span 2, growx, gaptop 12, gapbottom 4");
         JButton manageThemesBtn = new JButton(Messages.get("settings.theme.manage"));
         manageThemesBtn.addActionListener(e -> {
             new ThemeManagerDialog(SwingUtilities.getWindowAncestor(this)).setVisible(true);
@@ -228,9 +228,12 @@ final class SettingsDialog extends JDialog {
         return combo;
     }
 
-    private static JLabel sectionLabel(String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(label.getFont().deriveFont(Font.BOLD));
-        return label;
+    /** A section title, as IntelliJ's settings show one: regular weight, with a hairline to the right edge. */
+    private static JComponent sectionLabel(String text) {
+        JPanel title = new JPanel(new MigLayout("insets 0, gap 8", "[][grow]", "[center]"));
+        title.setOpaque(false);
+        title.add(new JLabel(text));
+        title.add(new JSeparator(), "growx");
+        return title;
     }
 }
