@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntPredicate;
 
@@ -339,7 +340,12 @@ public final class IndexedEntries implements EntryRows {
         while (buf.hasRemaining()) {
             int n;
             try {
-                n = channel.read(buf, position + buf.position() - start).get();
+                Future<Integer> read = channel.read(buf, position + buf.position() - start);
+                // get() returns a finished read without looking at the interrupt flag, so an
+                // interrupted scan could run to the end (or not) depending on timing. Check it
+                // here: the read was issued, and the channel stays open either way.
+                if (Thread.interrupted()) throw new InterruptedException();
+                n = read.get();
             } catch (ExecutionException ex) {
                 throw ex.getCause() instanceof IOException io ? io : new IOException(ex.getCause());
             }
