@@ -15,6 +15,8 @@ final class SettingsDialog extends JDialog {
 
     /** One width for every spinner, wide enough for "2,000,000" plus the arrows. */
     private static final String SPINNER = "w 120!";
+    /** Settings sit indented under their section title, so the titles stand out. */
+    private static final String INDENT = "gapleft 16";
 
     private final TabPanel tabPanel;
     private final Runnable onApply;
@@ -90,32 +92,32 @@ final class SettingsDialog extends JDialog {
 
         // ── Table section ────────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.table")), "span 2, growx, gaptop 0, gapbottom 4");
-        content.add(new JLabel(Messages.get("settings.row.height")));
+        content.add(new JLabel(Messages.get("settings.row.height")), INDENT);
         content.add(rowHeightSpinner, SPINNER);
-        content.add(stripesCheckBox, "span 2");
+        content.add(stripesCheckBox, "span 2, " + INDENT);
 
         // ── Detail panel section ─────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.detail")), "span 2, growx, gaptop 12, gapbottom 4");
-        content.add(new JLabel(Messages.get("settings.detail.font.size")));
+        content.add(new JLabel(Messages.get("settings.detail.font.size")), INDENT);
         content.add(detailFontSizeSpinner, SPINNER);
-        content.add(wrapLinesCheckBox, "span 2");
+        content.add(wrapLinesCheckBox, "span 2, " + INDENT);
 
         // ── Tabs section ──────────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.tabs")), "span 2, growx, gaptop 12, gapbottom 4");
-        content.add(confirmCloseCheckBox, "span 2");
-        content.add(confirmHighlightClearAllCheckBox, "span 2");
-        content.add(confirmAnnotationDeleteCheckBox, "span 2");
-        content.add(followByDefaultCheckBox, "span 2");
-        content.add(new JLabel(Messages.get("settings.max.entries.per.tab")));
+        content.add(confirmCloseCheckBox, "span 2, " + INDENT);
+        content.add(confirmHighlightClearAllCheckBox, "span 2, " + INDENT);
+        content.add(confirmAnnotationDeleteCheckBox, "span 2, " + INDENT);
+        content.add(followByDefaultCheckBox, "span 2, " + INDENT);
+        content.add(new JLabel(Messages.get("settings.max.entries.per.tab")), INDENT);
         content.add(maxEntriesSpinner, SPINNER);
 
         // ── Files section ─────────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.files")), "span 2, growx, gaptop 12, gapbottom 4");
-        content.add(new JLabel(Messages.get("settings.recent.max")));
+        content.add(new JLabel(Messages.get("settings.recent.max")), INDENT);
         content.add(recentMaxSpinner, SPINNER);
-        content.add(new JLabel(Messages.get("settings.multi.open")));
+        content.add(new JLabel(Messages.get("settings.multi.open")), INDENT);
         content.add(multiOpenCombo, "growx");
-        content.add(new JLabel(Messages.get("settings.startup")));
+        content.add(new JLabel(Messages.get("settings.startup")), INDENT);
         content.add(startupCombo, "growx");
 
         // ── Appearance section ────────────────────────────────────────────
@@ -131,9 +133,9 @@ final class SettingsDialog extends JDialog {
         JPanel themeRow = new JPanel(new MigLayout("insets 0", "[grow,fill][]"));
         themeRow.add(themeCombo);
         themeRow.add(manageThemesBtn);
-        content.add(new JLabel(Messages.get("settings.theme")));
+        content.add(new JLabel(Messages.get("settings.theme")), INDENT);
         content.add(themeRow, "growx");
-        content.add(new JLabel(Messages.get("settings.timezone")));
+        content.add(new JLabel(Messages.get("settings.timezone")), INDENT);
         content.add(timezoneCombo, "growx");
 
         // ── Buttons ──────────────────────────────────────────────────────
