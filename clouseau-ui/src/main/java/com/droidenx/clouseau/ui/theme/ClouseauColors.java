@@ -49,6 +49,21 @@ public final class ClouseauColors {
     /** Main log table background. */
     public static Color tableBackground()    { return UIManager.getColor("Table.background"); }
 
+    /**
+     * Background of every other log row when stripes are on (Settings → Table): the theme's
+     * {@code Clouseau.stripeBackground}, else the table background moved 4% toward the text color.
+     */
+    public static Color stripeBackground() {
+        Color c = UIManager.getColor("Clouseau.stripeBackground");
+        if (c != null) return c;
+        Color bg = tableBackground(), fg = foreground();
+        if (bg == null || fg == null) return bg;
+        float t = 0.04f;
+        return new Color(Math.round(bg.getRed()   + (fg.getRed()   - bg.getRed())   * t),
+                         Math.round(bg.getGreen() + (fg.getGreen() - bg.getGreen()) * t),
+                         Math.round(bg.getBlue()  + (fg.getBlue()  - bg.getBlue())  * t));
+    }
+
     /** Detail text-pane background. */
     public static Color detailBackground()   { return UIManager.getColor("TextArea.background"); }
 

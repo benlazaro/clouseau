@@ -567,6 +567,14 @@ public final class TabPanel extends JPanel {
 
     public void applyDetailFontSize(int size) { shared.refreshDetail(); }
 
+    /** Applies the saved table settings (row height, stripes) after the Settings dialog. */
+    public void applyTableSettings() {
+        JTable table = getLogTable();
+        if (table == null) return;
+        table.setRowHeight(AppPrefs.getRowHeight());
+        table.repaint();
+    }
+
     public void applyWrapLines(boolean wrap) { shared.applyWrapLines(wrap); }
 
     /** Rebuilds timestamp formatters from the current preference and refreshes the table and detail panel. */

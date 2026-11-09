@@ -63,6 +63,7 @@ There is no built-in parser plugin module: built-in parsers are regex definition
 | Concern | Library |
 |---|---|
 | Look & feel | FlatLaf 3.4.1 (built-in Dark and Light themes, plus user `.properties` themes) |
+| Fonts | Inter 4.1 (interface) and JetBrains Mono 2.304 (log text, code), bundled via FlatLaf's font modules; see `ClouseauFonts` |
 | Layout | MigLayout 11.3 |
 | Detail panel text | RSyntaxTextArea 3.4.0 |
 | Plugins | PF4J 3.12.0 |

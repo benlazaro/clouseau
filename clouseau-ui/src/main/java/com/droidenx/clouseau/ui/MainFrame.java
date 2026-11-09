@@ -14,6 +14,7 @@ import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import com.droidenx.clouseau.ui.theme.ThemeManager;
 import com.droidenx.clouseau.ui.theme.ThemeManagerDialog;
 import lombok.extern.slf4j.Slf4j;
@@ -558,6 +559,7 @@ public final class MainFrame extends JFrame {
         new SettingsDialog(this, activeTabPanel(), () -> {
             manager.refreshRecentMenus();
             manager.allPanels().forEach(TabPanel::refreshTimezone);
+            manager.allPanels().forEach(TabPanel::applyTableSettings);
             manager.restoreSettingChanged();
         }).setVisible(true);
     }
@@ -1561,7 +1563,7 @@ public final class MainFrame extends JFrame {
     /** A rounded key-chip label, styled like a keyboard key. */
     private static JComponent keyBadge(String text) {
         JLabel label = new JLabel(text);
-        label.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        label.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
 
         JPanel badge = new JPanel(new BorderLayout()) {
             @Override

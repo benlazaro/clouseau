@@ -3,6 +3,7 @@ package com.droidenx.clouseau.ui;
 import com.google.gson.*;
 import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import com.droidenx.clouseau.core.RegexLogParser;
 import com.droidenx.clouseau.core.LogReaders;
 import lombok.extern.slf4j.Slf4j;
@@ -243,14 +244,14 @@ public final class ParserEditorDialog extends JDialog {
 
         sourceArea.setLineWrap(true);
         sourceArea.setWrapStyleWord(false);
-        sourceArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        sourceArea.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
         sourceScroll = new JScrollPane(sourceArea);
         form.add(sourceLabel, "hidemode 3");
         form.add(sourceScroll, "hmin 60, grow, hidemode 3");
 
         patternArea.setLineWrap(true);
         patternArea.setWrapStyleWord(false);
-        patternArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        patternArea.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
         form.add(patternLabel);
         form.add(new JScrollPane(patternArea), "hmin 80, grow");
 
@@ -459,7 +460,7 @@ public final class ParserEditorDialog extends JDialog {
 
         JTextArea area = new JTextArea(content);
         area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
         area.setOpaque(false);
         JOptionPane.showMessageDialog(this, new JScrollPane(area),
                 Messages.get("parsereditor.template.help.title"),
@@ -581,7 +582,7 @@ public final class ParserEditorDialog extends JDialog {
         k.setForeground(ClouseauColors.dimForeground());
         k.setFont(k.getFont().deriveFont(11f));
         JLabel v = new JLabel(value != null ? value : "");
-        v.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        v.setFont(ClouseauFonts.mono(Font.PLAIN, 11));
         fieldsPanel.add(k);
         fieldsPanel.add(v);
     }

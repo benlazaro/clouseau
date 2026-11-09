@@ -130,7 +130,8 @@ final class FilterBar extends JPanel {
         fieldsButton = new JButton(Messages.get("filter.fields.all"));
         fieldsButton.addActionListener(e -> showFieldsPopup(fieldsButton));
         fieldsButton.setVisible(false);
-        add(fieldsButton);
+        // Like the Sources button: takes no room while hidden, so the time fields keep theirs.
+        add(fieldsButton, "hidemode 3");
 
         add(new JSeparator(JSeparator.VERTICAL), "growy, gapx 4");
 

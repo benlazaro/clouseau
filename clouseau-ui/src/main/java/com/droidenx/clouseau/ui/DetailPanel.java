@@ -5,6 +5,7 @@ import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.core.AnnotationStore;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
@@ -258,13 +259,13 @@ final class DetailPanel extends JPanel {
         int fontSize = AppPrefs.getDetailFontSize();
 
         SimpleAttributeSet key = new SimpleAttributeSet();
-        StyleConstants.setFontFamily(key, Font.MONOSPACED);
+        StyleConstants.setFontFamily(key, ClouseauFonts.MONO_FAMILY);
         StyleConstants.setFontSize(key, fontSize);
         StyleConstants.setBold(key, true);
         StyleConstants.setForeground(key, ClouseauColors.detailKeyColor());
 
         SimpleAttributeSet val = new SimpleAttributeSet();
-        StyleConstants.setFontFamily(val, Font.MONOSPACED);
+        StyleConstants.setFontFamily(val, ClouseauFonts.MONO_FAMILY);
         StyleConstants.setFontSize(val, fontSize);
         StyleConstants.setForeground(val, ClouseauColors.foreground());
 
@@ -289,7 +290,7 @@ final class DetailPanel extends JPanel {
 
         if (content.highlight() != null) {
             SimpleAttributeSet swatchStyle = new SimpleAttributeSet();
-            StyleConstants.setFontFamily(swatchStyle, Font.MONOSPACED);
+            StyleConstants.setFontFamily(swatchStyle, ClouseauFonts.MONO_FAMILY);
             StyleConstants.setFontSize(swatchStyle, fontSize);
             StyleConstants.setForeground(swatchStyle, content.highlight());
             appendField(doc, key, swatchStyle, Messages.get("detail.highlight.label"), "██████");

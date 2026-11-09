@@ -6,6 +6,7 @@ import com.droidenx.clouseau.core.LineScanner;
 import com.droidenx.clouseau.core.LogReaders;
 import com.droidenx.clouseau.core.TextLines;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
@@ -108,7 +109,7 @@ final class PlainTextView extends JPanel {
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.setFillsViewportHeight(true);
-        Font mono = new Font(Font.MONOSPACED, Font.PLAIN, table.getFont().getSize());
+        Font mono = ClouseauFonts.mono(Font.PLAIN, table.getFont().getSize());
         table.setFont(mono);
         table.setRowHeight(table.getFontMetrics(mono).getHeight() + 2);
         table.setTransferHandler(new TransferHandler() {

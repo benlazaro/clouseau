@@ -23,6 +23,7 @@ class ThemedColorsTest {
         UIManager.put("Clouseau.level.ERROR", null);
         UIManager.put("Clouseau.selectionForeground", null);
         UIManager.put("Clouseau.selectionRing", null);
+        UIManager.put("Clouseau.stripeBackground", null);
     }
 
     private static void onEdt(Runnable r) throws Exception {
@@ -115,5 +116,17 @@ class ThemedColorsTest {
         assertThat(ClouseauColors.selectionRing()).isEqualTo(ClouseauColors.selectionBackground().brighter());
         UIManager.put("Clouseau.selectionRing", RED);
         assertThat(ClouseauColors.selectionRing()).isEqualTo(RED);
+    }
+    @Test
+    void stripesUseTheThemeColorElseAFaintStepTowardTheText() {
+        UIManager.put("Clouseau.stripeBackground", RED);
+        assertThat(ClouseauColors.stripeBackground()).isEqualTo(RED);
+        UIManager.put("Clouseau.stripeBackground", null);
+        Color bg = ClouseauColors.tableBackground();
+        Color stripe = ClouseauColors.stripeBackground();
+        assertThat(stripe).isNotNull();
+        int step = Math.abs(stripe.getRed() - bg.getRed()) + Math.abs(stripe.getGreen() - bg.getGreen())
+                 + Math.abs(stripe.getBlue() - bg.getBlue());
+        assertThat(step).isBetween(1, 40);
     }
 }

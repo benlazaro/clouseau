@@ -3,6 +3,7 @@ package com.droidenx.clouseau.ui;
 import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 
 import javax.swing.*;
 import javax.swing.border.Border;
@@ -71,6 +72,7 @@ final class LogTableView {
             }
         };
         logTable.setBackground(ClouseauColors.tableBackground());
+        logTable.setFont(ClouseauFonts.mono(Font.PLAIN, 13));
         logTable.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                 .put(KeyStroke.getKeyStroke(KeyEvent.VK_HOME, InputEvent.CTRL_DOWN_MASK), "scrollToTop");
         logTable.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
@@ -109,7 +111,7 @@ final class LogTableView {
                 } else if (isSearchMatch) {
                     setBackground(ClouseauColors.searchMatchBackground());
                 } else {
-                    setBackground(t.getBackground());
+                    setBackground(r % 2 == 1 && AppPrefs.isTableStripes() ? ClouseauColors.stripeBackground() : t.getBackground());
                 }
 
                 // Ring border on any selected row
@@ -246,9 +248,9 @@ final class LogTableView {
             int minW = measure.getPreferredSize().width + 40;
             logTable.getColumnModel().getColumn(i).setMinWidth(minW);
         }
-        logTable.setShowHorizontalLines(true);
-        logTable.setShowVerticalLines(false);
-        logTable.setGridColor(ClouseauColors.separatorColor());
+        // Row lines come from the theme ([style].logTable in its .properties file: showHorizontalLines,
+        // gridColor), so a live theme switch updates them.
+        logTable.putClientProperty("FlatLaf.styleClass", "logTable");
         logTable.setRowHeight(AppPrefs.getRowHeight());
         logTable.addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e)  { maybeShowTableMenu(e); }

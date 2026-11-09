@@ -37,6 +37,7 @@ public final class AppPrefs {
     private static final String KEY_DETAIL_FONT_SIZE   = "detail.font.size";
     private static final String KEY_DETAIL_WRAP_LINES  = "detail.wrap.lines";
     private static final String KEY_ROW_HEIGHT         = "row.height";
+    private static final String KEY_TABLE_STRIPES      = "table.stripes";
     private static final String KEY_LAST_OPEN_DIR      = "last.open.dir";
     private static final String KEY_RECENT_FILES       = "recent.files";
     private static final String KEY_RECENT_MAX         = "recent.max";
@@ -361,7 +362,16 @@ public final class AppPrefs {
     }
 
     public static int getRowHeight() {
-        return getInt(KEY_ROW_HEIGHT, 22);
+        return getInt(KEY_ROW_HEIGHT, 24);
+    }
+
+    /** Whether every other log row is shaded (Settings → Table). Off by default. */
+    public static boolean isTableStripes() {
+        return getBool(KEY_TABLE_STRIPES, false);
+    }
+
+    public static void setTableStripes(boolean stripes) {
+        putBool(KEY_TABLE_STRIPES, stripes);
     }
 
     public static void setRowHeight(int height) {

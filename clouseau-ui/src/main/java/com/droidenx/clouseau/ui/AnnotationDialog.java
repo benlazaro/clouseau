@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import net.miginfocom.swing.MigLayout;
 
 import com.droidenx.clouseau.core.AnnotationStore;
@@ -34,7 +35,7 @@ public final class AnnotationDialog extends JDialog {
         noteArea = new JTextArea(existing != null ? existing.note() : "", 8, 40);
         noteArea.setLineWrap(true);
         noteArea.setWrapStyleWord(true);
-        noteArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+        noteArea.setFont(ClouseauFonts.mono(Font.PLAIN, 13));
         add(new JScrollPane(noteArea), "grow, wrap");
 
         JButton ok     = new JButton("OK");

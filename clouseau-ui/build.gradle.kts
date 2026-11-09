@@ -406,6 +406,9 @@ dependencies {
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.0")
     implementation("com.formdev:flatlaf:${rootProject.extra["flatlafVersion"]}")
     implementation("com.formdev:flatlaf-intellij-themes:${rootProject.extra["flatlafVersion"]}")
+    // Bundled fonts (SIL OFL): Inter for the interface, JetBrains Mono for log text (ClouseauFonts)
+    implementation("com.formdev:flatlaf-fonts-inter:4.1")
+    implementation("com.formdev:flatlaf-fonts-jetbrains-mono:2.304")
     implementation("com.miglayout:miglayout-swing:${rootProject.extra["migLayoutVersion"]}")
     implementation("com.fifesoft:rsyntaxtextarea:${rootProject.extra["rstaVersion"]}")
 

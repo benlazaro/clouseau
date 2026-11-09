@@ -4,6 +4,7 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.core.FilePattern;
 import com.droidenx.clouseau.core.LogSniffer;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
@@ -350,7 +351,7 @@ final class FileChooserDialog extends JDialog {
 
         JTextArea previewArea = new JTextArea();
         previewArea.setEditable(false);
-        previewArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        previewArea.setFont(ClouseauFonts.mono(Font.PLAIN, 11));
         previewArea.setBackground(ClouseauColors.detailBackground());
         previewArea.setForeground(ClouseauColors.dimForeground());
         previewArea.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));

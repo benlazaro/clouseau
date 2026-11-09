@@ -21,6 +21,7 @@ final class SettingsDialog extends JDialog {
 
     // Table settings
     private final JSpinner rowHeightSpinner;
+    private final JCheckBox stripesCheckBox;
 
     // Detail panel settings
     private final JSpinner detailFontSizeSpinner;
@@ -51,6 +52,7 @@ final class SettingsDialog extends JDialog {
         this.onApply  = onApply;
 
         rowHeightSpinner       = new JSpinner(new SpinnerNumberModel(AppPrefs.getRowHeight(), 14, 64, 1));
+        stripesCheckBox        = new JCheckBox(Messages.get("settings.table.stripes"), AppPrefs.isTableStripes());
         detailFontSizeSpinner  = new JSpinner(new SpinnerNumberModel(AppPrefs.getDetailFontSize(), 8, 36, 1));
         wrapLinesCheckBox      = new JCheckBox(Messages.get("settings.detail.wrap"), AppPrefs.isDetailWrapLines());
         confirmCloseCheckBox            = new JCheckBox(Messages.get("settings.tab.confirm.close"),             AppPrefs.isTabCloseConfirm());
@@ -90,6 +92,7 @@ final class SettingsDialog extends JDialog {
         content.add(sectionLabel(Messages.get("settings.section.table")), "span 2, gaptop 0, gapbottom 4");
         content.add(new JLabel(Messages.get("settings.row.height")));
         content.add(rowHeightSpinner, SPINNER);
+        content.add(stripesCheckBox, "span 2");
 
         // ── Detail panel section ─────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.detail")), "span 2, gaptop 12, gapbottom 4");
@@ -164,8 +167,9 @@ final class SettingsDialog extends JDialog {
     }
 
     private void applySettings() {
-        JTable logTable = tabPanel != null ? tabPanel.getLogTable() : null;
-        if (logTable != null) logTable.setRowHeight((int) rowHeightSpinner.getValue());
+        // Saved, then applied to every open tab by onApply (TabPanel.applyTableSettings).
+        AppPrefs.setRowHeight((int) rowHeightSpinner.getValue());
+        AppPrefs.setTableStripes(stripesCheckBox.isSelected());
         int fontSize = (int) detailFontSizeSpinner.getValue();
         AppPrefs.setDetailFontSize(fontSize);
         if (tabPanel != null) tabPanel.applyDetailFontSize(fontSize);

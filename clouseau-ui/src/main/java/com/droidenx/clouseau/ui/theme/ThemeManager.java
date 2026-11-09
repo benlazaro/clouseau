@@ -34,6 +34,7 @@ public final class ThemeManager {
     private static final LinkedHashMap<String, Runnable> BUILTINS = new LinkedHashMap<>();
 
     static {
+        ClouseauFonts.install();
         BUILTINS.put("Dark", () -> setup(new ClouseauDarkLaf()));
         BUILTINS.put("Dark (revised)", () -> setup(new ClouseauDarkRevisedLaf()));
 //        BUILTINS.put("FlatLaf Dark",  () -> setup(new FlatDarkLaf()));
@@ -148,6 +149,9 @@ public final class ThemeManager {
 
     /** Structural/layout overrides that apply regardless of which theme is active. */
     private static void applyNeutralOverrides() {
-        UIManager.put("defaultFont",                  new FontUIResource(new Font(Font.SANS_SERIF, Font.PLAIN, 13)));
+        // Inter (ClouseauFonts, FlatLaf's preferred family) at 13px.
+        Font system = UIManager.getFont("defaultFont");
+        Font base = system != null ? system : new Font(Font.SANS_SERIF, Font.PLAIN, 13);
+        UIManager.put("defaultFont", new FontUIResource(base.deriveFont(Font.PLAIN, 13f)));
     }
 }

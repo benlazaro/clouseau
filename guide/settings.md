@@ -33,7 +33,8 @@ readable in any theme.
 
 | Section | Setting | What it does |
 |---|---|---|
-| Table | Row height | The height of table rows |
+| Table | Row height | The height of table rows (24 pixels by default) |
+| | Stripe alternate rows | Shades every other row, to help follow a long row across a wide window |
 | Detail Panel | Font size | The detail panel's font size (also changed with **A−** / **A+**) |
 | | Wrap long lines | Wrap long lines in the detail panel instead of scrolling sideways |
 | Tabs | Confirm when closing a tab | Ask before closing a tab |
