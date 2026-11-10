@@ -69,9 +69,15 @@ public final class AppPrefs {
 
     /**
      * A saved column layout: column order (visible first, then hidden), per-column width.
+     * A field column also keeps its field name ({@code field}), so the layout finds it
+     * wherever the model puts it; it's null for the fixed columns and in older layouts.
      */
     public record ColumnLayout(String name, java.util.List<ColumnEntry> columns) {
-        public record ColumnEntry(int modelIndex, boolean visible, int width) {}
+        public record ColumnEntry(int modelIndex, boolean visible, int width, String field) {
+            public ColumnEntry(int modelIndex, boolean visible, int width) {
+                this(modelIndex, visible, width, null);
+            }
+        }
     }
 
     /**
@@ -235,7 +241,8 @@ public final class AppPrefs {
                     entries.add(new ColumnLayout.ColumnEntry(
                             jsonInt(co, "modelIndex", 0),
                             !co.has("visible") || co.get("visible").getAsBoolean(),
-                            jsonInt(co, "width", 100)));
+                            jsonInt(co, "width", 100),
+                            jsonString(co, "field", null)));
                 }
             }
             list.add(new ColumnLayout(jsonString(o, "name", ""), entries));
@@ -254,6 +261,7 @@ public final class AppPrefs {
                 co.addProperty("modelIndex", e.modelIndex());
                 co.addProperty("visible",    e.visible());
                 co.addProperty("width",      e.width());
+                if (e.field() != null) co.addProperty("field", e.field());
                 cols.add(co);
             }
             o.add("columns", cols);

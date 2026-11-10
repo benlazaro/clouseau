@@ -407,18 +407,29 @@ final class LogTableView {
         List<AppPrefs.ColumnLayout.ColumnEntry> entries = new ArrayList<>();
         for (int vi = 0; vi < logTable.getColumnCount(); vi++) {
             TableColumn col = logTable.getColumnModel().getColumn(vi);
-            entries.add(new AppPrefs.ColumnLayout.ColumnEntry(col.getModelIndex(), true, col.getWidth()));
+            entries.add(new AppPrefs.ColumnLayout.ColumnEntry(
+                    col.getModelIndex(), true, col.getWidth(), fieldOf(col.getModelIndex())));
         }
         hiddenColumns.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(e -> entries.add(
-                        new AppPrefs.ColumnLayout.ColumnEntry(e.getKey(), false, e.getValue().getWidth())));
+                .forEach(e -> entries.add(new AppPrefs.ColumnLayout.ColumnEntry(
+                        e.getKey(), false, e.getValue().getWidth(), fieldOf(e.getKey()))));
         return new AppPrefs.ColumnLayout(name, entries);
     }
 
+    /** The field a model column shows, or null for a fixed column. */
+    private String fieldOf(int modelIndex) {
+        int at = modelIndex - LogTableModel.FIXED_COLUMNS;
+        List<String> fields = logTableModel.fieldColumns();
+        return at >= 0 && at < fields.size() ? fields.get(at) : null;
+    }
+
     /** Applies a saved layout: visibility, order and widths. Safe to call on any file (unknown model indices are skipped). */
-    void applyColumnLayout(AppPrefs.ColumnLayout layout) {
+    void applyColumnLayout(AppPrefs.ColumnLayout saved) {
         int modelCount = logTableModel.getColumnCount();
+        // The saved columns as this model numbers them (a merged view's Source shifts the fields).
+        AppPrefs.ColumnLayout layout = new AppPrefs.ColumnLayout(saved.name(),
+                LayoutColumns.resolve(saved.columns(), logTableModel.fieldColumns()));
 
         // 1. Make all currently-hidden columns visible again
         new ArrayList<>(hiddenColumns.keySet()).forEach(mi -> {

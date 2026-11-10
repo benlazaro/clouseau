@@ -105,7 +105,8 @@ Right-click any column header:
 - **Save current layout…** saves the order, visibility and width of the columns under a
   name. Pick a saved layout in the same menu to apply it.
 - **Manage layouts…** deletes layouts, and sets one as the **default**, applied to every
-  file you open. The default is marked ★.
+  file you open. The default is marked ★. A layout fits merged views too: their extra
+  Source column doesn't throw the other columns out of place.
 
 Drag a column header to move the column. Columns size themselves to their content when a
 file opens.

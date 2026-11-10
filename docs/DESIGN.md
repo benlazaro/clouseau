@@ -1171,7 +1171,13 @@ as a reusable "workspace".
    - **Source column and filter:** the Source column is the first custom column, keyed
      `LogTableModel.SOURCE_COLUMN` (a name no parser can declare). The filter bar's
      **Sources** button hides whole files; `EntryFilter.testSource` carries that, and
-     `MergedEntries.testIndex` checks it before the index columns.
+     `MergedEntries.testIndex` checks it before the index columns. Because Source moves
+     the field columns along by one, a saved column layout (`settings.json`) records each
+     field column's name as well as its model index, and `LayoutColumns` finds the columns
+     by name, so one layout fits single files and merged views. Layouts saved before names
+     were kept are read by index, shifted past Source when they're one column short or over.
+     The status bar's file list can shrink and ends in "…", so a long list can't widen the
+     tab (issue #6: a tabbed pane gives every tab the widest tab's minimum size).
    - **Not yet (later steps):** single-file tabs keep their own loader (`TabPanel.load`; it now indexes through `FileIndexer`, question 4);
      only the model reads both through `EntryRows`. Every file uses the tab's parser
      choice (chosen, or per-line detection). A merged tab can't be exported for review

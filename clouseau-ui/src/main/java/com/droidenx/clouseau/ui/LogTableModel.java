@@ -39,7 +39,8 @@ import java.util.function.Predicate;
  */
 public final class LogTableModel extends AbstractTableModel {
 
-    private static final int FIXED_COLUMNS = 6;
+    /** The columns every log has (#, Timestamp, Level, Thread, Logger, Message); field columns follow. */
+    static final int FIXED_COLUMNS = 6;
     /**
      * The key of the Source column of a merged view (D-17), the first custom column. Not a
      * name a parser can declare, so it never clashes with a field.
@@ -733,6 +734,9 @@ public final class LogTableModel extends AbstractTableModel {
             fireTableStructureChanged();
         }
     }
+
+    /** The field columns, in model order after the fixed ones; a merged view's Source is {@link #SOURCE_COLUMN}. */
+    List<String> fieldColumns() { return customFields; }
 
     @Override public int getRowCount()    { return rows.size(); }
     @Override public int getColumnCount() { return FIXED_COLUMNS + customFields.size(); }

@@ -22,7 +22,7 @@ final class TabStatusBar extends JPanel {
 
     /** {@code onTimezoneClick} runs when the user clicks the timezone badge. */
     TabStatusBar(Runnable onTimezoneClick) {
-        super(new BorderLayout());
+        super(new BorderLayout(16, 0));   // a gap between a shortened path and the badge
         setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, ClouseauColors.separatorColor()));
         pathLabel.setText(" ");
         countsLabel.setText(" ");
@@ -36,7 +36,11 @@ final class TabStatusBar extends JPanel {
         east.setOpaque(false);
         east.add(timezoneLabel);
         east.add(countsLabel);
-        add(pathLabel, BorderLayout.WEST);
+        // The path takes what's left and ends in "…" when it doesn't fit. A label's minimum
+        // width is its whole text, so without this a merged tab's list of file names would
+        // widen the tab, and with it every tab in the window, past the window's edge.
+        pathLabel.setMinimumSize(new Dimension(0, 0));
+        add(pathLabel, BorderLayout.CENTER);
         add(east, BorderLayout.EAST);
     }
 
