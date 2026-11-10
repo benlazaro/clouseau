@@ -178,9 +178,9 @@ refresh; open tabs keep the list they were created with.
 |---|---|
 | **EDT** | All Swing access. Table model mutations (`appendBatch`, `append`, clearing, highlights). |
 | **Load worker** (`SwingWorker`, one per tab) | Read and parse the file; `publish` entries in chunks. |
-| **Tail worker** (`SwingWorker`, one per tab) | Wait for the file to change, then read new lines while following; on an indexed tab, add them to the index. Holds the tab's tail lock, so a cancelled worker finishes before the next one starts. |
+| **Tail worker** (`SwingWorker` on a `clouseau-follow-N` thread, D-22; one per followed tab, per followed file of a merged view, and per followed plain-text view) | Wait for the file to change, then read new lines while following; on an indexed tab, add them to the index. Holds the tab's tail lock, so a cancelled worker finishes before the next one starts. |
 | **Filter executor** (`clouseau-filter`, one per tab) | Re-run the active filter over all entries; a generation counter discards stale results. |
-| **Source worker** (`SwingWorker`, one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. Marks the tab's `SourceConnection` connected; its changes reach the tab's dot through `invokeLater`. |
+| **Source worker** (`SwingWorker` on a `clouseau-follow-N` thread, D-22; one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. Marks the tab's `SourceConnection` connected; its changes reach the tab's dot through `invokeLater`. |
 | **Source close** (`source-close`, a daemon thread per close) | Run `LogSource.close` when a live tab is closed or reloaded. Closing can wait on the network or a plugin, so it never runs on the EDT (issue #1). |
 
 **Rules:**
@@ -192,6 +192,11 @@ refresh; open tabs keep the list they were created with.
    set) runs off the EDT and must be cancellable. Opening a new file cancels the tab's
    previous load and tail workers. Network calls count, closing included: an SSH
    connection that went silent can take seconds to give up.
+4. A worker that never ends by itself (a follow loop, a live source) starts with
+   `FollowThreads.start`, never `SwingWorker.execute` (D-22). `execute` shares one pool of
+   10 threads across the JVM, so ten followed files would hold every thread and the next
+   load, preview, export or download would wait forever. One-shot work (loads, merges,
+   previews, exports, downloads) keeps using `execute`.
 
 ### 6.2 Opening a file (UC-1, UC-2)
 
@@ -1818,6 +1823,34 @@ restored session. *As checked:* a restored session with a plain file, a `.gz`, a
 shown as plain text and a merged view, and a line appended to a file followed by two
 tabs, which each showed it once. Rotation, a merged view's offset and parser change, and
 Reconnect were left to the tests.
+
+### D-22 · Follow loops run on threads of their own · Adopted
+
+Follow mode and live sources were `SwingWorker`s started with `execute()`, whose loops
+end only when the tab cancels them. `execute()` runs workers on a JDK-wide pool capped at
+10 threads, so a merged view of ten followed files (or ten followed tabs) held every
+thread for good, and every later `SwingWorker` queued forever: a newly opened file stayed
+on "Loading log file...", and file chooser previews, review export, plugin download and a
+merged view's re-merge would never run.
+
+**The decision.** `FollowThreads.start(worker)` (ui) runs a never-ending worker on an
+unbounded cached pool of daemon threads named `clouseau-follow-N`. The worker is still a
+`SwingWorker`, run through its own `run()`, so `publish`/`process`, `done()` and
+`cancel(true)` (which interrupts whichever thread runs it) behave as before, and D-21's
+cancel-on-replace is unchanged. It starts `FileContent`'s tail worker, each of
+`MergedTailer`'s per-file workers, `PlainTextView`'s follower and `LiveContent`'s source
+worker. `FollowThreadsTest` follows twelve files (six tabs and a six-file merged view)
+and then loads another.
+
+One-shot workers (a file's load, a merged load and re-merge, file chooser previews,
+review export, plugin search and download) stay on `execute()`. They end by themselves,
+so the worst case is a short wait for a free thread, and the shared pool keeps many of
+them (a restored session opening twenty tabs) from all reading the disk at once.
+
+*Considered:* virtual threads. Follow loops block in `WatchService`, file reads and, for
+SSH and plugin sources, socket reads inside libraries that may hold monitors and pin a
+carrier thread; there are few enough follow loops that platform threads cost nothing worth
+saving. A bounded pool was rejected: any bound brings the hang back one file later.
 
 ## 10. Planned features
 

@@ -118,7 +118,7 @@ final class LiveContent implements TabContent {
                 }
             }
         };
-        worker.execute();
+        FollowThreads.start(worker);
     }
 
     /** Rows stream in whatever follow mode says; the tab scrolls to them when following. */

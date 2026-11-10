@@ -296,7 +296,7 @@ final class FileContent implements TabContent {
                 model.appendFollowed(entries);
             }
         };
-        tailWorker.execute();
+        FollowThreads.start(tailWorker);
     }
 
     private void stopTailing() {

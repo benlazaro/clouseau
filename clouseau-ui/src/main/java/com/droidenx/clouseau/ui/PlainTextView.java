@@ -293,7 +293,7 @@ final class PlainTextView extends JPanel {
             }
         };
         follower = worker;
-        worker.execute();
+        FollowThreads.start(worker);
     }
 
     private void stopFollowing() {
