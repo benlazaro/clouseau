@@ -143,6 +143,7 @@ final class PlainTextView extends JPanel {
         });
 
         JScrollPane scroll = new JScrollPane(table);
+        scroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
         ClouseauColors.themedBackground(scroll.getViewport(), ClouseauColors::viewportBackground);
         // The text column is at least as wide as the view, which is only known once laid out.
         scroll.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {

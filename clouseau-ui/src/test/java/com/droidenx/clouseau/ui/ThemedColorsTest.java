@@ -23,6 +23,7 @@ class ThemedColorsTest {
         UIManager.put("Clouseau.level.ERROR", null);
         UIManager.put("Clouseau.selectionForeground", null);
         UIManager.put("Clouseau.selectionRing", null);
+        UIManager.put("Clouseau.selectionRingInactive", null);
         UIManager.put("Clouseau.stripeBackground", null);
     }
 
@@ -109,6 +110,19 @@ class ThemedColorsTest {
         assertThat(ClouseauColors.selectionForeground()).isEqualTo(Color.BLACK);
         UIManager.put("Clouseau.selectionForeground", BLUE);
         assertThat(ClouseauColors.selectionForeground()).isEqualTo(BLUE);
+    }
+
+    @Test
+    void inactiveSelectionRingFallsBackToTheBorderColor() {
+        Color saved = UIManager.getColor("Component.borderColor");
+        try {
+            UIManager.put("Component.borderColor", BLUE);
+            assertThat(ClouseauColors.selectionRingInactive()).isEqualTo(BLUE);
+            UIManager.put("Clouseau.selectionRingInactive", RED);
+            assertThat(ClouseauColors.selectionRingInactive()).isEqualTo(RED);
+        } finally {
+            UIManager.put("Component.borderColor", saved);
+        }
     }
 
     @Test

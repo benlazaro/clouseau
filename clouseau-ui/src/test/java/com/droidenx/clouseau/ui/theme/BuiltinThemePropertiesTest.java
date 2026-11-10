@@ -24,7 +24,7 @@ class BuiltinThemePropertiesTest {
     @Test
     void darkSetsTheColorsThatOtherwiseFallBackToLightThemeDefaults() throws Exception {
         assertThat(load("ClouseauDarkLaf").stringPropertyNames()).contains(
-                "Clouseau.selectionBackground", "Clouseau.selectionForeground", "Clouseau.selectionRing",
+                "Clouseau.selectionBackground", "Clouseau.selectionForeground", "Clouseau.selectionRing", "Clouseau.selectionRingInactive",
                 "Clouseau.stripeBackground", "Clouseau.activeFilterForeground", "Clouseau.searchMatchBg",
                 "[style].logTable");
     }

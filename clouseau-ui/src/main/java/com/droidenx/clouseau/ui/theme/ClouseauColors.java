@@ -157,6 +157,21 @@ public final class ClouseauColors {
         return c != null ? c : selectionBackground().brighter();
     }
 
+    /**
+     * Ring around the selected row while the table doesn't have keyboard focus: the theme's, else
+     * the component border color. The row keeps its fill; only the ring dims, as in IntelliJ.
+     */
+    public static Color selectionRingInactive() {
+        return get("Clouseau.selectionRingInactive", "Component.borderColor", Color.GRAY);
+    }
+
+    /**
+     * FlatLaf style for the scroll panes of the main reading areas (log table, plain-text view,
+     * detail pane): no amber frame when the view inside has focus. The frame is the largest amber
+     * on screen and says nothing the selection doesn't; focus shows through the selection ring.
+     */
+    public static final String NO_FOCUS_FRAME = "focusedBorderColor: $Component.borderColor; innerFocusWidth: 0";
+
     /** Background tint for find-bar matched rows. */
     public static Color searchMatchBackground(){ return get("Clouseau.searchMatchBg", "Table.background"); }
 

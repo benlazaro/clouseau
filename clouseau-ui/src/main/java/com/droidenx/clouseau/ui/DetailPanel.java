@@ -85,7 +85,9 @@ final class DetailPanel extends JPanel {
         detailArea.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
         add(buildToolbar(), BorderLayout.NORTH);
-        add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        JScrollPane detailScroll = new JScrollPane(detailArea);
+        detailScroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
+        add(detailScroll, BorderLayout.CENTER);
         render(null);
     }
 

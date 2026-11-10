@@ -141,7 +141,10 @@ final class LogTableView {
 
                 // Ring border on any selected row
                 if (sel) {
-                    Color ring = hl != null ? hl.brighter().brighter() : ClouseauColors.selectionRing();
+                    // A bright ring while the table has keyboard focus; a dim one otherwise, so
+                    // you can tell whether the arrow keys will move the selection.
+                    Color ring = !t.hasFocus() ? ClouseauColors.selectionRingInactive()
+                            : hl != null ? hl.brighter().brighter() : ClouseauColors.selectionRing();
                     int lastCol = t.getColumnCount() - 1;
                     setBorder(BorderFactory.createCompoundBorder(
                             BorderFactory.createMatteBorder(2, c == 0 ? 2 : 0, 2, c == lastCol ? 2 : 0, ring),
@@ -322,6 +325,11 @@ final class LogTableView {
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         ClouseauColors.themedBackground(tableScrollPane.getViewport(), ClouseauColors::viewportBackground);
+        tableScrollPane.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
+        logTable.addFocusListener(new java.awt.event.FocusListener() {
+            @Override public void focusGained(java.awt.event.FocusEvent e) { logTable.repaint(); }
+            @Override public void focusLost(java.awt.event.FocusEvent e)   { logTable.repaint(); }
+        });
         tableScrollPane.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override public void componentResized(java.awt.event.ComponentEvent e) {
                 if (tableColumnsManaged) stretchMessageColumn();
