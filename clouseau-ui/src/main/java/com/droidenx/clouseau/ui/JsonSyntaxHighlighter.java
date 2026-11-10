@@ -17,7 +17,7 @@ import java.util.List;
  */
 final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
 
-    // Monokai-inspired palette — read from UIManager via ClouseauColors at highlight time.
+    // Palette (keys, strings, literals, punctuation) is per theme, read from UIManager via ClouseauColors at highlight time.
 
     @Override
     public String getName() { return "JSON"; }

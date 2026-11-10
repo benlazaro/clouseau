@@ -218,11 +218,14 @@ public final class ClouseauColors {
 
     // ── JSON syntax-highlight palette (returned as packed RGB int) ────────────
 
-    public static int jsonKeyColor()      { return colorToRgb("Clouseau.json.key",     0xA6E22E); }
-    public static int jsonStringColor()   { return colorToRgb("Clouseau.json.string",  0xE6DB74); }
-    public static int jsonNumberColor()   { return colorToRgb("Clouseau.json.number",  0xAE81FF); }
-    public static int jsonBoolNullColor() { return colorToRgb("Clouseau.json.boolNull",0x66D9E8); }
-    public static int jsonPunctColor()    { return colorToRgb("Clouseau.json.punct",   0x75715E); }
+    // Fallbacks are the Dark theme's values. Keys orchid, strings cyan, numbers and
+    // true/false/null orange: hues no level or detail label uses, so a payload never reads as one.
+
+    public static int jsonKeyColor()      { return colorToRgb("Clouseau.json.key",     0xD896DA); }
+    public static int jsonStringColor()   { return colorToRgb("Clouseau.json.string",  0x8FD3E8); }
+    public static int jsonNumberColor()   { return colorToRgb("Clouseau.json.number",  0xF0B37E); }
+    public static int jsonBoolNullColor() { return colorToRgb("Clouseau.json.boolNull",0xF0B37E); }
+    public static int jsonPunctColor()    { return colorToRgb("Clouseau.json.punct",   0x8A8F99); }
 
     // ── Colors that follow theme switches ─────────────────────────────────────
 
