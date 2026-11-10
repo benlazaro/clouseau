@@ -447,6 +447,9 @@ final class FilterBar extends JPanel {
 
         JCheckBox rendererCb = new JCheckBox();
         rendererCb.setOpaque(false);
+        // FlatLaf fills a non-opaque check box whose background differs from its parent's; in a
+        // tree cell that box hid the row highlight. No content area, so the highlight shows through.
+        rendererCb.setContentAreaFilled(false);
         tree.setCellRenderer((TreeCellRenderer) (t, value, selected, expanded, leaf, row, hasFocus) -> {
             if (!(((DefaultMutableTreeNode) value).getUserObject() instanceof LoggerNode ln))
                 return new JLabel();
@@ -475,7 +478,10 @@ final class FilterBar extends JPanel {
             }
         });
 
-        content.add(new JScrollPane(tree), "grow, wrap");
+        JScrollPane treeScroll = new JScrollPane(tree);
+        // The popup's own hairline, as in the Fields and Sources popups, not a field's focus border.
+        treeScroll.setBorder(UIManager.getBorder("PopupMenu.border"));
+        content.add(treeScroll, "grow, wrap");
 
         JButton allBtn   = new JButton(Messages.get("filter.loggers.select.all"));
         JButton noneBtn  = new JButton(Messages.get("filter.loggers.select.none"));
@@ -493,7 +499,9 @@ final class FilterBar extends JPanel {
             onChanged.run();
         });
         closeBtn.addActionListener(e -> popup.setVisible(false));
-        JPanel btnRow = new JPanel(new MigLayout("insets 0", "[]push[][]"));
+        // All and None are a pair, on the left; Close stands alone on the right. No default
+        // (amber) button: every check box applies at once, so there is nothing to confirm.
+        JPanel btnRow = new JPanel(new MigLayout("insets 0", "[][]push[]"));
         btnRow.add(allBtn);
         btnRow.add(noneBtn);
         btnRow.add(closeBtn);
@@ -630,7 +638,9 @@ final class FilterBar extends JPanel {
         });
         closeBtn.addActionListener(e -> popup.setVisible(false));
 
-        JPanel btnRow = new JPanel(new MigLayout("insets 0", "[]push[][]"));
+        // All and None are a pair, on the left; Close stands alone on the right. No default
+        // (amber) button: every check box applies at once, so there is nothing to confirm.
+        JPanel btnRow = new JPanel(new MigLayout("insets 0", "[][]push[]"));
         btnRow.add(allBtn);
         btnRow.add(noneBtn);
         btnRow.add(closeBtn);
