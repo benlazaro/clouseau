@@ -87,7 +87,7 @@ final class MergedTailer {
         for (int s = 0; s < followers.size(); s++) {
             if (followers.get(s) != null) workers.add(tail(s));
         }
-        workers.forEach(SwingWorker::execute);
+        workers.forEach(FollowThreads::start);
         if (!workers.isEmpty()) timer.start();
     }
 
