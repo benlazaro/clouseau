@@ -12,6 +12,8 @@ import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeCellRenderer;
 import javax.swing.tree.TreePath;
@@ -431,6 +433,7 @@ final class FilterBar extends JPanel {
     // ── Logger picker popup ───────────────────────────────────────────────────
 
     private void showLoggerPopup(JButton invoker) {
+        if (consumeClosedByPress(invoker)) return;   // this click just closed it
         JPopupMenu popup = new JPopupMenu();
         JPanel content = new JPanel(new MigLayout("fill, insets 6", "[grow]", "[grow][]"));
         content.setPreferredSize(new Dimension(300, 350));
@@ -497,7 +500,7 @@ final class FilterBar extends JPanel {
         content.add(btnRow, "growx");
 
         popup.add(content);
-        popup.show(invoker, 0, invoker.getHeight());
+        showBelow(popup, invoker);
     }
 
     private DefaultMutableTreeNode buildLoggerTree() {
@@ -562,6 +565,7 @@ final class FilterBar extends JPanel {
     // ── Field value picker popup ──────────────────────────────────────────────
 
     private void showFieldsPopup(JButton invoker) {
+        if (consumeClosedByPress(invoker)) return;   // this click just closed it
         JPopupMenu popup = new JPopupMenu();
         JPanel content = new JPanel(new MigLayout("fill, insets 6", "[grow]", "[grow][]"));
         content.setPreferredSize(new Dimension(280, 320));
@@ -633,7 +637,7 @@ final class FilterBar extends JPanel {
         content.add(btnRow, "growx");
 
         popup.add(content);
-        popup.show(invoker, 0, invoker.getHeight());
+        showBelow(popup, invoker);
     }
 
     // ── Time range popup ──────────────────────────────────────────────────────
@@ -650,6 +654,7 @@ final class FilterBar extends JPanel {
      * a field) sets the range; Clear removes it; Escape or a click outside closes it unchanged.
      */
     private void showTimePopup(JButton invoker) {
+        if (consumeClosedByPress(invoker)) return;   // this click just closed it
         JPopupMenu popup = new JPopupMenu();
         JPanel content = new JPanel(new MigLayout("insets 10, wrap 3, gapy 8", "[][grow, fill][]"));
         JTextField from = new JTextField(fromText, 16);
@@ -713,7 +718,7 @@ final class FilterBar extends JPanel {
         content.add(btnRow, "span 3, growx, gaptop 4");
 
         popup.add(content);
-        popup.show(invoker, 0, invoker.getHeight());
+        showBelow(popup, invoker);
         from.requestFocusInWindow();
     }
 
@@ -792,6 +797,7 @@ final class FilterBar extends JPanel {
     // ── Source picker popup ───────────────────────────────────────────────────
 
     private void showSourcesPopup(JButton invoker) {
+        if (consumeClosedByPress(invoker)) return;   // this click just closed it
         JPopupMenu popup = new JPopupMenu();
         JPanel content = new JPanel(new MigLayout("fill, insets 6", "[grow]", "[grow][]"));
 
@@ -833,7 +839,7 @@ final class FilterBar extends JPanel {
         content.add(btnRow, "growx");
 
         popup.add(content);
-        popup.show(invoker, 0, invoker.getHeight());
+        showBelow(popup, invoker);
     }
 
     private void updateSourcesButtonLabel() {
@@ -961,6 +967,42 @@ final class FilterBar extends JPanel {
         button.setIcon(new ChevronDown());
         button.setHorizontalTextPosition(SwingConstants.LEADING);
         button.setIconTextGap(8);
+        // The flag below lives for one click only: cleared once that click's action has run.
+        button.addMouseListener(new MouseAdapter() {
+            @Override public void mouseReleased(MouseEvent e) {
+                SwingUtilities.invokeLater(() -> button.putClientProperty(CLOSED_BY_PRESS, null));
+            }
+        });
+    }
+
+    private static final String CLOSED_BY_PRESS = "clouseau.popupClosedByPress";
+
+    /**
+     * Shows a picker's popup below its button. Pressing the button while its popup is open closes
+     * the popup (Swing closes a popup on any press outside it); this marks that press, so the
+     * action the same click fires doesn't open the popup again. The button toggles, like a drop-down.
+     */
+    private static void showBelow(JPopupMenu popup, JButton invoker) {
+        popup.addPopupMenuListener(new PopupMenuListener() {
+            @Override public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+                if (EventQueue.getCurrentEvent() instanceof MouseEvent me
+                        && me.getID() == MouseEvent.MOUSE_PRESSED
+                        && me.getComponent() != null
+                        && SwingUtilities.isDescendingFrom(me.getComponent(), invoker)) {
+                    invoker.putClientProperty(CLOSED_BY_PRESS, Boolean.TRUE);
+                }
+            }
+            @Override public void popupMenuWillBecomeVisible(PopupMenuEvent e) { }
+            @Override public void popupMenuCanceled(PopupMenuEvent e) { }
+        });
+        popup.show(invoker, 0, invoker.getHeight());
+    }
+
+    /** True, once, when the click behind this action is the one that just closed the button's popup. */
+    private static boolean consumeClosedByPress(JButton invoker) {
+        boolean closed = Boolean.TRUE.equals(invoker.getClientProperty(CLOSED_BY_PRESS));
+        invoker.putClientProperty(CLOSED_BY_PRESS, null);
+        return closed;
     }
 
     private static final class ChevronDown implements Icon {
