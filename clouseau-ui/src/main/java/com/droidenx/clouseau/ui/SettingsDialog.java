@@ -16,7 +16,12 @@ final class SettingsDialog extends JDialog {
     /** One width for every spinner, wide enough for "2,000,000" plus the arrows. */
     private static final String SPINNER = "w 120!";
     /** Settings sit indented under their section title, so the titles stand out. */
-    private static final String INDENT = "gapleft 16";
+    private static final String INDENT = "gapleft 28";
+
+    /** The dialog opens at least this wide... */
+    private static final int MIN_WIDTH = 760;
+    /** ...and at most this fraction of its width tall. */
+    private static final float ASPECT = 0.72f;
 
     private final TabPanel tabPanel;
     private final Runnable onApply;
@@ -85,43 +90,46 @@ final class SettingsDialog extends JDialog {
             }
         });
 
-        // The field column sizes to its widest control (the timezone combo), so nothing
-        // overflows the dialog's right edge; the same insets pad every side.
-        // Spinners keep one fixed width, left-aligned in that column; combos fill it.
-        JPanel content = new JPanel(new MigLayout("insets 20, wrap 2, gapy 6", "[]24[grow]"));
+        // Three columns: labels, fields, and a growing filler. The field column sizes to its
+        // widest control (the timezone combo), so a wide window doesn't stretch the combos;
+        // section titles and checkboxes span all three, so the title rules reach the right edge.
+        // Spinners keep one fixed width, left-aligned in the field column; combos fill it.
+        // Padding follows IntelliJ's settings: generous around the settings, tighter around
+        // the buttons, with a divider between them.
+        JPanel content = new ScrollablePanel(new MigLayout("insets 24 28 24 28, gapy 10", "[]24[][grow]"));
 
         // ── Table section ────────────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.table")), "span 2, growx, gaptop 0, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.table")), "span 3, growx, wrap, gaptop 0, gapbottom 8");
         content.add(new JLabel(Messages.get("settings.row.height")), INDENT);
-        content.add(rowHeightSpinner, SPINNER);
-        content.add(stripesCheckBox, "span 2, " + INDENT);
+        content.add(rowHeightSpinner, SPINNER + ", wrap");
+        content.add(stripesCheckBox, "span 3, wrap, " + INDENT);
 
         // ── Detail panel section ─────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.detail")), "span 2, growx, gaptop 12, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.detail")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
         content.add(new JLabel(Messages.get("settings.detail.font.size")), INDENT);
-        content.add(detailFontSizeSpinner, SPINNER);
-        content.add(wrapLinesCheckBox, "span 2, " + INDENT);
+        content.add(detailFontSizeSpinner, SPINNER + ", wrap");
+        content.add(wrapLinesCheckBox, "span 3, wrap, " + INDENT);
 
         // ── Tabs section ──────────────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.tabs")), "span 2, growx, gaptop 12, gapbottom 4");
-        content.add(confirmCloseCheckBox, "span 2, " + INDENT);
-        content.add(confirmHighlightClearAllCheckBox, "span 2, " + INDENT);
-        content.add(confirmAnnotationDeleteCheckBox, "span 2, " + INDENT);
-        content.add(followByDefaultCheckBox, "span 2, " + INDENT);
+        content.add(sectionLabel(Messages.get("settings.section.tabs")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
+        content.add(confirmCloseCheckBox, "span 3, wrap, " + INDENT);
+        content.add(confirmHighlightClearAllCheckBox, "span 3, wrap, " + INDENT);
+        content.add(confirmAnnotationDeleteCheckBox, "span 3, wrap, " + INDENT);
+        content.add(followByDefaultCheckBox, "span 3, wrap, " + INDENT);
         content.add(new JLabel(Messages.get("settings.max.entries.per.tab")), INDENT);
-        content.add(maxEntriesSpinner, SPINNER);
+        content.add(maxEntriesSpinner, SPINNER + ", wrap");
 
         // ── Files section ─────────────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.files")), "span 2, growx, gaptop 12, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.files")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
         content.add(new JLabel(Messages.get("settings.recent.max")), INDENT);
-        content.add(recentMaxSpinner, SPINNER);
+        content.add(recentMaxSpinner, SPINNER + ", wrap");
         content.add(new JLabel(Messages.get("settings.multi.open")), INDENT);
-        content.add(multiOpenCombo, "growx");
+        content.add(multiOpenCombo, "growx, wrap");
         content.add(new JLabel(Messages.get("settings.startup")), INDENT);
-        content.add(startupCombo, "growx");
+        content.add(startupCombo, "growx, wrap");
 
         // ── Appearance section ────────────────────────────────────────────
-        content.add(sectionLabel(Messages.get("settings.section.appearance")), "span 2, growx, gaptop 12, gapbottom 4");
+        content.add(sectionLabel(Messages.get("settings.section.appearance")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
         JButton manageThemesBtn = new JButton(Messages.get("settings.theme.manage"));
         manageThemesBtn.addActionListener(e -> {
             new ThemeManagerDialog(SwingUtilities.getWindowAncestor(this)).setVisible(true);
@@ -134,9 +142,9 @@ final class SettingsDialog extends JDialog {
         themeRow.add(themeCombo);
         themeRow.add(manageThemesBtn);
         content.add(new JLabel(Messages.get("settings.theme")), INDENT);
-        content.add(themeRow, "growx");
+        content.add(themeRow, "growx, wrap");
         content.add(new JLabel(Messages.get("settings.timezone")), INDENT);
-        content.add(timezoneCombo, "growx");
+        content.add(timezoneCombo, "growx, wrap");
 
         // ── Buttons ──────────────────────────────────────────────────────
         JButton ok     = new JButton(Messages.get("settings.button.ok"));
@@ -151,12 +159,26 @@ final class SettingsDialog extends JDialog {
             dispose();
         });
 
-        JPanel buttons = new JPanel(new MigLayout("insets 8 0 0 0, align right", "[][]"));
+        JScrollPane scroll = new JScrollPane(content);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        // Open at the first section, whichever control takes the focus.
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                SwingUtilities.invokeLater(() -> scroll.getViewport().setViewPosition(new Point(0, 0)));
+            }
+        });
+
+        JPanel buttons = new JPanel(new MigLayout("insets 14 28 14 28, align right", "[][]"));
         buttons.add(cancel);
         buttons.add(ok);
-        content.add(buttons, "span 2, growx");
+        JPanel footer = new JPanel(new BorderLayout());
+        footer.add(new JSeparator(), BorderLayout.NORTH);
+        footer.add(buttons, BorderLayout.CENTER);
 
-        setContentPane(content);
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(scroll, BorderLayout.CENTER);
+        root.add(footer, BorderLayout.SOUTH);
+        setContentPane(root);
         getRootPane().setDefaultButton(ok);
         getRootPane().registerKeyboardAction(
                 e -> dispose(),
@@ -164,8 +186,27 @@ final class SettingsDialog extends JDialog {
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         pack();
-        setResizable(false);
+        sizeLandscape();
         setLocationRelativeTo(owner);
+    }
+
+    /**
+     * Opens wider than tall, as IntelliJ's settings do: at least {@link #MIN_WIDTH} wide and
+     * at most {@link #ASPECT} of that width tall, so the settings scroll when they don't fit.
+     * The window stays resizable, and never opens bigger than the screen.
+     */
+    private void sizeLandscape() {
+        GraphicsConfiguration gc = getGraphicsConfiguration();
+        Rectangle screen = gc.getBounds();
+        Insets taskbar = Toolkit.getDefaultToolkit().getScreenInsets(gc);
+        int maxW = screen.width - taskbar.left - taskbar.right;
+        int maxH = screen.height - taskbar.top - taskbar.bottom;
+        Dimension packed = getSize();
+        int w = Math.min(Math.max(packed.width, MIN_WIDTH), maxW);
+        int h = Math.min(Math.min(packed.height, Math.round(w * ASPECT)), maxH);
+        setSize(w, h);
+        setMinimumSize(new Dimension(Math.min(w, 420), Math.min(h, 280)));
+        setResizable(true);
     }
 
     private void applySettings() {
@@ -237,5 +278,29 @@ final class SettingsDialog extends JDialog {
         title.add(new JLabel(text));
         title.add(new JSeparator(), "growx");
         return title;
+    }
+
+    /**
+     * The settings inside the scroll pane: they fill the viewport when the window is big
+     * enough, and scroll (either way) when it isn't.
+     */
+    private static final class ScrollablePanel extends JPanel implements Scrollable {
+        private static final int UNIT = 16;
+
+        ScrollablePanel(LayoutManager layout) { super(layout); }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return UNIT;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(UNIT, (orientation == SwingConstants.VERTICAL ? visible.height : visible.width) - UNIT);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() {
+            return getParent() instanceof JViewport v && v.getWidth() >= getPreferredSize().width;
+        }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() instanceof JViewport v && v.getHeight() >= getPreferredSize().height;
+        }
     }
 }
