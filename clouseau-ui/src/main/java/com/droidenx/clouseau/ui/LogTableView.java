@@ -4,6 +4,7 @@ import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.ui.theme.ClouseauFonts;
+import com.formdev.flatlaf.ui.FlatTableHeaderUI;
 
 import javax.swing.*;
 import javax.swing.border.Border;
@@ -70,6 +71,25 @@ final class LogTableView {
                 // Otherwise fill the viewport when columns are narrower; scroll when wider.
                 return getParent() == null || getPreferredSize().width < getParent().getWidth();
             }
+
+            @Override
+            protected JTableHeader createDefaultTableHeader() {
+                return new JTableHeader(columnModel) {
+                    @Override
+                    public void updateUI() {
+                        super.updateUI();
+                        // Only sortable columns react to hover, so the others don't look clickable.
+                        if (getUI() instanceof FlatTableHeaderUI) {
+                            setUI(new FlatTableHeaderUI() {
+                                @Override public int getRolloverColumn() {
+                                    int col = super.getRolloverColumn();
+                                    return col >= 0 && !isSortableViewColumn(col) ? -1 : col;
+                                }
+                            });
+                        }
+                    }
+                };
+            }
         };
         logTable.setBackground(ClouseauColors.tableBackground());
         logTable.setFont(ClouseauFonts.mono(Font.PLAIN, 13));
@@ -84,7 +104,12 @@ final class LogTableView {
             public void actionPerformed(java.awt.event.ActionEvent e) { scrollToBottom(); }
         });
         logTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        logTable.setRowSorter(new javax.swing.table.TableRowSorter<>(logTableModel));
+        // Only # and Timestamp sort: their use is reversing the order (newest first), and in a
+        // merged view the two can differ. Sorting by level, thread, logger or message would
+        // scramble the timeline; the filters answer those questions without losing the order.
+        logTable.setRowSorter(new javax.swing.table.TableRowSorter<>(logTableModel) {
+            @Override public boolean isSortable(int modelColumn) { return modelColumn == 0 || modelColumn == 1; }
+        });
         logTable.getColumnModel().getColumn(0).setPreferredWidth(50);
         logTable.getColumnModel().getColumn(1).setPreferredWidth(180);
         logTable.getColumnModel().getColumn(2).setPreferredWidth(60);
@@ -133,10 +158,14 @@ final class LogTableView {
                     if (modelCol == 2 || modelCol == 5) {                  // Level + Message columns
                         LogEntry.LogLevel level = entry != null ? entry.level() : null;
                         setForeground(ClouseauColors.levelColor(level));
+                    } else if (modelCol == 0) {                           // line numbers recede
+                        setForeground(ClouseauColors.dimForeground());
                     } else {
                         setForeground(t.getForeground());
                     }
                 }
+                // Line numbers are right-aligned so their digits line up; everything else reads left.
+                setHorizontalAlignment(modelCol == 0 ? SwingConstants.RIGHT : SwingConstants.LEFT);
                 boolean isLevel = modelCol == 2;
                 setFont(getFont().deriveFont(sel || isLevel ? Font.BOLD : Font.PLAIN));
 
@@ -153,16 +182,35 @@ final class LogTableView {
         logTable.setDefaultRenderer(String.class,  levelRenderer);
         logTable.setDefaultRenderer(Integer.class, levelRenderer);
 
+        // The header is a quiet label for the data: titles left-aligned where their column's text
+        // starts (# right-aligned like its numbers), dim and a size smaller than the rows, with
+        // short dividers that read as resize handles. FlatLaf's full-height column lines are
+        // hidden (separatorColor = the header's own background); the bottom line stays. No side
+        // cell margins, so cellPad alone sets the indent and titles line up with the rows.
         JTableHeader header = logTable.getTableHeader();
+        header.putClientProperty("FlatLaf.style",
+                "height: 28; cellMargins: 2,0,2,0; separatorColor: $TableHeader.background; "
+                + "sortIconColor: $Label.disabledForeground");
         TableCellRenderer origHeaderRenderer = header.getDefaultRenderer();
         header.setDefaultRenderer((table, value, isSelected, hasFocus, row, column) -> {
             Component c = origHeaderRenderer.getTableCellRendererComponent(
                     table, value, isSelected, hasFocus, row, column);
             if (c instanceof JLabel label) {
+                boolean numberColumn = table != null && table.convertColumnIndexToModel(column) == 0;
+                boolean last = table != null && column == table.getColumnCount() - 1;
                 Border existing = label.getBorder();
-                label.setBorder(existing != null
-                        ? BorderFactory.createCompoundBorder(existing, cellPad)
-                        : cellPad);
+                Border inner = BorderFactory.createCompoundBorder(new HeaderDivider(!last), cellPad);
+                label.setBorder(existing != null ? BorderFactory.createCompoundBorder(existing, inner) : inner);
+                label.setHorizontalAlignment(numberColumn ? SwingConstants.RIGHT : SwingConstants.LEFT);
+                if (label.getIcon() != null) {
+                    // The sort arrow goes on the far side of the title from its alignment edge, so
+                    // sorting never moves a title: after a left-aligned title, before the "#".
+                    // Wrapped, FlatLaf no longer recognizes the arrow and leaves it where it's put.
+                    label.setIcon(new SortIcon(label.getIcon()));
+                    label.setHorizontalTextPosition(numberColumn ? SwingConstants.TRAILING : SwingConstants.LEADING);
+                }
+                label.setForeground(ClouseauColors.dimForeground());
+                label.setFont(label.getFont().deriveFont(Font.PLAIN, 12f));
             }
             return c;
         });
@@ -584,5 +632,37 @@ final class LogTableView {
                 (int)(a.getGreen() * t + b.getGreen() * (1 - t)),
                 (int)(a.getBlue()  * t + b.getBlue()  * (1 - t))
         );
+    }
+    /**
+     * A short vertical hairline at a header cell's right edge, inset from the top and bottom so
+     * it reads as a resize handle rather than a table border. Drawn in the theme's separator color
+     * at paint time, so a live theme switch updates it.
+     */
+    private boolean isSortableViewColumn(int viewColumn) {
+        return logTable.getRowSorter() instanceof DefaultRowSorter<?, ?> sorter
+                && sorter.isSortable(logTable.convertColumnIndexToModel(viewColumn));
+    }
+
+    private record SortIcon(Icon icon) implements Icon {
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) { icon.paintIcon(c, g, x, y); }
+        @Override public int getIconWidth()  { return icon.getIconWidth(); }
+        @Override public int getIconHeight() { return icon.getIconHeight(); }
+    }
+
+    private static final class HeaderDivider implements Border {
+        private final boolean draw;
+        HeaderDivider(boolean draw) { this.draw = draw; }
+
+        @Override public void paintBorder(Component c, Graphics g, int x, int y, int w, int h) {
+            if (!draw) return;
+            Color line = UIManager.getColor("Separator.foreground");
+            if (line == null) line = UIManager.getColor("Component.borderColor");
+            if (line == null) return;
+            int inset = Math.max(4, h / 4);
+            g.setColor(line);
+            g.fillRect(x + w - 1, y + inset, 1, h - 2 * inset);
+        }
+        @Override public Insets getBorderInsets(Component c) { return new Insets(0, 0, 0, 0); }
+        @Override public boolean isBorderOpaque() { return false; }
     }
 }

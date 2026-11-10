@@ -134,18 +134,21 @@ final class FilterBar extends JPanel {
         add(new JSeparator(JSeparator.VERTICAL), "growy, gapx 4");
 
         // ── Source picker button (merged views only) ──────────────────────────
-        sourcesButton = new JButton(withArrow(Messages.get("filter.sources.all")));
+        sourcesButton = new JButton(Messages.get("filter.sources.all"));
+        pickerArrow(sourcesButton);
         sourcesButton.addActionListener(e -> showSourcesPopup(sourcesButton));
         sourcesButton.setVisible(false);
         add(sourcesButton, "hidemode 3");
 
         // ── Logger picker button ──────────────────────────────────────────────
-        loggerButton = new JButton(withArrow(Messages.get("filter.loggers.all")));
+        loggerButton = new JButton(Messages.get("filter.loggers.all"));
+        pickerArrow(loggerButton);
         loggerButton.addActionListener(e -> showLoggerPopup(loggerButton));
         add(loggerButton);
 
         // ── Field value picker button ─────────────────────────────────────────
-        fieldsButton = new JButton(withArrow(Messages.get("filter.fields.all")));
+        fieldsButton = new JButton(Messages.get("filter.fields.all"));
+        pickerArrow(fieldsButton);
         fieldsButton.addActionListener(e -> showFieldsPopup(fieldsButton));
         fieldsButton.setVisible(false);
         add(fieldsButton, "hidemode 3");
@@ -154,6 +157,7 @@ final class FilterBar extends JPanel {
         // The From/To fields took the most room in the bar and are the least used, so they
         // live in a popup; the button shows the range, in the accent color, while one is set.
         timeButton = new JButton();
+        pickerArrow(timeButton);
         timeButton.addActionListener(e -> showTimePopup(timeButton));
         ClouseauColors.themedForeground(timeButton, this::timeButtonForeground);
         updateTimeButton();
@@ -772,7 +776,7 @@ final class FilterBar extends JPanel {
             timeButton.setToolTipText(MessageFormat.format(Messages.get("filter.time.range"),
                     fromText.isEmpty() ? "\u2026" : fromText, toText.isEmpty() ? "\u2026" : toText));
         }
-        timeButton.setText(withArrow(label));
+        timeButton.setText(label);
         timeButton.setForeground(timeButtonForeground());
     }
 
@@ -784,8 +788,6 @@ final class FilterBar extends JPanel {
     /** The Time button's label; for tests. */
     String timeButtonText() { return timeButton.getText(); }
 
-    /** A picker button's label, with the ▾ that says it opens a popup. */
-    private static String withArrow(String label) { return label + "  \u25BE"; }
 
     // ── Source picker popup ───────────────────────────────────────────────────
 
@@ -836,9 +838,9 @@ final class FilterBar extends JPanel {
 
     private void updateSourcesButtonLabel() {
         int total = allSources.size();
-        sourcesButton.setText(withArrow(excludedSources.isEmpty() || total == 0
+        sourcesButton.setText(excludedSources.isEmpty() || total == 0
             ? Messages.get("filter.sources.all")
-            : Messages.get("filter.sources.partial").formatted(total - excludedSources.size(), total)));
+            : Messages.get("filter.sources.partial").formatted(total - excludedSources.size(), total));
     }
 
     // Logger-tree depth colors read from UIManager via ClouseauColors at render time.
@@ -913,16 +915,16 @@ final class FilterBar extends JPanel {
     private void updateLoggerButtonLabel() {
         int total   = allLoggers.size();
         long active = allLoggers.stream().filter(l -> !excludedLoggers.contains(l)).count();
-        loggerButton.setText(withArrow(excludedLoggers.isEmpty() || total == 0
+        loggerButton.setText(excludedLoggers.isEmpty() || total == 0
             ? Messages.get("filter.loggers.all")
-            : Messages.get("filter.loggers.partial").formatted(active, total)));
+            : Messages.get("filter.loggers.partial").formatted(active, total));
     }
 
     private void updateFieldsButtonLabel() {
         boolean anyExcluded = excludedFieldValues.values().stream().anyMatch(s -> !s.isEmpty());
-        fieldsButton.setText(withArrow(anyExcluded
+        fieldsButton.setText(anyExcluded
             ? Messages.get("filter.fields.partial")
-            : Messages.get("filter.fields.all")));
+            : Messages.get("filter.fields.all"));
     }
 
     static void applyToggleStyle(JToggleButton btn) {
@@ -950,5 +952,35 @@ final class FilterBar extends JPanel {
             public void removeUpdate(DocumentEvent e)  { action.run(); }
             public void changedUpdate(DocumentEvent e) {}
         };
+    }
+    /**
+     * Marks a button that opens a popup with a down chevron after its label, the same arrow and
+     * color as a drop-down's, so pickers and drop-downs read as one family.
+     */
+    private static void pickerArrow(JButton button) {
+        button.setIcon(new ChevronDown());
+        button.setHorizontalTextPosition(SwingConstants.LEADING);
+        button.setIconTextGap(8);
+    }
+
+    private static final class ChevronDown implements Icon {
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Color color = c.isEnabled() ? UIManager.getColor("ComboBox.buttonArrowColor")
+                                        : UIManager.getColor("ComboBox.buttonDisabledArrowColor");
+            if (color == null) color = c.getForeground();
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            g2.setColor(color);
+            g2.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            java.awt.geom.Path2D.Float p = new java.awt.geom.Path2D.Float();
+            p.moveTo(x + 0.5f, y + 1f);
+            p.lineTo(x + 4.5f, y + 5f);
+            p.lineTo(x + 8.5f, y + 1f);
+            g2.draw(p);
+            g2.dispose();
+        }
+        @Override public int getIconWidth()  { return 9; }
+        @Override public int getIconHeight() { return 6; }
     }
 }

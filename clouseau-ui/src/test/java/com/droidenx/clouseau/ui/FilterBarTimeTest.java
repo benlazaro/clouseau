@@ -27,20 +27,20 @@ class FilterBarTimeTest {
         onEdt(() -> {
             AtomicInteger changes = new AtomicInteger();
             FilterBar bar = new FilterBar(changes::incrementAndGet);
-            assertThat(bar.timeButtonText()).isEqualTo("Time  ▾");
+            assertThat(bar.timeButtonText()).isEqualTo("Time");
 
             bar.setTimeRange("2026-03-27 10:00:00", "2026-03-27 10:15:00");
-            assertThat(bar.timeButtonText()).isEqualTo("10:00:00 → 10:15:00  ▾");
+            assertThat(bar.timeButtonText()).isEqualTo("10:00:00 → 10:15:00");
             assertThat(changes).hasValue(1);
 
             bar.setTimeRange("2026-03-27 10:00:00", "2026-03-27 10:15:00");   // unchanged: no refilter
             assertThat(changes).hasValue(1);
 
             bar.setTimeRange("2026-03-27 10:00:00", "");
-            assertThat(bar.timeButtonText()).isEqualTo("2026-03-27 10:00:00 → …  ▾");
+            assertThat(bar.timeButtonText()).isEqualTo("2026-03-27 10:00:00 → …");
 
             bar.setTimeRange("2026-03-27 23:00:00", "2026-03-28 01:00:00");
-            assertThat(bar.timeButtonText()).isEqualTo("2026-03-27 23:00:00 → 2026-03-28 01:00:00  ▾");
+            assertThat(bar.timeButtonText()).isEqualTo("2026-03-27 23:00:00 → 2026-03-28 01:00:00");
         });
     }
 
@@ -56,11 +56,11 @@ class FilterBarTimeTest {
 
             FilterBar restored = new FilterBar(() -> {});
             restored.restore(saved);
-            assertThat(restored.timeButtonText()).isEqualTo("10:00:00 → …  ▾");
+            assertThat(restored.timeButtonText()).isEqualTo("10:00:00 → …");
             assertThat(restored.state()).isEqualTo(saved);
 
             restored.clear();
-            assertThat(restored.timeButtonText()).isEqualTo("Time  ▾");
+            assertThat(restored.timeButtonText()).isEqualTo("Time");
             assertThat(restored.state()).isNull();
         });
     }
@@ -115,7 +115,7 @@ class FilterBarTimeTest {
             bar.showUpTo(at("2026-03-27T10:30:00").timestamp());
             assertThat(bar.state().from()).isEqualTo("2026-03-27 10:00:00.250");
             assertThat(bar.state().to()).isEqualTo("2026-03-27 10:30:00.000");
-            assertThat(bar.timeButtonText()).isEqualTo("10:00:00.250 \u2192 10:30:00.000  \u25BE");
+            assertThat(bar.timeButtonText()).isEqualTo("10:00:00.250 \u2192 10:30:00.000");
         });
     }
 }
