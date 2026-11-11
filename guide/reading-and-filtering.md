@@ -40,10 +40,12 @@ and holds its controls:
   setting as in Settings).
 - **Aa** opens the text size: **−** and **+** around the current size, and **Reset**. With
   the panel focused, `Ctrl`+mouse wheel, `Ctrl`+`+` and `Ctrl`+`-` change it too, and the new
-  size shows briefly in the panel's corner.
-- **Copy Message** copies the message as shown; the arrow next to it also offers **Copy Raw
-  Line** (the lines exactly as in the file) and **Copy Entry** (every field, as shown).
-  `Ctrl`+`C` in the panel copies the message too, unless you've selected some text.
+  size shows briefly in the middle of the panel.
+- **Copy** opens three choices: **Message** (as shown), **Raw Line** (the lines exactly as
+  in the file, stack trace included) and **Entry** (every field, as shown). What you copied
+  flashes, and a note in the middle of the panel confirms it, such as "Raw lines copied (10
+  lines)". `Ctrl`+`C` in the panel copies the message, unless you've selected some text;
+  right-click in the panel offers the same choices, plus **Copy** for the selection.
 - Drag the bar between the table and the panel to resize them.
 
 ## Filters

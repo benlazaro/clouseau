@@ -69,7 +69,9 @@ final class DetailPanel extends JPanel {
     private JLabel  sizeToast;
     private Timer   toastTimer;
     private JButton copyBtn;
-    private JButton copyMenuBtn;
+    /** The body: the entry's text, or the empty state when nothing is selected. */
+    private final CardLayout bodyCards = new CardLayout();
+    private final JPanel     body      = new JPanel(bodyCards);
     private Content shown;
     private final JTextPane detailArea;
 
@@ -87,9 +89,16 @@ final class DetailPanel extends JPanel {
         this.current = current;
 
         detailArea = new JTextPane() {
+            // Always at least as wide and tall as the pane: with Wrap off a short entry would
+            // otherwise end at its longest line, and the scroll area's own gray show beyond it.
             @Override
             public boolean getScrollableTracksViewportWidth() {
-                return wrapLines;
+                return wrapLines || (getParent() != null && getUI().getPreferredSize(this).width <= getParent().getWidth());
+            }
+
+            @Override
+            public boolean getScrollableTracksViewportHeight() {
+                return getParent() != null && getUI().getPreferredSize(this).height <= getParent().getHeight();
             }
         };
         detailArea.setEditable(false);
@@ -99,9 +108,13 @@ final class DetailPanel extends JPanel {
 
         add(buildHeader(), BorderLayout.NORTH);
         installKeys();
+        installContextMenu();
         JScrollPane detailScroll = new JScrollPane(detailArea);
         detailScroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
-        add(detailScroll, BorderLayout.CENTER);
+        ClouseauColors.themedBackground(detailScroll.getViewport(), ClouseauColors::detailBackground);
+        body.add(detailScroll, "entry");
+        body.add(buildEmptyState(), "empty");
+        add(body, BorderLayout.CENTER);
         render(null);
     }
 
@@ -178,30 +191,27 @@ final class DetailPanel extends JPanel {
         tools.add(buildTextSizeButton());
         tools.add(verticalSeparator(), "gapx 4 4");
 
-        // Copy: the message, with Raw Line and Entry behind the chevron.
-        copyBtn = new JButton(Messages.get("detail.toolbar.copy"));
+        // Copy ⌄: one button that opens the choices, like Loggers ⌄ and Time ⌄.
+        copyBtn = new JButton(Messages.get("detail.copy"));
+        copyBtn.setToolTipText(Messages.get("detail.copy.tooltip"));
+        copyBtn.setIcon(new FilterBar.ChevronDown());
+        copyBtn.setHorizontalTextPosition(SwingConstants.LEADING);
+        copyBtn.setIconTextGap(8);
         copyBtn.setEnabled(false);
-        copyBtn.addActionListener(e -> copy(lastFormattedMessage, true));
-        copyMenuBtn = new JButton(new FilterBar.ChevronDown());
-        copyMenuBtn.setToolTipText(Messages.get("detail.copy.more"));
-        copyMenuBtn.setEnabled(false);
-        copyMenuBtn.setMargin(new Insets(4, 6, 4, 6));
-        copyMenuBtn.addActionListener(e -> {
+        long[] closedAt = {0};
+        copyBtn.addActionListener(e -> {
+            if (System.currentTimeMillis() - closedAt[0] < 250) return;   // this click just closed it
             JPopupMenu menu = new JPopupMenu();
-            JMenuItem msg = new JMenuItem(Messages.get("detail.toolbar.copy"));
-            msg.addActionListener(a -> copy(lastFormattedMessage, true));
-            JMenuItem raw = new JMenuItem(Messages.get("detail.copy.raw"));
-            raw.addActionListener(a -> copy(rawText(), false));
-            JMenuItem all = new JMenuItem(Messages.get("detail.copy.entry"));
-            all.addActionListener(a -> copy(detailArea.getText().stripTrailing(), false));
-            menu.add(msg);
-            menu.add(raw);
-            menu.add(all);
-            // Right-aligned under the chevron: it sits at the window's right edge.
-            menu.show(copyMenuBtn, copyMenuBtn.getWidth() - menu.getPreferredSize().width, copyMenuBtn.getHeight());
+            addCopyItems(menu);
+            menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+                @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent ev) { closedAt[0] = System.currentTimeMillis(); }
+                @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent ev) { }
+                @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent ev) { }
+            });
+            // Right-aligned under the button: it sits at the window's right edge.
+            menu.show(copyBtn, copyBtn.getWidth() - menu.getPreferredSize().width, copyBtn.getHeight());
         });
-        tools.add(copyBtn, "gapx 0 0");
-        tools.add(copyMenuBtn, "gapx 0 0");
+        tools.add(copyBtn);
 
         bar.add(tools);
         updateFontSizeLabel();
@@ -283,7 +293,7 @@ final class DetailPanel extends JPanel {
         detailArea.getInputMap().put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, ctrl), "detail.copy");
         detailArea.getActionMap().put("detail.copy", action(() -> {
             if (detailArea.getSelectedText() != null) detailArea.copy();
-            else if (shown != null) copy(lastFormattedMessage, true);
+            else if (shown != null) copyMessage();
         }));
     }
 
@@ -300,7 +310,7 @@ final class DetailPanel extends JPanel {
         if (size == AppPrefs.getDetailFontSize()) return;
         AppPrefs.setDetailFontSize(size);
         refresh();
-        showSizeToast(size);
+        showToast(java.text.MessageFormat.format(Messages.get("detail.font.toast"), size));
     }
 
     private void updateFontSizeLabel() {
@@ -311,10 +321,11 @@ final class DetailPanel extends JPanel {
     }
 
     /**
-     * Shows "Text size 14" briefly over the pane's top-right corner, as browsers show their zoom
-     * level, so a shortcut or wheel change has visible feedback.
+     * Shows a short note ("Text size 14", "Message copied") in the middle of the pane's body for
+     * about a second, so an action has visible feedback where the eye is: not in a corner it
+     * would be missed in once a menu closes.
      */
-    private void showSizeToast(int size) {
+    private void showToast(String text) {
         JRootPane root = getRootPane();
         if (root == null || !isShowing()) return;
         if (sizeToast == null) {
@@ -323,27 +334,87 @@ final class DetailPanel extends JPanel {
             sizeToast.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(UIManager.getColor("PopupMenu.borderColor") != null
                             ? UIManager.getColor("PopupMenu.borderColor") : ClouseauColors.separatorColor()),
-                    BorderFactory.createEmptyBorder(4, 10, 4, 10)));
+                    BorderFactory.createEmptyBorder(8, 16, 8, 16)));
             toastTimer = new Timer(1200, e -> sizeToast.setVisible(false));
             toastTimer.setRepeats(false);
         }
-        sizeToast.setBackground(UIManager.getColor("PopupMenu.background"));
-        sizeToast.setForeground(ClouseauColors.foreground());
-        sizeToast.setText(java.text.MessageFormat.format(Messages.get("detail.font.toast"), size));
+        // The "on" toggle fill: a mid-gray chip that stands apart from the pane in both themes
+        // (a popup's or tooltip's white would vanish on Light's white pane).
+        Color bg = UIManager.getColor("ToggleButton.selectedBackground"), fg = UIManager.getColor("ToggleButton.selectedForeground");
+        sizeToast.setBackground(bg != null ? bg : UIManager.getColor("PopupMenu.background"));
+        sizeToast.setForeground(fg != null ? fg : ClouseauColors.foreground());
+        sizeToast.setText(text);
         JLayeredPane layers = root.getLayeredPane();
         if (sizeToast.getParent() != layers) layers.add(sizeToast, JLayeredPane.POPUP_LAYER);
         Dimension d = sizeToast.getPreferredSize();
-        Point p = SwingUtilities.convertPoint(this, getWidth() - d.width - 24, 52, layers);
+        Component body = ((BorderLayout) getLayout()).getLayoutComponent(BorderLayout.CENTER);
+        Rectangle area = body != null ? SwingUtilities.convertRectangle(this, body.getBounds(), layers)
+                                      : SwingUtilities.convertRectangle(getParent(), getBounds(), layers);
+        Point p = new Point(area.x + (area.width - d.width) / 2, area.y + (area.height - d.height) / 2);
         sizeToast.setBounds(p.x, p.y, d.width, d.height);
         sizeToast.setVisible(true);
         toastTimer.restart();
     }
 
-    private void copy(String text, boolean flash) {
-        if (shown == null || text == null) return;
+    /** Message (Ctrl+C), Raw Line and Entry: the Copy menu and the pane's right-click menu. */
+    private void addCopyItems(JPopupMenu menu) {
+        JMenuItem msg = new JMenuItem(Messages.get("detail.copy.message"));
+        msg.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        msg.addActionListener(a -> copyMessage());
+        JMenuItem raw = new JMenuItem(Messages.get("detail.copy.raw"));
+        raw.addActionListener(a -> copyRaw());
+        JMenuItem all = new JMenuItem(Messages.get("detail.copy.entry"));
+        all.addActionListener(a -> copyEntry());
+        for (JMenuItem i : new JMenuItem[] {msg, raw, all}) { i.setEnabled(shown != null); menu.add(i); }
+    }
+
+    /** The message as shown: it flashes, and "Message copied" confirms it. */
+    private void copyMessage() {
+        if (!toClipboard(lastFormattedMessage)) return;
+        flash(messageFieldStart, messageFieldEnd);
+        showToast(Messages.get("detail.copied.message"));
+    }
+
+    /** The lines exactly as in the file. They aren't on screen to flash, so the note says how many. */
+    private void copyRaw() {
+        String raw = rawText();
+        if (!toClipboard(raw)) return;
+        long lines = raw.lines().count();
+        showToast(lines > 1 ? java.text.MessageFormat.format(Messages.get("detail.copied.raw.lines"), lines)
+                            : Messages.get("detail.copied.raw"));
+    }
+
+    /** Every field, as shown: the whole entry flashes. */
+    private void copyEntry() {
+        if (!toClipboard(detailArea.getText().stripTrailing())) return;
+        flash(0, detailArea.getDocument().getLength());
+        showToast(Messages.get("detail.copied.entry"));
+    }
+
+    private boolean toClipboard(String text) {
+        if (shown == null || text == null) return false;
         Toolkit.getDefaultToolkit().getSystemClipboard()
                 .setContents(new java.awt.datatransfer.StringSelection(text), null);
-        if (flash) flashMessageField();
+        return true;
+    }
+
+    /** Right-click in the pane: Copy for selected text, then the same three as the Copy menu. */
+    private void installContextMenu() {
+        detailArea.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mousePressed(java.awt.event.MouseEvent e)  { maybeShow(e); }
+            @Override public void mouseReleased(java.awt.event.MouseEvent e) { maybeShow(e); }
+            private void maybeShow(java.awt.event.MouseEvent e) {
+                if (!e.isPopupTrigger()) return;
+                JPopupMenu menu = new JPopupMenu();
+                JMenuItem sel = new JMenuItem(Messages.get("detail.copy.selection"));
+                sel.setEnabled(detailArea.getSelectedText() != null);
+                sel.addActionListener(a -> detailArea.copy());
+                menu.add(sel);
+                menu.addSeparator();
+                addCopyItems(menu);
+                menu.show(detailArea, e.getX(), e.getY());
+            }
+        });
     }
 
     /** The entry's lines as the file has them: its raw line and any continuation lines. */
@@ -381,7 +452,6 @@ final class DetailPanel extends JPanel {
         LogEntry entry = content != null ? content.entry() : null;
         shown = entry != null ? content : null;
         copyBtn.setEnabled(entry != null);
-        copyMenuBtn.setEnabled(entry != null);
         updateFontSizeLabel();
         titleContext.setText(entry != null && content.lineNumber() != null
                 ? "\u00b7  " + java.text.MessageFormat.format(Messages.get("detail.title.line"), content.lineNumber()) : "");
@@ -405,11 +475,11 @@ final class DetailPanel extends JPanel {
             lastFormattedMessage = "";
             messageFieldStart = messageFieldEnd = -1;
             formatToggles.values().forEach(b -> b.setVisible(false));
-            insertText(doc, Messages.get("detail.placeholder"), val);
-            detailArea.setCaretPosition(0);
+            bodyCards.show(body, "empty");
             return;
         }
 
+        bodyCards.show(body, "entry");
         SimpleAttributeSet levelVal = new SimpleAttributeSet(val);
         StyleConstants.setForeground(levelVal, ClouseauColors.levelColor(entry.level()));
         StyleConstants.setBold(levelVal, true);
@@ -498,12 +568,40 @@ final class DetailPanel extends JPanel {
         }
         messageFieldEnd = doc.getLength() - 1; // exclude trailing newline
 
+        spaceLines(doc);
         detailArea.setCaretPosition(0);
     }
 
-    /** Briefly lights up the message after it's copied. */
-    private void flashMessageField() {
-        if (messageFieldStart < 0 || messageFieldEnd <= messageFieldStart) return;
+    /**
+     * What the pane says with nothing selected, centered: what to do, then what you'll get, in
+     * the interface font and the dim text of hints, so it doesn't read as log data.
+     */
+    private JComponent buildEmptyState() {
+        JPanel empty = new JPanel(new net.miginfocom.swing.MigLayout("fill, insets 16", "[center]", "push[]6[]push"));
+        ClouseauColors.themedBackground(empty, ClouseauColors::detailBackground);
+        JLabel title = new JLabel(Messages.get("detail.empty.title"));
+        ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
+        JLabel hint = new JLabel(Messages.get("detail.empty.hint"));
+        ClouseauColors.themedForeground(hint, ClouseauColors::mutedForeground);
+        hint.setFont(hint.getFont().deriveFont(hint.getFont().getSize2D() - 1f));
+        empty.add(title, "wrap");
+        empty.add(hint);
+        return empty;
+    }
+
+    /**
+     * Line spacing: each line is about 1.6 times the text height (20px at the default 12), close
+     * to the table's 24px rows, so the pane reads with the same rhythm as the log.
+     */
+    private static void spaceLines(StyledDocument doc) {
+        SimpleAttributeSet spacing = new SimpleAttributeSet();
+        StyleConstants.setLineSpacing(spacing, 0.35f);
+        doc.setParagraphAttributes(0, doc.getLength(), spacing, false);
+    }
+
+    /** Briefly lights up the text from {@code start} to {@code end} after it's copied. */
+    private void flash(int start, int end) {
+        if (start < 0 || end <= start) return;
         final Color peak = ClouseauColors.flashPeakColor();
         final Color bg   = ClouseauColors.detailBackground();
         final int   steps = 25;
@@ -512,7 +610,7 @@ final class DetailPanel extends JPanel {
 
         Highlighter hl = detailArea.getHighlighter();
         try {
-            tag[0] = hl.addHighlight(messageFieldStart, messageFieldEnd,
+            tag[0] = hl.addHighlight(start, end,
                     new DefaultHighlighter.DefaultHighlightPainter(peak));
         } catch (BadLocationException ignored) { return; }
 
@@ -525,7 +623,7 @@ final class DetailPanel extends JPanel {
             } else {
                 float t = 1f - (float) step[0] / steps;
                 try {
-                    tag[0] = hl.addHighlight(messageFieldStart, messageFieldEnd,
+                    tag[0] = hl.addHighlight(start, end,
                             new DefaultHighlighter.DefaultHighlightPainter(blend(peak, bg, t)));
                 } catch (BadLocationException ignored) {}
             }
