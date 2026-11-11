@@ -44,8 +44,8 @@ readable in any theme.
 |---|---|---|
 | Table | Row height | The height of table rows (24 pixels by default) |
 | | Stripe alternate rows | Shades every other row, to help follow a long row across a wide window |
-| Detail Panel | Font size | The detail panel's font size (also changed with **A−** / **A+**) |
-| | Wrap long lines | Wrap long lines in the detail panel instead of scrolling sideways |
+| Detail Panel | Font size | The detail panel's font size (also changed with **Aa** in its header) |
+| | Wrap long lines | Wrap long lines in the detail panel instead of scrolling sideways (also the **Wrap** button in its header) |
 | Tabs | Confirm when closing a tab | Ask before closing a tab |
 | | Confirm when clearing all highlights | Ask before **Clear all highlights** |
 | | Confirm when deleting a note | Ask before deleting a note |

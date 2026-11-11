@@ -25,8 +25,12 @@ import java.util.function.Supplier;
 
 /**
  * The detail pane under a tab's table (UC-3): the selected entry's fields, its note and
- * highlight, and its message run through the formatters and syntax highlighters, with a
- * toolbar to toggle them, change the font size and copy the message.
+ * highlight, and its message run through the formatters and syntax highlighters.
+ * <p>
+ * Its header belongs to the pane, not to the divider above it: it has the pane's own
+ * background, a title ("Details · line 41") on the left, and on the right one toggle per
+ * message format (formatter and highlighter of the same name together), Wrap, a text-size
+ * stepper and a Copy split button.
  * <p>
  * It asks its owner what to show through a {@link Supplier}, so its own toolbar buttons can
  * redraw it. EDT only.
@@ -45,19 +49,28 @@ final class DetailPanel extends JPanel {
      *                      added to its timestamp; 0 if none
      */
     record Content(LogEntry entry, Color highlight, AnnotationStore.Annotation annotation,
-                   List<LogEntry> continuations, long shiftMillis) {}
+                   List<LogEntry> continuations, long shiftMillis, Object lineNumber) {}
+
+    private static final int MIN_FONT = 8, MAX_FONT = 36, DEFAULT_FONT = 12;
 
     private final List<LogFormatter> formatters;
     private final List<LogSyntaxHighlighter> syntaxHighlighters;
     /** Returns what to show now, or null when nothing is selected. */
     private final Supplier<Content> current;
 
-    private final Set<String> disabledFormatters = new HashSet<>();
-    private final List<JToggleButton> formatterBtnList       = new ArrayList<>();
-    private final List<JToggleButton> syntaxHighlightBtnList = new ArrayList<>();
-    private JPanel formatterPanel;
-    private JPanel syntaxHighlightPanel;
+    /** Formats the user switched off (by name), kept while the pane lives. */
+    private final Set<String> disabledFormats = new HashSet<>();
+    /** One toggle per format name, shared by the formatter and highlighter of that name. */
+    private final java.util.Map<String, JToggleButton> formatToggles = new java.util.LinkedHashMap<>();
+    private JToggleButton wrapToggle;
+    private JLabel  titleContext;
+    private JLabel  fontSizeLabel;
+    private JButton resetFontBtn;
+    private JLabel  sizeToast;
+    private Timer   toastTimer;
     private JButton copyBtn;
+    private JButton copyMenuBtn;
+    private Content shown;
     private final JTextPane detailArea;
 
     private String  lastFormattedMessage = "";
@@ -84,7 +97,8 @@ final class DetailPanel extends JPanel {
         ClouseauColors.themedForeground(detailArea, ClouseauColors::foreground);
         detailArea.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
-        add(buildToolbar(), BorderLayout.NORTH);
+        add(buildHeader(), BorderLayout.NORTH);
+        installKeys();
         JScrollPane detailScroll = new JScrollPane(detailArea);
         detailScroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
         add(detailScroll, BorderLayout.CENTER);
@@ -98,6 +112,7 @@ final class DetailPanel extends JPanel {
 
     void setWrapLines(boolean wrap) {
         this.wrapLines = wrap;
+        if (wrapToggle != null && wrapToggle.isSelected() != wrap) wrapToggle.setSelected(wrap);
         detailArea.revalidate();
         refresh();
     }
@@ -112,105 +127,225 @@ final class DetailPanel extends JPanel {
         return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(AppPrefs.getDisplayTimezone());
     }
 
-    // ── Toolbar ───────────────────────────────────────────────────────────────
+    // ── Header ────────────────────────────────────────────────────────────────
 
-    private JPanel buildToolbar() {
-        JPanel bar = new JPanel(new BorderLayout());
+    private JPanel buildHeader() {
+        JPanel bar = new JPanel(new net.miginfocom.swing.MigLayout(
+                "insets 4 10 4 8, gapx 6, hidemode 3, aligny center", "[][]push[]"));
+        // The pane's own background and a hairline below, so the header reads as the top of the
+        // pane; the window-gray divider above stays the only boundary between table and pane.
+        ClouseauColors.themedBackground(bar, ClouseauColors::detailBackground);
         bar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
 
-        // Left: formatter / syntax highlight toggles
-        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 3));
-        controls.setOpaque(false);
+        JLabel title = new JLabel(Messages.get("detail.title"));
+        ClouseauColors.themedForeground(title, ClouseauColors::foreground);
+        titleContext = new JLabel();
+        ClouseauColors.themedForeground(titleContext, ClouseauColors::dimForeground);
+        bar.add(title);
+        bar.add(titleContext);
 
-        formatterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        formatterPanel.setOpaque(false);
-        formatterPanel.setVisible(false);
-        if (!formatters.isEmpty()) {
-            formatterPanel.add(toolbarLabel(Messages.get("detail.toolbar.format")));
-            for (LogFormatter formatter : formatters) {
-                JToggleButton btn = toggle(formatter.getName());
-                btn.addActionListener(e -> {
-                    if (btn.isSelected()) disabledFormatters.remove(formatter.getName());
-                    else                  disabledFormatters.add(formatter.getName());
-                    refresh();
-                });
-                formatterPanel.add(btn);
-                formatterBtnList.add(btn);
-            }
+        JPanel tools = new JPanel(new net.miginfocom.swing.MigLayout("insets 0, gapx 6, hidemode 3, aligny center"));
+        tools.setOpaque(false);
+
+        // One toggle per format: pressed shows the message formatted and colored, released as logged.
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        formatters.forEach(f -> names.add(f.getName()));
+        syntaxHighlighters.forEach(h -> names.add(h.getName()));
+        for (String name : names) {
+            JToggleButton btn = new JToggleButton(name, true);
+            btn.setToolTipText(java.text.MessageFormat.format(Messages.get("detail.format.tooltip"), name));
+            FilterBar.applyToggleStyle(btn);
+            btn.setVisible(false);
+            btn.addActionListener(e -> {
+                if (btn.isSelected()) disabledFormats.remove(name); else disabledFormats.add(name);
+                refresh();
+            });
+            formatToggles.put(name, btn);
+            tools.add(btn);
         }
-        controls.add(formatterPanel);
 
-        syntaxHighlightPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        syntaxHighlightPanel.setOpaque(false);
-        syntaxHighlightPanel.setVisible(false);
-        if (!syntaxHighlighters.isEmpty()) {
-            if (!formatters.isEmpty()) syntaxHighlightPanel.add(verticalSeparator());
-            syntaxHighlightPanel.add(toolbarLabel(Messages.get("detail.toolbar.color")));
-            for (LogSyntaxHighlighter hl : syntaxHighlighters) {
-                JToggleButton btn = toggle(hl.getName());
-                btn.addActionListener(e -> refresh());
-                syntaxHighlightPanel.add(btn);
-                syntaxHighlightBtnList.add(btn);
-            }
-        }
-        controls.add(syntaxHighlightPanel);
+        wrapToggle = new JToggleButton(Messages.get("detail.wrap"), wrapLines);
+        wrapToggle.setToolTipText(Messages.get("detail.wrap.tooltip"));
+        FilterBar.applyToggleStyle(wrapToggle);
+        wrapToggle.addActionListener(e -> {
+            AppPrefs.setDetailWrapLines(wrapToggle.isSelected());
+            setWrapLines(wrapToggle.isSelected());
+        });
+        tools.add(wrapToggle);
+        tools.add(verticalSeparator(), "gapx 4 4");
 
-        bar.add(controls, BorderLayout.CENTER);
+        // Text size: one "Aa" button; its popup labels the stepper and offers Reset.
+        tools.add(buildTextSizeButton());
+        tools.add(verticalSeparator(), "gapx 4 4");
 
-        // Right: font size + copy button
+        // Copy: the message, with Raw Line and Entry behind the chevron.
         copyBtn = new JButton(Messages.get("detail.toolbar.copy"));
-        copyBtn.setFont(copyBtn.getFont().deriveFont(11f));
-        copyBtn.setMargin(new Insets(2, 6, 2, 6));
         copyBtn.setEnabled(false);
-        copyBtn.addActionListener(e -> {
-            if (lastFormattedMessage.isEmpty()) return;
-            Toolkit.getDefaultToolkit().getSystemClipboard()
-                    .setContents(new java.awt.datatransfer.StringSelection(lastFormattedMessage), null);
-            flashMessageField();
+        copyBtn.addActionListener(e -> copy(lastFormattedMessage, true));
+        copyMenuBtn = new JButton(new FilterBar.ChevronDown());
+        copyMenuBtn.setToolTipText(Messages.get("detail.copy.more"));
+        copyMenuBtn.setEnabled(false);
+        copyMenuBtn.setMargin(new Insets(4, 6, 4, 6));
+        copyMenuBtn.addActionListener(e -> {
+            JPopupMenu menu = new JPopupMenu();
+            JMenuItem msg = new JMenuItem(Messages.get("detail.toolbar.copy"));
+            msg.addActionListener(a -> copy(lastFormattedMessage, true));
+            JMenuItem raw = new JMenuItem(Messages.get("detail.copy.raw"));
+            raw.addActionListener(a -> copy(rawText(), false));
+            JMenuItem all = new JMenuItem(Messages.get("detail.copy.entry"));
+            all.addActionListener(a -> copy(detailArea.getText().stripTrailing(), false));
+            menu.add(msg);
+            menu.add(raw);
+            menu.add(all);
+            // Right-aligned under the chevron: it sits at the window's right edge.
+            menu.show(copyMenuBtn, copyMenuBtn.getWidth() - menu.getPreferredSize().width, copyMenuBtn.getHeight());
         });
+        tools.add(copyBtn, "gapx 0 0");
+        tools.add(copyMenuBtn, "gapx 0 0");
 
-        JButton fontDecBtn = new JButton("A⁻");
-        JButton fontIncBtn = new JButton("A⁺");
-        for (JButton btn : new JButton[]{fontDecBtn, fontIncBtn}) {
-            btn.setFont(btn.getFont().deriveFont(11f));
-            btn.setMargin(new Insets(2, 5, 2, 5));
-        }
-        fontDecBtn.setToolTipText("Decrease font size");
-        fontIncBtn.setToolTipText("Increase font size");
-        fontDecBtn.addActionListener(e -> {
-            AppPrefs.setDetailFontSize(Math.max(8, AppPrefs.getDetailFontSize() - 1));
-            refresh();
-        });
-        fontIncBtn.addActionListener(e -> {
-            AppPrefs.setDetailFontSize(Math.min(32, AppPrefs.getDetailFontSize() + 1));
-            refresh();
-        });
-
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 3));
-        right.setOpaque(false);
-        right.add(fontDecBtn);
-        right.add(fontIncBtn);
-        right.add(verticalSeparator());
-        right.add(copyBtn);
-        bar.add(right, BorderLayout.EAST);
-
+        bar.add(tools);
+        updateFontSizeLabel();
         return bar;
     }
 
-    private static JLabel toolbarLabel(String text) {
-        JLabel label = new JLabel(text);
-        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
-        label.setFont(label.getFont().deriveFont(11f));
-        return label;
+    /**
+     * "Aa", the familiar text-size symbol, opening a small popup: "Text size  − 12 +" and Reset.
+     * The popup stays open while you step, and a second click on Aa closes it.
+     */
+    private JButton buildTextSizeButton() {
+        JButton aa = new JButton("Aa");
+        aa.setToolTipText(Messages.get("detail.font.size.tooltip"));
+        long[] closedAt = {0};
+
+        JPopupMenu popup = new JPopupMenu();
+        JPanel body = new JPanel(new net.miginfocom.swing.MigLayout("insets 10 12 10 12, gapx 4", "[]12[][][]"));
+        body.setOpaque(false);
+        body.add(new JLabel(Messages.get("detail.font.size")));
+        body.add(stepButton("\u2212", Messages.get("detail.font.smaller"), -1));
+        fontSizeLabel = new JLabel();
+        fontSizeLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        body.add(fontSizeLabel, "w 24!");
+        body.add(stepButton("+", Messages.get("detail.font.bigger"), +1), "wrap");
+        resetFontBtn = new JButton(Messages.get("detail.font.reset"));
+        resetFontBtn.addActionListener(e -> setTextSize(DEFAULT_FONT));
+        body.add(resetFontBtn, "span, right, gaptop 6");
+        popup.add(body);
+        popup.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) { closedAt[0] = System.currentTimeMillis(); }
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) { }
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) { }
+        });
+
+        aa.addActionListener(e -> {
+            // The press that closed the popup shouldn't open it again: the button toggles it.
+            if (System.currentTimeMillis() - closedAt[0] < 250) return;
+            updateFontSizeLabel();
+            popup.pack();
+            popup.show(aa, aa.getWidth() - popup.getPreferredSize().width, aa.getHeight());
+        });
+        return aa;
     }
 
-    private static JToggleButton toggle(String name) {
-        JToggleButton btn = new JToggleButton(name);
-        btn.setSelected(true);
-        btn.setEnabled(false);
-        btn.setFont(btn.getFont().deriveFont(11f));
-        FilterBar.applyToggleStyle(btn);
-        return btn;
+    private JButton stepButton(String text, String tooltip, int delta) {
+        JButton b = new JButton(text);
+        b.setToolTipText(tooltip);
+        b.setMargin(new Insets(2, 7, 2, 7));
+        b.putClientProperty("JButton.buttonType", "borderless");
+        b.setFocusable(false);   // the shortcuts cover the keyboard; no focus ring the moment the popup opens
+        b.addActionListener(e -> stepFont(delta));
+        return b;
+    }
+
+    /** Ctrl+wheel, Ctrl+Plus and Ctrl+Minus change the text size; Ctrl+C with nothing selected copies the message. */
+    private void installKeys() {
+        detailArea.addMouseWheelListener(e -> {
+            if (e.isControlDown()) { stepFont(e.getWheelRotation() < 0 ? 1 : -1); e.consume(); }
+            else {
+                // Without Ctrl, scroll as usual: hand the wheel to the scroll pane.
+                Container sp = SwingUtilities.getAncestorOfClass(JScrollPane.class, detailArea);
+                if (sp != null) sp.dispatchEvent(SwingUtilities.convertMouseEvent(detailArea, e, sp));
+            }
+        });
+        InputMap in = getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        int ctrl = java.awt.event.InputEvent.CTRL_DOWN_MASK;   // as elsewhere in the app; also safe headless
+        in.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_EQUALS, ctrl), "detail.bigger");
+        in.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ADD, ctrl), "detail.bigger");
+        in.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_MINUS, ctrl), "detail.smaller");
+        in.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_SUBTRACT, ctrl), "detail.smaller");
+        getActionMap().put("detail.bigger",  action(() -> stepFont(1)));
+        getActionMap().put("detail.smaller", action(() -> stepFont(-1)));
+
+        detailArea.getInputMap().put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, ctrl), "detail.copy");
+        detailArea.getActionMap().put("detail.copy", action(() -> {
+            if (detailArea.getSelectedText() != null) detailArea.copy();
+            else if (shown != null) copy(lastFormattedMessage, true);
+        }));
+    }
+
+    private static Action action(Runnable r) {
+        return new AbstractAction() { @Override public void actionPerformed(java.awt.event.ActionEvent e) { r.run(); } };
+    }
+
+    private void stepFont(int delta) {
+        setTextSize(AppPrefs.getDetailFontSize() + delta);
+    }
+
+    private void setTextSize(int requested) {
+        int size = Math.max(MIN_FONT, Math.min(MAX_FONT, requested));
+        if (size == AppPrefs.getDetailFontSize()) return;
+        AppPrefs.setDetailFontSize(size);
+        refresh();
+        showSizeToast(size);
+    }
+
+    private void updateFontSizeLabel() {
+        int size = AppPrefs.getDetailFontSize();
+        fontSizeLabel.setText(String.valueOf(size));
+        resetFontBtn.setEnabled(size != DEFAULT_FONT);
+    }
+
+    /**
+     * Shows "Text size 14" briefly over the pane's top-right corner, as browsers show their zoom
+     * level, so a shortcut or wheel change has visible feedback.
+     */
+    private void showSizeToast(int size) {
+        JRootPane root = getRootPane();
+        if (root == null || !isShowing()) return;
+        if (sizeToast == null) {
+            sizeToast = new JLabel();
+            sizeToast.setOpaque(true);
+            sizeToast.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(UIManager.getColor("PopupMenu.borderColor") != null
+                            ? UIManager.getColor("PopupMenu.borderColor") : ClouseauColors.separatorColor()),
+                    BorderFactory.createEmptyBorder(4, 10, 4, 10)));
+            toastTimer = new Timer(1200, e -> sizeToast.setVisible(false));
+            toastTimer.setRepeats(false);
+        }
+        sizeToast.setBackground(UIManager.getColor("PopupMenu.background"));
+        sizeToast.setForeground(ClouseauColors.foreground());
+        sizeToast.setText(java.text.MessageFormat.format(Messages.get("detail.font.toast"), size));
+        JLayeredPane layers = root.getLayeredPane();
+        if (sizeToast.getParent() != layers) layers.add(sizeToast, JLayeredPane.POPUP_LAYER);
+        Dimension d = sizeToast.getPreferredSize();
+        Point p = SwingUtilities.convertPoint(this, getWidth() - d.width - 24, 52, layers);
+        sizeToast.setBounds(p.x, p.y, d.width, d.height);
+        sizeToast.setVisible(true);
+        toastTimer.restart();
+    }
+
+    private void copy(String text, boolean flash) {
+        if (shown == null || text == null) return;
+        Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new java.awt.datatransfer.StringSelection(text), null);
+        if (flash) flashMessageField();
+    }
+
+    /** The entry's lines as the file has them: its raw line and any continuation lines. */
+    private String rawText() {
+        if (shown == null) return "";
+        StringBuilder sb = new StringBuilder(shown.entry().rawLine() != null ? shown.entry().rawLine() : "");
+        if (shown.continuations() != null) for (LogEntry c : shown.continuations()) sb.append('\n').append(c.rawLine());
+        return sb.toString();
     }
 
     private static JSeparator verticalSeparator() {
@@ -219,29 +354,13 @@ final class DetailPanel extends JPanel {
         return sep;
     }
 
-    private static void disableDetailBtn(JToggleButton btn) {
-        if (btn.isEnabled()) {
-            btn.putClientProperty("savedSelected", btn.isSelected());
-        }
-        btn.setSelected(false);
-        btn.setEnabled(false);
-    }
-
-    private static void enableDetailBtn(JToggleButton btn) {
-        if (!btn.isEnabled()) {
-            btn.setEnabled(true);
-            Boolean saved = (Boolean) btn.getClientProperty("savedSelected");
-            btn.setSelected(saved != null ? saved : true);
-        }
-    }
-
     // ── Rendering ─────────────────────────────────────────────────────────────
 
-    /** Apply all formatters that can handle this input, in sequence. */
+    /** Apply all formatters that can handle this input and aren't switched off, in sequence. */
     private String applyFormatters(String input) {
         String result = input;
         for (LogFormatter formatter : formatters) {
-            if (formatter.canFormat(result) && !disabledFormatters.contains(formatter.getName())) {
+            if (formatter.canFormat(result) && !disabledFormats.contains(formatter.getName())) {
                 try {
                     result = formatter.format(result);
                 } catch (Exception e) {
@@ -254,7 +373,12 @@ final class DetailPanel extends JPanel {
 
     private void render(Content content) {
         LogEntry entry = content != null ? content.entry() : null;
+        shown = entry != null ? content : null;
         copyBtn.setEnabled(entry != null);
+        copyMenuBtn.setEnabled(entry != null);
+        updateFontSizeLabel();
+        titleContext.setText(entry != null && content.lineNumber() != null
+                ? "\u00b7  " + java.text.MessageFormat.format(Messages.get("detail.title.line"), content.lineNumber()) : "");
         StyledDocument doc = detailArea.getStyledDocument();
         try { doc.remove(0, doc.getLength()); } catch (BadLocationException ignored) {}
 
@@ -274,8 +398,7 @@ final class DetailPanel extends JPanel {
         if (entry == null) {
             lastFormattedMessage = "";
             messageFieldStart = messageFieldEnd = -1;
-            formatterPanel.setVisible(false);
-            syntaxHighlightPanel.setVisible(false);
+            formatToggles.values().forEach(b -> b.setVisible(false));
             insertText(doc, Messages.get("detail.placeholder"), val);
             detailArea.setCaretPosition(0);
             return;
@@ -330,9 +453,6 @@ final class DetailPanel extends JPanel {
             entry.fields().forEach((k, v) -> appendField(doc, key, val, k, v));
         }
 
-        formatterPanel.setVisible(!formatters.isEmpty());
-        syntaxHighlightPanel.setVisible(!syntaxHighlighters.isEmpty());
-
         // Fold continuation lines (HL7 segments, stack traces, wrapped lines) into the message
         // so they are included in formatting, syntax highlighting, and the copy action.
         String rawMsg = entry.message() != null ? entry.message() : "";
@@ -342,23 +462,24 @@ final class DetailPanel extends JPanel {
             rawMsg = sb.toString();
         }
 
-        for (int i = 0; i < formatters.size(); i++) {
-            if (formatters.get(i).canFormat(rawMsg)) enableDetailBtn(formatterBtnList.get(i));
-            else                                     disableDetailBtn(formatterBtnList.get(i));
-        }
+        // A format's toggle shows only when this message is in that format, so the header stays
+        // quiet on plain text and says at a glance that a line carries JSON.
+        java.util.Set<String> applicable = new HashSet<>();
+        for (LogFormatter f : formatters) if (f.canFormat(rawMsg)) applicable.add(f.getName());
+        for (LogSyntaxHighlighter h : syntaxHighlighters) if (h.canHighlight(rawMsg)) applicable.add(h.getName());
 
         String messageText = applyFormatters(rawMsg);
         lastFormattedMessage = messageText;
-
-        for (int i = 0; i < syntaxHighlighters.size(); i++) {
-            if (syntaxHighlighters.get(i).canHighlight(messageText)) enableDetailBtn(syntaxHighlightBtnList.get(i));
-            else                                                      disableDetailBtn(syntaxHighlightBtnList.get(i));
-        }
+        for (LogSyntaxHighlighter h : syntaxHighlighters) if (h.canHighlight(messageText)) applicable.add(h.getName());
+        formatToggles.forEach((name, btn) -> {
+            btn.setVisible(applicable.contains(name));
+            btn.setSelected(!disabledFormats.contains(name));
+        });
 
         LogSyntaxHighlighter colorizer = null;
-        for (int i = 0; i < syntaxHighlighters.size(); i++) {
-            if (syntaxHighlighters.get(i).canHighlight(messageText) && syntaxHighlightBtnList.get(i).isSelected()) {
-                colorizer = syntaxHighlighters.get(i);
+        for (LogSyntaxHighlighter h : syntaxHighlighters) {
+            if (h.canHighlight(messageText) && !disabledFormats.contains(h.getName())) {
+                colorizer = h;
                 break;
             }
         }

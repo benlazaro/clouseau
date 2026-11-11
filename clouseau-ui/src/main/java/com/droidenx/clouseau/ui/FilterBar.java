@@ -1015,7 +1015,7 @@ final class FilterBar extends JPanel {
         return closed;
     }
 
-    private static final class ChevronDown implements Icon {
+    static final class ChevronDown implements Icon {
         @Override public void paintIcon(Component c, Graphics g, int x, int y) {
             Color color = c.isEnabled() ? UIManager.getColor("ComboBox.buttonArrowColor")
                                         : UIManager.getColor("ComboBox.buttonDisabledArrowColor");

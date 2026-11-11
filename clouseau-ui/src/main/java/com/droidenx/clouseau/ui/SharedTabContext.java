@@ -439,7 +439,7 @@ final class SharedTabContext {
         long shift = merged != null && ordinal >= 0 && ordinal < merged.size()
                 ? merged.offsetMillis(merged.sourceOf(ordinal)) : 0;
         return new DetailPanel.Content(entry, model.getHighlight(modelRow),
-                notes.at(ordinal), model.getContinuationLines(modelRow), shift);
+                notes.at(ordinal), model.getContinuationLines(modelRow), shift, model.getValueAt(modelRow, 0));
     }
 
     void refreshDetail() {

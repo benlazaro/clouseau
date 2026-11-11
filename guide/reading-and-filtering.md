@@ -30,12 +30,20 @@ are shown out of how many there are.
 ## The detail panel
 
 Select a row to see the whole entry below the table: every field, the full message and
-its stack trace.
+its stack trace. The panel's header names the entry it shows, such as **Details · line 41**,
+and holds its controls:
 
-- JSON in a message is pretty-printed and colored. The **Formatter** and **Syntax
-  Highlight** buttons above the panel turn that off and on.
-- **Copy Message** copies the formatted message.
-- **A−** and **A+** change the font size.
+- **JSON** appears when the message is JSON. Pressed (the default), the message is
+  pretty-printed and colored; released, it's shown exactly as logged. Plugin formats get a
+  button of their own in the same way.
+- **Wrap** wraps long lines to the panel's width instead of scrolling sideways (the same
+  setting as in Settings).
+- **Aa** opens the text size: **−** and **+** around the current size, and **Reset**. With
+  the panel focused, `Ctrl`+mouse wheel, `Ctrl`+`+` and `Ctrl`+`-` change it too, and the new
+  size shows briefly in the panel's corner.
+- **Copy Message** copies the message as shown; the arrow next to it also offers **Copy Raw
+  Line** (the lines exactly as in the file) and **Copy Entry** (every field, as shown).
+  `Ctrl`+`C` in the panel copies the message too, unless you've selected some text.
 - Drag the bar between the table and the panel to resize them.
 
 ## Filters
