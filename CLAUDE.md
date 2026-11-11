@@ -92,7 +92,7 @@ the project's JDK) before running `./gradlew`.
   release builds skip the configuration cache.
 - `distZipImage` and `jpackage` are skipped for `-SNAPSHOT` versions, so pass a release
   version to build them locally.
-- Only one Clouseau runs at a time (localhost port 54823). A second launch forwards its
+- Only one Clouseau runs at a time (localhost port 41823). A second launch forwards its
   files to the running instance and exits, so close any running Clouseau before testing a
   new build.
 - Running from source stores data in `./data/` under the working directory; see
@@ -203,5 +203,5 @@ land in the same change), start each in its own worktree session without asking 
 With fewer than 3 pieces, work here or propose sessions as usual.
 
 - Ask before merging those sessions' branches into this checkout, and never push them.
-- Only one Clouseau runs at a time (port 54823), so parallel sessions must not launch the
+- Only one Clouseau runs at a time (port 41823), so parallel sessions must not launch the
   GUI. Do GUI checks in the main session after their branches are merged.

@@ -377,7 +377,7 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
 
 ### 6.8 Startup and single instance
 
-`SingleInstanceManager` binds a localhost socket (port 54823). If another Clouseau is
+`SingleInstanceManager` binds a localhost socket (port 41823, below Windows' dynamic range 49152–65535, where Hyper-V, WSL and Docker reserve blocks of ports at boot that no program can bind). If another Clouseau is
 already running, a new launch forwards its file arguments to it and exits, so
 double-clicking several files opens tabs in one window: the window used last, when there
 are several (D-18). The check is the first thing startup does after logging, before the
@@ -401,6 +401,11 @@ window of its own and finishes quickly.
 - **No answer:** the sender retries for about a second. If the running instance still
   doesn't accept the connection (it hangs, or another program holds the port), the new
   launch shows an error naming the files that didn't open, instead of exiting silently.
+- **Nobody there:** if the port can't be bound but every connection is refused, nothing
+  listens on it (on Windows, the port is in a reserved range: `netsh interface ipv4 show
+  excludedportrange protocol=tcp`). The launch then starts as a normal window without
+  single-instance support, so later launches open their own windows. It leaves the unpacked
+  copies in `<data>/cache/` alone, since another such instance may be using them.
 
 ### 6.8.1 Colors across theme switches
 

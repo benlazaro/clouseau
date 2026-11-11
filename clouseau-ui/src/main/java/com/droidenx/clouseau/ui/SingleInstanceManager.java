@@ -23,8 +23,12 @@ import java.util.function.Consumer;
 @Slf4j
 public final class SingleInstanceManager {
 
-    /** Arbitrary port unlikely to conflict with other services. */
-    static final int PORT = 54823;
+    /**
+     * Arbitrary port unlikely to conflict with other services. It sits below Windows' dynamic
+     * port range (49152-65535), where Hyper-V, WSL and Docker reserve blocks at boot that no
+     * program can bind, though nothing listens on them.
+     */
+    static final int PORT = 41823;
 
     /** Connections the OS may queue while the listener handles one; Windows refuses the rest. */
     private static final int BACKLOG = 50;
@@ -95,15 +99,27 @@ public final class SingleInstanceManager {
      * Sends {@code filePaths} to the primary instance over one IPC connection,
      * retrying briefly if the primary doesn't accept it at once. An empty list only
      * asks the primary to bring its window to the front.
-     *
-     * @return {@code true} if the paths were delivered.
      */
-    public static boolean sendToPrimary(List<String> filePaths) {
+    public static Delivery sendToPrimary(List<String> filePaths) {
         return send(PORT, filePaths);
     }
 
-    static boolean send(int port, List<String> filePaths) {
+    /** What became of a secondary launch's attempt to reach the primary. */
+    public enum Delivery {
+        /** The primary received the paths. */
+        DELIVERED,
+        /**
+         * Every attempt was refused: nothing listens on the port, so there is no primary.
+         * The port couldn't be bound for another reason (on Windows, a reserved port range).
+         */
+        NO_INSTANCE,
+        /** Something holds the port but the paths didn't get through. */
+        FAILED
+    }
+
+    static Delivery send(int port, List<String> filePaths) {
         IOException last = null;
+        boolean allRefused = true;
         for (int attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
             try (Socket socket = new Socket(InetAddress.getLoopbackAddress(), port);
                  Writer writer = new BufferedWriter(
@@ -113,9 +129,10 @@ public final class SingleInstanceManager {
                     writer.write('\n');
                 }
                 writer.flush();
-                return true;
+                return Delivery.DELIVERED;
             } catch (IOException e) {
                 last = e;
+                if (!(e instanceof ConnectException)) allRefused = false;
                 if (attempt < SEND_ATTEMPTS) {
                     try {
                         Thread.sleep(SEND_RETRY_MS);
@@ -126,7 +143,11 @@ public final class SingleInstanceManager {
                 }
             }
         }
+        if (allRefused && last != null) {
+            log.warn("Port {} couldn't be bound, but no instance listens on it ({})", port, last.getMessage());
+            return Delivery.NO_INSTANCE;
+        }
         log.warn("Failed to contact primary instance on port {}", port, last);
-        return false;
+        return Delivery.FAILED;
     }
 }

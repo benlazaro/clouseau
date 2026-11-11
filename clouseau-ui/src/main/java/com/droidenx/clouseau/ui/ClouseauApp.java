@@ -50,12 +50,23 @@ public final class ClouseauApp {
             List<String> paths = java.util.Arrays.stream(args)
                     .map(a -> Path.of(a).toAbsolutePath().toString())
                     .toList();
-            if (!SingleInstanceManager.sendToPrimary(paths) && !paths.isEmpty()) {
-                showNotDelivered(paths);
-                System.exit(1);
+            switch (SingleInstanceManager.sendToPrimary(paths)) {
+                case DELIVERED -> {
+                    log.info("Delegated to existing instance — exiting.");
+                    System.exit(0);
+                }
+                case FAILED -> {
+                    if (!paths.isEmpty()) {
+                        showNotDelivered(paths);
+                        System.exit(1);
+                    }
+                    System.exit(0);
+                }
+                // The port couldn't be bound, yet nobody answers on it (on Windows, a range
+                // reserved by Hyper-V, WSL or Docker): start anyway rather than exit silently.
+                case NO_INSTANCE -> log.warn("No running instance answered; starting without "
+                        + "single-instance support, so later launches open their own window.");
             }
-            log.info("Delegated to existing instance — exiting.");
-            System.exit(0);
         }
 
         applyTheme();
@@ -77,10 +88,13 @@ public final class ClouseauApp {
 
         if (splash != null) splash.setStatus("Starting...");
 
-        // Only the running instance may do this: copies in use belong to its open tabs.
-        com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir());
-        Runtime.getRuntime().addShutdownHook(new Thread(
-                () -> com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir()), "cache-cleanup"));
+        // Only the running instance may do this: copies in use belong to its open tabs. An
+        // instance started without the port can't know whether another one owns them.
+        if (isPrimary) {
+            com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir());
+            Runtime.getRuntime().addShutdownHook(new Thread(
+                    () -> com.droidenx.clouseau.core.LogCache.clean(AppDirs.cacheDir()), "cache-cleanup"));
+        }
 
         SwingUtilities.invokeLater(() -> {
             WindowManager windows = new WindowManager(pluginManager);

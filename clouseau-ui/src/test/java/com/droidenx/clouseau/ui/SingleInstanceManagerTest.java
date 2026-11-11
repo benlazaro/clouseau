@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 
+import com.droidenx.clouseau.ui.SingleInstanceManager.Delivery;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SingleInstanceManagerTest {
@@ -46,7 +48,7 @@ class SingleInstanceManagerTest {
         assertThat(server).isNotNull();
 
         List<String> paths = List.of("C:\\logs\\a.log", "C:\\logs\\b.log", "C:\\logs\\follow.log");
-        assertThat(SingleInstanceManager.send(port, paths)).isTrue();
+        assertThat(SingleInstanceManager.send(port, paths)).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(paths);
     }
@@ -60,7 +62,7 @@ class SingleInstanceManagerTest {
         ExecutorService pool = Executors.newFixedThreadPool(launches);
         try {
             CountDownLatch start = new CountDownLatch(1);
-            List<Future<Boolean>> results = new ArrayList<>();
+            List<Future<Delivery>> results = new ArrayList<>();
             for (int i = 0; i < launches; i++) {
                 List<String> paths = List.of("/logs/" + i + "-1.log", "/logs/" + i + "-2.log");
                 results.add(pool.submit(() -> {
@@ -69,7 +71,7 @@ class SingleInstanceManagerTest {
                 }));
             }
             start.countDown();
-            for (Future<Boolean> r : results) assertThat(r.get(10, TimeUnit.SECONDS)).isTrue();
+            for (Future<Delivery> r : results) assertThat(r.get(10, TimeUnit.SECONDS)).isEqualTo(Delivery.DELIVERED);
         } finally {
             pool.shutdownNow();
         }
@@ -83,7 +85,7 @@ class SingleInstanceManagerTest {
         int port = freePort();
         server = SingleInstanceManager.listen(port, received::add);
 
-        assertThat(SingleInstanceManager.send(port, List.of())).isTrue();
+        assertThat(SingleInstanceManager.send(port, List.of())).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(List.of());
     }
@@ -93,7 +95,7 @@ class SingleInstanceManagerTest {
         int port = freePort();
         server = SingleInstanceManager.listen(port, received::add);
 
-        assertThat(SingleInstanceManager.send(port, List.of("", "/logs/a.log", " "))).isTrue();
+        assertThat(SingleInstanceManager.send(port, List.of("", "/logs/a.log", " "))).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(List.of("/logs/a.log"));
     }
@@ -106,8 +108,8 @@ class SingleInstanceManagerTest {
             received.add(paths);
         });
 
-        assertThat(SingleInstanceManager.send(port, List.of("/logs/bad.log"))).isTrue();
-        assertThat(SingleInstanceManager.send(port, List.of("/logs/good.log"))).isTrue();
+        assertThat(SingleInstanceManager.send(port, List.of("/logs/bad.log"))).isEqualTo(Delivery.DELIVERED);
+        assertThat(SingleInstanceManager.send(port, List.of("/logs/good.log"))).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(List.of("/logs/good.log"));
     }
@@ -117,7 +119,7 @@ class SingleInstanceManagerTest {
         int port = freePort();
         server = SingleInstanceManager.listen(port, received::add);
 
-        assertThat(SingleInstanceManager.send(port, List.of("/logs/journal-é-日本.log"))).isTrue();
+        assertThat(SingleInstanceManager.send(port, List.of("/logs/journal-é-日本.log"))).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(List.of("/logs/journal-é-日本.log"));
     }
@@ -131,9 +133,9 @@ class SingleInstanceManagerTest {
     }
 
     @Test
-    void reportsFailureWhenNoPrimaryAnswers() throws Exception {
+    void reportsNoInstanceWhenNothingListens() throws Exception {
         int port = freePort();   // nothing listens here
 
-        assertThat(SingleInstanceManager.send(port, List.of("/logs/a.log"))).isFalse();
+        assertThat(SingleInstanceManager.send(port, List.of("/logs/a.log"))).isEqualTo(Delivery.NO_INSTANCE);
     }
 }
