@@ -1910,3 +1910,6 @@ is now the biggest UI class.
   like `clouseau-*-plugin`, or a shared group), so Browse can list what's available when
   it opens, filter as you type, and mark plugins you have, with **Update** when a newer
   version exists. Needs the convention settled first, in `guide/developers.md`.
+  Once Browse knows each plugin's kind, File → Open Remote → Browse Plugins… should
+  open it filtered to sources and be renamed **Browse Connectivity Plugins…** ("remote
+  plugins" would read as plugins stored remotely).
