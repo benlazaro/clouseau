@@ -1,7 +1,5 @@
 package com.droidenx.clouseau.ui;
 
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonParser;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 
@@ -113,15 +111,6 @@ final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
     }
 
     private static int findJsonStart(String input) {
-        for (int i = 0; i < input.length(); i++) {
-            char c = input.charAt(i);
-            if (c == '{' || c == '[') {
-                try {
-                    JsonParser.parseString(input.substring(i));
-                    return i;
-                } catch (JsonParseException ignored) {}
-            }
-        }
-        return -1;
+        return JsonDetection.findJsonStart(input);
     }
 }
