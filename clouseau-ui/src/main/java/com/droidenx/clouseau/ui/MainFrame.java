@@ -334,25 +334,23 @@ public final class MainFrame extends JFrame {
         openMergedItem.addActionListener(e -> openFile(true));
         fileMenu.add(openMergedItem);
 
+        // SSH, then the sources plugins add, under their own names. Rebuilt each time it
+        // opens, so sources from newly installed plugins appear.
+        JMenu remoteMenu = new JMenu(Messages.get("menu.file.remote"));
+        remoteMenu.setMargin(menuMargin());
+        remoteMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildRemoteMenu(remoteMenu); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        });
+        rebuildRemoteMenu(remoteMenu);
+        fileMenu.add(remoteMenu);
+
         recentMenu = new JMenu(Messages.get("menu.file.recent"));
         recentMenu.setMargin(menuMargin());
         fileMenu.add(recentMenu);
         refreshRecentMenu();
         fileMenu.addSeparator();
-
-        JMenuItem sshItem = menuItem(Messages.get("menu.file.ssh"));
-        sshItem.addActionListener(e -> openSsh());
-        fileMenu.add(sshItem);
-
-        // Rebuilt each time it opens, so sources from newly installed plugins appear.
-        JMenu sourceMenu = new JMenu(Messages.get("menu.file.source"));
-        sourceMenu.setMargin(menuMargin());
-        sourceMenu.addMenuListener(new javax.swing.event.MenuListener() {
-            @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildSourceMenu(sourceMenu); }
-            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
-            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
-        });
-        fileMenu.add(sourceMenu);
 
         // One item for the active tab: Reload File on a file, Reconnect on a live source
         // (issue #4). Ctrl+R does whichever applies.
@@ -1241,7 +1239,7 @@ public final class MainFrame extends JFrame {
     private void reconnectSource(TabPanel panel, Session.Tab t, LogSourceProvider provider) {
         try {
             List<SourceSetting> settings = List.copyOf(provider.settings());
-            new SourceSettingsDialog(owner(panel), provider, settings, parsers()).showDialog().ifPresent(r -> {
+            new SourceSettingsDialog(owner(panel), provider, settings, parsers(), pluginManager.pluginNameOf(provider)).showDialog().ifPresent(r -> {
                 panel.setSessionOrigin(Session.Tab.source(new Session.PluginSource(provider.getClass().getName(),
                                 t.source().name(), r.sessionValues()), parserName(r.parser()), t.timezone())
                         .withState(t.follow(), t.columns(), t.filters()));
@@ -1289,14 +1287,17 @@ public final class MainFrame extends JFrame {
         });
     }
 
-    private void rebuildSourceMenu(JMenu menu) {
+    /**
+     * File → Open Remote: SSH, which is built in, then each source a plugin adds, listed by
+     * its own name like any other item, then Browse Plugins…, which opens the Plugin
+     * Manager's Browse tab.
+     */
+    private void rebuildRemoteMenu(JMenu menu) {
         menu.removeAll();
-        if (manager.sourceProviders().isEmpty()) {
-            JMenuItem none = menuItem(Messages.get("menu.file.source.none"));
-            none.setEnabled(false);
-            menu.add(none);
-            return;
-        }
+        JMenuItem ssh = menuItem(Messages.get("menu.file.remote.ssh"));
+        ssh.addActionListener(e -> openSsh());
+        menu.add(ssh);
+        menu.addSeparator();
         for (LogSourceProvider provider : manager.sourceProviders()) {
             String name;
             try {
@@ -1309,6 +1310,11 @@ public final class MainFrame extends JFrame {
             item.addActionListener(e -> openSource(provider, name));
             menu.add(item);
         }
+        if (!manager.sourceProviders().isEmpty()) menu.addSeparator();
+        JMenuItem more = menuItem(Messages.get("menu.file.remote.more"));
+        more.addActionListener(e ->
+                new PluginManagerDialog(this, pluginManager, manager::reloadExtensions).browsing().setVisible(true));
+        menu.add(more);
     }
 
     /** Shows a source plugin's settings form, then streams the source into a new tab. */
@@ -1319,11 +1325,11 @@ public final class MainFrame extends JFrame {
         } catch (RuntimeException | LinkageError e) {
             log.error("Source plugin '{}' failed in settings()", name, e);
             JOptionPane.showMessageDialog(this,
-                    java.text.MessageFormat.format(Messages.get("source.dialog.create.failed"), e),
+                    SourceSettingsDialog.failed(pluginManager.pluginNameOf(provider), String.valueOf(e)),
                     Messages.get("source.error.title"), JOptionPane.ERROR_MESSAGE);
             return;
         }
-        new SourceSettingsDialog(this, provider, settings, parsers()).showDialog().ifPresent(r -> {
+        new SourceSettingsDialog(this, provider, settings, parsers(), pluginManager.pluginNameOf(provider)).showDialog().ifPresent(r -> {
             log.info("Opening source '{}'", name);
             TabPanel panel = newTabPanel();
             addLogTab(name, null, panel);

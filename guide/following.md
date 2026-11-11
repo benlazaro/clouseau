@@ -35,7 +35,7 @@ Clouseau keeps your rows when the log is rotated:
 
 ## Remote logs over SSH
 
-**File → Connect via SSH…** follows a log on another machine.
+**File → Open Remote → SSH…** follows a log on another machine.
 
 1. Under **Server**, enter the **Host**, **Port** and **Username**. You can also type or
    paste `user@host` or `user@host:2222` into Host; Clouseau moves the user and port into
@@ -96,7 +96,9 @@ how many were trimmed.
 ## Source plugins
 
 Plugins can bring in lines from other places, such as a log service or a message queue.
-Installed source plugins appear under **File → Connect to Source**. Each shows a form for its
+Installed source plugins appear under **File → Open Remote**, after SSH, each under its own
+name. **Browse Plugins…** at the bottom opens the Plugin Manager's Browse tab. If one
+can't open its source, the error names the plugin. Each shows a form for its
 settings; Clouseau checks required fields, remembers the values, and stores passwords
 encrypted. Lines stream into a new tab, with the same limit, connection dot and
 **Reconnect** as SSH tabs.

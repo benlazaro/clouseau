@@ -113,7 +113,7 @@ parser are logged and the line is shown as UNKNOWN, so a bug can't stop a file l
 
 A `LogSourceProvider` brings in live lines from somewhere else (a log aggregator, a
 message queue, …). It declares its settings, and Clouseau draws the form under
-**File → Connect to Source**, checks required fields, numbers and choices, and remembers the
+**File → Open Remote**, checks required fields, numbers and choices, and remembers the
 values (passwords encrypted). The example's `DemoStreamSource` shows the shape:
 
 ```java

@@ -69,6 +69,12 @@ public final class PluginManagerDialog extends JDialog {
         setLocationRelativeTo(owner);
     }
 
+    /** Opens on the Browse tab: File → Open Remote → Browse Plugins…. */
+    public PluginManagerDialog browsing() {
+        tabs.setSelectedComponent(browse);
+        return this;
+    }
+
     private void buildUI() {
         // ── Installed ─────────────────────────────────────────────────────────
         list.setCellRenderer(new PluginRenderer());

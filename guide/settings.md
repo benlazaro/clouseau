@@ -51,7 +51,7 @@ readable in any theme.
 | | Confirm when deleting a note | Ask before deleting a note |
 | | Follow new lines by default | Start new tabs with [Follow](following.md) on |
 | | Max entries per tab | How many lines an SSH or plugin-source tab keeps in memory (10,000 to 2,000,000; default 200,000). Files you open are never trimmed. |
-| Files | Max recent files | How many files **Open Recent** lists |
+| Files | Max recent files | How many files **Recent Files** lists |
 | | When opening several files | **Ask each time**, **Merge them** into a [merged view](merged-views.md), or open **Separate tabs** |
 | | On startup | **Restore last session** (the default) reopens the windows and tabs you had open; **Start empty** opens one empty window. See [Picking up where you left off](opening-files.md#picking-up-where-you-left-off). |
 | Appearance | Theme | The theme, with a live preview (also in **View → Theme**) |

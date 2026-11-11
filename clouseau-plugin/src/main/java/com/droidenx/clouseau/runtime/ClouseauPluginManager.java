@@ -139,6 +139,13 @@ public final class ClouseauPluginManager {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
+    /** The name of the plugin an extension comes from, as the Plugin Manager shows it, or null. */
+    public String pluginNameOf(Object extension) {
+        if (extension == null) return null;
+        PluginWrapper pw = pf4j.whichPlugin(extension.getClass());
+        return pw != null ? displayName(pw.getPluginId(), pw.getPluginPath()) : null;
+    }
+
     private static String blank(String s) { return s == null ? "" : s.trim(); }
 
     /**
