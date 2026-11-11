@@ -88,6 +88,8 @@ final class DetailPanel extends JPanel {
 
     private String  lastFormattedMessage = "";
     private int     messageFieldStart    = -1;
+    /** Where values start, in pixels at the current text size: the hanging indent of every field. */
+    private float   valueIndent;
     private int     messageFieldEnd      = -1;
     private boolean wrapLines            = AppPrefs.isDetailWrapLines();
     private DateTimeFormatter tsFmt      = timestampFormatter();
@@ -492,6 +494,7 @@ final class DetailPanel extends JPanel {
         StyleConstants.setFontFamily(val, ClouseauFonts.MONO_FAMILY);
         StyleConstants.setFontSize(val, fontSize);
         StyleConstants.setForeground(val, ClouseauColors.foreground());
+        valueIndent = valueIndent(fontSize);
 
         if (entry == null) {
             lastFormattedMessage = "";
@@ -662,21 +665,49 @@ final class DetailPanel extends JPanel {
         );
     }
 
-    private static void appendField(StyledDocument doc, SimpleAttributeSet keyStyle,
-                                    SimpleAttributeSet valStyle, String label, String value) {
-        insertText(doc, String.format("%-12s ", label + ":"), keyStyle);
-        insertText(doc, value + "\n", valStyle);
+    /** The width of a padded label ("Message:" and spaces to 12 columns, then a space). */
+    private float valueIndent(int fontSize) {
+        Font bold  = new Font(ClouseauFonts.MONO_FAMILY, Font.BOLD, fontSize);
+        Font plain = new Font(ClouseauFonts.MONO_FAMILY, Font.PLAIN, fontSize);
+        return detailArea.getFontMetrics(bold).stringWidth("000000000000")
+             + detailArea.getFontMetrics(plain).charWidth(' ');
     }
 
-    private static void renderSyntaxHighlightedField(StyledDocument doc, SimpleAttributeSet keyStyle,
-                                                     SimpleAttributeSet baseStyle, String label,
-                                                     String text, LogSyntaxHighlighter colorizer) {
+    /**
+     * A hanging indent for the field from {@code start} to the end of the document: its first
+     * line reaches back to the label, and every other line (wrapped, continuation, formatted
+     * JSON) starts where the value does. Layout only, so copying yields the text as logged.
+     */
+    private void hang(StyledDocument doc, int start) {
+        int end = Math.max(start, doc.getLength() - 1);   // up to the field's own newline
+        SimpleAttributeSet rest = new SimpleAttributeSet();
+        StyleConstants.setLeftIndent(rest, valueIndent);
+        StyleConstants.setFirstLineIndent(rest, 0f);
+        doc.setParagraphAttributes(start, end - start, rest, false);
+        SimpleAttributeSet first = new SimpleAttributeSet();
+        StyleConstants.setFirstLineIndent(first, -valueIndent);
+        doc.setParagraphAttributes(start, 0, first, false);
+    }
+
+    private void appendField(StyledDocument doc, SimpleAttributeSet keyStyle,
+                             SimpleAttributeSet valStyle, String label, String value) {
+        int start = doc.getLength();
+        insertText(doc, String.format("%-12s ", label + ":"), keyStyle);
+        insertText(doc, value + "\n", valStyle);
+        hang(doc, start);
+    }
+
+    private void renderSyntaxHighlightedField(StyledDocument doc, SimpleAttributeSet keyStyle,
+                                              SimpleAttributeSet baseStyle, String label,
+                                              String text, LogSyntaxHighlighter colorizer) {
+        int start = doc.getLength();
         insertText(doc, String.format("%-12s ", label + ":"), keyStyle);
         List<LogSyntaxHighlighter.ColorSpan> spans;
         try {
             spans = colorizer.highlight(text);
         } catch (Exception e) {
             insertText(doc, text + "\n", baseStyle);
+            hang(doc, start);
             return;
         }
         int pos = 0;
@@ -693,6 +724,7 @@ final class DetailPanel extends JPanel {
             insertText(doc, text.substring(pos), baseStyle);
         }
         insertText(doc, "\n", baseStyle);
+        hang(doc, start);
     }
 
     private static void insertText(StyledDocument doc, String text, SimpleAttributeSet style) {
