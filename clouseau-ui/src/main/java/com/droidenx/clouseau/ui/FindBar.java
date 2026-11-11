@@ -232,6 +232,9 @@ final class FindBar extends JPanel {
         return false;
     }
 
+    /** Whether the bar is open with something typed, so Find Next / Previous can step. */
+    boolean hasQuery() { return isVisible() && !field.getText().isBlank(); }
+
     void navigate(int direction) {
         if (matches.isEmpty()) return;
         if (cursor < 0) {

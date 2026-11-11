@@ -58,6 +58,9 @@ final class RowMenu {
         void reload();
 
         void clearTable();
+
+        /** True if Clear Table applies (a tab streaming a live source). */
+        boolean canClearTable();
     }
 
     private final LogTableModel logTableModel;
@@ -227,6 +230,7 @@ final class RowMenu {
         menu.add(reloadFileItem);
 
         JMenuItem clearTableItem = new JMenuItem(Messages.get("table.clear"));
+        clearTableItem.setEnabled(host.canClearTable());
         clearTableItem.addActionListener(e -> host.clearTable());
         menu.add(clearTableItem);
 
@@ -243,6 +247,12 @@ final class RowMenu {
             rawLines.put(logTableModel.ordinalAt(r), entry.rawLine());
         }
         host.notesSaved(host.notes().setHighlights(rawLines, slot));
+    }
+
+    /** Edit → Add Note… / Edit Note…: the note on a model row, as the row menu's item does. */
+    void editNote(int modelRow) {
+        int ordinal = logTableModel.ordinalAt(modelRow);
+        showAnnotationDialog(logTableModel.getEntry(modelRow), ordinal, host.notes().at(ordinal));
     }
 
     private void showAnnotationDialog(LogEntry entry, int ordinal, AnnotationStore.Annotation existing) {

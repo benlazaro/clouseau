@@ -24,8 +24,11 @@ are shown out of how many there are.
 
 - `Ctrl+Home` and `Ctrl+End` jump to the first and last row.
 - Right-click a row for [highlights](#highlights), [notes](annotations-and-review.md),
-  **Reload File** (read the file again from the start) and **Clear Table** (remove every
-  row).
+  **Reload File** (read the file again from the start, also **File → Reload File**,
+  `Ctrl+R`) and, on a live source, **Clear Table** (remove every row so far).
+- The **Edit** menu has the copy commands, Find (`Ctrl+F`, then `F3` / `Shift+F3` for the
+  next and previous match) and notes for the selected row. The **View** menu has Follow,
+  Wrap Lines, Text Size (`Ctrl+=` / `Ctrl+-`), the tab's Time Zone and Clear All Filters.
 
 ## The detail panel
 
@@ -89,9 +92,10 @@ filter reads the text of the remaining rows in the background; the status bar sh
 
 ## Find
 
-`Ctrl+F` opens the find bar. It searches every column of the rows the filters show.
+`Ctrl+F` (**Edit → Find…**) opens the find bar. It searches every column of the rows the filters show.
 
-- `Enter` or **▼** goes to the next match, `Shift+Enter` or **▲** to the previous one.
+- `Enter`, `F3` or **▼** goes to the next match, `Shift+Enter`, `Shift+F3` or **▲** to the
+  previous one. `F3` works from the table too.
 - The counter shows how many rows match ("Searching n%" while it's still counting).
 - `Escape` closes the bar.
 

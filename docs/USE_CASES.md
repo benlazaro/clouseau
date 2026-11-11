@@ -39,7 +39,7 @@ exactly where the field left off.
 | Email | Attachments, often compressed | Saved to disk, then opened as a local file |
 | Local development | Plain files written by the running app, still growing | Opened directly, optionally followed live |
 | Remote hosts | Files on a server reachable over SSH | Streamed via SSH (`tail -F`) |
-| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Open Source (UC-11) |
+| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Connect to Source (UC-11) |
 
 Logs from tickets and email are **local files the user has already saved**. Opening them
 should be as easy as possible (drag-and-drop, "Open with"), but Clouseau does not fetch
@@ -56,7 +56,7 @@ Each use case lists its current support status: ✅ supported · 🟡 partial ·
 **Actor:** Field engineer, Developer
 **Goal:** View a log someone sent me, or one my app just wrote.
 
-1. User opens a file with `File → Open` (`Ctrl+O`), by dragging it onto the window, or
+1. User opens a file with `File → Open…` (`Ctrl+O`), by dragging it onto the window, or
    by choosing Clouseau from the operating system's "Open with" menu.
 2. Clouseau detects the log format from the first lines and shows a parser preview.
 3. User accepts, or picks a different parser.
@@ -303,7 +303,7 @@ ship with.
 2. User installs it by dropping the JAR in the plugins folder, or from a plugin repository
    (Nexus or Maven Central) in the Plugin Manager.
 3. The new capability is available without restarting.
-4. For a log source, the user picks it under **File → Open Source**, fills in the form
+4. For a log source, the user picks it under **File → Connect to Source**, fills in the form
    Clouseau builds from the settings the plugin declares, and the lines stream into a new
    tab.
 

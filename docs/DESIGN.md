@@ -116,7 +116,7 @@ tab.
 | `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the JSON-defined parsers (section 5.1) | `RegexLogParser`, configured from JSON |
 | `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
 | `LogSyntaxHighlighter` | Color spans in the detail panel | Yes | `JsonSyntaxHighlighter` |
-| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File → Open Source (section 6.3) | None; SSH has its own dialog and creates `SshLogSource` directly |
+| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File → Connect to Source (section 6.3) | None; SSH has its own dialog and creates `SshLogSource` directly |
 
 **Contract notes:**
 
@@ -279,7 +279,7 @@ refresh; open tabs keep the list they were created with.
   password prompts with an empty one; servers differ in which an account without a
   password is let in by. `SshLogSourceServerTest` runs the source against an embedded
   Apache MINA SSHD server (a test-only dependency).
-- **Plugin sources (D-14):** **File → Open Source** lists every `LogSourceProvider`,
+- **Plugin sources (D-14):** **File → Connect to Source** lists every `LogSourceProvider`,
   rebuilt each time the menu opens. Choosing one opens `SourceSettingsDialog`, a form
   with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`
   (core) trims values, drops empty optional ones, and checks required values, numbers

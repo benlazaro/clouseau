@@ -43,7 +43,7 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 
 Each [release](https://github.com/benlazaro/clouseau/releases) has a portable zip per platform with its own Java runtime: unzip it and run the launcher. The [Edge build](https://github.com/benlazaro/clouseau/releases/tag/edge) is a single `clouseau-edge.jar` built from every push to `main`; run it with `java -jar clouseau-edge.jar` on Java 21 or later.
 
-Then open a log with `File → Open` (`Ctrl+O`) or drag it onto the window. The [User Guide](guide/index.md) covers everything else.
+Then open a log with `File → Open…` (`Ctrl+O`) or drag it onto the window. The [User Guide](guide/index.md) covers everything else.
 
 To build Clouseau yourself or write a plugin, see [For developers](guide/developers.md).
 

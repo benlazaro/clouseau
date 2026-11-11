@@ -559,6 +559,12 @@ public final class TabPanel extends JPanel {
 
     public JTable getLogTable() { return shared.table(); }
 
+    /** What the window's Edit and View menus act on. */
+    SharedTabContext actions() { return shared; }
+
+    /** Whether Reload File applies: the tab shows a file. */
+    boolean canReload() { return content instanceof FileContent; }
+
     public void clearTable() { shared.clearTable(); }
 
     public void showAnnotationsDialog() { shared.showAnnotationsDialog(); }
