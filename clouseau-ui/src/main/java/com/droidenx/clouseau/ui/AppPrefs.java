@@ -36,6 +36,7 @@ public final class AppPrefs {
     private static final String KEY_MULTI_OPEN         = "open.several";
     private static final String KEY_DETAIL_FONT_SIZE   = "detail.font.size";
     private static final String KEY_DETAIL_WRAP_LINES  = "detail.wrap.lines";
+    private static final String KEY_DETAIL_SPLIT       = "detail.split.ratio";
     private static final String KEY_ROW_HEIGHT         = "row.height";
     private static final String KEY_TABLE_STRIPES      = "table.stripes";
     private static final String KEY_SSH_SAVE           = "ssh.saveConnection";
@@ -360,6 +361,24 @@ public final class AppPrefs {
 
     public static void setDetailFontSize(int size) {
         putInt(KEY_DETAIL_FONT_SIZE, size);
+    }
+
+    /** The share of a tab's height the log table takes over the detail pane, 0.55 at first. */
+    public static double getDetailSplitRatio() {
+        double r = ROOT.has(KEY_DETAIL_SPLIT) ? ROOT.get(KEY_DETAIL_SPLIT).getAsDouble() : DEFAULT_DETAIL_SPLIT;
+        return clampSplitRatio(r);
+    }
+
+    public static void setDetailSplitRatio(double ratio) {
+        ROOT.addProperty(KEY_DETAIL_SPLIT, Math.round(clampSplitRatio(ratio) * 1000) / 1000.0);
+        save();
+    }
+
+    static final double DEFAULT_DETAIL_SPLIT = 0.55;
+
+    /** Keeps both the table and the pane visible: a pane dragged shut doesn't open new tabs shut. */
+    static double clampSplitRatio(double r) {
+        return Double.isFinite(r) ? Math.max(0.15, Math.min(0.90, r)) : DEFAULT_DETAIL_SPLIT;
     }
 
     public static boolean isDetailWrapLines() {

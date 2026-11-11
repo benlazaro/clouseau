@@ -30,7 +30,8 @@ are shown out of how many there are.
 ## The detail panel
 
 Select a row to see the whole entry below the table: every field, the full message and
-its stack trace. The panel's header names the entry it shows, such as **Details · line 41**,
+its stack trace. The panel's header names the line it shows, such as **Line 41** (with the
+file, **Line 41 · db.log**, in a merged view; even with the **#** column hidden),
 and holds its controls:
 
 - **JSON** appears when the message is JSON. Pressed (the default), the message is
@@ -44,9 +45,12 @@ and holds its controls:
 - **Copy** opens three choices: **Message** (as shown), **Raw Line** (the lines exactly as
   in the file, stack trace included) and **Entry** (every field, as shown). What you copied
   flashes, and a note in the middle of the panel confirms it, such as "Raw lines copied (10
-  lines)". `Ctrl`+`C` in the panel copies the message, unless you've selected some text;
-  right-click in the panel offers the same choices, plus **Copy** for the selection.
-- Drag the bar between the table and the panel to resize them.
+  lines)". Shortcuts work from the table or the panel: `Ctrl`+`C` copies the message (in the
+  panel, the text you've selected, if any), `Ctrl`+`Alt`+`C` the raw line and
+  `Ctrl`+`Shift`+`C` the entry. Right-click in the panel offers the same choices, plus
+  **Copy** for the selection.
+- Drag the bar between the table and the panel to resize them. Files you open later start
+  with the same split, even after a restart.
 
 ## Filters
 
