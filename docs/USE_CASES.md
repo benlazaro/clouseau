@@ -39,7 +39,7 @@ exactly where the field left off.
 | Email | Attachments, often compressed | Saved to disk, then opened as a local file |
 | Local development | Plain files written by the running app, still growing | Opened directly, optionally followed live |
 | Remote hosts | Files on a server reachable over SSH | Streamed via SSH (`tail -F`) |
-| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Connect to Source (UC-11) |
+| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Open Remote (UC-11) |
 
 Logs from tickets and email are **local files the user has already saved**. Opening them
 should be as easy as possible (drag-and-drop, "Open with"), but Clouseau does not fetch
@@ -267,7 +267,7 @@ can't be exported, and a file can't be exported while it is still loading.
 **Success:** The developer sees exactly what the field engineer flagged, on the right
 lines, and knows who flagged it.
 
-**Current behavior:** A bundle opens like any `.zip` (File → Open, Open Recent, the
+**Current behavior:** A bundle opens like any `.zip` (File → Open…, Recent Files, the
 command line or "Open with"): Clouseau recognizes it by its manifest, opens its log in
 one tab without asking which file, and attaches each annotation and highlight to its
 line (D-9), with its author. Notes the developer adds are saved next to the bundle in
@@ -303,7 +303,7 @@ ship with.
 2. User installs it by dropping the JAR in the plugins folder, or from a plugin repository
    (Nexus or Maven Central) in the Plugin Manager.
 3. The new capability is available without restarting.
-4. For a log source, the user picks it under **File → Connect to Source**, fills in the form
+4. For a log source, the user picks it under **File → Open Remote**, fills in the form
    Clouseau builds from the settings the plugin declares, and the lines stream into a new
    tab.
 

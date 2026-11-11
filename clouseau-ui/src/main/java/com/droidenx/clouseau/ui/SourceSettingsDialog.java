@@ -37,6 +37,17 @@ final class SourceSettingsDialog extends JDialog {
                   Map<String, String> sessionValues) {}
 
     private final LogSourceProvider provider;
+    private final String pluginName;
+
+    /**
+     * A source that couldn't be created, naming the plugin when it's known, so it's clear
+     * whose problem it is.
+     */
+    static String failed(String pluginName, String message) {
+        return pluginName != null
+                ? MessageFormat.format(Messages.get("source.dialog.create.failed.plugin"), pluginName, message)
+                : MessageFormat.format(Messages.get("source.dialog.create.failed"), message);
+    }
     private final List<SourceSetting> settings;
     private final Map<String, JComponent> fields = new LinkedHashMap<>();
     private final List<LogParser> parsers;
@@ -44,9 +55,11 @@ final class SourceSettingsDialog extends JDialog {
     private final JLabel errorLabel = new JLabel(" ");
     private Result result;
 
+    /** @param pluginName the plugin the source comes from, named when it fails; null if unknown */
     SourceSettingsDialog(Frame owner, LogSourceProvider provider, List<SourceSetting> settings,
-                         List<LogParser> parsers) {
+                         List<LogParser> parsers, String pluginName) {
         super(owner, MessageFormat.format(Messages.get("source.dialog.title"), provider.getName()), true);
+        this.pluginName = pluginName;
         this.provider = provider;
         this.settings = settings;
         this.parsers  = parsers;
@@ -168,8 +181,7 @@ final class SourceSettingsDialog extends JDialog {
             return;
         } catch (Exception | LinkageError e) {
             log.error("Source plugin '{}' failed to create a source", provider.getName(), e);
-            showError(MessageFormat.format(Messages.get("source.dialog.create.failed"),
-                    escape(e.getMessage() != null ? e.getMessage() : e.toString())));
+            showError(failed(pluginName, escape(e.getMessage() != null ? e.getMessage() : e.toString())));
             return;
         }
 

@@ -15,7 +15,7 @@ nav_order: 1
 - **File → Open** (`Ctrl+O`) opens the file dialog.
 - **Drag** one or more files onto the window: the table, the detail panel, the tab strip
   or the welcome screen. Folders are ignored.
-- **File → Open Recent** lists the files you opened last (how many is set in
+- **File → Recent Files** lists the files you opened last (how many is set in
   [Settings](settings.md)).
 - **"Open with"** from your file manager. The Windows, macOS and Linux installers
   associate `.log` files with Clouseau, so double-clicking one opens it. The portable zip
