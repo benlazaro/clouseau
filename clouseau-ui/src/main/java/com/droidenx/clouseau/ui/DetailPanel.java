@@ -210,13 +210,31 @@ final class DetailPanel extends JPanel {
 
     /**
      * "Aa", the familiar text-size symbol, opening a small popup: "Text size  − 12 +" and Reset.
-     * The popup stays open while you step, and a second click on Aa closes it.
+     * The popup stays open while you step, and a second click on Aa closes it. It's built each
+     * time it opens: a popup that isn't showing isn't in the window, so a theme switch would
+     * miss it and it would open in the old theme's colors.
      */
     private JButton buildTextSizeButton() {
         JButton aa = new JButton("Aa");
         aa.setToolTipText(Messages.get("detail.font.size.tooltip"));
         long[] closedAt = {0};
+        aa.addActionListener(e -> {
+            // The press that closed the popup shouldn't open it again: the button toggles it.
+            if (System.currentTimeMillis() - closedAt[0] < 250) return;
+            JPopupMenu popup = buildTextSizePopup();
+            popup.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+                @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent ev) { closedAt[0] = System.currentTimeMillis(); }
+                @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent ev) { }
+                @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent ev) { }
+            });
+            updateFontSizeLabel();
+            popup.pack();
+            popup.show(aa, aa.getWidth() - popup.getPreferredSize().width, aa.getHeight());
+        });
+        return aa;
+    }
 
+    private JPopupMenu buildTextSizePopup() {
         JPopupMenu popup = new JPopupMenu();
         JPanel body = new JPanel(new net.miginfocom.swing.MigLayout("insets 10 12 10 12, gapx 4", "[]12[][][]"));
         body.setOpaque(false);
@@ -230,20 +248,7 @@ final class DetailPanel extends JPanel {
         resetFontBtn.addActionListener(e -> setTextSize(DEFAULT_FONT));
         body.add(resetFontBtn, "span, right, gaptop 6");
         popup.add(body);
-        popup.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
-            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) { closedAt[0] = System.currentTimeMillis(); }
-            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) { }
-            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) { }
-        });
-
-        aa.addActionListener(e -> {
-            // The press that closed the popup shouldn't open it again: the button toggles it.
-            if (System.currentTimeMillis() - closedAt[0] < 250) return;
-            updateFontSizeLabel();
-            popup.pack();
-            popup.show(aa, aa.getWidth() - popup.getPreferredSize().width, aa.getHeight());
-        });
-        return aa;
+        return popup;
     }
 
     private JButton stepButton(String text, String tooltip, int delta) {
@@ -299,6 +304,7 @@ final class DetailPanel extends JPanel {
     }
 
     private void updateFontSizeLabel() {
+        if (fontSizeLabel == null) return;   // the popup hasn't been opened yet
         int size = AppPrefs.getDetailFontSize();
         fontSizeLabel.setText(String.valueOf(size));
         resetFontBtn.setEnabled(size != DEFAULT_FONT);
