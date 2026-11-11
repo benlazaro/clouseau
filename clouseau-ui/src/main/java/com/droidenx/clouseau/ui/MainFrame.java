@@ -519,7 +519,7 @@ public final class MainFrame extends JFrame {
         return edit;
     }
 
-    /** Follow, Wrap Lines, Text Size, Time Zone and Clear All Filters for the active tab. */
+    /** Follow, the Detail Pane submenu (Wrap Lines, text size), Time Zone and Clear All Filters for the active tab. */
     private void addTabViewItems(JMenu view) {
         int ctrl = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
         JCheckBoxMenuItem follow = new JCheckBoxMenuItem(Messages.get("menu.view.follow"));
@@ -530,19 +530,21 @@ public final class MainFrame extends JFrame {
         });
         view.add(follow);
 
+        // Wrap and text size only change the detail pane, so they sit in a submenu named
+        // after it, matching the pane header's Wrap and Aa buttons.
+        JMenu pane = new JMenu(Messages.get("menu.view.detail"));
+        pane.setMargin(menuMargin());
         JCheckBoxMenuItem wrap = new JCheckBoxMenuItem(Messages.get("menu.view.wrap"));
         wrap.setMargin(menuMargin());
         wrap.addActionListener(e -> { SharedTabContext t = activeActions(); if (t != null) t.toggleWrap(); });
-        view.add(wrap);
-
-        JMenu size = new JMenu(Messages.get("menu.view.text.size"));
-        size.setMargin(menuMargin());
+        pane.add(wrap);
+        pane.addSeparator();
         // Shown as "Ctrl+=" and "Ctrl+-"; the keys themselves are bound on the root pane.
         String mod = (ctrl & java.awt.event.InputEvent.META_DOWN_MASK) != 0 ? "meta" : "ctrl";
-        tabItem(size, "menu.view.text.bigger", KeyStroke.getKeyStroke(mod + " typed ="), t -> t.changeTextSize(1));
-        tabItem(size, "menu.view.text.smaller", KeyStroke.getKeyStroke(mod + " typed -"), t -> t.changeTextSize(-1));
-        JMenuItem reset = tabItem(size, "menu.view.text.reset", null, t -> t.changeTextSize(0));
-        view.add(size);
+        tabItem(pane, "menu.view.text.bigger", KeyStroke.getKeyStroke(mod + " typed ="), t -> t.changeTextSize(1));
+        tabItem(pane, "menu.view.text.smaller", KeyStroke.getKeyStroke(mod + " typed -"), t -> t.changeTextSize(-1));
+        JMenuItem reset = tabItem(pane, "menu.view.text.reset", null, t -> t.changeTextSize(0));
+        view.add(pane);
         view.addSeparator();
 
         JMenuItem zone = menuItem(Messages.get("menu.view.timezone"));
@@ -560,7 +562,7 @@ public final class MainFrame extends JFrame {
             follow.setSelected(active != null && active.isFollow());
             wrap.setEnabled(t != null && !active.isPlainText());
             wrap.setSelected(t != null ? t.wrapLines() : AppPrefs.isDetailWrapLines());
-            size.setEnabled(t != null && !active.isPlainText());
+            pane.setEnabled(t != null && !active.isPlainText());
             reset.setText(java.text.MessageFormat.format(Messages.get("menu.view.text.reset"), 12));
             zone.setEnabled(active != null);
             clearFilters.setEnabled(t != null && !active.isPlainText());
