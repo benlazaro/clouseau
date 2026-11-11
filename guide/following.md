@@ -37,12 +37,17 @@ Clouseau keeps your rows when the log is rotated:
 
 **File → Connect via SSH…** follows a log on another machine.
 
-1. Enter the **Host**, **Port** and **Username**.
-2. Choose how to sign in: **Password**, **Private key** (with its passphrase, if it has
-   one), or **No password** for an account that has none (common on embedded devices).
-3. Enter the **Remote path** of the log, and pick a **Parser** if auto-detection isn't
-   right.
-4. Click **Connect**.
+1. Under **Server**, enter the **Host**, **Port** and **Username**. You can also type or
+   paste `user@host` or `user@host:2222` into Host; Clouseau moves the user and port into
+   their own fields.
+2. Under **Authentication**, choose the **Method**: **Password**, **Private key**, or
+   **None** for an account without a password (common on embedded devices). For a key,
+   Clouseau fills in `~/.ssh/id_ed25519`, `id_ecdsa` or `id_rsa`, whichever you have; leave
+   **Passphrase** empty if the key has none.
+3. Under **Log**, enter the **Remote path** of the log, and pick a **Parser** if
+   auto-detection isn't right.
+4. Click **Connect**. While it's grayed out, the line above the buttons says what's still
+   missing.
 
 The tab is named after the file and the host, such as `app.log — 10.0.0.5`, so the same
 log followed on two servers gets two distinct tabs. Point at the name to see the user, the
@@ -53,8 +58,14 @@ keeps going when the log is rotated or replaced. If the path is wrong or you can
 the file, Clouseau says so. If the connection drops without closing (a router or VPN
 timing it out), Clouseau notices within about a minute and a quarter and shows an error,
 instead of the tab quietly going still. Closing an SSH tab is immediate, even if the connection has
-dropped. Save connections you use often with the **★**
-button next to **Favorites**, and pick them from that list next time.
+dropped. To keep a connection for next time, tick
+**Save this connection** before you click **Connect** (passwords and passphrases are stored
+encrypted). Saved connections are listed on the left of the dialog, grouped by host, each
+log by its file name with its folder below; type in the filter box to narrow the list by host
+or file. Click one to fill in the form, or double-click to connect right away. To
+forget one, point at it and click the trash can at the right of its row (or select it and
+press `Delete`); the trash can on a host forgets every log saved on it, after asking. The
+**Save this connection** box remembers whether you ticked it last time.
 
 ### Connection dot and Reconnect
 

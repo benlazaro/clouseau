@@ -274,7 +274,7 @@ refresh; open tabs keep the list they were created with.
   connection that died silently ends with an error instead of hanging in `readLine`.
   `close` disconnects the transport without closing the channel first: a channel close
   waits up to 30 s for a reply that a silent connection never sends.
-  "No password" (`SshConfig` with neither a password nor a key file) tries the `none`
+  "None" (`SshConfig` with neither a password nor a key file; "No password" before) tries the `none`
   method, then `password` with an empty password, then `keyboard-interactive` answering
   password prompts with an empty one; servers differ in which an account without a
   password is let in by. `SshLogSourceServerTest` runs the source against an embedded
@@ -1889,3 +1889,13 @@ is now the biggest UI class.
   the clock (a static log ends in the past), and *±1 min of selected row*, disabled with
   no selection. While following, "last" moves with the newest entry only when the preset
   is applied again; a range that slides by itself would need its own decision.
+- **G-13 · Browse the remote file.** The SSH dialog takes the remote path as typed
+  (with an example as its placeholder). Planned: a **Browse…** button beside Remote path
+  that signs in with the dialog's details and lists the server's directories over SFTP
+  (sshj has it), starting in `/var/log` or the user's home, showing readable files only.
+  It needs the dialog to sign in before Connect, so it shares the work with G-14.
+- **G-14 · Test the connection.** A wrong host, password or path is only found out after
+  Connect, as an error on a new tab. Planned: a **Test** button in the SSH dialog's footer
+  that signs in and checks the file with `test -r`, reporting the result inline in the
+  hint line (signed in · file readable, or which step failed and why), without opening a
+  tab. It must time out like the source does and never keep the session open.

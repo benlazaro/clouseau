@@ -16,7 +16,7 @@ final class SettingsDialog extends JDialog {
     /** One width for every spinner, wide enough for "2,000,000" plus the arrows. */
     private static final String SPINNER = "w 120!";
     /** Settings sit indented under their section title, so the titles stand out. */
-    private static final String INDENT = "gapleft 28";
+    static final String INDENT = "gapleft 28";   // shared with SshConnectionDialog
 
     /** The dialog opens at least this wide... */
     private static final int MIN_WIDTH = 760;
@@ -272,7 +272,7 @@ final class SettingsDialog extends JDialog {
     }
 
     /** A section title, as IntelliJ's settings show one: regular weight, with a hairline to the right edge. */
-    private static JComponent sectionLabel(String text) {
+    static JComponent sectionLabel(String text) {   // shared with SshConnectionDialog
         JPanel title = new JPanel(new MigLayout("insets 0, gap 8", "[][grow]", "[center]"));
         title.setOpaque(false);
         title.add(new JLabel(text));

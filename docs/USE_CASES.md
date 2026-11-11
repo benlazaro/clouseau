@@ -198,8 +198,8 @@ filters and column layout; notes on the old rows go with them. SSH signs in agai
 the password or key passphrase entered in the dialog, without asking; a plugin source is
 created again from the same setting values.
 
-**Signing in (SSH):** Password, private key (with or without a passphrase), or "No
-password" for accounts without one, common on embedded devices. "No password" works with
+**Signing in (SSH):** Password, private key (with or without a passphrase), or "None"
+for accounts without a password, common on embedded devices. "None" works with
 servers that let such accounts in by any of the usual methods (none, an empty password,
 or keyboard-interactive).
 

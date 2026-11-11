@@ -38,6 +38,7 @@ public final class AppPrefs {
     private static final String KEY_DETAIL_WRAP_LINES  = "detail.wrap.lines";
     private static final String KEY_ROW_HEIGHT         = "row.height";
     private static final String KEY_TABLE_STRIPES      = "table.stripes";
+    private static final String KEY_SSH_SAVE           = "ssh.saveConnection";
     private static final String KEY_LAST_OPEN_DIR      = "last.open.dir";
     private static final String KEY_RECENT_FILES       = "recent.files";
     private static final String KEY_RECENT_MAX         = "recent.max";
@@ -380,6 +381,15 @@ public final class AppPrefs {
 
     public static void setTableStripes(boolean stripes) {
         putBool(KEY_TABLE_STRIPES, stripes);
+    }
+
+    /** Whether the SSH dialog's "Save this connection" starts ticked: as it was last time. */
+    public static boolean isSshSaveConnection() {
+        return getBool(KEY_SSH_SAVE, false);
+    }
+
+    public static void setSshSaveConnection(boolean save) {
+        putBool(KEY_SSH_SAVE, save);
     }
 
     public static void setRowHeight(int height) {
