@@ -66,6 +66,9 @@ them.
 - **Loggers**: a tree of every logger in the file. Untick a package or class to hide its
   lines, or use **All** and **None**. The button shows how many loggers are shown, for
   example **Loggers (15 / 20)**.
+  Right-click a row for **Hide Logger** or **Show Only Logger** (its logger, or those of
+  all selected rows), and **Show All Loggers**, which says how many are hidden. Showing
+  them all again leaves the other filters as they are.
 - **Fields**: for formats with extra fields, untick values to hide their lines. The button
   shows a dot while a field filter is active.
 - **Sources**: in a [merged view](merged-views.md), hide whole files.
