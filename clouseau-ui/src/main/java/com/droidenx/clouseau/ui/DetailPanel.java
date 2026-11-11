@@ -28,7 +28,8 @@ import java.util.function.Supplier;
  * highlight, and its message run through the formatters and syntax highlighters.
  * <p>
  * Its header belongs to the pane, not to the divider above it: it has the pane's own
- * background, a title ("Details · line 41") on the left, and on the right one toggle per
+ * background, a title on the left in the column headers' style ("Log entry · line 41", with
+ * "· db.log" in a merged view), and on the right one toggle per
  * message format (formatter and highlighter of the same name together), Wrap, a text-size
  * stepper and a Copy split button.
  * <p>
@@ -49,9 +50,15 @@ final class DetailPanel extends JPanel {
      *                      added to its timestamp; 0 if none
      */
     record Content(LogEntry entry, Color highlight, AnnotationStore.Annotation annotation,
-                   List<LogEntry> continuations, long shiftMillis, Object lineNumber) {}
+                   List<LogEntry> continuations, long shiftMillis, Object lineNumber, String source) {}
 
     private static final int MIN_FONT = 8, MAX_FONT = 36, DEFAULT_FONT = 12;
+
+    /** Copy Raw Line and Copy Entry; the tab binds them so they work from the table too. */
+    static final KeyStroke COPY_RAW_KEY = KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C,
+            java.awt.event.InputEvent.CTRL_DOWN_MASK | java.awt.event.InputEvent.ALT_DOWN_MASK);
+    static final KeyStroke COPY_ENTRY_KEY = KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C,
+            java.awt.event.InputEvent.CTRL_DOWN_MASK | java.awt.event.InputEvent.SHIFT_DOWN_MASK);
 
     private final List<LogFormatter> formatters;
     private final List<LogSyntaxHighlighter> syntaxHighlighters;
@@ -63,7 +70,11 @@ final class DetailPanel extends JPanel {
     /** One toggle per format name, shared by the formatter and highlighter of that name. */
     private final java.util.Map<String, JToggleButton> formatToggles = new java.util.LinkedHashMap<>();
     private JToggleButton wrapToggle;
-    private JLabel  titleContext;
+    /**
+     * "Log entry · line 41" ("Log entry" with nothing selected, "· db.log" added in a merged
+     * view). The number comes from the table's data, so it shows even with # hidden.
+     */
+    private JLabel  title;
     private JLabel  fontSizeLabel;
     private JButton resetFontBtn;
     private JLabel  sizeToast;
@@ -112,6 +123,9 @@ final class DetailPanel extends JPanel {
         JScrollPane detailScroll = new JScrollPane(detailArea);
         detailScroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
         ClouseauColors.themedBackground(detailScroll.getViewport(), ClouseauColors::detailBackground);
+        // No frame of its own: the header's hairline is the only line between header and text
+        // (a frame doubled it into a bright 2px band), as the main toolbar has one line.
+        detailScroll.setBorder(BorderFactory.createEmptyBorder());
         body.add(detailScroll, "entry");
         body.add(buildEmptyState(), "empty");
         add(body, BorderLayout.CENTER);
@@ -144,18 +158,18 @@ final class DetailPanel extends JPanel {
 
     private JPanel buildHeader() {
         JPanel bar = new JPanel(new net.miginfocom.swing.MigLayout(
-                "insets 4 10 4 8, gapx 6, hidemode 3, aligny center", "[][]push[]"));
+                "insets 4 10 4 8, gapx 6, hidemode 3, aligny center", "[]push[]"));
         // The pane's own background and a hairline below, so the header reads as the top of the
         // pane; the window-gray divider above stays the only boundary between table and pane.
         ClouseauColors.themedBackground(bar, ClouseauColors::detailBackground);
         bar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
 
-        JLabel title = new JLabel(Messages.get("detail.title"));
-        ClouseauColors.themedForeground(title, ClouseauColors::foreground);
-        titleContext = new JLabel();
-        ClouseauColors.themedForeground(titleContext, ClouseauColors::dimForeground);
+        // Styled like the table's column headers (12px, dim): a label for what's below, so the
+        // bright text stays the data's.
+        title = new JLabel(Messages.get("detail.title.none"));
+        ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
+        title.setFont(title.getFont().deriveFont(Font.PLAIN, 12f));
         bar.add(title);
-        bar.add(titleContext);
 
         JPanel tools = new JPanel(new net.miginfocom.swing.MigLayout("insets 0, gapx 6, hidemode 3, aligny center"));
         tools.setOpaque(false);
@@ -362,21 +376,23 @@ final class DetailPanel extends JPanel {
         msg.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         msg.addActionListener(a -> copyMessage());
         JMenuItem raw = new JMenuItem(Messages.get("detail.copy.raw"));
+        raw.setAccelerator(COPY_RAW_KEY);
         raw.addActionListener(a -> copyRaw());
         JMenuItem all = new JMenuItem(Messages.get("detail.copy.entry"));
+        all.setAccelerator(COPY_ENTRY_KEY);
         all.addActionListener(a -> copyEntry());
         for (JMenuItem i : new JMenuItem[] {msg, raw, all}) { i.setEnabled(shown != null); menu.add(i); }
     }
 
     /** The message as shown: it flashes, and "Message copied" confirms it. */
-    private void copyMessage() {
+    void copyMessage() {
         if (!toClipboard(lastFormattedMessage)) return;
         flash(messageFieldStart, messageFieldEnd);
         showToast(Messages.get("detail.copied.message"));
     }
 
     /** The lines exactly as in the file. They aren't on screen to flash, so the note says how many. */
-    private void copyRaw() {
+    void copyRaw() {
         String raw = rawText();
         if (!toClipboard(raw)) return;
         long lines = raw.lines().count();
@@ -385,7 +401,7 @@ final class DetailPanel extends JPanel {
     }
 
     /** Every field, as shown: the whole entry flashes. */
-    private void copyEntry() {
+    void copyEntry() {
         if (!toClipboard(detailArea.getText().stripTrailing())) return;
         flash(0, detailArea.getDocument().getLength());
         showToast(Messages.get("detail.copied.entry"));
@@ -453,8 +469,14 @@ final class DetailPanel extends JPanel {
         shown = entry != null ? content : null;
         copyBtn.setEnabled(entry != null);
         updateFontSizeLabel();
-        titleContext.setText(entry != null && content.lineNumber() != null
-                ? "\u00b7  " + java.text.MessageFormat.format(Messages.get("detail.title.line"), content.lineNumber()) : "");
+        // "Log entry", then "· line 41", then "· db.log" in a merged view (line numbers repeat there).
+        StringBuilder heading = new StringBuilder(Messages.get("detail.title.none"));
+        if (entry != null && content.lineNumber() != null) {
+            heading.append("  \u00b7  ").append(java.text.MessageFormat.format(
+                    Messages.get("detail.title.line"), String.valueOf(content.lineNumber())));
+        }
+        if (entry != null && content.source() != null) heading.append("  \u00b7  ").append(content.source());
+        title.setText(heading.toString());
         StyledDocument doc = detailArea.getStyledDocument();
         try { doc.remove(0, doc.getLength()); } catch (BadLocationException ignored) {}
 

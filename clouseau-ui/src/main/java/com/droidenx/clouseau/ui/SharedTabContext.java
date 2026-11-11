@@ -149,13 +149,24 @@ final class SharedTabContext {
         });
 
         detailPanel = new DetailPanel(formatters, highlighters, this::currentDetail);
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableView.scrollPane(), detailPanel);
-        split.setResizeWeight(0.70);
-        split.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override public void componentResized(java.awt.event.ComponentEvent e) {
-                split.removeComponentListener(this);
-                split.setDividerLocation(0.70);
-            }
+        JSplitPane split = new RememberedSplit(tableView.scrollPane(), detailPanel);
+        // Ctrl+C copies the selected line's message, Ctrl+Alt+C its raw text, Ctrl+Shift+C the
+        // whole entry, from the table or the detail pane alike; the pane flashes and confirms
+        // what was copied. Ctrl+C is bound on the table itself, ahead of its row copy (tab-joined
+        // cells), so the pane keeps its own Ctrl+C for selected text.
+        table.getInputMap(JComponent.WHEN_FOCUSED).put(
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_DOWN_MASK), "copyMessage");
+        table.getActionMap().put("copyMessage", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { detailPanel.copyMessage(); }
+        });
+        InputMap keys = split.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        keys.put(DetailPanel.COPY_RAW_KEY, "copyRawLine");
+        keys.put(DetailPanel.COPY_ENTRY_KEY, "copyEntry");
+        split.getActionMap().put("copyRawLine", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { detailPanel.copyRaw(); }
+        });
+        split.getActionMap().put("copyEntry", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { detailPanel.copyEntry(); }
         });
         centerCards.add(split, CARD_ROWS);
         centerCards.add(buildLoadingPanel(), CARD_LOADING);
@@ -438,8 +449,11 @@ final class SharedTabContext {
         MergedEntries merged = mergedView();
         long shift = merged != null && ordinal >= 0 && ordinal < merged.size()
                 ? merged.offsetMillis(merged.sourceOf(ordinal)) : 0;
+        // In a merged view line numbers repeat across files, so the title also names the file.
+        String source = merged != null && ordinal >= 0 && ordinal < merged.size()
+                ? merged.sources().get(merged.sourceOf(ordinal)).name() : null;
         return new DetailPanel.Content(entry, model.getHighlight(modelRow),
-                notes.at(ordinal), model.getContinuationLines(modelRow), shift, model.getValueAt(modelRow, 0));
+                notes.at(ordinal), model.getContinuationLines(modelRow), shift, model.getValueAt(modelRow, 0), source);
     }
 
     void refreshDetail() {
@@ -483,5 +497,52 @@ final class SharedTabContext {
 
         panel.add(inner, BorderLayout.CENTER);
         return panel;
+    }
+
+    /**
+     * The table over the detail pane. A new tab opens at the ratio the user last dragged the
+     * divider to, in any tab (kept in the settings, so it outlasts a restart), and keeps that
+     * ratio as the window resizes.
+     */
+    static final class RememberedSplit extends JSplitPane {
+        private final java.awt.event.MouseListener onRelease = new java.awt.event.MouseAdapter() {
+            @Override public void mouseReleased(java.awt.event.MouseEvent e) { remember(); }
+        };
+
+        RememberedSplit(Component top, Component bottom) {
+            super(JSplitPane.VERTICAL_SPLIT, top, bottom);
+            double ratio = AppPrefs.getDetailSplitRatio();
+            setResizeWeight(ratio);
+            addComponentListener(new java.awt.event.ComponentAdapter() {
+                @Override public void componentResized(java.awt.event.ComponentEvent e) {
+                    if (getHeight() <= 0) return;
+                    removeComponentListener(this);
+                    setDividerLocation(ratio);
+                }
+            });
+            hookDivider();
+        }
+
+        /** A theme switch installs a new UI, and with it a new divider to listen to. */
+        @Override public void updateUI() {
+            super.updateUI();
+            hookDivider();
+        }
+
+        private void hookDivider() {
+            if (onRelease != null && getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI ui) {
+                ui.getDivider().removeMouseListener(onRelease);
+                ui.getDivider().addMouseListener(onRelease);
+            }
+        }
+
+        /** The ratio the user just dragged to: for new tabs, and for this one as it resizes. */
+        private void remember() {
+            int space = getHeight() - getDividerSize();
+            if (space <= 0) return;
+            double ratio = AppPrefs.clampSplitRatio((double) getDividerLocation() / space);
+            setResizeWeight(ratio);
+            AppPrefs.setDetailSplitRatio(ratio);
+        }
     }
 }
