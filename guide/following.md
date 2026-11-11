@@ -62,10 +62,18 @@ dropped. To keep a connection for next time, tick
 **Save this connection** before you click **Connect** (passwords and passphrases are stored
 encrypted). Saved connections are listed on the left of the dialog, grouped by host, each
 log by its file name with its folder below; type in the filter box to narrow the list by host
-or file. Click one to fill in the form, or double-click to connect right away. To
-forget one, point at it and click the trash can at the right of its row (or select it and
-press `Delete`); the trash can on a host forgets every log saved on it, after asking. The
-**Save this connection** box remembers whether you ticked it last time.
+or file. Click one to fill in the form, or double-click to connect right away.
+
+- **To change a saved connection**, click it, edit anything (the host, user and path
+  included), and click **Connect**: it's updated in place.
+- **To follow another file on the same server**, point at a saved log and click the
+  duplicate icon at the right of its row (or press `Ctrl+D`). The form keeps every detail
+  and selects the file name in **Remote path**; type the new one and click **Connect** to
+  save it as a new entry.
+- **To forget one**, click the trash can at the right of its row (or select it and press
+  `Delete`). The trash can on a host forgets every log saved on it, after asking.
+
+The **Save this connection** box remembers whether you ticked it last time.
 
 ### Connection dot and Reconnect
 

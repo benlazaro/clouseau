@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
  * the default button in a footer below a divider. Saved connections are a sidebar on the left,
  * grouped by host (the way people look for a log: which machine, then which file), with a
  * filter on top, and a trash can on the row under the mouse; a connection is saved by ticking
- * "Save this connection", beside Connect, which remembers whether it was ticked last time.
+ * "Save this connection", the form's last line, which remembers whether it was ticked last time.
  */
 public class SshConnectionDialog extends JDialog {
 
@@ -206,21 +206,22 @@ public class SshConnectionDialog extends JDialog {
                 Messages.get("ssh.dialog.remote.path.placeholder"));
         content.add(new JLabel(Messages.get("ssh.dialog.parser")), SettingsDialog.INDENT);
         content.add(parserCombo, "wrap");
+        // Saving is part of setting up the connection: the last line of the form, under the
+        // fields and just above Connect, like "Remember me" on a sign-in form.
+        content.add(saveBox, "skip 1, wrap, gaptop 4");
 
         // What Connect is waiting for, while it's disabled. Always present, so the dialog
         // doesn't change size as the fields fill in.
         hintLabel.setForeground(ClouseauColors.dimForeground());
         content.add(hintLabel, "span 2, gaptop 6, growx 0");
 
-        // ── Footer: Save this connection · Cancel · Connect ──────────────
+        // ── Footer: Cancel · Connect ─────────────────────────────────────
         connectBtn.addActionListener(e -> onConnect());
         JButton cancelBtn = new JButton(Messages.get("ssh.dialog.cancel"));
         cancelBtn.addActionListener(e -> dispose());
         saveBox.setToolTipText(Messages.get("ssh.dialog.save.tooltip"));
 
-        // Saving belongs to connecting, so the box sits right before the buttons.
-        JPanel buttons = new JPanel(new MigLayout("insets 14 28 14 28", "push[]16[][]"));
-        buttons.add(saveBox);
+        JPanel buttons = new JPanel(new MigLayout("insets 14 28 14 28", "push[][]"));
         buttons.add(cancelBtn);
         buttons.add(connectBtn);
         JPanel footer = new JPanel(new BorderLayout());
@@ -343,6 +344,9 @@ public class SshConnectionDialog extends JDialog {
         savedTree.setCellRenderer(new SavedRenderer());
         savedTree.getSelectionModel().setSelectionMode(javax.swing.tree.TreeSelectionModel.SINGLE_TREE_SELECTION);
         javax.swing.ToolTipManager.sharedInstance().registerComponent(savedTree);
+        savedTree.registerKeyboardAction(e -> { AppPrefs.SshFavorite f = selectedFavorite(); if (f != null) duplicate(f); },
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK),
+                JComponent.WHEN_FOCUSED);
         savedTree.addTreeSelectionListener(e -> {
             AppPrefs.SshFavorite f = selectedFavorite();
             if (f != null) loadFavorite(f);
@@ -451,33 +455,42 @@ public class SshConnectionDialog extends JDialog {
     }
 
     /**
-     * The saved-connections tree. It fills the sidebar's width and shows a trash can at the right
-     * of the row under the mouse: on a log it forgets that log, on a host every log under it.
-     * A press on the trash can doesn't select the row.
+     * The saved-connections tree. It fills the sidebar's width and shows tools at the right of
+     * the row under the mouse: on a log, a duplicate icon and a trash can; on a host, a trash can
+     * that forgets every log under it. A press on a tool doesn't select the row.
      */
     private final class SavedTree extends JTree {
-        private static final int TRASH_ZONE = 26;
+        private static final int TOOL = 24;                // width of each tool's hit area
+        private enum Tool { NONE, DUPLICATE, TRASH }
         private int hoverRow = -1;
-        private boolean overTrash;
+        private Tool overTool = Tool.NONE;
 
         SavedTree(DefaultMutableTreeNode root) {
             super(root);
             java.awt.event.MouseAdapter hover = new java.awt.event.MouseAdapter() {
                 @Override public void mouseMoved(java.awt.event.MouseEvent e)  { track(e.getPoint()); }
-                @Override public void mouseExited(java.awt.event.MouseEvent e) { hoverRow = -1; overTrash = false; repaint(); }
+                @Override public void mouseExited(java.awt.event.MouseEvent e) { hoverRow = -1; overTool = Tool.NONE; repaint(); }
             };
             addMouseListener(hover);
             addMouseMotionListener(hover);
+        }
+
+        private boolean isLog(int row) {
+            javax.swing.tree.TreePath path = row >= 0 ? getPathForRow(row) : null;
+            return path != null && ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject()
+                    instanceof AppPrefs.SshFavorite;
         }
 
         private void track(Point p) {
             int row = getClosestRowForLocation(p.x, p.y);
             Rectangle r = row >= 0 ? getRowBounds(row) : null;
             int newRow = r != null && p.y >= r.y && p.y < r.y + r.height ? row : -1;
-            boolean newOver = newRow >= 0 && p.x >= getWidth() - TRASH_ZONE;
-            if (newRow != hoverRow || newOver != overTrash) {
+            Tool tool = Tool.NONE;
+            if (newRow >= 0 && p.x >= getWidth() - TOOL - 2) tool = Tool.TRASH;
+            else if (newRow >= 0 && isLog(newRow) && p.x >= getWidth() - 2 * TOOL - 2) tool = Tool.DUPLICATE;
+            if (newRow != hoverRow || tool != overTool) {
                 hoverRow = newRow;
-                overTrash = newOver;
+                overTool = tool;
                 repaint();
             }
         }
@@ -487,24 +500,27 @@ public class SshConnectionDialog extends JDialog {
         @Override protected void processMouseEvent(java.awt.event.MouseEvent e) {
             if (e.getID() == java.awt.event.MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e)) {
                 track(e.getPoint());
-                if (overTrash && hoverRow >= 0) {
-                    javax.swing.tree.TreePath path = getPathForRow(hoverRow);
+                if (overTool != Tool.NONE && hoverRow >= 0) {
+                    DefaultMutableTreeNode node = (DefaultMutableTreeNode) getPathForRow(hoverRow).getLastPathComponent();
+                    Tool tool = overTool;
                     e.consume();
-                    if (path != null) SwingUtilities.invokeLater(() -> forget((DefaultMutableTreeNode) path.getLastPathComponent()));
+                    SwingUtilities.invokeLater(() -> {
+                        if (tool == Tool.TRASH) forget(node);
+                        else if (node.getUserObject() instanceof AppPrefs.SshFavorite f) duplicate(f);
+                    });
                     return;
                 }
             }
-            if (e.getID() == java.awt.event.MouseEvent.MOUSE_CLICKED && overTrash) return;
+            if (e.getID() == java.awt.event.MouseEvent.MOUSE_CLICKED && overTool != Tool.NONE) return;
             super.processMouseEvent(e);
         }
 
         @Override public String getToolTipText(java.awt.event.MouseEvent e) {
             track(e.getPoint());
-            if (overTrash && hoverRow >= 0) {
-                Object n = getPathForRow(hoverRow).getLastPathComponent();
-                return n instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof AppPrefs.SshFavorite
-                        ? Messages.get("ssh.dialog.saved.remove.tooltip")
-                        : Messages.get("ssh.dialog.saved.forget.host.tooltip");
+            if (overTool == Tool.DUPLICATE) return Messages.get("ssh.dialog.saved.duplicate.tooltip");
+            if (overTool == Tool.TRASH) {
+                return isLog(hoverRow) ? Messages.get("ssh.dialog.saved.remove.tooltip")
+                                       : Messages.get("ssh.dialog.saved.forget.host.tooltip");
             }
             return super.getToolTipText(e);
         }
@@ -515,11 +531,29 @@ public class SshConnectionDialog extends JDialog {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             if (hoverRow >= 0 && hoverRow < getRowCount()) {
                 Rectangle r = getRowBounds(hoverRow);
-                Color c = overTrash ? ClouseauColors.levelColor(com.droidenx.clouseau.api.LogEntry.LogLevel.ERROR)
-                        : isRowSelected(hoverRow) ? UIManager.getColor("Tree.selectionForeground") : ClouseauColors.dimForeground();
-                paintTrash(g2, getWidth() - TRASH_ZONE + 7, r.y + (r.height - 14) / 2, c);
+                Color base = isRowSelected(hoverRow) ? UIManager.getColor("Tree.selectionForeground") : ClouseauColors.dimForeground();
+                int y = r.y + (r.height - 14) / 2;
+                paintTrash(g2, getWidth() - TOOL + 5, y, overTool == Tool.TRASH
+                        ? ClouseauColors.levelColor(com.droidenx.clouseau.api.LogEntry.LogLevel.ERROR) : base);
+                if (isLog(hoverRow)) {
+                    paintDuplicate(g2, getWidth() - 2 * TOOL + 5, y,
+                            overTool == Tool.DUPLICATE ? ClouseauColors.foreground() : base);
+                }
             }
             g2.dispose();
+        }
+
+        /** Two overlapping 9×10 rounded sheets, the back one offset up and left. */
+        private void paintDuplicate(Graphics2D g, int x, int y, Color c) {
+            g.setColor(c);
+            g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g.draw(new java.awt.geom.RoundRectangle2D.Float(x + 3.5f, y + 4f, 8.5f, 9.5f, 2.5f, 2.5f));
+            java.awt.geom.Path2D.Float back = new java.awt.geom.Path2D.Float();
+            back.moveTo(x + 1f, y + 10.5f);
+            back.lineTo(x + 1f, y + 2.5f);
+            back.quadTo(x + 1f, y + 1f, x + 2.5f, y + 1f);
+            back.lineTo(x + 8.5f, y + 1f);
+            g.draw(back);
         }
 
         /** A 12×14 outline trash can: lid with a handle, body with two ribs. */
@@ -566,8 +600,8 @@ public class SshConnectionDialog extends JDialog {
             setOpaque(false);
             setBackgroundNonSelectionColor(null);
             Object o = value instanceof DefaultMutableTreeNode n ? n.getUserObject() : null;
-            // Leave room on the right for the trash can.
-            setBorder(BorderFactory.createEmptyBorder(3, 0, 3, 22));
+            // Leave room on the right for the row's tools: trash can, and duplicate on a log.
+            setBorder(BorderFactory.createEmptyBorder(3, 0, 3, o instanceof AppPrefs.SshFavorite ? 50 : 26));
             if (o instanceof AppPrefs.SshFavorite f) {
                 Color dim = selected ? getForeground() : ClouseauColors.dimForeground();
                 setText("<html>" + esc(fileName(f.remotePath()))
@@ -613,7 +647,31 @@ public class SshConnectionDialog extends JDialog {
         saveBox.setSelected(true);
     }
 
-    private void saveFavorite(SshConfig c, String authType, String parserName) {
+    private int indexOf(String name) {
+        for (int i = 0; i < favorites.size(); i++) if (favorites.get(i).name().equals(name)) return i;
+        return -1;
+    }
+
+    /**
+     * Starts a new connection from a saved one: the form gets all its details, but no saved entry
+     * is picked, so Connect saves a new one. The file name in Remote path is selected, ready to
+     * type another file on the same server.
+     */
+    private void duplicate(AppPrefs.SshFavorite f) {
+        savedTree.clearSelection();
+        loadFavorite(f);
+        saveBox.setSelected(true);
+        String path = remotePathField.getText();
+        int slash = path.lastIndexOf('/');
+        remotePathField.requestFocusInWindow();
+        remotePathField.select(slash + 1, path.length());
+    }
+
+    /**
+     * Saves the connection. With a saved log picked in the sidebar, it replaces that entry in
+     * place, whatever changed (host, user and path included), instead of adding a second one.
+     */
+    private void saveFavorite(SshConfig c, String authType, String parserName, AppPrefs.SshFavorite replacing) {
         String name = c.user() + "@" + c.host() + ":" + c.remotePath();
         AppPrefs.SshFavorite fav = switch (authType) {
             case AUTH_KEY  -> new AppPrefs.SshFavorite(name, c.host(), c.port(), c.user(), AUTH_KEY,
@@ -623,8 +681,9 @@ public class SshConnectionDialog extends JDialog {
             default        -> new AppPrefs.SshFavorite(name, c.host(), c.port(), c.user(), AUTH_PASSWORD,
                     c.password(), null, null, c.remotePath(), parserName);
         };
-        favorites.removeIf(f -> f.name().equals(name));
-        favorites.add(0, fav);
+        int at = replacing == null ? -1 : indexOf(replacing.name());
+        favorites.removeIf(f -> f.name().equals(name) || (replacing != null && f.name().equals(replacing.name())));
+        favorites.add(at >= 0 ? Math.min(at, favorites.size()) : 0, fav);
         AppPrefs.saveSshFavorites(favorites);
     }
 
@@ -672,7 +731,9 @@ public class SshConnectionDialog extends JDialog {
                 ? Optional.of(parsers.get(parserIdx - 1))
                 : Optional.empty();
 
-        if (saveBox.isSelected()) saveFavorite(config, authType, parser.map(LogParser::getName).orElse(null));
+        if (saveBox.isSelected()) {
+            saveFavorite(config, authType, parser.map(LogParser::getName).orElse(null), selectedFavorite());
+        }
         AppPrefs.setSshSaveConnection(saveBox.isSelected());
 
         result = new Result(config, parser);
