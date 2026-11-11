@@ -317,6 +317,24 @@ final class DetailPanel extends JPanel {
         return new AbstractAction() { @Override public void actionPerformed(java.awt.event.ActionEvent e) { r.run(); } };
     }
 
+    /** Whether an entry is shown, so the copy commands have something to copy. */
+    boolean hasEntry() { return shown != null; }
+
+    boolean wrapLines() { return wrapLines; }
+
+    /** View → Wrap Lines: the same as the header's Wrap toggle. */
+    void toggleWrap() {
+        boolean wrap = !wrapLines;
+        AppPrefs.setDetailWrapLines(wrap);
+        setWrapLines(wrap);
+    }
+
+    /** View → Text Size: one step bigger (+1) or smaller (-1), or 0 for the default. */
+    void changeTextSize(int step) {
+        if (step == 0) setTextSize(DEFAULT_FONT);
+        else stepFont(step);
+    }
+
     private void stepFont(int delta) {
         setTextSize(AppPrefs.getDetailFontSize() + delta);
     }

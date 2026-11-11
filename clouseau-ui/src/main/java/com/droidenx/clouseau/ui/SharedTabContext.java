@@ -64,6 +64,8 @@ final class SharedTabContext {
     private final LogTableView tableView;
     private final JTable table;
     private final DetailPanel detailPanel;
+    /** The table's right-click menu; Edit → Add Note… opens its note dialog. */
+    private final RowMenu[] rowMenu = new RowMenu[1];
     private final FindBar findBar;
     private final HighlightNavBar highlightNavBar;
     private final JPanel centerCards = new JPanel(new CardLayout());
@@ -105,7 +107,7 @@ final class SharedTabContext {
 
         // The find bar is built after the table, which it acts on; the renderer checks for null.
         FindBar[] find = new FindBar[1];
-        RowMenu[] menu = new RowMenu[1];
+        RowMenu[] menu = rowMenu;
         tableView = new LogTableView(model, new LogTableView.Host() {
             @Override public Notes notes() { return notes; }
             @Override public boolean isFindMatch(int modelRow) { return find[0] != null && find[0].isMatch(modelRow); }
@@ -139,6 +141,7 @@ final class SharedTabContext {
             @Override public boolean canReload() { return host.canReload(); }
             @Override public void reload() { host.reload(); }
             @Override public void clearTable() { SharedTabContext.this.clearTable(); }
+            @Override public boolean canClearTable() { return SharedTabContext.this.canClearTable(); }
         });
 
         // The time popup's "Use selected row" reads the selected row's (corrected) time.
@@ -299,6 +302,50 @@ final class SharedTabContext {
         highlightNavBar.refresh();
         showCard(CARD_ROWS);
     }
+
+    // ── The window's Edit and View menus act on the active tab through these ──────────
+
+    /** Clear Table empties what a live source streamed; a file is reloaded instead. */
+    boolean canClearTable() { return host.content() instanceof LiveContent; }
+
+    boolean hasEntry() { return plainView == null && detailPanel.hasEntry(); }
+
+    void copyMessage() { detailPanel.copyMessage(); }
+    void copyRaw()     { detailPanel.copyRaw(); }
+    void copyEntry()   { detailPanel.copyEntry(); }
+
+    /** F3 / Shift+F3: the next or previous match, or the find bar when nothing is searched yet. */
+    void findStep(int direction) {
+        if (plainView == null && findBar.hasQuery()) findBar.navigate(direction);
+        else openFind();
+    }
+
+    /** The one selected row's model index, or -1 (none, several, or the plain-text view). */
+    private int singleSelectedRow() {
+        if (plainView != null || table.getSelectedRowCount() != 1) return -1;
+        return table.convertRowIndexToModel(table.getSelectedRow());
+    }
+
+    boolean canEditNote() { return singleSelectedRow() >= 0; }
+
+    /** Whether the selected row already has a note: the menu then says Edit Note…. */
+    boolean selectedHasNote() {
+        int row = singleSelectedRow();
+        return row >= 0 && notes.at(model.ordinalAt(row)) != null;
+    }
+
+    void editNote() {
+        int row = singleSelectedRow();
+        if (row >= 0) rowMenu[0].editNote(row);
+    }
+
+    boolean hasNotes() { return notes.size() > 0; }
+
+    boolean wrapLines() { return detailPanel.wrapLines(); }
+    void toggleWrap()   { detailPanel.toggleWrap(); }
+    void changeTextSize(int step) { detailPanel.changeTextSize(step); }
+
+    void clearFilters() { filterBar.clear(); }
 
     /** Ctrl+F: the plain-text view's find, or the find bar. */
     void openFind() {

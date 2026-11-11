@@ -84,7 +84,7 @@ SSH and source-plugin tabs show a dot next to the title:
 - **Gray**: disconnected. The stream ended or failed; point at the dot to see why.
 
 To connect again, right-click the tab and choose **Reconnect**, or press `Ctrl+R`
-(**File → Reconnect**) on the tab. Reconnecting empties the tab and streams the log again
+(**File → Reconnect**, `Ctrl+R`) on the tab. Reconnecting empties the tab and streams the log again
 from the last lines, as if you had just opened it, so no line is shown twice. The tab
 keeps its title, parser, filters and columns; notes on its lines are not kept. It signs
 in with the same details you entered, without asking again.
@@ -96,7 +96,7 @@ how many were trimmed.
 ## Source plugins
 
 Plugins can bring in lines from other places, such as a log service or a message queue.
-Installed source plugins appear under **File → Open Source**. Each shows a form for its
+Installed source plugins appear under **File → Connect to Source**. Each shows a form for its
 settings; Clouseau checks required fields, remembers the values, and stores passwords
 encrypted. Lines stream into a new tab, with the same limit, connection dot and
 **Reconnect** as SSH tabs.

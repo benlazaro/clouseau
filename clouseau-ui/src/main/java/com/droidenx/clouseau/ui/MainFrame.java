@@ -80,6 +80,25 @@ public final class MainFrame extends JFrame {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) { openSettings(); }
         });
 
+        // View → Text Size: the same char-based display, with the keys bound here. The
+        // detail pane binds them too while it has focus; this makes them work anywhere.
+        int mask = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        InputMap rootKeys = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        for (int vk : new int[] {java.awt.event.KeyEvent.VK_EQUALS, java.awt.event.KeyEvent.VK_ADD})
+            rootKeys.put(KeyStroke.getKeyStroke(vk, mask), "textBigger");
+        for (int vk : new int[] {java.awt.event.KeyEvent.VK_MINUS, java.awt.event.KeyEvent.VK_SUBTRACT})
+            rootKeys.put(KeyStroke.getKeyStroke(vk, mask), "textSmaller");
+        getRootPane().getActionMap().put("textBigger", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                SharedTabContext t = activeActions(); if (t != null) t.changeTextSize(1);
+            }
+        });
+        getRootPane().getActionMap().put("textSmaller", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                SharedTabContext t = activeActions(); if (t != null) t.changeTextSize(-1);
+            }
+        });
+
         // Dropped files open like "Open with": auto-detect; several can be merged (UC-1, UC-12).
         FileDropHandler.install(this, this::openFiles);
 
@@ -319,6 +338,7 @@ public final class MainFrame extends JFrame {
         recentMenu.setMargin(menuMargin());
         fileMenu.add(recentMenu);
         refreshRecentMenu();
+        fileMenu.addSeparator();
 
         JMenuItem sshItem = menuItem(Messages.get("menu.file.ssh"));
         sshItem.addActionListener(e -> openSsh());
@@ -334,28 +354,19 @@ public final class MainFrame extends JFrame {
         });
         fileMenu.add(sourceMenu);
 
-        // Enabled while the active tab streams a live source (issue #4).
-        reconnectItem = menuItem(Messages.get("menu.file.reconnect"));
+        // One item for the active tab: Reload File on a file, Reconnect on a live source
+        // (issue #4). Ctrl+R does whichever applies.
+        reconnectItem = menuItem(Messages.get("menu.file.reload"));
         reconnectItem.setEnabled(false);
         reconnectItem.setAccelerator(reconnectKey());
         reconnectItem.addActionListener(e -> {
             TabPanel active = activeTabPanel();
-            if (active != null && active.canReconnect()) active.reconnect();
+            if (active == null) return;
+            if (active.canReconnect()) active.reconnect();
+            else if (active.canReload()) active.reload();
         });
         fileMenu.add(reconnectItem);
         tabbedPane.addChangeListener(e -> updateReconnectItem());
-
-        JMenuItem exportReviewItem = menuItem(Messages.get("menu.file.export.review"));
-        exportReviewItem.addActionListener(e -> ReviewExporter.export(this, activeTabPanel()));
-        fileMenu.add(exportReviewItem);
-
-        closeTabItem = menuItem(Messages.get("menu.file.close.tab"));
-        closeTabItem.setEnabled(false);
-        closeTabItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W,
-                java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
-        closeTabItem.addActionListener(e -> closeTab(tabbedPane.getSelectedIndex()));
-        fileMenu.add(closeTabItem);
-
         fileMenu.addSeparator();
 
         // Named sessions (UC-17); rebuilt each time it opens.
@@ -367,6 +378,14 @@ public final class MainFrame extends JFrame {
             @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
         });
         fileMenu.add(sessionsMenu);
+
+        JMenuItem exportReviewItem = menuItem(Messages.get("menu.file.export.review"));
+        exportReviewItem.addActionListener(e -> {
+            TabPanel active = activeTabPanel();
+            if (active != null) ReviewExporter.export(this, active);
+        });
+        fileMenu.add(exportReviewItem);
+        fileMenu.addSeparator();
 
         // KeyStroke.getKeyStroke(char, int) casts char to int → ',' (44) == VK_COMMA,
         // so getKeyText renders "Comma". The string form with "typed" creates a true
@@ -381,13 +400,27 @@ public final class MainFrame extends JFrame {
 
         fileMenu.addSeparator();
 
+        closeTabItem = menuItem(Messages.get("menu.file.close.tab"));
+        closeTabItem.setEnabled(false);
+        closeTabItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W,
+                java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        closeTabItem.addActionListener(e -> closeTab(tabbedPane.getSelectedIndex()));
+        fileMenu.add(closeTabItem);
+
         JMenuItem exitItem = menuItem(Messages.get("menu.file.exit"));
         exitItem.addActionListener(e -> manager.exit());
         fileMenu.add(exitItem);
 
+        whenOpened(fileMenu, () -> {
+            TabPanel active = activeTabPanel();
+            exportReviewItem.setEnabled(active != null);
+            updateReconnectItem();
+        });
         menuBar.add(fileMenu);
+        menuBar.add(buildEditMenu());
 
         JMenu viewMenu = new JMenu(Messages.get("menu.view"));
+        addTabViewItems(viewMenu);
         // Rebuilt each time it opens, so newly installed themes and a theme picked in
         // Settings show up.
         JMenu themeMenu = new JMenu(Messages.get("menu.view.theme"));
@@ -398,6 +431,7 @@ public final class MainFrame extends JFrame {
             @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
         });
         rebuildThemeMenu(themeMenu);
+        viewMenu.addSeparator();
         viewMenu.add(themeMenu);
         menuBar.add(viewMenu);
 
@@ -439,6 +473,137 @@ public final class MainFrame extends JFrame {
 
         menuBar.add(helpMenu);
         return menuBar;
+    }
+
+    // ── Edit and View: what the active tab can do ───────────────────────────────
+
+    /**
+     * Copy, Find and Notes for the active tab, under the names and shortcuts the detail
+     * pane's Copy menu and the row menu already use.
+     */
+    private JMenu buildEditMenu() {
+        JMenu edit = new JMenu(Messages.get("menu.edit"));
+        int ctrl = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+
+        JMenuItem copyMessage = tabItem(edit, "menu.edit.copy.message",
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, ctrl), SharedTabContext::copyMessage);
+        JMenuItem copyRaw = tabItem(edit, "menu.edit.copy.raw", DetailPanel.COPY_RAW_KEY, SharedTabContext::copyRaw);
+        JMenuItem copyEntry = tabItem(edit, "menu.edit.copy.entry", DetailPanel.COPY_ENTRY_KEY, SharedTabContext::copyEntry);
+        edit.addSeparator();
+        JMenuItem find = tabItem(edit, "menu.edit.find",
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F, ctrl), SharedTabContext::openFind);
+        JMenuItem findNext = tabItem(edit, "menu.edit.find.next",
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F3, 0), t -> t.findStep(1));
+        JMenuItem findPrev = tabItem(edit, "menu.edit.find.prev",
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F3, java.awt.event.InputEvent.SHIFT_DOWN_MASK),
+                t -> t.findStep(-1));
+        edit.addSeparator();
+        JMenuItem note = tabItem(edit, "menu.edit.note.add", null, SharedTabContext::editNote);
+        JMenuItem notes = tabItem(edit, "menu.edit.notes",
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, ctrl | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
+                SharedTabContext::showAnnotationsDialog);
+        JMenuItem clearTable = tabItem(edit, "menu.edit.clear.table", null, SharedTabContext::clearTable);
+
+        whenOpened(edit, () -> {
+            SharedTabContext t = activeActions();
+            boolean entry = t != null && t.hasEntry();
+            copyMessage.setEnabled(entry);
+            copyRaw.setEnabled(entry);
+            copyEntry.setEnabled(entry);
+            find.setEnabled(t != null);
+            findNext.setEnabled(t != null);
+            findPrev.setEnabled(t != null);
+            note.setText(Messages.get(t != null && t.selectedHasNote() ? "menu.edit.note.edit" : "menu.edit.note.add"));
+            note.setEnabled(t != null && t.canEditNote());
+            notes.setEnabled(t != null && t.hasNotes());
+            clearTable.setEnabled(t != null && t.canClearTable());
+        });
+        return edit;
+    }
+
+    /** Follow, Wrap Lines, Text Size, Time Zone and Clear All Filters for the active tab. */
+    private void addTabViewItems(JMenu view) {
+        int ctrl = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        JCheckBoxMenuItem follow = new JCheckBoxMenuItem(Messages.get("menu.view.follow"));
+        follow.setMargin(menuMargin());
+        follow.addActionListener(e -> {
+            TabPanel active = activeTabPanel();
+            if (active != null) active.setFollow(!active.isFollow());
+        });
+        view.add(follow);
+
+        JCheckBoxMenuItem wrap = new JCheckBoxMenuItem(Messages.get("menu.view.wrap"));
+        wrap.setMargin(menuMargin());
+        wrap.addActionListener(e -> { SharedTabContext t = activeActions(); if (t != null) t.toggleWrap(); });
+        view.add(wrap);
+
+        JMenu size = new JMenu(Messages.get("menu.view.text.size"));
+        size.setMargin(menuMargin());
+        // Shown as "Ctrl+=" and "Ctrl+-"; the keys themselves are bound on the root pane.
+        String mod = (ctrl & java.awt.event.InputEvent.META_DOWN_MASK) != 0 ? "meta" : "ctrl";
+        tabItem(size, "menu.view.text.bigger", KeyStroke.getKeyStroke(mod + " typed ="), t -> t.changeTextSize(1));
+        tabItem(size, "menu.view.text.smaller", KeyStroke.getKeyStroke(mod + " typed -"), t -> t.changeTextSize(-1));
+        JMenuItem reset = tabItem(size, "menu.view.text.reset", null, t -> t.changeTextSize(0));
+        view.add(size);
+        view.addSeparator();
+
+        JMenuItem zone = menuItem(Messages.get("menu.view.timezone"));
+        zone.addActionListener(e -> {
+            TabPanel active = activeTabPanel();
+            if (active != null) active.showSourceTimezoneDialog(this);
+        });
+        view.add(zone);
+        JMenuItem clearFilters = tabItem(view, "menu.view.clear.filters", null, SharedTabContext::clearFilters);
+
+        whenOpened(view, () -> {
+            TabPanel active = activeTabPanel();
+            SharedTabContext t = activeActions();
+            follow.setEnabled(active != null);
+            follow.setSelected(active != null && active.isFollow());
+            wrap.setEnabled(t != null && !active.isPlainText());
+            wrap.setSelected(t != null ? t.wrapLines() : AppPrefs.isDetailWrapLines());
+            size.setEnabled(t != null && !active.isPlainText());
+            reset.setText(java.text.MessageFormat.format(Messages.get("menu.view.text.reset"), 12));
+            zone.setEnabled(active != null);
+            clearFilters.setEnabled(t != null && !active.isPlainText());
+        });
+    }
+
+    private SharedTabContext activeActions() {
+        TabPanel active = activeTabPanel();
+        return active != null ? active.actions() : null;
+    }
+
+    /** A menu item acting on the active tab, if there is one. */
+    private JMenuItem tabItem(JMenu menu, String key, KeyStroke accelerator,
+                              java.util.function.Consumer<SharedTabContext> action) {
+        JMenuItem item = menuItem(Messages.get(key));
+        if (accelerator != null) item.setAccelerator(accelerator);
+        item.addActionListener(e -> { SharedTabContext t = activeActions(); if (t != null) action.accept(t); });
+        menu.add(item);
+        return item;
+    }
+
+    /**
+     * Runs {@code update} when {@code menu} opens, so its items show what applies to the
+     * active tab right now, and enables them all again when it closes: a menu's shortcuts
+     * only work while its items are enabled, and each action checks for itself that it
+     * applies. Close Tab is left alone: it follows the tab count.
+     */
+    private void whenOpened(JMenu menu, Runnable update) {
+        menu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { update.run(); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) { enableAll(menu); }
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) { enableAll(menu); }
+        });
+    }
+
+    private void enableAll(JMenu menu) {
+        for (Component c : menu.getMenuComponents()) {
+            if (c == closeTabItem) continue;   // follows the tab count
+            if (c instanceof JMenu sub) { sub.setEnabled(true); enableAll(sub); }
+            else if (c instanceof JMenuItem item) item.setEnabled(true);
+        }
     }
 
     /** One radio item per theme (the current one selected), then "Manage Themes…". */
@@ -484,6 +649,12 @@ public final class MainFrame extends JFrame {
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.reconnect"), "Ctrl+R");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.settings"),  "Ctrl+,");
 
+        addDialogSection(grid, Messages.get("shortcuts.section.edit"), "gaptop 20");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.copy.message"), "Ctrl+C");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.copy.raw"),     "Ctrl+Alt+C");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.copy.entry"),   "Ctrl+Shift+C");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.notes"),        "Ctrl+Shift+N");
+
         addDialogSection(grid, Messages.get("shortcuts.section.tabs"), "gaptop 20");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.next"),      "Ctrl+Tab");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.prev"),      "Ctrl+Shift+Tab");
@@ -499,8 +670,8 @@ public final class MainFrame extends JFrame {
 
         addDialogSection(grid, Messages.get("shortcuts.section.find"),  "gaptop 20");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.find"),       "Ctrl+F");
-        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.next"),  "Enter");
-        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.prev"),  "Shift+Enter");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.next"),  "F3 / Enter");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.prev"),  "Shift+F3 / Shift+Enter");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.close"), "Esc");
 
         dialog.setContentPane(grid);
@@ -1495,11 +1666,16 @@ public final class MainFrame extends JFrame {
         updateReconnectItem();
     }
 
-    /** Enables File → Reconnect when the active tab streams a live source. */
+    /**
+     * File → Reconnect on a tab streaming a live source, Reload File on a file tab, disabled
+     * (as Reload File) otherwise.
+     */
     private void updateReconnectItem() {
         if (reconnectItem == null) return;
         TabPanel active = activeTabPanel();
-        reconnectItem.setEnabled(active != null && active.canReconnect());
+        boolean live = active != null && active.canReconnect();
+        reconnectItem.setText(Messages.get(live ? "menu.file.reconnect" : "menu.file.reload"));
+        reconnectItem.setEnabled(live || active != null && active.canReload());
     }
 
     /** Ctrl+R (Cmd+R on macOS): reconnect the active live-source tab. */
