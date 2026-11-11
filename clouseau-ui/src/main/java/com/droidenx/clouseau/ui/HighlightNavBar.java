@@ -17,13 +17,13 @@ final class HighlightNavBar extends JPanel {
 
     private final JTable table;
     private final LogTableModel model;
-    private final JPanel swatches = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+    private final JPanel swatches = new JPanel(new MigLayout("insets 0, gapx 3", "", "[center]"));
     private final JLabel position = new JLabel("0 / 0");
     /** The color being navigated, or null for all highlighted rows. */
     private Color navColor = null;
 
     HighlightNavBar(JTable table, LogTableModel model) {
-        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][grow][]", "[]"));
+        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][grow][]", "[center]"));
         this.table = table;
         this.model = model;
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
@@ -51,9 +51,11 @@ final class HighlightNavBar extends JPanel {
         rightPanel.add(prevBtn);
         rightPanel.add(nextBtn);
 
-        add(label);
-        add(swatches, "grow");
-        add(rightPanel);
+        // Everything centered on one line, the chips included (a FlowLayout put them at the
+        // top of their row, above the label's middle).
+        add(label, "aligny center");
+        add(swatches, "growx, aligny center");
+        add(rightPanel, "aligny center");
     }
 
     /** Rebuilds the swatches after highlights changed; hides the bar when there are none. */
@@ -90,7 +92,7 @@ final class HighlightNavBar extends JPanel {
         allBtn.setFocusPainted(false);
         allBtn.setFont(allBtn.getFont().deriveFont(11f));
         allBtn.addActionListener(e -> { navColor = null; refresh(); });
-        swatches.add(allBtn);
+        swatches.add(allBtn, "w 30!, h 16!");
 
         // Color swatches in highlight palette order
         for (Color palette : ClouseauColors.highlightColors()) {
@@ -116,7 +118,7 @@ final class HighlightNavBar extends JPanel {
             swatch.setContentAreaFilled(false);
             swatch.setFocusPainted(false);
             swatch.addActionListener(e -> { navColor = c; refresh(); });
-            swatches.add(swatch);
+            swatches.add(swatch, "w 16!, h 16!");
         }
 
         swatches.revalidate();

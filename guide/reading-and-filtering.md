@@ -28,7 +28,8 @@ are shown out of how many there are.
   `Ctrl+R`) and, on a live source, **Clear Table** (remove every row so far).
 - The **Edit** menu has the copy commands, Find (`Ctrl+F`, then `F3` / `Shift+F3` for the
   next and previous match) and notes for the selected row. The **View** menu has Follow,
-  Wrap Lines, Text Size (`Ctrl+=` / `Ctrl+-`), the tab's Time Zone and Clear All Filters.
+  **Detail Pane** (Wrap Lines and text size, `Ctrl+=` / `Ctrl+-`), the tab's Time Zone and
+  Clear All Filters.
 
 ## The detail panel
 
