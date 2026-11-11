@@ -524,17 +524,21 @@ final class DetailPanel extends JPanel {
 
         AnnotationStore.Annotation annotation = content.annotation();
         if (annotation != null) {
-            SimpleAttributeSet noteKey = new SimpleAttributeSet(key);
-            StyleConstants.setForeground(noteKey, ClouseauColors.annotationIndicatorColor());
-            SimpleAttributeSet noteVal = new SimpleAttributeSet(val);
-            StyleConstants.setForeground(noteVal, ClouseauColors.annotationIndicatorColor());
+            // A field like the others: what the user wrote, then who and when under it in dim
+            // text, aligned with the value. The pencil in the # column already marks it as a note.
             SimpleAttributeSet noteMeta = new SimpleAttributeSet(val);
             StyleConstants.setFontSize(noteMeta, Math.max(10, fontSize - 1));
             StyleConstants.setForeground(noteMeta, ClouseauColors.dimForeground());
-            appendField(doc, noteKey, noteVal, "✎ " + Messages.get("annotation.detail.label"), annotation.note());
-            String byLine = "  " + Messages.get("annotation.detail.by") + " " + annotation.author()
-                    + (annotation.createdAt() != null ? "  ·  " + annotation.createdAt().replace("T", " ").replaceFirst("\\.\\d+Z$", " UTC") : "");
+            appendField(doc, key, val, Messages.get("annotation.detail.label"), annotation.note());
+            String when = noteTime(annotation.createdAt());
+            String byLine = Messages.get("annotation.detail.by") + " " + annotation.author()
+                    + (when != null ? "  \u00b7  " + when : "");
+            int start = doc.getLength();
             insertText(doc, byLine + "\n", noteMeta);
+            SimpleAttributeSet atValue = new SimpleAttributeSet();
+            StyleConstants.setLeftIndent(atValue, valueIndent);
+            StyleConstants.setFirstLineIndent(atValue, 0f);
+            doc.setParagraphAttributes(start, 0, atValue, false);
         }
 
         appendField(doc, key, val,      Messages.get("table.col.timestamp"), ts);
@@ -663,6 +667,17 @@ final class DetailPanel extends JPanel {
                 (int)(a.getGreen() * t + b.getGreen() * (1 - t)),
                 (int)(a.getBlue()  * t + b.getBlue()  * (1 - t))
         );
+    }
+
+    /** When a note was written, in the display time zone and the Timestamp field's format, to the second. */
+    private String noteTime(String createdAt) {
+        if (createdAt == null || createdAt.isBlank()) return null;
+        try {
+            return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(tsFmt.getZone())
+                    .format(java.time.Instant.parse(createdAt));
+        } catch (java.time.DateTimeException e) {
+            return createdAt;
+        }
     }
 
     /** The width of a padded label ("Message:" and spaces to 12 columns, then a space). */
