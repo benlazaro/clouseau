@@ -86,13 +86,18 @@ The shortcuts use `Ctrl` on every platform, including macOS.
 **Tools → Plugins…** opens the Plugin Manager. Plugins add parsers, message formatters,
 syntax highlighters and [live sources](following.md#source-plugins).
 
-- The table lists installed plugins; select one to see what it adds. Untick **On** to
-  disable a plugin, or **Delete** it.
-- **Download…** searches a plugin repository (Nexus or Maven Central) and installs a
-  plugin. **Manage…** next to the repository list adds a repository. For Nexus, choose an
+- **Installed** lists each plugin by name, with its description under it and what it adds
+  (parser, source, and so on) on the right. Select one to see the details: what it adds,
+  its ID, author, license and file. Untick its box (or press `Space`) to turn it off; the
+  trash can on the row under the mouse (or `Delete`) removes it.
+- A file in the `plugins` folder that couldn't be loaded shows as **Failed**, in red, with
+  the reason, such as "Not a Clouseau plugin: its manifest has no Plugin-Id".
+- **Browse** searches a plugin repository (Nexus or Maven Central); double-click a result,
+  or select it and click **Install**. The new plugin is then selected in Installed.
+  **Manage…** next to the repository list adds a repository. For Nexus, choose an
   authentication method: none, a username and password, or a Nexus user token.
-- **Open Folder** opens the `plugins` folder. Dropping a plugin JAR there and clicking
-  **Refresh** works too.
+- **Open Plugins Folder** opens the `plugins` folder. A JAR you drop there, or remove,
+  shows up in the list while it's open.
 
 New plugins are available without restarting; tabs you open afterwards use them.
 

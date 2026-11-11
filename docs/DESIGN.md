@@ -369,8 +369,13 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
 
 - At startup, `ClouseauApp` creates a `ClouseauPluginManager` over `<data>/plugins` and
   calls `loadAll()`.
-- The Plugin Manager can install JARs from Nexus or Maven Central repositories, then
-  calls `refresh()`, which reloads plugins without a restart.
+- The Plugin Manager (Installed and Browse tabs) can install JARs from Nexus or Maven
+  Central repositories, then calls `refresh()`, which reloads plugins without a restart.
+  While it's open it also calls `refresh()` when `folderStamp()` (the folder's names, sizes
+  and times) changes, so a JAR dropped in or removed shows up without a Refresh button.
+- `getPluginInfos()` lists the loaded plugins, then each JAR or ZIP in the folder that
+  didn't load, as Failed with the reason (`whyNotLoaded`: not a JAR, no `Plugin-Id`, a
+  duplicate ID). PF4J only logs these, so without this a dropped file just doesn't appear.
 - After a refresh, `MainFrame.reloadExtensions()` fetches formatters and highlighters
   again. **Tabs that are already open keep the extensions they started with**; only new
   tabs see the change.
@@ -1899,3 +1904,9 @@ is now the biggest UI class.
   that signs in and checks the file with `test -r`, reporting the result inline in the
   hint line (signed in · file readable, or which step failed and why), without opening a
   tab. It must time out like the source does and never keep the session open.
+- **G-15 · Find Clouseau plugins, not any artifact.** Browse searches the whole repository,
+  so "logfmt" on Maven Central returns any Java library, and finding a plugin means knowing
+  its coordinates. Planned: a naming convention for published plugins (an artifact name
+  like `clouseau-*-plugin`, or a shared group), so Browse can list what's available when
+  it opens, filter as you type, and mark plugins you have, with **Update** when a newer
+  version exists. Needs the convention settled first, in `guide/developers.md`.
