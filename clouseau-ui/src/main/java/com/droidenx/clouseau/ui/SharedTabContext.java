@@ -142,6 +142,7 @@ final class SharedTabContext {
             @Override public void reload() { host.reload(); }
             @Override public void clearTable() { SharedTabContext.this.clearTable(); }
             @Override public boolean canClearTable() { return SharedTabContext.this.canClearTable(); }
+            @Override public FilterBar filterBar() { return filterBar; }
         });
 
         // The time popup's "Use selected row" reads the selected row's (corrected) time.

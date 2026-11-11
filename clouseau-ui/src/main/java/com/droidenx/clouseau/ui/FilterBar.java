@@ -384,6 +384,45 @@ final class FilterBar extends JPanel {
         updateLoggerButtonLabel();
     }
 
+    // ── The row menu's logger items ───────────────────────────────────────────────
+
+    /** Hides these loggers' rows; the Loggers button and popup show them unticked. */
+    void hideLoggers(java.util.Collection<String> loggers) {
+        excludedLoggers.addAll(loggers);
+        loggersChanged();
+    }
+
+    /** Hides every logger but these. */
+    void showOnlyLoggers(java.util.Collection<String> loggers) {
+        excludedLoggers.clear();
+        pendingLoggers.clear();
+        for (String l : allLoggers) if (!loggers.contains(l)) excludedLoggers.add(l);
+        loggersChanged();
+    }
+
+    /** Shows every logger again; levels, the time range and other filters stay. */
+    void showAllLoggers() {
+        excludedLoggers.clear();
+        pendingLoggers.clear();
+        loggersChanged();
+    }
+
+    /** How many loggers are hidden, for "Show All Loggers (n hidden)". */
+    int hiddenLoggerCount() { return excludedLoggers.size() + pendingLoggers.size(); }
+
+    /** Whether exactly these loggers, and no others, are shown. */
+    boolean showsOnly(java.util.Collection<String> loggers) {
+        for (String l : allLoggers) {
+            if (loggers.contains(l) == excludedLoggers.contains(l)) return false;
+        }
+        return pendingLoggers.isEmpty();
+    }
+
+    private void loggersChanged() {
+        updateLoggerButtonLabel();
+        onChanged.run();
+    }
+
     /** Returns the AND of all active filters. */
     EntryFilter buildFilter() {
         EnumSet<LogLevel> allowed = EnumSet.noneOf(LogLevel.class);

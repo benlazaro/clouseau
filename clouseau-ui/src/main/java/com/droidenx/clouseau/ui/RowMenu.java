@@ -59,6 +59,9 @@ final class RowMenu {
 
         void clearTable();
 
+        /** The filter bar, which the logger items change (Hide, Show Only, Show All). */
+        FilterBar filterBar();
+
         /** True if Clear Table applies (a tab streaming a live source). */
         boolean canClearTable();
     }
@@ -168,6 +171,9 @@ final class RowMenu {
             menu.addSeparator();
         }
 
+        // ── Loggers: hide the rows' loggers, or show only them ──────────────────
+        addLoggerItems(menu, entries);
+
         // ── Annotation section ────────────────────────────────────────────────
         if (entries.size() == 1) {
             int targetRow = entries.get(0);
@@ -247,6 +253,54 @@ final class RowMenu {
             rawLines.put(logTableModel.ordinalAt(r), entry.rawLine());
         }
         host.notesSaved(host.notes().setHighlights(rawLines, slot));
+    }
+
+    /**
+     * Hide Logger "RouteResolver" and Show Only Logger "RouteResolver" for the selected rows'
+     * loggers (or "Hide 3 Loggers" for several), then, below its own line so it isn't hit by
+     * mistake, Show All Loggers with how many are hidden: that's what it would undo.
+     */
+    private void addLoggerItems(JPopupMenu menu, List<Integer> entries) {
+        java.util.Set<String> loggers = new java.util.LinkedHashSet<>();
+        for (int r : entries) {
+            LogEntry e = logTableModel.getEntry(r);
+            if (e != null && e.logger() != null && !e.logger().isBlank()) loggers.add(e.logger());
+        }
+        FilterBar filters = host.filterBar();
+        int hidden = filters.hiddenLoggerCount();
+        if (loggers.isEmpty() && hidden == 0) return;
+
+        if (!loggers.isEmpty()) {
+            String one = loggers.size() == 1 ? shortLogger(loggers.iterator().next()) : null;
+            JMenuItem hide = new JMenuItem(one != null
+                    ? java.text.MessageFormat.format(Messages.get("table.context.logger.hide"), one)
+                    : java.text.MessageFormat.format(Messages.get("table.context.logger.hide.many"), loggers.size()));
+            JMenuItem only = new JMenuItem(one != null
+                    ? java.text.MessageFormat.format(Messages.get("table.context.logger.only"), one)
+                    : java.text.MessageFormat.format(Messages.get("table.context.logger.only.many"), loggers.size()));
+            String full = String.join(", ", loggers);
+            hide.setToolTipText(full);
+            only.setToolTipText(full);
+            only.setEnabled(!filters.showsOnly(loggers));
+            hide.addActionListener(e -> filters.hideLoggers(loggers));
+            only.addActionListener(e -> filters.showOnlyLoggers(loggers));
+            menu.add(hide);
+            menu.add(only);
+            menu.addSeparator();
+        }
+        JMenuItem all = new JMenuItem(hidden > 0
+                ? java.text.MessageFormat.format(Messages.get("table.context.logger.all.hidden"), hidden)
+                : Messages.get("table.context.logger.all"));
+        all.setEnabled(hidden > 0);
+        all.addActionListener(e -> filters.showAllLoggers());
+        menu.add(all);
+        menu.addSeparator();
+    }
+
+    /** "com.example.gateway.route.RouteResolver" reads "RouteResolver"; the tooltip has it all. */
+    static String shortLogger(String logger) {
+        int dot = logger.lastIndexOf('.');
+        return dot >= 0 && dot < logger.length() - 1 ? logger.substring(dot + 1) : logger;
     }
 
     /** Edit → Add Note… / Edit Note…: the note on a model row, as the row menu's item does. */
