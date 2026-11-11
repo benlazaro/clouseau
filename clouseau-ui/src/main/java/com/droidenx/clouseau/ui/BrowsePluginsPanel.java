@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
@@ -10,15 +11,17 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 
 /**
- * Dialog for searching a plugin repository and installing JARs into the plugins folder.
- * Searching and downloading run on SwingWorker threads; all UI updates happen on the EDT.
+ * The Plugin Manager's Browse tab: search a plugin repository and install a JAR into the
+ * plugins folder. Searching and downloading run on SwingWorker threads; all UI updates happen
+ * on the EDT. Results and problems show under the table rather than in message boxes.
  */
-final class DownloadPluginDialog extends JDialog {
+final class BrowsePluginsPanel extends JPanel {
 
-    private final Path     pluginsDir;
-    private final Runnable onInstalled;
+    private final Path           pluginsDir;
+    private final Consumer<Path> onInstalled;
 
     private final DefaultComboBoxModel<PluginRepository> repoModel = new DefaultComboBoxModel<>();
     private final JComboBox<PluginRepository>            repoCombo = new JComboBox<>(repoModel);
@@ -26,20 +29,21 @@ final class DownloadPluginDialog extends JDialog {
     private final JButton       searchBtn   = new JButton(Messages.get("plugins.download.search"));
     private final JButton       installBtn  = new JButton(Messages.get("plugins.download.install"));
     private final JProgressBar  progressBar = new JProgressBar();
+    private final JLabel        status      = new JLabel(" ");
     private final ResultsModel  tableModel  = new ResultsModel();
-    private       JTable        table;
+    private final JTable        table       = new JTable(tableModel);
 
-    DownloadPluginDialog(Window owner, Path pluginsDir, Runnable onInstalled) {
-        super(owner, Messages.get("plugins.download.title"), ModalityType.APPLICATION_MODAL);
+    /** @param onInstalled called on the EDT with the installed file */
+    BrowsePluginsPanel(Path pluginsDir, Consumer<Path> onInstalled) {
+        super(new MigLayout("fill, insets 16 16 12 16, wrap 1", "[grow]", "[]8[]8[grow]6[]"));
         this.pluginsDir  = pluginsDir;
         this.onInstalled = onInstalled;
         rebuildRepos();
         buildUI();
-        pack();
-        setMinimumSize(new Dimension(600, 420));
-        setResizable(true);
-        setLocationRelativeTo(owner);
     }
+
+    /** The field Browse starts in. */
+    JTextField searchField() { return searchField; }
 
     private void rebuildRepos() {
         PluginRepository selected = (PluginRepository) repoCombo.getSelectedItem();
@@ -48,7 +52,6 @@ final class DownloadPluginDialog extends JDialog {
         for (AppPrefs.PluginRepo r : AppPrefs.getPluginRepos()) {
             if ("nexus3".equals(r.type())) repoModel.addElement(new NexusPluginRepository(r));
         }
-        // restore selection if possible
         if (selected != null) {
             for (int i = 0; i < repoModel.getSize(); i++) {
                 if (repoModel.getElementAt(i).getName().equals(selected.getName())) {
@@ -60,9 +63,6 @@ final class DownloadPluginDialog extends JDialog {
     }
 
     private void buildUI() {
-        JPanel content = new JPanel(new MigLayout(
-                "fill, insets 16, wrap 1", "[grow]", "[]8[]8[grow]8[]8[]"));
-
         // ── Repository row ────────────────────────────────────────────────────
         repoCombo.setRenderer(new DefaultListCellRenderer() {
             @Override public Component getListCellRendererComponent(
@@ -74,71 +74,78 @@ final class DownloadPluginDialog extends JDialog {
         });
 
         JButton manageBtn = new JButton(Messages.get("plugins.download.manage.repos"));
-        manageBtn.addActionListener(e -> {
-            new PluginRepoManagerDialog(this, this::rebuildRepos).setVisible(true);
-        });
+        manageBtn.addActionListener(e ->
+                new PluginRepoManagerDialog(SwingUtilities.getWindowAncestor(this), this::rebuildRepos).setVisible(true));
 
         JPanel repoRow = new JPanel(new MigLayout("insets 0, gapx 6", "[][grow][]"));
         repoRow.add(new JLabel(Messages.get("plugins.download.repo.label")));
         repoRow.add(repoCombo, "growx");
         repoRow.add(manageBtn);
-        content.add(repoRow, "growx");
+        add(repoRow, "growx");
 
         // ── Search row ────────────────────────────────────────────────────────
         JButton helpBtn = new JButton("?");
-        helpBtn.setMargin(new java.awt.Insets(2, 6, 2, 6));
+        helpBtn.setMargin(new Insets(2, 6, 2, 6));
         helpBtn.setToolTipText(Messages.get("plugins.download.search.help.tooltip"));
         helpBtn.addActionListener(e -> showSearchHelp());
+        searchField.putClientProperty("JTextField.placeholderText", Messages.get("plugins.download.search.placeholder"));
 
         JPanel searchRow = new JPanel(new MigLayout("insets 0, gapx 6", "[grow][][]"));
         searchRow.add(searchField, "growx");
         searchRow.add(searchBtn);
         searchRow.add(helpBtn);
-        content.add(searchRow, "growx");
+        add(searchRow, "growx");
 
         searchBtn.addActionListener(e -> doSearch());
         searchField.addActionListener(e -> doSearch());
 
         // ── Results table ─────────────────────────────────────────────────────
-        table = new JTable(tableModel);
         table.setRowHeight(26);
         table.setShowGrid(false);
         table.setIntercellSpacing(new Dimension(0, 0));
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-
+        DefaultTableCellRenderer left = new DefaultTableCellRenderer();
+        left.setHorizontalAlignment(SwingConstants.LEADING);
+        ((DefaultTableCellRenderer) table.getTableHeader().getDefaultRenderer())
+                .setHorizontalAlignment(SwingConstants.LEADING);
         DefaultTableCellRenderer right = new DefaultTableCellRenderer();
-        right.setHorizontalAlignment(SwingConstants.RIGHT);
-
+        right.setHorizontalAlignment(SwingConstants.TRAILING);
         table.getColumnModel().getColumn(1).setMinWidth(90);
         table.getColumnModel().getColumn(1).setMaxWidth(90);
         table.getColumnModel().getColumn(2).setMinWidth(80);
         table.getColumnModel().getColumn(2).setMaxWidth(80);
         table.getColumnModel().getColumn(2).setCellRenderer(right);
-
         table.getSelectionModel().addListSelectionListener(
                 e -> installBtn.setEnabled(table.getSelectedRow() >= 0));
+        table.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2 && table.getSelectedRow() >= 0 && installBtn.isEnabled()) doInstall();
+            }
+        });
 
-        content.add(new JScrollPane(table), "grow");
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
+        add(scroll, "grow");
 
-        // ── Progress bar ──────────────────────────────────────────────────────
+        // ── Status, progress and Install ──────────────────────────────────────
         progressBar.setStringPainted(true);
         progressBar.setVisible(false);
-        content.add(progressBar, "growx");
-
-        // ── Button bar ────────────────────────────────────────────────────────
+        ClouseauColors.themedForeground(status, ClouseauColors::dimForeground);
         installBtn.setEnabled(false);
         installBtn.addActionListener(e -> doInstall());
 
-        JButton cancelBtn = new JButton(Messages.get("plugins.download.cancel"));
-        cancelBtn.addActionListener(e -> dispose());
+        say(Messages.get("plugins.download.start"), false);
+        JPanel bottom = new JPanel(new MigLayout("insets 0, hidemode 3, gapx 8", "[grow][]"));
+        bottom.add(status, "growx");
+        bottom.add(progressBar, "growx");
+        bottom.add(installBtn);
+        add(bottom, "growx");
+    }
 
-        JPanel buttons = new JPanel(new MigLayout("insets 0", "push[][]"));
-        buttons.add(installBtn);
-        buttons.add(cancelBtn);
-        content.add(buttons, "growx");
-
-        setContentPane(content);
-        getRootPane().setDefaultButton(searchBtn);
+    private void say(String text, boolean problem) {
+        status.setText(text == null || text.isBlank() ? " " : text);
+        status.setForeground(problem ? ClouseauColors.levelColor(com.droidenx.clouseau.api.LogEntry.LogLevel.ERROR)
+                                     : ClouseauColors.dimForeground());
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
@@ -171,6 +178,7 @@ final class DownloadPluginDialog extends JDialog {
 
         searchBtn.setEnabled(false);
         tableModel.setResults(List.of());
+        say(Messages.get("plugins.download.searching"), false);
 
         new SwingWorker<List<PluginRepository.Asset>, Void>() {
             @Override
@@ -185,21 +193,18 @@ final class DownloadPluginDialog extends JDialog {
                     if (tableModel.getRowCount() == 0) {
                         boolean authWarning = repo instanceof NexusPluginRepository nexusRepo
                                 && nexusRepo.hasAuthConfigured();
-                        String msg = authWarning
-                                ? Messages.get("plugins.download.search.no.results") + "\n\n"
-                                  + Messages.get("plugins.download.search.no.results.auth.hint")
-                                : Messages.get("plugins.download.search.no.results");
-                        JOptionPane.showMessageDialog(DownloadPluginDialog.this,
-                                msg,
-                                Messages.get("plugins.download.search.no.results.title"),
-                                authWarning ? JOptionPane.WARNING_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
+                        say(Messages.get("plugins.download.search.no.results")
+                                + (authWarning ? " " + Messages.get("plugins.download.search.no.results.auth.short") : ""),
+                                authWarning);
+                        if (authWarning) status.setToolTipText(
+                                Messages.get("plugins.download.search.no.results.auth.hint").replace("\n", " "));
+                    } else {
+                        say(java.text.MessageFormat.format(Messages.get("plugins.download.found"), tableModel.getRowCount()), false);
+                        status.setToolTipText(null);
                     }
                 } catch (InterruptedException | ExecutionException ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    JOptionPane.showMessageDialog(DownloadPluginDialog.this,
-                            cause.getMessage(),
-                            Messages.get("plugins.download.search.error.title"),
-                            JOptionPane.ERROR_MESSAGE);
+                    say(Messages.get("plugins.download.search.error.title") + ": " + cause.getMessage(), true);
                 }
             }
         }.execute();
@@ -217,6 +222,7 @@ final class DownloadPluginDialog extends JDialog {
         progressBar.setIndeterminate(asset.sizeBytes() <= 0);
         progressBar.setString("");
         progressBar.setVisible(true);
+        status.setVisible(false);
 
         new SwingWorker<Path, Long>() {
             @Override
@@ -237,23 +243,16 @@ final class DownloadPluginDialog extends JDialog {
             @Override
             protected void done() {
                 progressBar.setVisible(false);
+                status.setVisible(true);
                 installBtn.setEnabled(true);
                 searchBtn.setEnabled(true);
                 try {
-                    get();
-                    onInstalled.run();
-                    JOptionPane.showMessageDialog(DownloadPluginDialog.this,
-                            Messages.get("plugins.download.install.success")
-                                    .formatted(asset.artifactId() + " " + asset.version()),
-                            Messages.get("plugins.download.install.success.title"),
-                            JOptionPane.INFORMATION_MESSAGE);
-                    dispose();
+                    Path installed = get();
+                    say(" ", false);
+                    onInstalled.accept(installed);
                 } catch (InterruptedException | ExecutionException ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    JOptionPane.showMessageDialog(DownloadPluginDialog.this,
-                            cause.getMessage(),
-                            Messages.get("plugins.download.install.error.title"),
-                            JOptionPane.ERROR_MESSAGE);
+                    say(Messages.get("plugins.download.install.error.title") + ": " + cause.getMessage(), true);
                 }
             }
         }.execute();
@@ -295,15 +294,9 @@ final class DownloadPluginDialog extends JDialog {
                 case 0 -> a.groupId().isBlank() ? a.artifactId()
                                                 : a.groupId() + ":" + a.artifactId();
                 case 1 -> a.version();
-                case 2 -> a.sizeBytes() > 0 ? formatBytes(a.sizeBytes()) : "\u2014";
+                case 2 -> a.sizeBytes() > 0 ? formatBytes(a.sizeBytes()) : "—";
                 default -> null;
             };
-        }
-
-        private static String formatBytes(long bytes) {
-            if (bytes < 1024L)        return bytes + " B";
-            if (bytes < 1024L * 1024) return String.format("%.1f KB", bytes / 1024.0);
-            return String.format("%.1f MB", bytes / (1024.0 * 1024));
         }
     }
 }

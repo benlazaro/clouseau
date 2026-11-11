@@ -29,6 +29,7 @@ tasks.jar {
             "Plugin-Id"       to pluginId,
             "Plugin-Version"  to pluginVersion,
             "Plugin-Provider" to "Clouseau",
+            "Plugin-Name"     to "logfmt example",
             "Plugin-Description" to "Example plugin: a logfmt parser and a demo live source",
         )
     }

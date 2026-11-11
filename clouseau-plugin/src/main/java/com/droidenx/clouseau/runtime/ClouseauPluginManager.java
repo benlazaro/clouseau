@@ -22,8 +22,23 @@ import java.util.List;
 @Slf4j
 public final class ClouseauPluginManager {
 
-    /** Snapshot of a loaded plugin's identity and runtime state. */
-    public record PluginInfo(String id, String version, String types, String state, boolean enabled) {}
+    /**
+     * Snapshot of a plugin's identity and runtime state. A file in the plugins folder that
+     * PF4J couldn't load is listed too, with state "Failed", its file name as id and name, and
+     * the reason in {@code error}.
+     *
+     * @param name        what to call it: the manifest's {@code Plugin-Name}, or the id made readable
+     * @param description the manifest's {@code Plugin-Description}, or empty
+     * @param provider    the manifest's {@code Plugin-Provider}, or empty
+     * @param license     the manifest's {@code Plugin-License}, or empty
+     * @param error       why it failed, or null
+     * @param file        the JAR (or folder) it came from, or null
+     */
+    public record PluginInfo(String id, String name, String description, String provider, String license,
+                             String version, String types, String state, boolean enabled,
+                             String error, Path file) {
+        public boolean failed() { return "Failed".equals(state); }
+    }
 
     private final PluginManager pf4j;
 
@@ -35,15 +50,116 @@ public final class ClouseauPluginManager {
         return pf4j.getPluginsRoot();
     }
 
+    /** The loaded plugins, then the files in the plugins folder that didn't load, each by name. */
     public List<PluginInfo> getPluginInfos() {
-        return pf4j.getPlugins().stream()
-                .map(pw -> new PluginInfo(
-                        pw.getPluginId(),
-                        pw.getDescriptor().getVersion(),
-                        deriveTypes(pw.getPluginId()),
-                        friendlyState(pw),
-                        pw.getPluginState() == PluginState.STARTED))
-                .toList();
+        List<PluginInfo> out = new java.util.ArrayList<>();
+        java.util.Set<Path> loaded = new java.util.HashSet<>();
+        for (PluginWrapper pw : pf4j.getPlugins()) {
+            org.pf4j.PluginDescriptor d = pw.getDescriptor();
+            Path file = pw.getPluginPath();
+            if (file != null) loaded.add(file.toAbsolutePath().normalize());
+            Throwable failure = pw.getFailedException();
+            String error = pw.getPluginState() == PluginState.FAILED
+                    ? (failure != null && failure.getMessage() != null ? failure.getMessage() : "Couldn't be started.")
+                    : null;
+            out.add(new PluginInfo(pw.getPluginId(), displayName(pw.getPluginId(), file),
+                    blank(d.getPluginDescription()), blank(d.getProvider()), blank(d.getLicense()),
+                    d.getVersion(), deriveTypes(pw.getPluginId()), friendlyState(pw),
+                    pw.getPluginState() == PluginState.STARTED, error, file));
+        }
+        out.sort(java.util.Comparator.comparing(i -> i.name().toLowerCase(java.util.Locale.ROOT)));
+        for (Path file : unloadedFiles(loaded)) {
+            String fileName = file.getFileName().toString();
+            out.add(new PluginInfo(fileName, fileName, "", "", "", "", "\u2014", "Failed", false,
+                    whyNotLoaded(file), file));
+        }
+        return out;
+    }
+
+    /**
+     * JARs and ZIPs in the plugins folder that no loaded plugin came from. PF4J unpacks a ZIP
+     * into a folder of the same name and loads that, so a ZIP counts as loaded when its folder is.
+     */
+    private List<Path> unloadedFiles(java.util.Set<Path> loaded) {
+        Path root = getPluginsRoot();
+        if (root == null || !java.nio.file.Files.isDirectory(root)) return List.of();
+        try (java.util.stream.Stream<Path> files = java.nio.file.Files.list(root)) {
+            return files.filter(java.nio.file.Files::isRegularFile)
+                    .filter(f -> {
+                        String n = f.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+                        if (n.startsWith(".") || !(n.endsWith(".jar") || n.endsWith(".zip"))) return false;
+                        Path abs = f.toAbsolutePath().normalize();
+                        if (loaded.contains(abs)) return false;
+                        return !(n.endsWith(".zip") && loaded.contains(
+                                abs.resolveSibling(f.getFileName().toString().replaceFirst("(?i)\\.zip$", ""))));
+                    })
+                    .sorted()
+                    .toList();
+        } catch (java.io.IOException e) {
+            log.warn("Could not list {}", root, e);
+            return List.of();
+        }
+    }
+
+    /** Why PF4J passed over a file, in words a user can act on. */
+    String whyNotLoaded(Path file) {
+        java.util.jar.Manifest manifest;
+        try (java.util.jar.JarFile jar = new java.util.jar.JarFile(file.toFile())) {
+            manifest = jar.getManifest();
+        } catch (java.io.IOException e) {
+            return "Not a JAR or ZIP file, or it's damaged.";
+        }
+        String id = manifest != null ? manifest.getMainAttributes().getValue("Plugin-Id") : null;
+        if (id == null || id.isBlank()) return "Not a Clouseau plugin: its manifest has no Plugin-Id.";
+        if (pf4j.getPlugin(id.trim()) != null) {
+            return "Another file already provides plugin \u201c" + id.trim() + "\u201d.";
+        }
+        return "Couldn't be loaded. The log file has the details.";
+    }
+
+    /** The manifest's Plugin-Name if the plugin gives one, otherwise its id made readable. */
+    static String displayName(String id, Path file) {
+        if (file != null && java.nio.file.Files.isRegularFile(file)) {
+            try (java.util.jar.JarFile jar = new java.util.jar.JarFile(file.toFile())) {
+                java.util.jar.Manifest m = jar.getManifest();
+                String name = m != null ? m.getMainAttributes().getValue("Plugin-Name") : null;
+                if (name != null && !name.isBlank()) return name.trim();
+            } catch (java.io.IOException ignored) {
+                // fall back to the id
+            }
+        }
+        return readableId(id);
+    }
+
+    /** "clouseau-loki-source-plugin" reads "Loki source". */
+    static String readableId(String id) {
+        String s = id.replaceFirst("(?i)^clouseau[-_.]", "").replaceFirst("(?i)[-_.]plugin$", "")
+                .replace('-', ' ').replace('_', ' ').trim();
+        if (s.isEmpty()) return id;
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private static String blank(String s) { return s == null ? "" : s.trim(); }
+
+    /**
+     * Names, sizes and modification times of what's in the plugins folder: changes when a
+     * file is added, removed or replaced, so a window can reload without a Refresh button.
+     */
+    public String folderStamp() {
+        Path root = getPluginsRoot();
+        if (root == null || !java.nio.file.Files.isDirectory(root)) return "";
+        try (java.util.stream.Stream<Path> files = java.nio.file.Files.list(root)) {
+            return files.sorted().map(f -> {
+                try {
+                    return f.getFileName() + ":" + java.nio.file.Files.size(f) + ":"
+                            + java.nio.file.Files.getLastModifiedTime(f).toMillis();
+                } catch (java.io.IOException e) {
+                    return f.getFileName().toString();
+                }
+            }).collect(java.util.stream.Collectors.joining("|"));
+        } catch (java.io.IOException e) {
+            return "";
+        }
     }
 
     private String deriveTypes(String pluginId) {
@@ -129,6 +245,21 @@ public final class ClouseauPluginManager {
         pf4j.deletePlugin(id);
         log.info("Deleted plugin '{}' ({})", id, jar);
         return true;
+    }
+
+    /** Deletes a file in the plugins folder that didn't load as a plugin. */
+    public boolean deleteUnloadedFile(Path file) {
+        Path root = getPluginsRoot();
+        if (file == null || root == null
+                || !file.toAbsolutePath().normalize().startsWith(root.toAbsolutePath().normalize())) return false;
+        try {
+            boolean deleted = java.nio.file.Files.deleteIfExists(file);
+            log.info("Deleted unloaded plugin file {}", file);
+            return deleted;
+        } catch (java.io.IOException e) {
+            log.warn("Could not delete {}", file, e);
+            return false;
+        }
     }
 
     public void stopAll() {

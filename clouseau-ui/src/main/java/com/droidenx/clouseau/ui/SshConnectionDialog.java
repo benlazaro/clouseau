@@ -533,45 +533,14 @@ public class SshConnectionDialog extends JDialog {
                 Rectangle r = getRowBounds(hoverRow);
                 Color base = isRowSelected(hoverRow) ? UIManager.getColor("Tree.selectionForeground") : ClouseauColors.dimForeground();
                 int y = r.y + (r.height - 14) / 2;
-                paintTrash(g2, getWidth() - TOOL + 5, y, overTool == Tool.TRASH
+                ToolIcons.paintTrash(g2, getWidth() - TOOL + 5, y, overTool == Tool.TRASH
                         ? ClouseauColors.levelColor(com.droidenx.clouseau.api.LogEntry.LogLevel.ERROR) : base);
                 if (isLog(hoverRow)) {
-                    paintDuplicate(g2, getWidth() - 2 * TOOL + 5, y,
+                    ToolIcons.paintDuplicate(g2, getWidth() - 2 * TOOL + 5, y,
                             overTool == Tool.DUPLICATE ? ClouseauColors.foreground() : base);
                 }
             }
             g2.dispose();
-        }
-
-        /** Two overlapping 9×10 rounded sheets, the back one offset up and left. */
-        private void paintDuplicate(Graphics2D g, int x, int y, Color c) {
-            g.setColor(c);
-            g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g.draw(new java.awt.geom.RoundRectangle2D.Float(x + 3.5f, y + 4f, 8.5f, 9.5f, 2.5f, 2.5f));
-            java.awt.geom.Path2D.Float back = new java.awt.geom.Path2D.Float();
-            back.moveTo(x + 1f, y + 10.5f);
-            back.lineTo(x + 1f, y + 2.5f);
-            back.quadTo(x + 1f, y + 1f, x + 2.5f, y + 1f);
-            back.lineTo(x + 8.5f, y + 1f);
-            g.draw(back);
-        }
-
-        /** A 12×14 outline trash can: lid with a handle, body with two ribs. */
-        private void paintTrash(Graphics2D g, int x, int y, Color c) {
-            g.setColor(c);
-            g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g.drawLine(x, y + 3, x + 12, y + 3);                       // lid
-            g.drawLine(x + 4, y + 3, x + 4, y + 1);                    // handle
-            g.drawLine(x + 4, y + 1, x + 8, y + 1);
-            g.drawLine(x + 8, y + 1, x + 8, y + 3);
-            java.awt.geom.Path2D.Float body = new java.awt.geom.Path2D.Float();
-            body.moveTo(x + 1.5f, y + 3);
-            body.lineTo(x + 2.5f, y + 14);
-            body.lineTo(x + 9.5f, y + 14);
-            body.lineTo(x + 10.5f, y + 3);
-            g.draw(body);
-            g.drawLine(x + 5, y + 6, x + 5, y + 11);                   // ribs
-            g.drawLine(x + 7, y + 6, x + 7, y + 11);
         }
     }
 

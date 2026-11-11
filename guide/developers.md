@@ -83,6 +83,8 @@ complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
   PF4J as an `annotationProcessor`, which writes `META-INF/extensions.idx` from your
   `@Extension` classes.
 - **Manifest:** `Plugin-Id` and `Plugin-Version` (semantic version) in the JAR manifest.
+  The Plugin Manager also shows `Plugin-Name` (otherwise the ID, made readable),
+  `Plugin-Description`, `Plugin-Provider` and `Plugin-License` when you set them.
 - **The extension:**
 
 ```java
@@ -100,7 +102,7 @@ public class LogfmtParser implements LogParser {
 
 Build the JAR with `./gradlew :clouseau-example-plugin:jar` (it lands in
 `clouseau-example-plugin/build/libs/`), drop it in the `plugins` folder of the
-[data folder](settings.md#the-data-folder), and restart or refresh in the Plugin Manager. New tabs
+[data folder](settings.md#the-data-folder), or restart. The Plugin Manager picks it up while it's open. New tabs
 use it right away.
 
 Plugin parsers come after the built-in and `parsers.json` parsers during auto-detection,

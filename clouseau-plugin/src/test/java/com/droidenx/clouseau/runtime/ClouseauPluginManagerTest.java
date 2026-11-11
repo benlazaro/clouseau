@@ -80,6 +80,10 @@ class ClouseauPluginManagerTest {
                 .singleElement()
                 .satisfies(info -> {
                     assertThat(info.id()).isEqualTo(PLUGIN_ID);
+                    assertThat(info.name()).isEqualTo("logfmt example");
+                    assertThat(info.description()).startsWith("Example plugin");
+                    assertThat(info.provider()).isEqualTo("Clouseau");
+                    assertThat(info.failed()).isFalse();
                     assertThat(info.version()).isEqualTo("1.0.0");
                     assertThat(info.types()).isEqualTo("Parser, Source");
                     assertThat(info.enabled()).isTrue();
@@ -114,5 +118,49 @@ class ClouseauPluginManagerTest {
         LogParser parser = logfmtParser();
         assertThat(parser.canParse(lines.get(0))).isTrue();
         assertThat(parser.parse(lines.get(0)).logger()).isEqualTo("checkout");
+    }
+
+    @Test
+    void aFileThatIsNotAJarIsListedAsFailedWithTheReason() throws IOException {
+        Files.writeString(pluginsDir.resolve("broken-0.1.jar"), "not a jar");
+        manager.refresh();
+
+        assertThat(manager.getPluginInfos()).hasSize(2).last().satisfies(info -> {
+            assertThat(info.name()).isEqualTo("broken-0.1.jar");
+            assertThat(info.failed()).isTrue();
+            assertThat(info.enabled()).isFalse();
+            assertThat(info.error()).contains("Not a JAR");
+        });
+    }
+
+    @Test
+    void aJarWithoutAPluginIdSaysItIsNotAPlugin() throws IOException {
+        Path jar = pluginsDir.resolve("library.jar");
+        java.util.jar.Manifest m = new java.util.jar.Manifest();
+        m.getMainAttributes().put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+        try (var out = new java.util.jar.JarOutputStream(Files.newOutputStream(jar), m)) { /* empty */ }
+        manager.refresh();
+
+        assertThat(manager.getPluginInfos()).last().satisfies(info -> {
+            assertThat(info.failed()).isTrue();
+            assertThat(info.error()).contains("no Plugin-Id");
+        });
+        assertThat(manager.deleteUnloadedFile(jar)).isTrue();
+        assertThat(manager.getPluginInfos()).hasSize(1);
+    }
+
+    @Test
+    void anOtherFileIsIgnoredAndTheFolderStampChangesWithTheFolder() throws IOException {
+        String before = manager.folderStamp();
+        Files.writeString(pluginsDir.resolve("README.txt"), "hello");
+        assertThat(manager.getPluginInfos()).hasSize(1);
+        assertThat(manager.folderStamp()).isNotEqualTo(before);
+    }
+
+    @Test
+    void idsReadAsNames() {
+        assertThat(ClouseauPluginManager.readableId("clouseau-loki-source-plugin")).isEqualTo("Loki source");
+        assertThat(ClouseauPluginManager.readableId("my_parser")).isEqualTo("My parser");
+        assertThat(ClouseauPluginManager.readableId("logfmt")).isEqualTo("Logfmt");
     }
 }
