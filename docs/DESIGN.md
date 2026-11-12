@@ -1232,7 +1232,8 @@ as a reusable "workspace".
      if a long tail needs text), with highlights moved to their entry's new ordinal;
      `MergedNotes.setOrder` does the same for notes, and the selection stays on its
      entry. Find's matches are cleared. With Follow on the table scrolls to the bottom,
-     as on a single-file tab.
+     as on a single-file tab, unless the user has scrolled up (`BottomPin`: the vertical
+     bar is held at the bottom until the user moves it away; rows arriving don't count).
    - Clear on a merged tab stops following it; reload follows again.
    - `MergeOrderExtendTest` (including that extending in random steps gives the same
      order as one merge), `MergedFollowTest`, `MergedViewTest`.

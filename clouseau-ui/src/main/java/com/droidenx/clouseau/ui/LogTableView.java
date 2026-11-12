@@ -56,6 +56,8 @@ final class LogTableView {
     private final Host host;
     private final JTable logTable;
     private final JScrollPane tableScrollPane;
+    /** Whether follow mode scrolls to new rows: only while the view is at the bottom. */
+    private final BottomPin bottomPin;
     private boolean tableColumnsManaged = false;
     private int fittedColumnsWidth = 0;
     /** model-column-index → hidden TableColumn, in insertion order for restore positioning */
@@ -361,6 +363,7 @@ final class LogTableView {
         tableScrollPane.setCorner(JScrollPane.UPPER_LEFT_CORNER, new GutterCorner());
         ClouseauColors.themedBackground(tableScrollPane.getRowHeader(), ClouseauColors::tableBackground);
         tableScrollPane.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
+        bottomPin = new BottomPin(tableScrollPane.getVerticalScrollBar().getModel(), logTable::getRowHeight);
         logTable.addFocusListener(new java.awt.event.FocusListener() {
             @Override public void focusGained(java.awt.event.FocusEvent e) { logTable.repaint(); }
             @Override public void focusLost(java.awt.event.FocusEvent e)   { logTable.repaint(); }
@@ -383,6 +386,14 @@ final class LogTableView {
     void scrollToBottom() {
         int last = logTable.getRowCount() - 1;
         if (last >= 0) logTable.scrollRectToVisible(logTable.getCellRect(last, 0, true));
+    }
+
+    /**
+     * Follow mode's scroll after new rows: to the bottom, unless the user has scrolled up to
+     * read earlier rows. Scrolling back down to the end (or Ctrl+End) follows again.
+     */
+    void followToBottom() {
+        if (bottomPin.pinned()) scrollToBottom();
     }
 
     /** Forgets hidden columns and the applied layout, before the tab shows another log. */

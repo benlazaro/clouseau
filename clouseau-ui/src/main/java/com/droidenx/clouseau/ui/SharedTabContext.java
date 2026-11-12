@@ -195,7 +195,7 @@ final class SharedTabContext {
             TabContent content = host.content();
             boolean loading = content != null && content.loading();
             if (follow && !loading && e.getType() == TableModelEvent.INSERT)
-                SwingUtilities.invokeLater(tableView::scrollToBottom);
+                SwingUtilities.invokeLater(tableView::followToBottom);
             updateStatusBar();
             // Filtering, loading or trimming changes which highlighted rows show.
             if (e.getType() != TableModelEvent.UPDATE || e.getLastRow() == Integer.MAX_VALUE)
@@ -235,8 +235,12 @@ final class SharedTabContext {
 
     boolean follow() { return follow; }
 
-    /** Records follow mode and ticks the filter bar's checkbox; the content starts or stops following. */
+    /**
+     * Records follow mode and ticks the filter bar's checkbox; the content starts or stops
+     * following. Turning it on goes to the newest row, wherever the view was scrolled to.
+     */
     void setFollow(boolean on) {
+        if (on && !follow) SwingUtilities.invokeLater(tableView::scrollToBottom);
         follow = on;
         filterBar.setFollowSelected(on);
     }
@@ -398,7 +402,7 @@ final class SharedTabContext {
                     if (!follow) table.scrollRectToVisible(table.getCellRect(v, 0, true));
                 }
             }
-            if (follow) tableView.scrollToBottom();
+            if (follow) tableView.followToBottom();
             refreshDetail();
         };
         if (done) restore.run();

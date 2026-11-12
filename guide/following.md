@@ -17,6 +17,12 @@ them, like `tail -f`. It's on by default for files you open; **Follow new lines 
 default** in [Settings](settings.md) changes that. Turn it off and on per tab at any time:
 no line is lost or repeated.
 
+While you're at the bottom of the table, it scrolls to show new lines as they arrive.
+Scroll up to read earlier lines and the table stays where you put it, though new lines
+keep coming in below. Scroll back down to the end, press **Ctrl+End**, or turn Follow off
+and on, and it scrolls with new lines again. This works the same for files, merged views,
+SSH and other live sources.
+
 A file always opens at the top. Clouseau wakes up as soon as the operating system reports
 that the file changed, so new lines appear without delay.
 
