@@ -26,7 +26,7 @@ final class HighlightNavBar extends JPanel {
         super(new MigLayout("insets 3 8 3 8, gapy 0", "[][grow][]", "[center]"));
         this.table = table;
         this.model = model;
-        setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
+        setBorder(new FindBar.BarSeparator());
         setVisible(false);
 
         JLabel label = new JLabel(Messages.get("highlight.nav.label"));
@@ -58,17 +58,24 @@ final class HighlightNavBar extends JPanel {
         add(rightPanel, "aligny center");
     }
 
+    /** The find bar above draws its line only while this bar is under it. */
+    private void repaintBarAbove() {
+        if (getParent() != null) getParent().repaint();
+    }
+
     /** Rebuilds the swatches after highlights changed; hides the bar when there are none. */
     void refresh() {
         Set<Color> activeColors = model.getActiveHighlightColors();
         if (activeColors.isEmpty()) {
             setVisible(false);
             navColor = null;
+            repaintBarAbove();
             return;
         }
         // If the selected color was removed, fall back to "All"
         if (navColor != null && !activeColors.contains(navColor)) navColor = null;
         setVisible(true);
+        repaintBarAbove();
         swatches.removeAll();
 
         final Color navColorSnap = navColor;
