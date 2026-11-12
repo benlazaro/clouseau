@@ -115,6 +115,9 @@ filter reads the text of the remaining rows in the background; the status bar sh
 - `Enter`, `F3` or **▼** goes to the next match, `Shift+Enter`, `Shift+F3` or **▲** to the
   previous one. `F3` works from the table too.
 - The counter shows how many rows match ("Searching n%" while it's still counting).
+- **Highlight ⌄** colors every match at once: pick one of the [highlight](#highlights)
+  colors (a white ring marks the color they all have already), or **Clear Highlight** to
+  uncolor them. Only rows the filters show are matched, so only those are colored.
 - `Escape` closes the bar.
 
 ## Highlights

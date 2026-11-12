@@ -180,6 +180,12 @@ final class SharedTabContext {
         status.ready = true;
         updateTimezoneBadge();
         findBar = find[0] = new FindBar(table, FindBar.searchIn(model));
+        findBar.setHighlighter(new FindBar.Highlighter() {
+            @Override public void highlight(java.util.List<Integer> modelRows, Integer slot) {
+                if (rowMenu[0] != null) rowMenu[0].highlightRows(modelRows, slot);
+            }
+            @Override public Color highlightOf(int modelRow) { return model.getHighlight(modelRow); }
+        });
         highlightNavBar = nav[0] = new HighlightNavBar(table, model);
         ClouseauColors.onThemeChange(table, this::reapplyHighlightsForTheme);
 

@@ -1085,7 +1085,7 @@ final class FilterBar extends JPanel {
      * Marks a button that opens a popup with a down chevron after its label, the same arrow and
      * color as a drop-down's, so pickers and drop-downs read as one family.
      */
-    private static void pickerArrow(JButton button) {
+    static void pickerArrow(JButton button) {
         button.setIcon(new ChevronDown());
         button.setHorizontalTextPosition(SwingConstants.LEADING);
         button.setIconTextGap(8);
