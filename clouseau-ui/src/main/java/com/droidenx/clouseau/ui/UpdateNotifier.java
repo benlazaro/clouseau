@@ -74,13 +74,14 @@ final class UpdateNotifier {
                         MessageFormat.format(Messages.get("update.uptodate.message"), current),
                         Messages.get("update.title"), JOptionPane.INFORMATION_MESSAGE);
                 case Result.DevelopmentBuild d -> {
-                    // The default first: OptionPane.isYesLast lays it out last, with Close before it.
-                    Object[] options = { Messages.get("update.button.releases"), Messages.get("update.button.close") };
+                    // Mostly information, so Close is the default and the releases page the option.
+                    // The default first: OptionPane.isYesLast lays it out last, on the right.
+                    Object[] options = { Messages.get("update.button.close"), Messages.get("update.button.releases") };
                     int choice = JOptionPane.showOptionDialog(owner,
                             MessageFormat.format(Messages.get("update.development.message"), current),
                             Messages.get("update.title"), JOptionPane.DEFAULT_OPTION,
                             JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
-                    if (choice == 0) browse(UpdateCheck.RELEASES_PAGE);
+                    if (choice == 1) browse(UpdateCheck.RELEASES_PAGE);
                 }
                 case Result.Failed f -> JOptionPane.showMessageDialog(owner,
                         MessageFormat.format(Messages.get("update.failed.message"), f.reason()),
