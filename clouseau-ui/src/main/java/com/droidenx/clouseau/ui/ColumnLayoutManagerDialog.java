@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
@@ -49,7 +50,7 @@ final class ColumnLayoutManagerDialog extends JDialog {
 
         content.add(new JLabel(Messages.get("table.columns.layout.manage.list.label")));
 
-        JScrollPane scroll = new JScrollPane(layoutList);
+        JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(layoutList));
         scroll.setPreferredSize(new Dimension(340, 160));
         content.add(scroll, "grow, h 160!");
 

@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.SessionStore;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
@@ -53,7 +54,7 @@ final class ManageSessionsDialog extends JDialog {
         close.addActionListener(e -> dispose());
 
         JPanel content = new JPanel(new MigLayout("insets 16, gap 8", "[grow, fill][]", "[grow, fill]"));
-        content.add(new JScrollPane(list), "w 300!, h 240!, spany");
+        content.add(ClouseauColors.noFocusFrame(new JScrollPane(list)), "w 300!, h 240!, spany");
         JPanel buttons = new JPanel(new MigLayout("insets 0, wrap 1, gapy 6", "[fill]"));
         buttons.add(openButton);
         buttons.add(renameButton);

@@ -166,11 +166,37 @@ public final class ClouseauColors {
     }
 
     /**
-     * FlatLaf style for the scroll panes of the main reading areas (log table, plain-text view,
-     * detail pane): no amber frame when the view inside has focus. The frame is the largest amber
-     * on screen and says nothing the selection doesn't; focus shows through the selection ring.
+     * FlatLaf style for the scroll panes of reading areas, lists, trees and tables: no amber
+     * frame when the view inside has focus. The frame would be the largest amber on screen and
+     * says nothing the selection doesn't; focus shows through the selection (bright with focus,
+     * dimmer without). Fields and buttons keep their focus ring.
      */
     public static final String NO_FOCUS_FRAME = "focusedBorderColor: $Component.borderColor; innerFocusWidth: 0";
+
+    /** {@link #NO_FOCUS_FRAME} on {@code scroll}, for a list, tree or table; returns it. */
+    public static JScrollPane noFocusFrame(JScrollPane scroll) {
+        scroll.putClientProperty("FlatLaf.style", NO_FOCUS_FRAME);
+        return scroll;
+    }
+
+    /**
+     * {@link #NO_FOCUS_FRAME} on every scroll pane inside {@code root}, now and as they're added:
+     * for components that build their views themselves, such as a JFileChooser switching between
+     * its list and details views.
+     */
+    public static void noFocusFrames(Container root) {
+        if (root instanceof JScrollPane s) noFocusFrame(s);
+        if (root instanceof JComponent jc) {
+            if (jc.getClientProperty("Clouseau.noFocusFrames") != null) return;
+            jc.putClientProperty("Clouseau.noFocusFrames", Boolean.TRUE);
+        }
+        for (Component c : root.getComponents()) if (c instanceof Container k) noFocusFrames(k);
+        root.addContainerListener(new java.awt.event.ContainerAdapter() {
+            @Override public void componentAdded(java.awt.event.ContainerEvent e) {
+                if (e.getChild() instanceof Container k) noFocusFrames(k);
+            }
+        });
+    }
 
     /**
      * Find's mark behind matched text: a light, translucent box with an outline, so it shows on

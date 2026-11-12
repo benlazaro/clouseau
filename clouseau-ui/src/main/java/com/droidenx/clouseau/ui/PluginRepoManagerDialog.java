@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
@@ -38,7 +39,7 @@ final class PluginRepoManagerDialog extends JDialog {
         repoList = new JList<>(listModel);
         repoList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         repoList.setFixedCellHeight(26);
-        content.add(new JScrollPane(repoList), "grow");
+        content.add(ClouseauColors.noFocusFrame(new JScrollPane(repoList)), "grow");
 
         JButton addBtn = new JButton(Messages.get("plugins.repos.add"));
         editBtn   = new JButton(Messages.get("plugins.repos.edit"));

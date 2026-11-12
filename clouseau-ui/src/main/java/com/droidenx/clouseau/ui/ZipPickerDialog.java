@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.core.ZipLogs;
 import net.miginfocom.swing.MigLayout;
 
@@ -111,7 +112,7 @@ final class ZipPickerDialog extends JDialog {
                 updateState();
             }
         });
-        p.add(new JScrollPane(table), "grow, wrap");
+        p.add(ClouseauColors.noFocusFrame(new JScrollPane(table)), "grow, wrap");
 
         openButton.addActionListener(e -> {
             List<ZipLogs.Entry> chosen = new ArrayList<>();
