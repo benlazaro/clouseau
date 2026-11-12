@@ -168,6 +168,10 @@ Keep one set of open logs per project or incident, and switch between them:
 
 A named session is a snapshot: opening or closing tabs afterwards doesn't change it. To
 update it with what is open now, choose **File → Sessions → Save Session "Payments"**.
+To leave it, choose **File → Sessions → Close Session "Payments"**: its windows close,
+one empty window stays, and files you open from then on aren't part of it. If the tabs
+changed since you saved it, Clouseau asks first whether to **Save** them to it (moving or
+resizing windows doesn't count as a change).
 **File → Sessions → Manage Sessions…** opens, renames and deletes saved sessions;
 deleting one never touches the log files themselves. The session in use is remembered
 when you quit, so its name is back in the titles next time.
