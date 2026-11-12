@@ -106,7 +106,24 @@ final class SessionManager {
         if (saveNamed(owner, name)) setActive(name);
     }
 
-    private boolean saveNamed(Component owner, String name) {
+    /**
+     * Whether the tabs open now differ from what the named session holds: which files and
+     * sources, and how each is shown (filters, columns). Where the windows are doesn't count,
+     * so moving one doesn't make Close Session ask.
+     */
+    boolean differsFromSaved(String name) {
+        var named = SessionStore.find(sessionsDir(), name);
+        if (named.isEmpty()) return true;
+        if (!(SessionStore.read(named.get().file()) instanceof SessionStore.ReadResult.Read saved)) return true;
+        return !tabsOnly(snapshot()).equals(tabsOnly(saved.session()));
+    }
+
+    private static String tabsOnly(Session s) {
+        return SessionStore.toJson(new Session(null, s.windows().stream()
+                .map(w -> new Session.Window(null, null, false, 0, w.tabs())).toList()));
+    }
+
+    boolean saveNamed(Component owner, String name) {
         try {
             SessionStore.save(sessionsDir(), name, snapshot(), AppPrefs.getAppVersion());
             return true;

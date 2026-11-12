@@ -305,6 +305,45 @@ final class WindowManager {
         session.changed();
     }
 
+    /**
+     * Closes the named session in use (File → Sessions → Close Session): after asking to
+     * save it if its tabs changed (Save, Don't Save or Cancel), closes its windows and leaves
+     * one empty window where the first was, with no session in use. Files opened from then on
+     * aren't part of it; the session stays saved, to open again from the menu.
+     */
+    void closeNamedSession(Component parent) {
+        String name = session.active();
+        if (name == null) return;
+        if (!allPanels().isEmpty() && session.differsFromSaved(name)) {
+            // Save is the default; Cancel lays out first (OptionPane.isYesLast).
+            Object[] options = { Messages.get("session.close.save"), Messages.get("session.close.discard"),
+                    Messages.get("session.open.cancel") };
+            int answer = JOptionPane.showOptionDialog(parent,
+                    java.text.MessageFormat.format(Messages.get("session.close.message"), name),
+                    Messages.get("session.close.title"), JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+                    null, options, options[0]);
+            if (answer == 0) {
+                if (!session.saveNamed(parent, name)) return;
+            } else if (answer != 1) {
+                return;
+            }
+        }
+        List<MainFrame> old = windows();
+        MainFrame first = old.isEmpty() ? null : old.get(0);
+        Rectangle bounds = first != null ? first.getBounds() : null;
+        int state = first != null ? first.getExtendedState() : Frame.NORMAL;
+        old.forEach(MainFrame::closeForSession);
+        session.setActive(null);
+        MainFrame window = createFirstWindow();
+        if (bounds != null) window.setBounds(bounds);
+        window.setExtendedState(state);
+        window.setTitle(windowTitle());
+        window.setVisible(true);
+        window.toFront();
+        log.info("Closed session '{}'", name);
+        session.changed();
+    }
+
     /** How much of a window's top edge must be on a screen for it to be reachable. */
     static final int GRAB_WIDTH = 100;
     static final int GRAB_HEIGHT = 20;

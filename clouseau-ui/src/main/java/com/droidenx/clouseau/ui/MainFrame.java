@@ -287,6 +287,13 @@ public final class MainFrame extends JFrame {
         saveAs.setEnabled(anyTabs);
         saveAs.addActionListener(e -> sessions.saveAs(this));
         menu.add(saveAs);
+
+        // Leaves the session: files opened afterwards aren't part of it.
+        JMenuItem close = menuItem(active == null ? Messages.get("menu.file.sessions.close")
+                : MessageFormat.format(Messages.get("menu.file.sessions.close.named"), active));
+        close.setEnabled(active != null);
+        close.addActionListener(e -> manager.closeNamedSession(this));
+        menu.add(close);
         menu.addSeparator();
 
         List<SessionStore.Named> named = sessions.named();
