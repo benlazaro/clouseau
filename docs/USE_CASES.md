@@ -61,6 +61,9 @@ Each use case lists its current support status: ✅ supported · 🟡 partial ·
 2. Clouseau detects the log format from the first lines and shows a parser preview.
 3. User accepts, or picks a different parser.
 4. Entries appear in a table with timestamp, level, thread, logger, and message columns.
+   The columns fill the window (no horizontal scroll bar): Message takes the room the
+   others leave, and gives or takes width as the user drags a column border. The table
+   scrolls sideways only when Message would drop below 150px.
 
 **Success:** The file is readable within seconds, and columns are parsed correctly
 without manual configuration for common formats (Log4j, Logback/Spring Boot, JSON).
