@@ -534,11 +534,11 @@ final class DetailPanel extends JPanel {
         String logger = entry.logger()    != null ? entry.logger()        : "";
 
         if (content.highlight() != null) {
+            // One drawn swatch, not "██████": block characters leave hairline gaps between
+            // them in the bundled monospace font.
             SimpleAttributeSet swatchStyle = new SimpleAttributeSet();
-            StyleConstants.setFontFamily(swatchStyle, ClouseauFonts.MONO_FAMILY);
-            StyleConstants.setFontSize(swatchStyle, fontSize);
-            StyleConstants.setForeground(swatchStyle, content.highlight());
-            appendField(doc, key, swatchStyle, Messages.get("detail.highlight.label"), "██████");
+            StyleConstants.setIcon(swatchStyle, new HighlightSwatch(content.highlight(), fontSize));
+            appendField(doc, key, swatchStyle, Messages.get("detail.highlight.label"), " ");
         }
 
         AnnotationStore.Annotation annotation = content.annotation();
@@ -721,6 +721,32 @@ final class DetailPanel extends JPanel {
         SimpleAttributeSet first = new SimpleAttributeSet();
         StyleConstants.setFirstLineIndent(first, -valueIndent);
         doc.setParagraphAttributes(start, 0, first, false);
+    }
+
+    /**
+     * The Highlight field's value: a solid rounded block in the row's color, about six
+     * characters wide and a capital letter high at the pane's text size.
+     */
+    private static final class HighlightSwatch implements Icon {
+        private final Color color;
+        private final int width, height;
+
+        HighlightSwatch(Color color, int fontSize) {
+            this.color = color;
+            this.width = Math.round(fontSize * 3.6f);
+            this.height = Math.round(fontSize * 0.85f);
+        }
+
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fillRoundRect(x, y, width, height, 4, 4);
+            g2.dispose();
+        }
+
+        @Override public int getIconWidth()  { return width; }
+        @Override public int getIconHeight() { return height; }
     }
 
     private void appendField(StyledDocument doc, SimpleAttributeSet keyStyle,
