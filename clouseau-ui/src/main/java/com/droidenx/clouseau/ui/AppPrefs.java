@@ -241,6 +241,46 @@ public final class AppPrefs {
         putString("open.dialog.layout", width + "," + height + "," + left + "," + right);
     }
 
+    /**
+     * The names given to SSH servers in the SSH dialog, by host (an IP address, say): shown on
+     * the server's row in Saved connections, with the host beside it.
+     */
+    public static java.util.Map<String, String> getSshHostNames() {
+        java.util.Map<String, String> names = new java.util.HashMap<>();
+        if (!ROOT.has("ssh.hostNames")) return names;
+        JsonObject o = ROOT.getAsJsonObject("ssh.hostNames");
+        for (String host : o.keySet()) {
+            String name = jsonString(o, host, null);
+            if (name != null && !name.isBlank()) names.put(host, name);
+        }
+        return names;
+    }
+
+    /** Names {@code host}, or forgets its name when {@code name} is null or blank. */
+    public static void setSshHostName(String host, String name) {
+        JsonObject o = ROOT.has("ssh.hostNames") ? ROOT.getAsJsonObject("ssh.hostNames") : new JsonObject();
+        if (name == null || name.isBlank()) o.remove(host);
+        else o.addProperty(host, name.strip());
+        ROOT.add("ssh.hostNames", o);
+        save();
+    }
+
+    /** The SSH dialog's size and its divider (saved connections | form); null before the first time. */
+    public static int[] getSshDialogLayout() {
+        String v = getString("ssh.dialog.layout", null);
+        if (v == null) return null;
+        try {
+            int[] r = java.util.Arrays.stream(v.split(",")).mapToInt(s -> Integer.parseInt(s.trim())).toArray();
+            return r.length == 3 ? r : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    public static void setSshDialogLayout(int width, int height, int divider) {
+        putString("ssh.dialog.layout", width + "," + height + "," + divider);
+    }
+
     public static int getMaxEntriesPerTab() {
         return getInt(KEY_MAX_ENTRIES_PER_TAB, 200_000);
     }

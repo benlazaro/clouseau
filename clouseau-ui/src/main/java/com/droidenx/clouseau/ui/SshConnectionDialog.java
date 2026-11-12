@@ -58,6 +58,10 @@ public class SshConnectionDialog extends JDialog {
     private final JTextField hostField       = new JTextField(22);
     private final JTextField portField       = new JTextField("22", 5);
     private final JTextField userField       = new JTextField(22);
+    /** An optional name for the server, shown in Saved connections with the host beside it. */
+    private final JTextField nameField       = new JTextField(22);
+    /** Server names by host, as saved. */
+    private final java.util.Map<String, String> hostNames = AppPrefs.getSshHostNames();
 
     // Authentication
     private final JComboBox<String> authCombo = new JComboBox<>(new String[] {
@@ -88,7 +92,10 @@ public class SshConnectionDialog extends JDialog {
 
     // Footer
     private final JButton connectBtn = new JButton(Messages.get("ssh.dialog.connect"));
-    private final JLabel  hintLabel  = new JLabel(" ");
+    private final NoticeLabel hintLabel = new NoticeLabel();
+    /** The saved connections | the form; its divider is remembered. */
+    private JSplitPane split;
+    private static final int SIDEBAR_WIDTH = 250, SIDEBAR_MIN = 160;
 
     /** Takes the focus when the dialog opens: Host, or the secret a reconnect still needs. */
     private JComponent initialFocus = hostField;
@@ -120,9 +127,23 @@ public class SshConnectionDialog extends JDialog {
         });
         switchAuth(AUTH_PASSWORD);
         pack();
-        setResizable(false);
+        // Resizable, and as it was left last time; never smaller than the form needs.
+        Dimension packed = getSize();
+        setMinimumSize(new Dimension(packed.width - SIDEBAR_WIDTH + SIDEBAR_MIN, packed.height));
+        int[] layout = AppPrefs.getSshDialogLayout();
+        if (layout != null) {
+            setSize(Math.max(layout[0], getMinimumSize().width), Math.max(layout[1], packed.height));
+            split.setDividerLocation(Math.max(SIDEBAR_MIN, layout[2]));
+        }
         setLocationRelativeTo(owner);
         validateForm();
+    }
+
+    @Override public void dispose() {
+        if (split != null && isDisplayable()) {
+            AppPrefs.setSshDialogLayout(getWidth(), getHeight(), split.getDividerLocation());
+        }
+        super.dispose();
     }
 
     public Optional<Result> showDialog() {
@@ -154,6 +175,10 @@ public class SshConnectionDialog extends JDialog {
         // ── Server ───────────────────────────────────────────────────────
         content.add(SettingsDialog.sectionLabel(Messages.get("ssh.dialog.section.server")),
                 "span 2, growx, wrap, gapbottom 4");
+        content.add(new JLabel(Messages.get("ssh.dialog.name")), SettingsDialog.INDENT);
+        content.add(nameField, "wrap");
+        nameField.putClientProperty("JTextField.placeholderText", Messages.get("ssh.dialog.name.placeholder"));
+        nameField.setToolTipText(Messages.get("ssh.dialog.name.tooltip"));
         content.add(new JLabel(Messages.get("ssh.dialog.host")), SettingsDialog.INDENT);
         JPanel hostRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][][]"));
         hostRow.setOpaque(false);
@@ -169,7 +194,12 @@ public class SshConnectionDialog extends JDialog {
         ((AbstractDocument) portField.getDocument()).setDocumentFilter(new DigitsOnly(5));
         // "ops@db01:2222" typed or pasted in Host fills Username and Port.
         hostField.addFocusListener(new FocusAdapter() {
-            @Override public void focusLost(FocusEvent e) { applyHostSpec(); }
+            @Override public void focusLost(FocusEvent e) {
+                applyHostSpec();
+                // A server named before fills in its name, unless one is typed already.
+                String known = hostNames.get(hostField.getText().trim());
+                if (known != null && nameField.getText().isBlank()) nameField.setText(known);
+            }
         });
 
         // ── Authentication ───────────────────────────────────────────────
@@ -212,7 +242,6 @@ public class SshConnectionDialog extends JDialog {
 
         // What Connect is waiting for, while it's disabled. Always present, so the dialog
         // doesn't change size as the fields fill in.
-        hintLabel.setForeground(ClouseauColors.dimForeground());
         content.add(hintLabel, "span 2, gaptop 6, growx 0");
 
         // ── Footer: Cancel · Connect ─────────────────────────────────────
@@ -234,9 +263,13 @@ public class SshConnectionDialog extends JDialog {
         userField.getDocument().addDocumentListener(validator);
         remotePathField.getDocument().addDocumentListener(validator);
 
+        // Drag the divider to widen the saved connections; the form takes the rest.
+        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSavedSidebar(), content);
+        split.setBorder(null);
+        split.setResizeWeight(0);
+        split.setContinuousLayout(true);
         JPanel root = new JPanel(new BorderLayout());
-        root.add(buildSavedSidebar(), BorderLayout.WEST);
-        root.add(content, BorderLayout.CENTER);
+        root.add(split, BorderLayout.CENTER);
         root.add(footer, BorderLayout.SOUTH);
         return root;
     }
@@ -253,7 +286,12 @@ public class SshConnectionDialog extends JDialog {
         keyPassLabel.setVisible(useKey);
         keyPassphraseField.setVisible(useKey);
         if (useKey && keyFileField.getText().isBlank()) defaultKeyFile().ifPresent(keyFileField::setText);
-        if (isDisplayable()) pack();
+        if (isDisplayable()) {
+            // Grow to fit the rows that just appeared, keeping the size the user chose.
+            Dimension pref = getPreferredSize();
+            setMinimumSize(new Dimension(getMinimumSize().width, pref.height));
+            setSize(Math.max(getWidth(), pref.width), Math.max(getHeight(), pref.height));
+        }
     }
 
     private void validateForm() {
@@ -336,7 +374,7 @@ public class SshConnectionDialog extends JDialog {
         savedTree.setRootVisible(false);
         savedTree.setShowsRootHandles(true);
         savedTree.setRowHeight(0);                       // rows size to their renderer: logs take two lines
-        savedTree.setCellRenderer(new SavedRenderer());
+        savedTree.setCellRenderer(new SavedRenderer(hostNames));
         savedTree.getSelectionModel().setSelectionMode(javax.swing.tree.TreeSelectionModel.SINGLE_TREE_SELECTION);
         javax.swing.ToolTipManager.sharedInstance().registerComponent(savedTree);
         savedTree.registerKeyboardAction(e -> { AppPrefs.SshFavorite f = selectedFavorite(); if (f != null) duplicate(f); },
@@ -377,7 +415,8 @@ public class SshConnectionDialog extends JDialog {
         side.add(new JLabel(Messages.get("ssh.dialog.saved")), "wrap");
         side.add(savedFilter, "wrap");
         side.add(savedBody, "h 120:100%:");
-        side.setPreferredSize(new Dimension(250, 10));
+        side.setPreferredSize(new Dimension(SIDEBAR_WIDTH, 10));
+        side.setMinimumSize(new Dimension(SIDEBAR_MIN, 10));
         // A hairline divides the sidebar from the form, as panels are divided elsewhere.
         side.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, UIManager.getColor("Separator.foreground")));
         return side;
@@ -387,10 +426,13 @@ public class SshConnectionDialog extends JDialog {
     private void rebuildSavedTree() {
         AppPrefs.SshFavorite selected = selectedFavorite();
         String q = savedFilter.getText().trim().toLowerCase(java.util.Locale.ROOT);
-        java.util.TreeMap<String, List<AppPrefs.SshFavorite>> byHost =
-                new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        // Servers in order of what their row shows: the name if they have one, else the host.
+        java.util.TreeMap<String, List<AppPrefs.SshFavorite>> byHost = new java.util.TreeMap<>(
+                java.util.Comparator.comparing((String h) -> hostNames.getOrDefault(h, h), String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(String.CASE_INSENSITIVE_ORDER));
         for (AppPrefs.SshFavorite f : favorites) {
-            String hay = (f.host() + " " + f.remotePath() + " " + f.user()).toLowerCase(java.util.Locale.ROOT);
+            String hay = (f.host() + " " + hostNames.getOrDefault(f.host(), "") + " " + f.remotePath()
+                    + " " + f.user()).toLowerCase(java.util.Locale.ROOT);
             if (q.isEmpty() || hay.contains(q)) byHost.computeIfAbsent(f.host(), h -> new ArrayList<>()).add(f);
         }
         savedRoot.removeAllChildren();
@@ -445,6 +487,13 @@ public class SshConnectionDialog extends JDialog {
         AppPrefs.SshFavorite selected = selectedFavorite();
         favorites.removeIf(x -> names.contains(x.name()));
         AppPrefs.saveSshFavorites(favorites);
+        // A server with no saved logs left forgets its name too.
+        for (AppPrefs.SshFavorite f : gone) {
+            if (hostNames.containsKey(f.host()) && favorites.stream().noneMatch(x -> x.host().equals(f.host()))) {
+                hostNames.remove(f.host());
+                AppPrefs.setSshHostName(f.host(), null);
+            }
+        }
         if (selected != null && names.contains(selected.name())) savedTree.clearSelection();
         rebuildSavedTree();
     }
@@ -455,7 +504,7 @@ public class SshConnectionDialog extends JDialog {
      * that forgets every log under it. A press on a tool doesn't select the row.
      */
     private final class SavedTree extends JTree {
-        private static final int TOOL = 24;                // width of each tool's hit area
+        static final int TOOL = 24;                // width of each tool's hit area
         private enum Tool { NONE, DUPLICATE, TRASH }
         private int hoverRow = -1;
         private Tool overTool = Tool.NONE;
@@ -490,7 +539,10 @@ public class SshConnectionDialog extends JDialog {
             }
         }
 
-        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        /** Fills the sidebar, unless a row is wider: then it keeps its width and scrolls sideways. */
+        @Override public boolean getScrollableTracksViewportWidth() {
+            return getParent() instanceof JViewport v && v.getWidth() >= getPreferredSize().width;
+        }
 
         @Override protected void processMouseEvent(java.awt.event.MouseEvent e) {
             if (e.getID() == java.awt.event.MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e)) {
@@ -553,39 +605,66 @@ public class SshConnectionDialog extends JDialog {
     }
 
     /**
-     * Host rows show the host; log rows show the file name with its folder dimmed below, as one
-     * HTML label so the tree sizes each row to its text.
+     * Host rows show the host; log rows show the file name with its folder dimmed below, in
+     * full. Each row keeps room on its right for the row's tools (trash can, and duplicate on a
+     * log), and the tree is never narrower than its widest row, so the tools, drawn at the
+     * tree's right edge, never cover a name; a sidebar too narrow for a row scrolls sideways.
      */
-    private static final class SavedRenderer extends javax.swing.tree.DefaultTreeCellRenderer {
+    private static final class SavedRenderer extends JPanel implements javax.swing.tree.TreeCellRenderer {
+        /** Room kept free on the right for the tools: two on a log, one on a host. */
+        private static final int LOG_TOOLS = 2 * SavedTree.TOOL + 4, HOST_TOOLS = SavedTree.TOOL + 4;
+        private final javax.swing.tree.DefaultTreeCellRenderer colors = new javax.swing.tree.DefaultTreeCellRenderer();
+        private final JLabel name = new JLabel(), host = new JLabel(), folder = new JLabel();
+        private final java.util.Map<String, String> hostNames;
+
+        SavedRenderer(java.util.Map<String, String> hostNames) {
+            super(new BorderLayout(0, 1));
+            this.hostNames = hostNames;
+            setOpaque(false);
+            // A named server's row: the name, then the host dimmed beside it.
+            JPanel top = new JPanel(new BorderLayout(8, 0));
+            top.setOpaque(false);
+            top.add(name, BorderLayout.WEST);
+            top.add(host, BorderLayout.CENTER);
+            add(top, BorderLayout.NORTH);
+            add(folder, BorderLayout.SOUTH);
+        }
+
         @Override public Component getTreeCellRendererComponent(JTree tree, Object value, boolean selected,
                 boolean expanded, boolean leaf, int row, boolean hasFocus) {
-            super.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);
-            setIcon(null);
-            setOpaque(false);
-            setBackgroundNonSelectionColor(null);
+            colors.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);
+            Color fg = colors.getForeground();
             Object o = value instanceof DefaultMutableTreeNode n ? n.getUserObject() : null;
-            // Leave room on the right for the row's tools: trash can, and duplicate on a log.
-            setBorder(BorderFactory.createEmptyBorder(3, 0, 3, o instanceof AppPrefs.SshFavorite ? 50 : 26));
+            name.setFont(tree.getFont());
+            name.setForeground(fg);
+            folder.setFont(tree.getFont().deriveFont(tree.getFont().getSize2D() * 0.92f));
+            folder.setForeground(selected ? fg : ClouseauColors.dimForeground());
+            host.setFont(tree.getFont());
+            host.setForeground(folder.getForeground());
+            host.setVisible(false);
             if (o instanceof AppPrefs.SshFavorite f) {
-                Color dim = selected ? getForeground() : ClouseauColors.dimForeground();
-                setText("<html>" + esc(fileName(f.remotePath()))
-                        + "<br><span style='color:" + hex(dim) + ";font-size:0.92em'>"
-                        + esc(folder(f.remotePath())) + "</span></html>");
+                name.setText(fileName(f.remotePath()));
+                folder.setText(folder(f.remotePath()));
+                folder.setVisible(true);
                 setToolTipText(f.user() + "@" + f.host() + (f.port() != 22 ? ":" + f.port() : "")
                         + "  " + f.remotePath());
             } else {
-                setText(o == null ? "" : o.toString());
+                String h = o == null ? "" : o.toString();
+                String named = hostNames.get(h);
+                name.setText(named != null ? named : h);
+                host.setText(h);
+                host.setVisible(named != null);
+                folder.setVisible(false);
                 setToolTipText(null);
             }
+            setBorder(BorderFactory.createEmptyBorder(3, 0, 3, o instanceof AppPrefs.SshFavorite ? LOG_TOOLS : HOST_TOOLS));
             return this;
         }
-
-        private static String hex(Color c) { return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue()); }
-        private static String esc(String t) { return t.replace("&", "&amp;").replace("<", "&lt;"); }
     }
 
     private void loadFavorite(AppPrefs.SshFavorite f) {
         hostField.setText(f.host());
+        nameField.setText(hostNames.getOrDefault(f.host(), ""));
         portField.setText(String.valueOf(f.port()));
         userField.setText(f.user());
         remotePathField.setText(f.remotePath());
@@ -696,6 +775,8 @@ public class SshConnectionDialog extends JDialog {
                 : Optional.empty();
 
         if (saveBox.isSelected()) {
+            String name = nameField.getText().strip();
+            if (!name.equals(hostNames.getOrDefault(host, ""))) AppPrefs.setSshHostName(host, name);
             saveFavorite(config, authType, parser.map(LogParser::getName).orElse(null), selectedFavorite());
         }
         AppPrefs.setSshSaveConnection(saveBox.isSelected());
