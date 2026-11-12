@@ -87,6 +87,7 @@ public final class TabPanel extends JPanel {
             @Override public void setFollow(boolean on) { TabPanel.this.setFollow(on); }
             @Override public void filtersChanged() { if (restored != null) restored.filtersChanged(); }
             @Override public boolean zonesDiffer() { return mergedSettings.zonesDiffer(); }
+            @Override public ZoneId zoneOfSource(int source) { return mergedSettings.zoneOf(source); }
             @Override public void showTimezoneDialog() {
                 TabPanel.this.showSourceTimezoneDialog(SwingUtilities.getWindowAncestor(TabPanel.this));
             }
@@ -544,21 +545,16 @@ public final class TabPanel extends JPanel {
         reload();
     }
 
-    /** Shows a timezone picker dialog; on confirmation calls {@link #applySourceTimezone}. */
+    /** Opens the timezone popup above this tab's status bar (the window decides what "all tabs" are). */
     public void showSourceTimezoneDialog(Component parent) {
-        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(shared.timezone());
-        JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
-        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
-        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note };
-        int res = JOptionPane.showConfirmDialog(
-                parent, message,
-                Messages.get("source.timezone.dialog.title"),
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (res == JOptionPane.OK_OPTION) {
-            SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
-            if (sel != null) applySourceTimezone(sel.zone());
-        }
+        if (SwingUtilities.getWindowAncestor(this) instanceof MainFrame window) window.showTimezonePopup(this);
     }
+
+    /** Where the timezone popup opens from: the status bar's timezone label. */
+    JComponent timezoneAnchor() { return shared.statusBar().timezoneAnchor(); }
+
+    /** Whether a merged tab's files are read in more than one timezone. */
+    boolean zonesDiffer() { return mergedSettings.zonesDiffer(); }
 
     // ── The rest of the window's calls ────────────────────────────────────────
 

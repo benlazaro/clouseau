@@ -40,6 +40,8 @@ final class SharedTabContext {
         void filtersChanged();
         /** Whether a merged tab's files are read in more than one timezone. */
         boolean zonesDiffer();
+        /** The timezone a merged tab's file {@code source} is read in. */
+        java.time.ZoneId zoneOfSource(int source);
         /** The user clicked the status bar's timezone badge. */
         void showTimezoneDialog();
         void showTimeOffsetDialog(int source);
@@ -559,8 +561,10 @@ final class SharedTabContext {
         MergedEntries merged = mergedView();
         long shift = merged != null && ordinal >= 0 && ordinal < merged.size()
                 ? merged.offsetMillis(merged.sourceOf(ordinal)) : 0;
+        java.time.ZoneId zone = merged != null && ordinal >= 0 && ordinal < merged.size()
+                ? host.zoneOfSource(merged.sourceOf(ordinal)) : timezone;
         return new DetailPanel.Content(entry, model.getHighlight(modelRow),
-                notes.at(ordinal), model.getContinuationLines(modelRow), shift, where(modelRow, ordinal, merged));
+                notes.at(ordinal), model.getContinuationLines(modelRow), shift, where(modelRow, ordinal, merged), zone);
     }
 
     /**
@@ -593,6 +597,7 @@ final class SharedTabContext {
     void refreshTimezone() {
         model.refreshTimezone();
         detailPanel.refreshTimezone();
+        updateTimezoneBadge();
     }
 
     /** The tab closed: release the model. Its content was disposed first. */

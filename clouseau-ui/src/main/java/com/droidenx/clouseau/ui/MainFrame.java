@@ -1551,14 +1551,9 @@ public final class MainFrame extends JFrame {
             menu.addSeparator();
         }
 
-        JMenuItem tzItem = new JMenuItem(Messages.get("tab.context.source.timezone"));
-        tzItem.addActionListener(ev -> panel.showSourceTimezoneDialog(this));
+        JMenuItem tzItem = new JMenuItem(Messages.get("tab.context.timezones"));
+        tzItem.addActionListener(ev -> showTimezonePopup(panel));
         menu.add(tzItem);
-
-        JMenuItem tzAllItem = new JMenuItem(Messages.get("tab.context.source.timezone.all"));
-        tzAllItem.setEnabled(manager.allPanels().size() > 1);
-        tzAllItem.addActionListener(ev -> showSourceTimezoneAllTabsDialog(panel.getSourceTimezone()));
-        menu.add(tzAllItem);
 
         // Moving between windows (UC-16). Moving a window's only tab to a new window would
         // just swap one window for another, so that item needs a second tab.
@@ -1606,20 +1601,28 @@ public final class MainFrame extends JFrame {
         menu.show((Component) e.getSource(), e.getX(), e.getY());
     }
 
-    private void showSourceTimezoneAllTabsDialog(ZoneId initial) {
-        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(initial);
-        JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
-        note.setFont(note.getFont().deriveFont(java.awt.Font.ITALIC, 11f));
-        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note };
-        int res = JOptionPane.showConfirmDialog(
-                this, message,
-                Messages.get("tab.context.source.timezone.all"),
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (res != JOptionPane.OK_OPTION) return;
-        SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
-        if (sel == null) return;
-        ZoneId zone = sel.zone();
-        for (TabPanel lp : manager.allPanels()) lp.applySourceTimezone(zone);  // every window's tabs
+    /**
+     * The timezone popup for {@code panel}, above its status bar: how its log is read (this
+     * tab, or every open tab in every window) and how times are shown everywhere.
+     */
+    void showTimezonePopup(TabPanel panel) {
+        selectTab(panel);
+        SwingUtilities.invokeLater(() -> TimezonePopup.show(panel.timezoneAnchor(), panel.getSourceTimezone(),
+                panel.zonesDiffer(), manager.allPanels().size(), choice -> {
+            if (choice.displayChanged()) {
+                AppPrefs.setDisplayTimezone(choice.display());
+                manager.allPanels().forEach(TabPanel::refreshTimezone);
+            }
+            if (choice.allTabs()) {
+                for (TabPanel lp : manager.allPanels()) {
+                    if (!lp.getSourceTimezone().equals(choice.source()) || lp.zonesDiffer()) {
+                        lp.applySourceTimezone(choice.source());
+                    }
+                }
+            } else if (choice.sourceChanged()) {
+                panel.applySourceTimezone(choice.source());
+            }
+        }));
     }
 
     private JWindow createGhostWindow(JPanel tabHeader) {

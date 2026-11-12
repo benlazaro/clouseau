@@ -178,10 +178,26 @@ columns keep their widths, order and hiding.
 
 ## Timezones
 
-Log timestamps usually don't say which timezone they're in. Each tab has a **source
-timezone**, used to read its timestamps; it starts as your computer's timezone and is
-shown in the status bar as `[src: …]`. Click that label, or right-click the tab, to change
-it. Right-click a tab and choose **Set Source Timezone for All Tabs…** to change every tab.
+Log timestamps usually don't say which timezone they're in, so Clouseau keeps two:
 
-**Display timezone** in [Settings](settings.md) is a different thing: the timezone
-timestamps are *shown* in, and the one the **Time** filter's **From** and **To** use.
+- **Read times as** belongs to the log: the timezone its timestamps were written in. It
+  starts as your computer's timezone and is remembered for each file.
+- **Show times in** belongs to you: the timezone every tab shows times in, and the one the
+  **Time** filter's **From** and **To** use. It's the same setting as in
+  [Settings](settings.md).
+
+The status bar shows them at the right: just `America/Chicago` when a log is read and shown
+in the same timezone, or `UTC → America/Chicago` when it's read in one and shown in
+another (`Mixed → …` in a merged view whose files have different ones). Point at it to
+see how far apart they are.
+
+Click it (or right-click the tab, or **View → Timezones…**) to change either. Type in a
+timezone box to search it: "chic" finds America/Chicago. Your computer's timezone and UTC
+are listed first, then the ones you've used lately. Tick **Apply to all open tabs** to read
+every open tab, in every window, in the same timezone; otherwise only this tab changes.
+Changing how a log is read reloads it. In a merged view, the timezone you choose applies
+to all its files; to set one file's, right-click the tab and use **Sources**.
+
+When a log is read in one timezone and shown in another, the detail panel adds **In the
+file** under the timestamp: the time as the file has it, in its own timezone, so you can
+check it against the raw line.
