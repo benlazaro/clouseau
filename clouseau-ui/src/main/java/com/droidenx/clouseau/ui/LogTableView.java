@@ -39,6 +39,9 @@ final class LogTableView {
         /** True if Find marked this model row. */
         boolean isFindMatch(int modelRow);
 
+        /** What Find matched (lower case), to mark in the cells; null with no matches. */
+        String findQuery();
+
         /** Right-click on rows (model rows, possibly empty) at a point in the table. */
         void showRowMenu(List<Integer> modelRows, int x, int y);
 
@@ -136,6 +139,19 @@ final class LogTableView {
 
         Border cellPad = BorderFactory.createEmptyBorder(0, 8, 0, 8);
         DefaultTableCellRenderer levelRenderer = new DefaultTableCellRenderer() {
+            /** Find's query while this cell is in a matching row and a searched column; else null. */
+            private String markQuery;
+
+            @Override protected void paintComponent(Graphics g) {
+                if (markQuery == null) { super.paintComponent(g); return; }
+                // Background, then Find's marks, then the text on top of them.
+                g.setColor(getBackground());
+                g.fillRect(0, 0, getWidth(), getHeight());
+                FindMarks.paint(this, g, markQuery);
+                setOpaque(false);
+                try { super.paintComponent(g); } finally { setOpaque(true); }
+            }
+
             @Override
             public Component getTableCellRendererComponent(
                     JTable t, Object v, boolean sel, boolean foc, int r, int c) {
@@ -145,14 +161,14 @@ final class LogTableView {
                 Color hl = logTableModel.getHighlight(rowModel);
                 boolean hlSel = hl != null && sel;
 
-                // Background
-                boolean isSearchMatch = host.isFindMatch(rowModel);
+                // Background: a highlight, else the selection, else plain or striped. Find marks
+                // the matched text instead (see paintComponent), so it never hides a highlight.
+                int searchedCol = t.convertColumnIndexToModel(c);
+                markQuery = searchedCol >= 2 && host.isFindMatch(rowModel) ? host.findQuery() : null;
                 if (hl != null) {
                     setBackground(sel ? blend(hl, t.getSelectionBackground(), 0.55f) : hl);
                 } else if (sel) {
                     setBackground(ClouseauColors.selectionBackground());
-                } else if (isSearchMatch) {
-                    setBackground(ClouseauColors.searchMatchBackground());
                 } else {
                     setBackground(r % 2 == 1 && AppPrefs.isTableStripes() ? ClouseauColors.stripeBackground() : t.getBackground());
                 }
@@ -799,6 +815,8 @@ final class LogTableView {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             int rowHeight = logTable.getRowHeight();
             for (int r = first; r <= last; r++) {
+                if (host.isFindMatch(logTable.convertRowIndexToModel(r)))
+                    FindMarks.paintGutterTick(g2, WIDTH, r * rowHeight, rowHeight);
                 boolean note = hasNote(r);
                 if (!note && r != hoverRow) continue;
                 int y = r * rowHeight + (rowHeight - 12) / 2;

@@ -64,6 +64,8 @@ final class FindBar extends JPanel {
     private final JLabel counter = new JLabel();
 
     private Set<Integer>  matchModelRows = Set.of();
+    /** The query the current matches are for, lower case; null with none. */
+    private String matchedQuery;
     /** Matching model rows in view order. */
     private List<Integer> matches = List.of();
     private int cursor = -1;
@@ -260,6 +262,18 @@ final class FindBar extends JPanel {
         return counter.getText();
     }
 
+    /** The text the matches' marks go on (lower case), or null with no matches. */
+    String markQuery() {
+        return matches.isEmpty() ? null : matchedQuery;
+    }
+
+    /** The table and its scroll pane, whose gutter shows a tick on matching rows. */
+    private void repaintTable() {
+        table.repaint();
+        Container scroll = SwingUtilities.getAncestorOfClass(JScrollPane.class, table);
+        if (scroll != null) scroll.repaint();
+    }
+
     /** True when the model row is one of the current matches. */
     boolean isMatch(int modelRow) {
         return matchModelRows.contains(modelRow);
@@ -269,10 +283,11 @@ final class FindBar extends JPanel {
     void clearMatches() {
         matchModelRows = Set.of();
         matches        = List.of();
+        matchedQuery   = null;
         cursor         = -1;
         highlightBtn.setEnabled(false);
         counter.setText("");
-        table.repaint();
+        repaintTable();
     }
 
     void search(String query) {
@@ -285,7 +300,10 @@ final class FindBar extends JPanel {
         searcher.find(query.toLowerCase(), percent -> {
             ClouseauColors.themedForeground(counter, ClouseauColors::dimForeground);
             counter.setText(MessageFormat.format(Messages.get("find.searching"), percent));
-        }, this::showMatches);
+        }, rows -> {
+            matchedQuery = query.toLowerCase();
+            showMatches(rows);
+        });
     }
 
     /** Stops a running find, e.g. when the tab's content is replaced. */
@@ -313,7 +331,7 @@ final class FindBar extends JPanel {
         counter.setText(MessageFormat.format(Messages.get("find.count"), n));
         highlightBtn.setEnabled(n > 0);
         highlightBtn.setToolTipText(n > 0 ? MessageFormat.format(Messages.get("find.highlight.tooltip"), n) : null);
-        table.repaint();
+        repaintTable();
         if (n > 0) navigate(+1);
     }
 

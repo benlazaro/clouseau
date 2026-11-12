@@ -119,10 +119,23 @@ final class PlainTextView extends JPanel {
             }
         });
         table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            /** Find's query while this is the text of a matching line; else null. */
+            private String markQuery;
+
+            @Override protected void paintComponent(Graphics g) {
+                if (markQuery == null) { super.paintComponent(g); return; }
+                g.setColor(getBackground());
+                g.fillRect(0, 0, getWidth(), getHeight());
+                FindMarks.paint(this, g, markQuery);
+                setOpaque(false);
+                try { super.paintComponent(g); } finally { setOpaque(true); }
+            }
+
             @Override
             public Component getTableCellRendererComponent(JTable t, Object value, boolean sel, boolean focus,
                                                            int row, int col) {
                 super.getTableCellRendererComponent(t, value, sel, false, row, col);
+                markQuery = col != 0 && findBar.isMatch(row) ? findBar.markQuery() : null;
                 setFont(mono);
                 if (col == 0) {
                     setHorizontalAlignment(RIGHT);
@@ -135,7 +148,7 @@ final class PlainTextView extends JPanel {
                     // setForeground/setBackground stick on this renderer: set both for every cell.
                     if (!sel) {
                         setForeground(t.getForeground());
-                        setBackground(findBar.isMatch(row) ? ClouseauColors.searchMatchBackground() : t.getBackground());
+                        setBackground(t.getBackground());   // Find marks the text, not the line
                     }
                 }
                 return this;

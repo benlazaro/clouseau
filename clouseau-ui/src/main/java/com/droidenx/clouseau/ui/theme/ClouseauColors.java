@@ -172,8 +172,12 @@ public final class ClouseauColors {
      */
     public static final String NO_FOCUS_FRAME = "focusedBorderColor: $Component.borderColor; innerFocusWidth: 0";
 
-    /** Background tint for find-bar matched rows. */
-    public static Color searchMatchBackground(){ return get("Clouseau.searchMatchBg", "Table.background"); }
+    /**
+     * Find's mark behind matched text: a light, translucent box with an outline, so it shows on
+     * any row (plain, striped, highlighted, selected) and never reads as a highlight fill.
+     */
+    public static Color findMarkBackground() { return get("Clouseau.findMarkBg", "Table.background"); }
+    public static Color findMarkBorder()     { return get("Clouseau.findMarkBorder", "Label.foreground"); }
 
     // ── Row-highlight palette ─────────────────────────────────────────────────
 

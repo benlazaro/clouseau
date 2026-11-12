@@ -111,6 +111,7 @@ final class SharedTabContext {
         tableView = new LogTableView(model, new LogTableView.Host() {
             @Override public Notes notes() { return notes; }
             @Override public boolean isFindMatch(int modelRow) { return find[0] != null && find[0].isMatch(modelRow); }
+            @Override public String findQuery() { return find[0] != null ? find[0].markQuery() : null; }
             @Override public void showRowMenu(List<Integer> modelRows, int x, int y) { menu[0].show(modelRows, x, y); }
             @Override public void editNote(int modelRow) { if (menu[0] != null) menu[0].editNote(modelRow); }
         });
