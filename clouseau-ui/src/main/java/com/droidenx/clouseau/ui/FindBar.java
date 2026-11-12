@@ -69,8 +69,17 @@ final class FindBar extends JPanel {
     private int cursor = -1;
     private javax.swing.Timer debounce;
 
+    /** Colors rows (a palette slot, or null to clear) and reads a row's color; set by the tab. */
+    interface Highlighter {
+        void highlight(List<Integer> modelRows, Integer slot);
+        Color highlightOf(int modelRow);
+    }
+
+    private Highlighter highlighter;
+    private final JButton highlightBtn = new JButton(Messages.get("find.highlight"));
+
     FindBar(JTable table, Search searcher) {
-        super(new MigLayout("insets 3 8 3 8, gap 4", "[][grow][][][]", "[center]"));
+        super(new MigLayout("insets 3 8 3 8, gap 4", "[][grow][][][]8[][]", "[center]"));
         this.table = table;
         this.searcher = searcher;
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
@@ -132,9 +141,65 @@ final class FindBar extends JPanel {
         add(label);
         add(field, "growx");
         add(counter);
+        // Highlight ⌄: color every match at once, with the row menu's swatches.
+        FilterBar.pickerArrow(highlightBtn);
+        highlightBtn.setFont(highlightBtn.getFont().deriveFont(12f));
+        highlightBtn.setMargin(new Insets(1, 6, 1, 6));
+        highlightBtn.setEnabled(false);
+        highlightBtn.addActionListener(e -> showHighlightPopup());
+
+        add(label);
+        add(field, "growx");
+        add(counter);
         add(prevBtn);
         add(nextBtn);
+        add(highlightBtn, "hidemode 3");
         add(closeBtn);
+    }
+
+    /** Lets the bar color its matches; without one, the Highlight button stays hidden. */
+    void setHighlighter(Highlighter highlighter) {
+        this.highlighter = highlighter;
+        highlightBtn.setVisible(highlighter != null);
+    }
+
+    /**
+     * The swatches, under the button: a click colors every match in that color (a white ring
+     * marks the color they all have already), and Clear Highlight uncolors them.
+     */
+    private void showHighlightPopup() {
+        if (highlighter == null || matches.isEmpty()) return;
+        List<Integer> rows = matches;
+        JPopupMenu popup = new JPopupMenu();
+        JLabel title = new JLabel(MessageFormat.format(Messages.get("find.highlight.title"), rows.size()));
+        ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
+        JPanel head = new JPanel(new MigLayout("insets 6 8 2 8, gap 0, wrap 1"));
+        head.setOpaque(false);
+        head.add(title, "gapleft 4");
+
+        JPanel swatches = new JPanel(new MigLayout("insets 4, gap 4"));   // not FlowLayout: in a MigLayout it asks for ~600px
+        swatches.setOpaque(false);
+        Color[] palette = ClouseauColors.highlightColors();
+        for (int i = 0; i < palette.length; i++) {
+            Color color = palette[i];
+            int slot = i;
+            boolean all = rows.stream().allMatch(r -> color.equals(highlighter.highlightOf(r)));
+            JButton swatch = RowMenu.swatch(color, all);
+            swatch.addActionListener(e -> {
+                popup.setVisible(false);
+                highlighter.highlight(rows, slot);
+            });
+            swatches.add(swatch, "w 22!, h 22!");   // FlatLaf's button minimum width would stretch it
+        }
+        head.add(swatches);
+        popup.add(head);
+        popup.addSeparator();
+        JMenuItem clear = new JMenuItem(Messages.get("find.highlight.clear"));
+        clear.setEnabled(rows.stream().anyMatch(r -> highlighter.highlightOf(r) != null));
+        clear.addActionListener(e -> highlighter.highlight(rows, null));
+        popup.add(clear);
+        // Right-aligned with the button: it sits at the window's right edge.
+        popup.show(highlightBtn, highlightBtn.getWidth() - popup.getPreferredSize().width, highlightBtn.getHeight());
     }
 
     /** A small up/down arrow button, shared with {@link HighlightNavBar}. */
@@ -175,6 +240,7 @@ final class FindBar extends JPanel {
         matchModelRows = Set.of();
         matches        = List.of();
         cursor         = -1;
+        highlightBtn.setEnabled(false);
         counter.setText("");
         table.repaint();
     }
@@ -215,6 +281,8 @@ final class FindBar extends JPanel {
         ClouseauColors.themedForeground(counter,
                 () -> n == 0 ? ClouseauColors.statusError() : ClouseauColors.dimForeground());
         counter.setText(MessageFormat.format(Messages.get("find.count"), n));
+        highlightBtn.setEnabled(n > 0);
+        highlightBtn.setToolTipText(n > 0 ? MessageFormat.format(Messages.get("find.highlight.tooltip"), n) : null);
         table.repaint();
         if (n > 0) navigate(+1);
     }

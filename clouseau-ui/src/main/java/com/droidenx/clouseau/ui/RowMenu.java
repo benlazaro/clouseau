@@ -90,24 +90,7 @@ final class RowMenu {
                 final Color color = palette[slotIndex];
                 final int slot = slotIndex;
                 boolean allMatch = entries.stream().allMatch(r -> color.equals(logTableModel.getHighlight(r)));
-                JButton swatch = new JButton() {
-                    @Override protected void paintComponent(Graphics g) {
-                        Graphics2D g2 = (Graphics2D) g.create();
-                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                        g2.setColor(color);
-                        g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
-                        if (allMatch) {
-                            g2.setColor(Color.WHITE);
-                            g2.setStroke(new BasicStroke(2f));
-                            g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 5, 5);
-                        }
-                        g2.dispose();
-                    }
-                };
-                swatch.setPreferredSize(new Dimension(22, 22));
-                swatch.setBorderPainted(false);
-                swatch.setContentAreaFilled(false);
-                swatch.setFocusPainted(false);
+                JButton swatch = swatch(color, allMatch);
                 swatch.addActionListener(e -> {
                     setHighlights(entries, color, slot);
                     menu.setVisible(false);
@@ -255,6 +238,43 @@ final class RowMenu {
     }
 
     /** Highlights model rows (null clears them) and saves them with the annotations (D-15). */
+    /**
+     * A 22×22 highlight color button, ringed in white when every row it would color already
+     * has that color. Shared with the Find bar's Highlight popup.
+     */
+    static JButton swatch(Color color, boolean marked) {
+        JButton swatch = new JButton() {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(color);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+                if (marked) {
+                    g2.setColor(Color.WHITE);
+                    g2.setStroke(new BasicStroke(2f));
+                    g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 5, 5);
+                }
+                g2.dispose();
+            }
+        };
+        swatch.setPreferredSize(new Dimension(22, 22));
+        swatch.setBorderPainted(false);
+        swatch.setContentAreaFilled(false);
+        swatch.setFocusPainted(false);
+        return swatch;
+    }
+
+    /**
+     * Highlights the model rows in palette slot {@code slot} (null clears them), saves, and
+     * refreshes what shows highlights: the Find bar's "highlight every match".
+     */
+    void highlightRows(List<Integer> modelRows, Integer slot) {
+        if (modelRows.isEmpty()) return;
+        setHighlights(modelRows, slot == null ? null : ClouseauColors.highlightColors()[slot], slot);
+        logTable.repaint();
+        host.highlightsChanged();
+    }
+
     private void setHighlights(List<Integer> modelRows, Color color, Integer slot) {
         Map<Integer, String> rawLines = new java.util.LinkedHashMap<>();
         for (int r : modelRows) {
