@@ -26,7 +26,7 @@ final class HighlightNavBar extends JPanel {
     private Color navColor = null;
 
     HighlightNavBar(JTable table, LogTableModel model) {
-        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][]10[]8[grow]", "[center]"));
+        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][]10[]8[grow][]", "[center]"));
         this.table = table;
         this.model = model;
         setBorder(new FindBar.BarSeparator());
@@ -62,6 +62,21 @@ final class HighlightNavBar extends JPanel {
         add(swatches, "aligny center");
         add(arrows, "aligny center");
         add(position, "aligny center");
+
+        // Clear All at the far right, away from the chips and arrows clicked all the time.
+        clearAllBtn.setFont(clearAllBtn.getFont().deriveFont(12f));
+        clearAllBtn.setMargin(new Insets(1, 6, 1, 6));
+        clearAllBtn.setToolTipText(Messages.get("highlight.nav.clear.all.tooltip"));
+        clearAllBtn.addActionListener(e -> { if (onClearAll != null) onClearAll.run(); });
+        add(clearAllBtn, "aligny center");
+    }
+
+    private final JButton clearAllBtn = new JButton(Messages.get("highlight.nav.clear.all"));
+    private Runnable onClearAll;
+
+    /** What Clear All does: the tab removes every highlight, asking first. */
+    void setOnClearAll(Runnable onClearAll) {
+        this.onClearAll = onClearAll;
     }
 
     /** The find bar above draws its line only while this bar is under it. */

@@ -187,6 +187,7 @@ final class SharedTabContext {
             @Override public Color highlightOf(int modelRow) { return model.getHighlight(modelRow); }
         });
         highlightNavBar = nav[0] = new HighlightNavBar(table, model);
+        highlightNavBar.setOnClearAll(() -> { if (rowMenu[0] != null) rowMenu[0].clearAllHighlights(); });
         ClouseauColors.onThemeChange(table, this::reapplyHighlightsForTheme);
 
         model.addTableModelListener(e -> {

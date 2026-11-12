@@ -129,7 +129,9 @@ Highlights mark rows you want to come back to.
    that color (or **All**), and use **▲** and **▼** to go to the previous or next
    highlighted row.
 3. **Clear highlight** removes the color from the selected rows; **Clear all highlights**
-   removes every highlight in the tab.
+   in the same menu, or **Clear Highlights** at the right end of the bar, removes every
+   highlight in the tab, the ones the filters hide included (after asking, unless you
+   turned that off in Settings).
 
 Filters don't remove highlights, they only hide them. The bar stays while any row is
 highlighted and says how many the filters hide: **2 / 4 · 3 hidden**, or **3 hidden by
