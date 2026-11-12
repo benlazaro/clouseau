@@ -38,12 +38,12 @@ final class TimezonePopup extends JDialog {
 
         JPanel p = new JPanel(new MigLayout("insets 12 14 12 14, gapy 6, wrap 2", "[]12[grow, fill, 300::]"));
         p.add(SettingsDialog.sectionLabel(Messages.get("timezone.popup.read.title")), "span 2, growx, gapbottom 2");
-        p.add(new JLabel(Messages.get("timezone.popup.read")));
+        p.add(new JLabel(Messages.get("timezone.popup.read")), SettingsDialog.INDENT);
         p.add(sourceCombo);
         if (mixed) p.add(hint(Messages.get("timezone.popup.read.mixed")), "skip 1");
         p.add(allTabs, "skip 1");
         p.add(SettingsDialog.sectionLabel(Messages.get("timezone.popup.show.title")), "span 2, growx, gaptop 10, gapbottom 2");
-        p.add(new JLabel(Messages.get("timezone.popup.show")));
+        p.add(new JLabel(Messages.get("timezone.popup.show")), SettingsDialog.INDENT);
         p.add(displayCombo);
         p.add(hint(Messages.get("timezone.popup.show.hint")), "skip 1");
 

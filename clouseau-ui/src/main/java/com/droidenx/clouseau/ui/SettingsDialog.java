@@ -2,6 +2,7 @@ package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.ui.theme.ThemeManager;
 import com.droidenx.clouseau.ui.theme.ThemeManagerDialog;
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
@@ -16,7 +17,9 @@ final class SettingsDialog extends JDialog {
     /** One width for every spinner, wide enough for "2,000,000" plus the arrows. */
     private static final String SPINNER = "w 120!";
     /** Settings sit indented under their section title, so the titles stand out. */
-    static final String INDENT = "gapleft 28";   // shared with SshConnectionDialog
+    static final String INDENT = "gapleft 28";
+    /** The indent under a section title in a narrow, one-column pane (the Open dialog's details). */
+    static final String INDENT_NARROW = "gapleft 16";   // shared with SshConnectionDialog
 
     /** The dialog opens at least this wide... */
     private static final int MIN_WIDTH = 760;
@@ -239,11 +242,17 @@ final class SettingsDialog extends JDialog {
         return new ZoneCombo(current);
     }
 
-    /** A section title, as IntelliJ's settings show one: regular weight, with a hairline to the right edge. */
+    /**
+     * A section title, as IntelliJ's settings show one: regular weight, with a hairline to the
+     * right edge. Dim, a step below the labels and values, as the sidebars' group titles are,
+     * and the section's settings are indented under it ({@link #INDENT}).
+     */
     static JComponent sectionLabel(String text) {   // shared with SshConnectionDialog
         JPanel title = new JPanel(new MigLayout("insets 0, gap 8", "[][grow]", "[center]"));
         title.setOpaque(false);
-        title.add(new JLabel(text));
+        JLabel label = new JLabel(text);
+        ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
+        title.add(label);
         title.add(new JSeparator(), "growx");
         return title;
     }
