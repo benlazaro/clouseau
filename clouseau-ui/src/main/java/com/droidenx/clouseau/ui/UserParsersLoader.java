@@ -23,10 +23,11 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * Loads log parsers from two sources, in order:
+ * Loads log parsers from two sources, in the order auto-detection tries them:
  * <ol>
- *   <li>Bundled {@code default-parsers.json} (classpath resource) — always loaded.</li>
- *   <li>{@code parsers.json} in the data dir — user additions/overrides; loaded if present.</li>
+ *   <li>{@code parsers.json} in the data dir — the user's own, in their order; loaded if present.</li>
+ *   <li>Bundled {@code default-parsers.json} (classpath resource) — always loaded, except one
+ *       the user replaced with a parser of the same name.</li>
  * </ol>
  *
  * <p>Each entry supports:
@@ -50,34 +51,36 @@ public final class UserParsersLoader {
     private UserParsersLoader() {}
 
     public static List<LogParser> load() {
-        // Use a LinkedHashMap keyed by name so user entries silently override bundled defaults
-        // while preserving insertion order for new names.
+        // The user's parsers come first, in the order they set in the Parser Editor:
+        // auto-detection takes the first parser that reads a line, and theirs are the more
+        // specific. A user parser named like a bundled one replaces it.
         Map<String, LogParser> byName = new LinkedHashMap<>();
 
-        // 1. Bundled defaults
+        // 1. User file
+        if (Files.exists(USER_FILE)) {
+            try (Reader r = Files.newBufferedReader(USER_FILE)) {
+                parseArray(r, USER_FILE.toString()).forEach(p -> byName.putIfAbsent(p.getName(), p));
+            } catch (IOException e) {
+                log.warn("Could not read {}", USER_FILE, e);
+            }
+        }
+
+        // 2. Bundled defaults, after the user's; one the user replaced is left out
         try (InputStream is = UserParsersLoader.class.getClassLoader().getResourceAsStream(DEFAULT_RESOURCE)) {
             if (is != null) {
                 parseArray(new InputStreamReader(is, StandardCharsets.UTF_8), "default-parsers.json")
-                        .forEach(p -> byName.put(p.getName(), p));
+                        .forEach(p -> {
+                            if (byName.containsKey(p.getName())) {
+                                log.info("User parser '{}' overrides bundled default", p.getName());
+                            } else {
+                                byName.put(p.getName(), p);
+                            }
+                        });
             } else {
                 log.warn("Bundled default-parsers.json not found on classpath");
             }
         } catch (IOException e) {
             log.warn("Could not read bundled default-parsers.json", e);
-        }
-
-        // 2. User file — entries with the same name override bundled defaults
-        if (Files.exists(USER_FILE)) {
-            try (Reader r = Files.newBufferedReader(USER_FILE)) {
-                parseArray(r, USER_FILE.toString()).forEach(p -> {
-                    if (byName.containsKey(p.getName())) {
-                        log.info("User parser '{}' overrides bundled default", p.getName());
-                    }
-                    byName.put(p.getName(), p);
-                });
-            } catch (IOException e) {
-                log.warn("Could not read {}", USER_FILE, e);
-            }
         }
 
         List<LogParser> result = new ArrayList<>(byName.values());
