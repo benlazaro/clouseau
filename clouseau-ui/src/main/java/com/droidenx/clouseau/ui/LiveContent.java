@@ -94,7 +94,7 @@ final class LiveContent implements TabContent {
                     view.autoResizeColumns();   // a later line brought a new field column
                 }
                 tab.filterBar().addBatch(chunk);
-                if (tab.follow()) view.scrollToBottom();
+                if (tab.follow()) view.followToBottom();
             }
 
             @Override

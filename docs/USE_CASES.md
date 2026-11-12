@@ -164,7 +164,9 @@ responsive (about 1.6 s for 1M lines). Times are compared to the millisecond.
 **Goal:** Watch a running application's log, locally or on a remote host, for hours.
 
 1. User opens a file with follow mode on, or connects to a remote host over SSH.
-2. New entries appear as they are written; the view can auto-scroll.
+2. New entries appear as they are written. While the view is at the bottom it scrolls to
+   them; once the user scrolls up to read earlier rows it stays put, and scrolling back
+   to the end (or Ctrl+End, or turning Follow on) scrolls with new rows again.
 3. If the file is rotated, Clouseau keeps existing rows and continues with the new file.
 4. Clouseau stays responsive and does not crash, however long it is left running.
 
