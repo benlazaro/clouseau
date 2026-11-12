@@ -480,12 +480,17 @@ final class SharedTabContext {
             annotationsPanel = new AnnotationsPanel(
                     () -> notes, model, table,
                     () -> annotationsDialog.setVisible(false),
-                    saved -> { warnIfAnnotationsNotSaved(saved); refreshDetail(); });
+                    saved -> { warnIfAnnotationsNotSaved(saved); refreshDetail(); },
+                    ordinal -> {
+                        int row = model.rowOfOrdinal(ordinal);
+                        if (row >= 0 && rowMenu[0] != null) rowMenu[0].editNote(row);
+                    });
             annotationsDialog = new JDialog(owner, Messages.get("annotations.dialog.title"),
                     Dialog.ModalityType.MODELESS);
             annotationsDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
             annotationsDialog.add(annotationsPanel);
-            annotationsDialog.setSize(760, 280);
+            annotationsDialog.setSize(880, 360);
+            annotationsDialog.setMinimumSize(new Dimension(420, 220));
             annotationsDialog.setLocationRelativeTo(owner);
         } else {
             annotationsPanel.refresh();

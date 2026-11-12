@@ -271,7 +271,7 @@ lines, and knows who flagged it.
 command line or "Open with"): Clouseau recognizes it by its manifest, opens its log in
 one tab without asking which file, and attaches each annotation and highlight to its
 line (D-9), with its author. Notes the developer adds are saved next to the bundle in
-`<bundle>.zip!<log>.annotations`, never inside the bundle, and from then on that file is
+`<bundle>.zip!<log>.clouseau`, never inside the bundle, and from then on that file is
 what loads, so the received bundle stays as it was sent. A `.zip` without a Clouseau
 manifest still opens as an ordinary compressed log (UC-2).
 

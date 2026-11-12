@@ -124,7 +124,7 @@ class ReviewBundleTest {
         assertThat(entryBytes(bundle, "app.log")).isEqualTo(Files.readAllBytes(log));
         // Same format as the sidecar next to the log.
         assertThat(new String(entryBytes(bundle, "annotations.json"), StandardCharsets.UTF_8))
-                .isEqualTo(Files.readString(dir.resolve("app.log.annotations")));
+                .isEqualTo(Files.readString(dir.resolve("app.log.clouseau")));
         assertThat(filesIn(bundle.getParent())).containsExactly(bundle);   // no temp file left
     }
 
@@ -340,7 +340,7 @@ class ReviewBundleTest {
         AnnotationStore store = openBundle(bundle);
         store.put(3, note(LINES[3], "root cause", "developer"));
 
-        Path sidecar = bundle.resolveSibling("app-review.zip!app.log.annotations");
+        Path sidecar = bundle.resolveSibling("app-review.zip!app.log.clouseau");
         assertThat(store.getSavePath()).isEqualTo(sidecar);
         assertThat(Files.readAllBytes(bundle)).isEqualTo(bundleBytes);
 
