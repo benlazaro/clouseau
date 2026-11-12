@@ -64,6 +64,9 @@ final class PlainTextView extends JPanel {
     private String entry;
     private Path copy;
     private boolean follow;
+    /** Whether the view is at the last line: Follow is on while it is (see BottomPin). */
+    private BottomPin pin;
+    private final Consumer<Boolean> onFollow;
     private SwingWorker<?, ?> loader;
     private SwingWorker<?, ?> follower;
     /** Where following resumes: the end of the last complete line read. */
@@ -80,6 +83,7 @@ final class PlainTextView extends JPanel {
     PlainTextView(Runnable onCreateParser, Consumer<Boolean> onFollow, Runnable onLinesChanged) {
         super(new BorderLayout());
         this.onLinesChanged = onLinesChanged;
+        this.onFollow = onFollow;
 
         JPanel banner = new JPanel(new MigLayout("insets 6 10 6 10, gap 10", "[grow][][]", "[center]"));
         ClouseauColors.themedBackground(banner, ClouseauColors::loadingBackground);
@@ -156,6 +160,14 @@ final class PlainTextView extends JPanel {
         });
 
         JScrollPane scroll = new JScrollPane(table);
+        // Follow is on while the view is at the last line: scrolling up turns it off, scrolling
+        // back to the end turns it on. New lines are read either way.
+        pin = new BottomPin(scroll.getVerticalScrollBar().getModel(), table::getRowHeight);
+        pin.onChange(atEnd -> {
+            if (atEnd == follow || !followBtn.isEnabled()) return;
+            follow = atEnd;
+            onFollow.accept(atEnd);   // the tab and its toggle catch up
+        });
         scroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
         ClouseauColors.themedBackground(scroll.getViewport(), ClouseauColors::viewportBackground);
         // The text column is at least as wide as the view, which is only known once laid out.
@@ -185,6 +197,8 @@ final class PlainTextView extends JPanel {
         boolean compressed = entry != null || LogReaders.isCompressed(file);
         followBtn.setSelected(follow && !compressed);
         followBtn.setEnabled(!compressed);
+        if (follow) pin.hold();
+        else pin.release();   // opens at the first line, and stays there
         setBanner(banner);
         findBar.cancel();
         maxLineChars = 0;
@@ -239,7 +253,7 @@ final class PlainTextView extends JPanel {
                     log.warn("Failed to read {} as plain text", file, e);
                 }
                 showLines(target, widest);
-                if (PlainTextView.this.follow && !compressed) startFollowing();
+                if (!compressed) startFollowing();   // new lines are read whatever Follow says
             }
         };
         loader = worker;
@@ -250,13 +264,17 @@ final class PlainTextView extends JPanel {
         bannerText.setText(text);
     }
 
-    /** Turns following on or off; ignored for a compressed file. */
+    /**
+     * Follow on (go to the last line and keep it in view) or off (the view stays where it
+     * is). New lines are read either way. Ignored for a compressed file.
+     */
     void setFollow(boolean on) {
-        follow = on;
         if (followBtn.isEnabled()) followBtn.setSelected(on);
-        if (!on) stopFollowing();
-        else if (follower == null && loader != null && loader.isDone() && lines != null
-                && entry == null && !LogReaders.isCompressed(file)) startFollowing();
+        if (on == follow) return;   // the view got there itself (see the pin)
+        follow = on;
+        if (!followBtn.isEnabled()) return;
+        if (on) scrollToBottom();
+        else pin.release();
     }
 
     private void startFollowing() {
@@ -316,23 +334,18 @@ final class PlainTextView extends JPanel {
     }
 
     private void showLines(TextLines target, int widest) {
-        boolean atBottom = isScrolledToBottom();
         maxLineChars = Math.max(maxLineChars, widest);
         model.setCount(target.size());
         sizeColumns();
-        if (follow && atBottom) scrollToBottom();
+        if (follow && pin.pinned()) scrollToBottom();
         onLinesChanged.run();
     }
 
-    private boolean isScrolledToBottom() {
-        if (!(table.getParent() instanceof JViewport vp)) return true;
-        Rectangle view = vp.getViewRect();
-        return view.y + view.height >= table.getHeight() - table.getRowHeight();
-    }
-
+    /** Scrolls to the last line and holds the view there. */
     private void scrollToBottom() {
         int last = model.getRowCount() - 1;
         if (last >= 0) table.scrollRectToVisible(table.getCellRect(last, 0, true));
+        pin.hold();
     }
 
     private void sizeColumns() {

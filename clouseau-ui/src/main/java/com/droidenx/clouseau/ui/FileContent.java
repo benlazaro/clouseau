@@ -223,7 +223,9 @@ final class FileContent implements TabContent {
                     tab.statusChanged();
                     if (indexedTo >= 0) follower.setPosition(indexedTo);
                     else try { follower.setPosition(Files.size(file)); } catch (IOException ignored) {}
-                    if (tab.follow()) startTailing();
+                    // New lines are always read; Follow only decides whether the view keeps up.
+                    startTailing();
+                    if (tab.follow()) tab.tableView().scrollToBottomWhenShown();
                 } catch (Exception ex) {
                     log.error("Failed to load {}", file, ex);
                     onError.run();
@@ -309,9 +311,8 @@ final class FileContent implements TabContent {
 
     @Override
     public void setFollow(boolean on) {
+        // The file is read whatever Follow says; the table keeps up with it, or not, itself.
         if (plainView != null) plainView.setFollow(on);
-        else if (on) startTailing();
-        else stopTailing();
     }
 
     /**

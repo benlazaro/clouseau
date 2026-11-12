@@ -371,6 +371,15 @@ final class LogTableView {
         bottomPin = new BottomPin(tableScrollPane.getVerticalScrollBar().getModel(), logTable::getRowHeight);
         // Added after the table's own listener, so this one hears of a column change first.
         logTableModel.addTableModelListener(e -> {
+            // Rows dropped from the top (a live tab over its entry limit) while the user reads
+            // earlier rows: move the view up with them, so the row being read stays put.
+            if (e.getType() == javax.swing.event.TableModelEvent.DELETE && e.getFirstRow() == 0
+                    && !bottomPin.pinned()) {
+                JViewport vp = tableScrollPane.getViewport();
+                Point p = vp.getViewPosition();
+                int removed = (e.getLastRow() - e.getFirstRow() + 1) * logTable.getRowHeight();
+                vp.setViewPosition(new Point(p.x, Math.max(0, p.y - removed)));
+            }
             if (e.getFirstRow() == javax.swing.event.TableModelEvent.HEADER_ROW && tableColumnsManaged)
                 keepColumnsThroughRebuild();
         });
@@ -404,9 +413,16 @@ final class LogTableView {
         if (logTable.getRowCount() > 0) logTable.scrollRectToVisible(logTable.getCellRect(0, 0, true));
     }
 
+    /** Scrolls to the newest row and holds the view there: Follow is on from here. */
     void scrollToBottom() {
         int last = logTable.getRowCount() - 1;
         if (last >= 0) logTable.scrollRectToVisible(logTable.getCellRect(last, 0, true));
+        bottomPin.hold();
+    }
+
+    /** {@link #scrollToBottom} once the table has been laid out (after a load shows it). */
+    void scrollToBottomWhenShown() {
+        SwingUtilities.invokeLater(this::scrollToBottom);
     }
 
     /**
@@ -416,6 +432,15 @@ final class LogTableView {
     void followToBottom() {
         if (bottomPin.pinned()) scrollToBottom();
     }
+
+    /** Whether the view is held at the newest row (what the Follow toggle shows). */
+    boolean atNewest() { return bottomPin.pinned(); }
+
+    /** Runs with the new state when the user scrolls away from the newest row, or back to it. */
+    void onAtNewestChanged(java.util.function.Consumer<Boolean> listener) { bottomPin.onChange(listener); }
+
+    /** Follow turned off: the view stays where it is, even at the newest row, until the user scrolls. */
+    void stopAtNewest() { bottomPin.release(); }
 
     /** Forgets hidden columns and the applied layout, before the tab shows another log. */
     void resetColumns() {

@@ -90,8 +90,7 @@ loaded (low memory)". See [Memory](settings.md#memory) to raise the limit.
 ![A file shown as plain text](../docs/screenshots/plain-text.png)
 
 If no parser recognizes the first 50 lines of a file, it opens anyway, as read-only plain
-text: every line with its line number, Find (`Ctrl+F`), copy, and **Follow** for a file
-that's still growing.
+text: every line with its line number, Find (`Ctrl+F`), copy, new lines as the file grows, and **Follow** to keep the last line in view (as in [Following live logs](following.md)).
 
 Click **Create a Parser…** in the banner to open the [parser editor](parsers.md) with a new
 parser and the file's first line as a sample. When you save a parser that recognizes the

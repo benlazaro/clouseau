@@ -230,7 +230,20 @@ refresh; open tabs keep the list they were created with.
    status bar marks the tab as partly loaded, and follow mode isn't started, since new
    lines would follow a gap.
 6. When loading finishes, Clouseau sizes columns, applies the default column layout,
-   loads annotations, and starts following if follow mode is on.
+   loads annotations, and starts following, whatever the Follow toggle says; with Follow
+   on, the table opens at its newest row.
+
+**The Follow toggle is the view, not the reading.** Every file, merged view and live source
+reads new lines for as long as its tab is open (a partly loaded file excepted, above).
+Follow says whether the view is held at the newest row: `BottomPin` (ui) watches the
+vertical scroll bar, and `SharedTabContext` (and `PlainTextView` for plain text) turns
+Follow off when the user scrolls away from the end and on when they scroll back to it.
+Turning Follow on scrolls to the newest row and holds it there (`BottomPin.hold`, also
+when the bar didn't move); turning it off lets go where the view is (`BottomPin.release`,
+so a row arriving just after doesn't hold it again). Rows a live tab drops at its entry
+limit move the view up with them while it isn't held, so the row being read stays put.
+The setting **Start at the newest line** (`AppPrefs.isFollowByDefault`) is the toggle's
+starting state.
 
 ### 6.3 Following a log (UC-6)
 

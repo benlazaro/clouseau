@@ -62,6 +62,31 @@ class BottomPinTest {
     }
 
     @Test
+    void releasingAtTheBottomStaysReleasedAsRowsArrive() {
+        DefaultBoundedRangeModel bar = bar(50, 50 * ROW - 200);
+        BottomPin pin = new BottomPin(bar, () -> ROW);
+        java.util.List<Boolean> changes = new java.util.ArrayList<>();
+        pin.onChange(changes::add);
+
+        pin.release();   // Follow turned off at the bottom
+        bar.setMaximum(51 * ROW);   // one row arrives: still within a row of the end
+        assertThat(pin.pinned()).isFalse();
+
+        bar.setValue(51 * ROW - 200);   // the user scrolls to the end
+        assertThat(pin.pinned()).isTrue();
+        assertThat(changes).containsExactly(false, true);
+    }
+
+    @Test
+    void holdPinsWithoutTheBarMoving() {
+        DefaultBoundedRangeModel bar = bar(50, 50 * ROW - 200);
+        BottomPin pin = new BottomPin(bar, () -> ROW);
+        pin.release();
+        pin.hold();   // Follow turned on at the bottom: there's nowhere to scroll
+        assertThat(pin.pinned()).isTrue();
+    }
+
+    @Test
     void aViewThatShowsEveryRowIsPinned() {
         DefaultBoundedRangeModel bar = bar(50, 100);
         BottomPin pin = new BottomPin(bar, () -> ROW);
