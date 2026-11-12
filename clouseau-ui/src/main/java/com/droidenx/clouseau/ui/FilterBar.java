@@ -499,7 +499,7 @@ final class FilterBar extends JPanel {
             onChanged.run();
         });
 
-        JScrollPane treeScroll = new JScrollPane(tree);
+        JScrollPane treeScroll = ClouseauColors.noFocusFrame(new JScrollPane(tree));
         // The popup's own hairline, as in the Fields and Sources popups, not a field's focus border.
         treeScroll.setBorder(UIManager.getBorder("PopupMenu.border"));
         content.add(treeScroll, "grow, wrap");
@@ -676,7 +676,7 @@ final class FilterBar extends JPanel {
             fieldsChangedByUser();
         });
 
-        JScrollPane scroll = new JScrollPane(tree);
+        JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(tree));
         // The popup's own hairline, as in the Loggers and Sources popups, not a field's focus border.
         scroll.setBorder(UIManager.getBorder("PopupMenu.border"));
         content.add(scroll, "grow, wrap");
@@ -940,8 +940,8 @@ final class FilterBar extends JPanel {
             updateSourcesButtonLabel();
             onChanged.run();
         });
-        JScrollPane scroll = new JScrollPane(tree,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(tree,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER));
         scroll.setBorder(UIManager.getBorder("PopupMenu.border"));
         content.add(scroll, "grow, wrap, hmax 320");
 

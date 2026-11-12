@@ -359,7 +359,7 @@ public class SshConnectionDialog extends JDialog {
                 },
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_DELETE, 0), JComponent.WHEN_FOCUSED);
 
-        JScrollPane treeScroll = new JScrollPane(savedTree);
+        JScrollPane treeScroll = ClouseauColors.noFocusFrame(new JScrollPane(savedTree));
         treeScroll.setBorder(BorderFactory.createEmptyBorder());
         // The list sits on the sidebar itself, not on a box of its own.
         savedTree.setOpaque(false);

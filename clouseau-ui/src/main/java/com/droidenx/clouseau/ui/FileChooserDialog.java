@@ -83,7 +83,7 @@ final class FileChooserDialog extends JDialog {
     /** One line, cut short with … rather than wrapped, so the section's height never changes. */
     private final JLabel summary = new JLabel(" ");
     private final JList<Object> fileList = new JList<>(verdicts);
-    private final JScrollPane fileScroll = new JScrollPane(fileList);
+    private final JScrollPane fileScroll = ClouseauColors.noFocusFrame(new JScrollPane(fileList));
     private final JRadioButton asMerged = new JRadioButton(Messages.get("filechooser.as.merged"));
     private final JRadioButton asTabs = new JRadioButton(Messages.get("filechooser.as.tabs"));
     private final JComponent openAsRow;
@@ -159,6 +159,7 @@ final class FileChooserDialog extends JDialog {
         chooser.setAcceptAllFileFilterUsed(true);
         chooser.setMultiSelectionEnabled(true);
         chooser.setControlButtonsAreShown(false);
+        ClouseauColors.noFocusFrames(chooser);         // its list and details views: no amber frame
         File lastDir = AppPrefs.getLastOpenDir();
         if (lastDir != null) chooser.setCurrentDirectory(lastDir);
         Action detailsView = chooser.getActionMap().get("viewTypeDetails");
@@ -558,7 +559,6 @@ final class FileChooserDialog extends JDialog {
             if (e.getValueIsAdjusting()) return;
             if (fileList.getSelectedValue() instanceof Verdict verdict) showPreview(verdict);
         });
-        fileScroll.setBorder(UIManager.getBorder("ScrollPane.border"));
 
         parserCombo.addActionListener(e -> {
             selectedParserIndex = parserCombo.getSelectedIndex();
@@ -673,7 +673,7 @@ final class FileChooserDialog extends JDialog {
                 KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), JComponent.WHEN_FOCUSED);
         rebuildPlaces();
 
-        JScrollPane scroll = new JScrollPane(placesList);
+        JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(placesList));
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.setOpaque(false);
         scroll.getViewport().setOpaque(false);

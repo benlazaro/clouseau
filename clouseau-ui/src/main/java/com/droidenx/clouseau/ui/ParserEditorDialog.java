@@ -199,7 +199,7 @@ public final class ParserEditorDialog extends JDialog {
         parserList.setCellRenderer(new ParserRenderer());
         parserList.setOpaque(false);
         ToolTipManager.sharedInstance().registerComponent(parserList);
-        JScrollPane scroll = new JScrollPane(parserList);
+        JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(parserList));
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.setOpaque(false);
         scroll.getViewport().setOpaque(false);

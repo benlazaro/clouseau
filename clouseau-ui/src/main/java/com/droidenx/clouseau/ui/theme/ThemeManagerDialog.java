@@ -49,7 +49,7 @@ public final class ThemeManagerDialog extends JDialog {
         JPanel content = new JPanel(new MigLayout("insets 16, wrap 1, gapy 8", "[400px, fill]"));
         content.add(new JLabel(Messages.get("themes.manage.installed.label")));
 
-        JScrollPane scroll = new JScrollPane(themeList);
+        JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(themeList));
         scroll.setPreferredSize(new Dimension(400, 150));
         content.add(scroll, "grow, h 150!");
 
