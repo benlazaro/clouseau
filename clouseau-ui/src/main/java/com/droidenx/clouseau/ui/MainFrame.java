@@ -779,7 +779,8 @@ public final class MainFrame extends JFrame {
                     AppPrefs.setSourceTimezone(file.toAbsolutePath(), srcTz);
                 }
             }
-            openFiles(r.files(), r.parser(), r.merge());
+            // Several logs: the dialog already asked how to open them.
+            openFiles(r.files(), r.parser(), r.multiOpen());
         });
     }
 
@@ -793,13 +794,18 @@ public final class MainFrame extends JFrame {
 
     /** {@code merge}: open two or more files in one merged view without asking. */
     private void openFiles(List<Path> files, Optional<LogParser> parser, boolean merge) {
+        openFiles(files, parser, merge ? AppPrefs.MultiOpen.MERGE : null);
+    }
+
+    /** {@code how}: merged or separate tabs, already decided; null asks (unless remembered). */
+    private void openFiles(List<Path> files, Optional<LogParser> parser, AppPrefs.MultiOpen how) {
         List<Path> logs = new ArrayList<>();
         for (Path f : files) {
             if (f.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".zip")) openFile(f, parser);
             else logs.add(f);
         }
         if (logs.size() >= 2) {
-            AppPrefs.MultiOpen how = merge ? AppPrefs.MultiOpen.MERGE : chooseMultiOpen(logs.size());
+            if (how == null) how = chooseMultiOpen(logs.size());
             if (how == null) return;
             if (how == AppPrefs.MultiOpen.MERGE) {
                 openMerged(logs.stream().map(p -> new MergeLoad.File(p, null)).toList(), parser);

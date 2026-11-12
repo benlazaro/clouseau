@@ -222,6 +222,25 @@ public final class AppPrefs {
         putString(KEY_MULTI_OPEN, value.name());
     }
 
+    /**
+     * The Open dialog's size and its two dividers (favorites | files | details), as last left;
+     * null before the first time.
+     */
+    public static int[] getOpenDialogLayout() {
+        String v = getString("open.dialog.layout", null);
+        if (v == null) return null;
+        try {
+            int[] r = java.util.Arrays.stream(v.split(",")).mapToInt(s -> Integer.parseInt(s.trim())).toArray();
+            return r.length == 4 ? r : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    public static void setOpenDialogLayout(int width, int height, int left, int right) {
+        putString("open.dialog.layout", width + "," + height + "," + left + "," + right);
+    }
+
     public static int getMaxEntriesPerTab() {
         return getInt(KEY_MAX_ENTRIES_PER_TAB, 200_000);
     }

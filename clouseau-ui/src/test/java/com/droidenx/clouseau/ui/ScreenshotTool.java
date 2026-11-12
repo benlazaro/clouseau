@@ -143,8 +143,11 @@ public final class ScreenshotTool {
         JDialog dialog = waitForDialog();
         onEdt(() -> {
             JFileChooser chooser = find(dialog, JFileChooser.class, c -> true);
+            // Three services: each file's verdict, Open as, and a preview as the table shows it.
             chooser.setCurrentDirectory(logs.toFile());
-            chooser.setSelectedFile(logs.resolve("app.log").toFile());
+            chooser.setSelectedFiles(new java.io.File[] {
+                    logs.resolve("gateway.log").toFile(), logs.resolve("orders-service.log").toFile(),
+                    logs.resolve("payments-service.log").toFile() });
             return null;
         });
         settle(1500);
