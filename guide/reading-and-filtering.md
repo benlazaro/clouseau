@@ -166,6 +166,16 @@ Right-click any column header:
 Drag a column header to move the column. Columns size themselves to their content when a
 file opens.
 
+The columns always fill the window, so there's no horizontal scroll bar. **Message** takes
+whatever room the other columns leave. Drag the border on a column's right to resize it,
+and Message grows or shrinks to make up the difference. A message too long for its column
+ends with **…**; the [detail panel](#the-detail-panel) shows all of it. If a window is so
+narrow, or has so many columns, that Message would get very narrow, the table scrolls
+sideways instead.
+
+A log that gains a new field while you follow it gets a column for it, and your other
+columns keep their widths, order and hiding.
+
 ## Timezones
 
 Log timestamps usually don't say which timezone they're in. Each tab has a **source

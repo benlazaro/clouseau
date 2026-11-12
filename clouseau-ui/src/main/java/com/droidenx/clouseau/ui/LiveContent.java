@@ -90,9 +90,9 @@ final class LiveContent implements TabContent {
                     } else if (model.getColumnCount() != columnsBefore) {
                         view.autoResizeColumns();
                     }
-                } else if (model.getColumnCount() != columnsBefore) {
-                    view.autoResizeColumns();   // a later line brought a new field column
                 }
+                // A later line that brings a new field column: the table keeps the user's
+                // widths and sizes only the new column (LogTableView.keepColumnsThroughRebuild).
                 tab.filterBar().addBatch(chunk);
                 if (tab.follow()) view.followToBottom();
             }

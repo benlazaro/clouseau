@@ -51,6 +51,12 @@ final class LogTableView {
 
     /** Model column index of the Message column — always stretched to fill remaining width. */
     private static final int MESSAGE_MODEL_COL = 5;
+    /** Narrower than this, Message stops shrinking and the table scrolls sideways instead. */
+    private static final int MIN_FLEX_WIDTH = 150;
+    /** The narrowest the column after Message gets when Message's own border is dragged. */
+    private static final int MIN_OTHER_WIDTH = 30;
+    /** Set while this class changes column widths, so it doesn't take them for a user's drag. */
+    private boolean adjustingWidths;
 
     private final LogTableModel logTableModel;
     private final Host host;
@@ -88,11 +94,10 @@ final class LogTableView {
 
             @Override
             public boolean getScrollableTracksViewportWidth() {
-                // During a column resize drag, release the viewport constraint so the column
-                // can grow freely and the horizontal scrollbar appears immediately.
-                if (getTableHeader().getResizingColumn() != null) return false;
-                // Otherwise fill the viewport when columns are narrower; scroll when wider.
-                return getParent() == null || getPreferredSize().width < getParent().getWidth();
+                // Never stretched to the viewport: Message is sized to fill it (stretchMessageColumn).
+                // A stretched table resizes every column from its preferred width, which undid
+                // a column the user had just dragged narrower.
+                return false;
             }
 
             @Override
@@ -364,6 +369,22 @@ final class LogTableView {
         ClouseauColors.themedBackground(tableScrollPane.getRowHeader(), ClouseauColors::tableBackground);
         tableScrollPane.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
         bottomPin = new BottomPin(tableScrollPane.getVerticalScrollBar().getModel(), logTable::getRowHeight);
+        // Added after the table's own listener, so this one hears of a column change first.
+        logTableModel.addTableModelListener(e -> {
+            if (e.getFirstRow() == javax.swing.event.TableModelEvent.HEADER_ROW && tableColumnsManaged)
+                keepColumnsThroughRebuild();
+        });
+        // Columns fill the window: while a border is dragged, Message gives or takes the
+        // difference rather than the table growing past the window's edge.
+        logTable.getColumnModel().addColumnModelListener(new javax.swing.event.TableColumnModelListener() {
+            @Override public void columnMarginChanged(javax.swing.event.ChangeEvent e) {
+                if (!adjustingWidths && tableColumnsManaged) columnDragged();
+            }
+            @Override public void columnAdded(javax.swing.event.TableColumnModelEvent e) {}
+            @Override public void columnRemoved(javax.swing.event.TableColumnModelEvent e) {}
+            @Override public void columnMoved(javax.swing.event.TableColumnModelEvent e) {}
+            @Override public void columnSelectionChanged(javax.swing.event.ListSelectionEvent e) {}
+        });
         logTable.addFocusListener(new java.awt.event.FocusListener() {
             @Override public void focusGained(java.awt.event.FocusEvent e) { logTable.repaint(); }
             @Override public void focusLost(java.awt.event.FocusEvent e)   { logTable.repaint(); }
@@ -403,11 +424,21 @@ final class LogTableView {
     }
 
     void autoResizeColumns() {
-        int totalFitted = 0;
-        int sampleSize = Math.min(logTable.getRowCount(), 50);
-
         for (int col = 0; col < logTable.getColumnCount(); col++) {
             if (logTable.getColumnModel().getColumn(col).getModelIndex() == MESSAGE_MODEL_COL) continue;
+            fitColumn(col);
+        }
+
+        tableColumnsManaged = true;
+        recalcFittedColumnsWidth();   // the flex column (Message, or the last if it's hidden) fills the rest
+        logTable.repaint();
+        logTable.getTableHeader().repaint();
+    }
+
+    /** Sizes one column to its title and the first rows' values. */
+    private void fitColumn(int col) {
+        int sampleSize = Math.min(logTable.getRowCount(), 50);
+        {
             int maxWidth = 0;
             TableCellRenderer hr = logTable.getColumnModel().getColumn(col).getHeaderRenderer();
             if (hr == null) hr = logTable.getTableHeader().getDefaultRenderer();
@@ -429,34 +460,121 @@ final class LogTableView {
             maxWidth += 8;
             logTable.getColumnModel().getColumn(col).setPreferredWidth(maxWidth);
             logTable.getColumnModel().getColumn(col).setWidth(maxWidth);
-            totalFitted += maxWidth;
         }
-
-        fittedColumnsWidth = totalFitted;
-        tableColumnsManaged = true;
-        stretchMessageColumn();
-        logTable.repaint();
-        logTable.getTableHeader().repaint();
     }
 
-    void stretchMessageColumn() {
-        // Find the Message column by model index; fall back to the last visible column if hidden.
-        int msgViewCol = -1;
-        for (int i = 0; i < logTable.getColumnCount(); i++) {
-            if (logTable.getColumnModel().getColumn(i).getModelIndex() == MESSAGE_MODEL_COL) {
-                msgViewCol = i;
-                break;
+    /**
+     * The model's columns changed (a followed line brought a new field, a reload): Swing is
+     * about to rebuild every column at a default width, showing hidden ones again. Called
+     * before it does; once it has, puts back each column's width, order and hiding by title,
+     * and sizes only the columns that are new.
+     */
+    private void keepColumnsThroughRebuild() {
+        javax.swing.table.TableColumnModel cm = logTable.getColumnModel();
+        Map<String, Integer> widths = new LinkedHashMap<>();   // in view order
+        for (int i = 0; i < cm.getColumnCount(); i++) {
+            widths.put(String.valueOf(cm.getColumn(i).getHeaderValue()), cm.getColumn(i).getWidth());
+        }
+        java.util.Set<String> hidden = new java.util.HashSet<>();
+        hiddenColumns.values().forEach(c -> hidden.add(String.valueOf(c.getHeaderValue())));
+        String layout = activeLayoutName;
+        SwingUtilities.invokeLater(() -> {
+            adjustingWidths = true;
+            try {
+                hiddenColumns.clear();
+                int target = 0;
+                for (String name : widths.keySet()) {
+                    for (int i = target; i < cm.getColumnCount(); i++) {
+                        if (!name.equals(String.valueOf(cm.getColumn(i).getHeaderValue()))) continue;
+                        if (i != target) cm.moveColumn(i, target);
+                        target++;
+                        break;
+                    }
+                }
+                for (int i = cm.getColumnCount() - 1; i >= 0; i--) {
+                    TableColumn c = cm.getColumn(i);
+                    String name = String.valueOf(c.getHeaderValue());
+                    Integer w = widths.get(name);
+                    if (w != null) {
+                        c.setPreferredWidth(w);
+                        c.setWidth(w);
+                    } else if (hidden.contains(name) && cm.getColumnCount() > 1) {
+                        hiddenColumns.put(c.getModelIndex(), c);
+                        cm.removeColumn(c);
+                    } else if (c.getModelIndex() != MESSAGE_MODEL_COL) {
+                        fitColumn(i);
+                    }
+                }
+            } finally {
+                adjustingWidths = false;
             }
+            activeLayoutName = layout;
+            recalcFittedColumnsWidth();
+        });
+    }
+
+    /**
+     * The column that takes up the slack so the columns fill the window: Message, or the
+     * last visible column if Message is hidden; -1 if there are no columns.
+     */
+    private int flexViewColumn() {
+        for (int i = 0; i < logTable.getColumnCount(); i++) {
+            if (logTable.getColumnModel().getColumn(i).getModelIndex() == MESSAGE_MODEL_COL) return i;
         }
-        if (msgViewCol < 0) {
-            if (logTable.getColumnCount() == 0) return;
-            msgViewCol = logTable.getColumnCount() - 1;
-        }
-        int margins = logTable.getColumnModel().getColumnMargin() * logTable.getColumnCount();
+        return logTable.getColumnCount() - 1;
+    }
+
+    /**
+     * Sizes the flex column ({@link #flexViewColumn}) so the columns fill the window, with no
+     * horizontal scroll bar. Only if that would leave it narrower than {@link #MIN_FLEX_WIDTH}
+     * does the table grow wider than the window and scroll.
+     */
+    void stretchMessageColumn() {
+        int flex = flexViewColumn();
+        if (flex < 0) return;
         int viewportWidth = (tableScrollPane != null) ? tableScrollPane.getViewport().getWidth() : logTable.getWidth();
-        int msgWidth = Math.max(viewportWidth - fittedColumnsWidth - margins, 150);
-        logTable.getColumnModel().getColumn(msgViewCol).setPreferredWidth(msgWidth);
-        logTable.getColumnModel().getColumn(msgViewCol).setWidth(msgWidth);
+        int msgWidth = Math.max(viewportWidth - fittedColumnsWidth, MIN_FLEX_WIDTH);
+        TableColumn column = logTable.getColumnModel().getColumn(flex);
+        boolean was = adjustingWidths;
+        adjustingWidths = true;
+        try {
+            column.setPreferredWidth(msgWidth);
+            column.setWidth(msgWidth);
+        } finally {
+            adjustingWidths = was;
+        }
+    }
+
+    /**
+     * A column border is being dragged: the flex column gives or takes the difference, so
+     * the columns keep filling the window. Dragging the flex column's own right border
+     * trades width with the column after it instead (if it has none, the drag is undone:
+     * the flex column always reaches the window's edge).
+     */
+    private void columnDragged() {
+        TableColumn resizing = logTable.getTableHeader().getResizingColumn();
+        int flex = flexViewColumn();
+        if (resizing == null || flex < 0) return;
+        javax.swing.table.TableColumnModel cm = logTable.getColumnModel();
+        adjustingWidths = true;
+        try {
+            // A drag changes only the width; layouts and the next layout pass read the preferred one.
+            resizing.setPreferredWidth(resizing.getWidth());
+            if (resizing == cm.getColumn(flex) && flex + 1 < cm.getColumnCount()) {
+                int viewportWidth = tableScrollPane.getViewport().getWidth();
+                int others = 0;
+                for (int i = 0; i < cm.getColumnCount(); i++) {
+                    if (i != flex && i != flex + 1) others += cm.getColumn(i).getWidth();
+                }
+                TableColumn next = cm.getColumn(flex + 1);
+                int nextWidth = Math.max(viewportWidth - others - resizing.getWidth(), MIN_OTHER_WIDTH);
+                next.setPreferredWidth(nextWidth);
+                next.setWidth(nextWidth);
+            }
+            recalcFittedColumnsWidth();
+        } finally {
+            adjustingWidths = false;
+        }
     }
 
     // ── Column visibility ─────────────────────────────────────────────────────
@@ -494,10 +612,10 @@ final class LogTableView {
     /** Recomputes {@code fittedColumnsWidth} from current visible column widths and stretches Message. */
     private void recalcFittedColumnsWidth() {
         if (!tableColumnsManaged) return;
+        int flex = flexViewColumn();
         int total = 0;
         for (int i = 0; i < logTable.getColumnCount(); i++) {
-            if (logTable.getColumnModel().getColumn(i).getModelIndex() != MESSAGE_MODEL_COL)
-                total += logTable.getColumnModel().getColumn(i).getWidth();
+            if (i != flex) total += logTable.getColumnModel().getColumn(i).getWidth();
         }
         fittedColumnsWidth = total;
         stretchMessageColumn();
@@ -673,10 +791,9 @@ final class LogTableView {
             needed += 16 + 2 + logTable.getIntercellSpacing().width + 8;
             TableColumn c = logTable.getColumnModel().getColumn(col);
             if (needed <= c.getWidth()) return;
-            fittedColumnsWidth += needed - c.getWidth();
             c.setPreferredWidth(needed);
             c.setWidth(needed);
-            stretchMessageColumn();
+            recalcFittedColumnsWidth();
             return;
         }
     }
