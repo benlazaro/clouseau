@@ -2,9 +2,16 @@
 
 A log viewer for software engineers, born from a love of OtrosLogViewer and a desire to bring its core functionality into a cleaner, more modern interface. Open logs of any size, merge the logs of several services into one timeline, filter in milliseconds, and hand your annotated findings to a colleague in one file.
 
-![Java 21](https://img.shields.io/badge/Java-21-blue) ![Gradle 8.8](https://img.shields.io/badge/Gradle-8.8-02303A) ![License MIT](https://img.shields.io/badge/License-MIT-green)
+[![Latest release](https://img.shields.io/github/v/release/benlazaro/clouseau?include_prereleases&sort=semver&label=release)](https://github.com/benlazaro/clouseau/releases)
+[![Downloads](https://img.shields.io/github/downloads/benlazaro/clouseau/total?label=downloads)](https://github.com/benlazaro/clouseau/releases)
+[![Edge build](https://github.com/benlazaro/clouseau/actions/workflows/edge.yml/badge.svg?branch=main)](https://github.com/benlazaro/clouseau/actions/workflows/edge.yml)
+[![Release build](https://github.com/benlazaro/clouseau/actions/workflows/release.yml/badge.svg)](https://github.com/benlazaro/clouseau/actions/workflows/release.yml)
+[![Last commit](https://img.shields.io/github/last-commit/benlazaro/clouseau)](https://github.com/benlazaro/clouseau/commits/main)
+![Java 21](https://img.shields.io/badge/Java-21-blue)
+![Gradle 8.8](https://img.shields.io/badge/Gradle-8.8-02303A)
+[![License MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**[Download](https://github.com/benlazaro/clouseau/releases)** · **[User Guide](guide/index.md)** · **[For developers](guide/developers.md)**
+**[Download](#download)** · **[User Guide](guide/index.md)** · **[For developers](guide/developers.md)**
 
 ---
 
@@ -39,11 +46,23 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 
 ---
 
+## Download
+
+| | |
+|---|---|
+| **Windows** | [Latest release](https://github.com/benlazaro/clouseau/releases) → `clouseau-<version>-windows.zip` |
+| **macOS** | [Latest release](https://github.com/benlazaro/clouseau/releases) → `clouseau-<version>-macos.zip` |
+| **Linux** | [Latest release](https://github.com/benlazaro/clouseau/releases) → `clouseau-<version>-linux.zip` |
+| **Edge** | [⬇ clouseau-edge.jar](https://github.com/benlazaro/clouseau/releases/download/edge/clouseau-edge.jar), built from the latest commit on `main` |
+
+Each release's zip is portable and brings its own Java runtime: unzip it and run the
+launcher (`Clouseau.exe` on Windows). Releases are pre-releases while the plugin API
+settles. The Edge build is a single jar for trying the newest changes; run it with
+`java -jar clouseau-edge.jar` on Java 21 or later.
+
 ## Getting started
 
-Each [release](https://github.com/benlazaro/clouseau/releases) has a portable zip per platform with its own Java runtime: unzip it and run the launcher. The [Edge build](https://github.com/benlazaro/clouseau/releases/tag/edge) is a single `clouseau-edge.jar` built from every push to `main`; run it with `java -jar clouseau-edge.jar` on Java 21 or later.
-
-Then open a log with `File → Open…` (`Ctrl+O`) or drag it onto the window. The [User Guide](guide/index.md) covers everything else.
+Download Clouseau as above, then open a log with `File → Open…` (`Ctrl+O`) or drag it onto the window. The [User Guide](guide/index.md) covers everything else.
 
 To build Clouseau yourself or write a plugin, see [For developers](guide/developers.md).
 
