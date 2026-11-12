@@ -1059,6 +1059,7 @@ public final class ParserEditorDialog extends JDialog {
                 setFont(getFont().deriveFont(Font.PLAIN, 11f));
                 setForeground(ClouseauColors.dimForeground());
                 setBorder(BorderFactory.createEmptyBorder(i == 0 ? 2 : 12, 4, 4, 4));
+                setOpaque(false);
                 return this;
             }
             if (v instanceof EmptyMine) {
@@ -1066,6 +1067,7 @@ public final class ParserEditorDialog extends JDialog {
                 setForeground(ClouseauColors.mutedForeground());
                 setFont(getFont().deriveFont(Font.ITALIC));
                 setBorder(BorderFactory.createEmptyBorder(3, 12, 3, 4));
+                setOpaque(false);
                 return this;
             }
             ParserDef d = (ParserDef) v;
@@ -1076,6 +1078,7 @@ public final class ParserEditorDialog extends JDialog {
             setIcon(!d.builtin() && visibleProblems(d).any() ? PROBLEM_DOT : null);
             setHorizontalTextPosition(LEADING);
             setIconTextGap(6);
+            setOpaque(sel);                       // rows sit on the sidebar; only the selection is filled
             return this;
         }
     }

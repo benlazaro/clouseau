@@ -337,10 +337,6 @@ public final class MainFrame extends JFrame {
         openItem.addActionListener(e -> openFile());
         fileMenu.add(openItem);
 
-        JMenuItem openMergedItem = menuItem(Messages.get("menu.file.open.merged"));
-        openMergedItem.addActionListener(e -> openFile(true));
-        fileMenu.add(openMergedItem);
-
         // SSH, then the sources plugins add, under their own names. Rebuilt each time it
         // opens, so sources from newly installed plugins appear.
         JMenu remoteMenu = new JMenu(Messages.get("menu.file.remote"));
@@ -762,13 +758,9 @@ public final class MainFrame extends JFrame {
 
     // ── File opening ──────────────────────────────────────────────────────────
 
+    /** The open dialog; several logs open merged or in tabs, as chosen there (Open as). */
     private void openFile() {
-        openFile(false);
-    }
-
-    /** The open dialog; {@code merged}: File → Open Merged…, which merges without asking. */
-    private void openFile(boolean merged) {
-        new FileChooserDialog(this, parsers(), manager.lastParserIndex(), merged).showDialog().ifPresent(r -> {
+        new FileChooserDialog(this, parsers(), manager.lastParserIndex()).showDialog().ifPresent(r -> {
             manager.setLastParserIndex(r.parserIndex());
             ZoneId srcTz = r.sourceTimezone();
             for (Path file : r.files()) {

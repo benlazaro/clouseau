@@ -164,7 +164,7 @@ tags.
   merged view's notes in each file's own `AnnotationStore` (D-17 step 4).
 - `ReviewBundle` (core) — D-10: writes and recognizes the review bundle `.zip` (manifest, log,
   annotations; version 2 holds every file of a merged view, D-17); `ReviewExporter` (ui) is
-  `File → Export for Review…`. `FilePattern` (core) expands `app.log*` for Open Merged.
+  `File → Export for Review…`. `FilePattern` (core) expands `app.log*` typed in the open dialog.
 - `Session`, `SessionStore` (core), `SessionManager`, `ManageSessionsDialog` (ui) — UC-17, D-19: the session model, reading
   and writing `session.json` (atomic, `.bad` if damaged) and named sessions, and the autosave
   (debounced, compared before writing). `WindowManager.restore` reopens it at startup;

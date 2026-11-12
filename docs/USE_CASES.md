@@ -397,8 +397,8 @@ the Source column shows the offset (`db.log (+3m 12s)`), the time filter uses th
 corrected time, and the detail panel says what the file wrote. Every file uses the
 tab's parser choice unless **Set Parser for …** gives it its own (a parser that doesn't
 recognize the file is refused); with automatic detection each is read in its own format. Files
-picked in the zip picker merge with "Merge into one view"; **File → Open Merged…**
-merges without asking, and a pattern such as `app.log*` typed in the open dialog opens
+picked in the zip picker merge with "Merge into one view"; several picked in the open
+dialog merge when its **Open as** says so, and a pattern such as `app.log*` typed in the open dialog opens
 every matching file in that folder, merged. A merged view exports for review as one
 bundle with every file, its notes, timezone, offset and parser, and opens again as the same
 merged view.
