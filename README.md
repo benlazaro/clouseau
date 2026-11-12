@@ -11,7 +11,7 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 ![Gradle 8.8](https://img.shields.io/badge/Gradle-8.8-02303A)
 [![License MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**[Download](#download)** · **[User Guide](guide/index.md)** · **[For developers](guide/developers.md)**
+**[Download](#download)** · **[User Guide](https://benlazaro.github.io/clouseau/guide/)** · **[For developers](https://benlazaro.github.io/clouseau/guide/developers.html)**
 
 ---
 
@@ -27,22 +27,22 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 
 ## Features
 
-- **Any file size** — every file is indexed on disk rather than loaded into memory, at about 29 bytes of heap per line, so a 1M-line, 125 MB log uses under 50 MB. Lines are never dropped from a file you open. [More](guide/opening-files.md#large-files)
-- **Multi-format parsing** — Log4j pattern and Spring Boot built in, auto-detected on open; add your own formats in the parser editor, without code. [More](guide/parsers.md)
-- **Merged views** — open several logs as one timeline, interleaved by timestamp: the rolled files of one app, or the logs of several services. Formats can be mixed, each file can have its own parser and timezone, and a file whose clock is off can be shifted into place. [More](guide/merged-views.md)
-- **Several windows** — move tabs into their own windows to watch logs on more than one monitor; a moved tab keeps following without reloading. [More](guide/opening-files.md#several-windows)
-- **Pick up where you left off** — Clouseau reopens your windows and tabs, with their filters, the next time it starts, and named sessions keep one set of logs per project to switch between. [More](guide/opening-files.md#picking-up-where-you-left-off)
-- **Compressed files** — open `.gz` and `.zip` files directly; for a zip with several logs, tick the ones you want, in separate tabs or merged. [More](guide/opening-files.md#compressed-files)
-- **Plain text fallback** — a file no parser recognizes opens as plain text, with an offer to create a parser for it. [More](guide/opening-files.md#files-no-parser-recognizes)
-- **Filtering and Find** — by level, logger, field, time range and text, combined; level, logger and time filters take milliseconds even on a million lines. `Ctrl+F` searches every column. [More](guide/reading-and-filtering.md)
-- **Highlights** — color-code rows for triage and jump between them by color. [More](guide/reading-and-filtering.md#highlights)
-- **Detail panel** — the full entry with its stack trace, and JSON payloads pretty-printed and syntax-highlighted. [More](guide/reading-and-filtering.md#the-detail-panel)
-- **Notes** — annotate lines while you investigate; notes are saved next to the log and come back whenever anyone opens it. [More](guide/annotations-and-review.md)
-- **Review bundles** — `File → Export for Review…` packs the log (or every file of a merged view) and its notes into one `.zip` for a colleague, who opens it like any log. [More](guide/annotations-and-review.md#exporting-for-review)
-- **Follow mode** — tail a live file like `tail -f`, locally or over SSH; survives log rotation without losing rows. Remote tabs show whether they are connected and reconnect with `Ctrl+R`. [More](guide/following.md)
-- **Columns and layouts** — hide, reorder and size columns, and save named layouts. [More](guide/reading-and-filtering.md#columns)
-- **Themes** — Dark and Light built in, plus any FlatLaf theme you install, switched live. [More](guide/settings.md#themes)
-- **Plugins** — add parsers, formatters, syntax highlighters or live log sources from a JAR, or install them from a Nexus or Maven Central repository. [More](guide/settings.md#plugins)
+- **Any file size** — every file is indexed on disk rather than loaded into memory, at about 29 bytes of heap per line, so a 1M-line, 125 MB log uses under 50 MB. Lines are never dropped from a file you open. [More](https://benlazaro.github.io/clouseau/guide/opening-files.html#large-files)
+- **Multi-format parsing** — Log4j pattern and Spring Boot built in, auto-detected on open; add your own formats in the parser editor, without code. [More](https://benlazaro.github.io/clouseau/guide/parsers.html)
+- **Merged views** — open several logs as one timeline, interleaved by timestamp: the rolled files of one app, or the logs of several services. Formats can be mixed, each file can have its own parser and timezone, and a file whose clock is off can be shifted into place. [More](https://benlazaro.github.io/clouseau/guide/merged-views.html)
+- **Several windows** — move tabs into their own windows to watch logs on more than one monitor; a moved tab keeps following without reloading. [More](https://benlazaro.github.io/clouseau/guide/opening-files.html#several-windows)
+- **Pick up where you left off** — Clouseau reopens your windows and tabs, with their filters, the next time it starts, and named sessions keep one set of logs per project to switch between. [More](https://benlazaro.github.io/clouseau/guide/opening-files.html#picking-up-where-you-left-off)
+- **Compressed files** — open `.gz` and `.zip` files directly; for a zip with several logs, tick the ones you want, in separate tabs or merged. [More](https://benlazaro.github.io/clouseau/guide/opening-files.html#compressed-files)
+- **Plain text fallback** — a file no parser recognizes opens as plain text, with an offer to create a parser for it. [More](https://benlazaro.github.io/clouseau/guide/opening-files.html#files-no-parser-recognizes)
+- **Filtering and Find** — by level, logger, field, time range and text, combined; level, logger and time filters take milliseconds even on a million lines. `Ctrl+F` searches every column. [More](https://benlazaro.github.io/clouseau/guide/reading-and-filtering.html)
+- **Highlights** — color-code rows for triage and jump between them by color. [More](https://benlazaro.github.io/clouseau/guide/reading-and-filtering.html#highlights)
+- **Detail panel** — the full entry with its stack trace, and JSON payloads pretty-printed and syntax-highlighted. [More](https://benlazaro.github.io/clouseau/guide/reading-and-filtering.html#the-detail-panel)
+- **Notes** — annotate lines while you investigate; notes are saved next to the log and come back whenever anyone opens it. [More](https://benlazaro.github.io/clouseau/guide/annotations-and-review.html)
+- **Review bundles** — `File → Export for Review…` packs the log (or every file of a merged view) and its notes into one `.zip` for a colleague, who opens it like any log. [More](https://benlazaro.github.io/clouseau/guide/annotations-and-review.html#exporting-for-review)
+- **Follow mode** — tail a live file like `tail -f`, locally or over SSH; survives log rotation without losing rows. Remote tabs show whether they are connected and reconnect with `Ctrl+R`. [More](https://benlazaro.github.io/clouseau/guide/following.html)
+- **Columns and layouts** — hide, reorder and size columns, and save named layouts. [More](https://benlazaro.github.io/clouseau/guide/reading-and-filtering.html#columns)
+- **Themes** — Dark and Light built in, plus any FlatLaf theme you install, switched live. [More](https://benlazaro.github.io/clouseau/guide/settings.html#themes)
+- **Plugins** — add parsers, formatters, syntax highlighters or live log sources from a JAR, or install them from a Nexus or Maven Central repository. [More](https://benlazaro.github.io/clouseau/guide/settings.html#plugins)
 
 ---
 
@@ -62,9 +62,9 @@ settles. The Edge build is a single jar for trying the newest changes; run it wi
 
 ## Getting started
 
-Download Clouseau as above, then open a log with `File → Open…` (`Ctrl+O`) or drag it onto the window. The [User Guide](guide/index.md) covers everything else.
+Download Clouseau as above, then open a log with `File → Open…` (`Ctrl+O`) or drag it onto the window. The [User Guide](https://benlazaro.github.io/clouseau/guide/) covers everything else.
 
-To build Clouseau yourself or write a plugin, see [For developers](guide/developers.md).
+To build Clouseau yourself or write a plugin, see [For developers](https://benlazaro.github.io/clouseau/guide/developers.html).
 
 ---
 
