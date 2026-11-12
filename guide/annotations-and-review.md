@@ -15,13 +15,15 @@ the log and your notes to someone else in one file.
 
 ## Adding notes
 
-1. Right-click a row and choose **Add Note…**.
+1. Right-click a row and choose **Add Note…**, or click the left edge of the table, beside
+   the row (a dim pencil shows there under the mouse), or use **Edit → Add Note…**.
 2. Type the note. **Author** starts as your user name; change it if you like.
 3. Click **OK**.
 
-Rows with a note show **✎** in the `#` column, and the note appears at the top of the
-detail panel when the row is selected. Right-click the row again to **Edit Note…** or
-**Remove Note**.
+Rows with a note show an amber pencil in the strip at the table's left edge, whichever
+columns you show. Point at it to read the note, or click it to edit it. The note also
+appears at the top of the detail panel when the row is selected. Right-click the row to
+**Edit Note…** or **Remove Note**.
 
 Each note stays on the line it was written on, even when the same text appears on many
 lines (as in retry loops), and follows that line if lines are added above it.

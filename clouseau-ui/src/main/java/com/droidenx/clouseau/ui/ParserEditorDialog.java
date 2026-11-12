@@ -602,8 +602,8 @@ public final class ParserEditorDialog extends JDialog {
         JButton closeBtn = new JButton(Messages.get("settings.button.cancel"));
         saveBtn.addActionListener(e -> save());
         closeBtn.addActionListener(e -> dispose());
+        bar.add(closeBtn);   // Cancel before the default button, as in Settings
         bar.add(saveBtn);
-        bar.add(closeBtn);
         return bar;
     }
 
