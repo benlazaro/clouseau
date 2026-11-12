@@ -145,6 +145,11 @@ public final class TabPanel extends JPanel {
         context.owner = next;
         contentContext = context;
         content = next;
+        // What the first column counts: lines of the file, the merged timeline, or what a
+        // live source sent (LogTableModel.Numbering).
+        shared.setNumbering(next instanceof FileContent ? LogTableModel.Numbering.FILE_LINES
+                : next instanceof MergedContent ? LogTableModel.Numbering.POSITION
+                : LogTableModel.Numbering.RECEIVED);
         shared.statusBar().setPath(next.path(), next.pathTooltip());
         next.start();
     }

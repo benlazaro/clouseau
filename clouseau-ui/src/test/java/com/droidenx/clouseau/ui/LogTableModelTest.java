@@ -144,6 +144,47 @@ class LogTableModelTest {
         assertThat(model.rowOfOrdinal(6)).isEqualTo(-1);
     }
 
+    @Test
+    void theNumberColumnShowsTheEntrysNumberInTheFileWhateverIsFiltered() throws Exception {
+        model.appendBatch(entries(10));
+        assertThat(model.getValueAt(7, 0)).isEqualTo(8);
+        model.applyFilter(e -> e.message().endsWith("7"));
+        for (int i = 0; i < 50 && model.getRowCount() != 1; i++) {
+            Thread.sleep(20);
+            drainEdt();
+        }
+        assertThat(model.getRowCount()).isEqualTo(1);
+        assertThat(model.getValueAt(0, 0)).isEqualTo(8);      // not 1: its place in the file
+        assertThat(model.lineNumber(0)).isEqualTo(8);
+    }
+
+    @Test
+    void aFileHeldInMemoryCountsItsBlankLinesToo() {
+        com.droidenx.clouseau.core.BlankLines blanks = new com.droidenx.clouseau.core.BlankLines();
+        blanks.add(0);      // a blank first line
+        blanks.add(2);      // and one after the second entry
+        model.setMemoryBlanks(blanks);
+        model.appendBatch(entries(4));
+        assertThat(model.getColumnName(0)).isEqualTo("Line");
+        assertThat(java.util.stream.IntStream.range(0, 4).map(model::numberAt).toArray())
+                .containsExactly(2, 3, 5, 6);
+        assertThat(model.lineCount()).isEqualTo(6);
+    }
+
+    @Test
+    void mergedAndLiveTabsNumberRowsByPosition() {
+        model.setNumbering(LogTableModel.Numbering.RECEIVED);
+        model.appendLive(entries(3));
+        assertThat(model.getColumnName(0)).isEqualTo("#");
+        assertThat(model.getValueAt(2, 0)).isEqualTo(3);
+    }
+
+    @Test
+    void aLiveTabKeepsCountingAfterOldEntriesAreDropped() {
+        model.appendLive(entries(120));   // 20 dropped
+        assertThat(model.getValueAt(0, 0)).isEqualTo(21);
+    }
+
     private static void drainEdt() {
         try {
             javax.swing.SwingUtilities.invokeAndWait(() -> {});

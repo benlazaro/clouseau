@@ -132,6 +132,10 @@ public final class IndexedEntries implements EntryRows {
 
     public EntryIndex index() { return index; }
 
+    @Override public int lineNumber(int ordinal) { return index.lineNumber(ordinal); }
+
+    @Override public long lineCount() { return index.lineCount(); }
+
     @Override
     public boolean isContinuation(int row) { return index.isContinuation(row); }
 

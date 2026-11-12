@@ -59,7 +59,9 @@ public final class FileTail {
                                          BooleanSupplier cancelled, boolean keepBlank) throws IOException {
         long end = endOfLastLine(channel, from);
         if (end <= from) return from;
-        if (keepBlank && endsCrlfSplit(channel, from)) {
+        // Also without blank lines: the \n would otherwise be reported as a skipped blank
+        // line, and an index counting those would put every later line one too far down.
+        if (endsCrlfSplit(channel, from)) {
             from++;                                   // the \n of a \r\n cut after its \r last time
             if (end <= from) return from;
         }

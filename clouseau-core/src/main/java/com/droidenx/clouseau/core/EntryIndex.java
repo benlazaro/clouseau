@@ -103,6 +103,18 @@ public final class EntryIndex implements MergeOrder.Timeline {
 
     public int size() { return size; }
 
+    /** Where blank lines were skipped, for the rows' line numbers in the file. */
+    private final BlankLines blanks = new BlankLines();
+
+    /** A blank line was skipped after the rows added so far. */
+    public void addBlank() { blanks.add(size); }
+
+    /** The row's line number in the file, counted from 1, blank lines included. */
+    public int lineNumber(int row) { return blanks.lineNumber(row); }
+
+    /** How many lines the rows came from, blank lines included. */
+    public long lineCount() { return (long) size + blanks.count(); }
+
     public long offset(int row)        { return offsets.get(row); }
     public int length(int row)         { return lengths.get(row); }
     /** Epoch milliseconds, or {@link #NO_TIMESTAMP}. */

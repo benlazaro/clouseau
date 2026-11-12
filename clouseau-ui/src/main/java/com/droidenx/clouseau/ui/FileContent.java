@@ -137,12 +137,15 @@ final class FileContent implements TabContent {
                 }
                 AnnotationStore.Anchoring anchoring = annotations.startAnchoring();
                 try (BufferedReader reader = LogReaders.open(file, entry)) {
+                    // Not indexed: the model still needs the blank lines for line numbers.
+                    com.droidenx.clouseau.core.BlankLines blanks = new com.droidenx.clouseau.core.BlankLines();
+                    SwingUtilities.invokeLater(() -> { if (!isCancelled()) tab.model().setMemoryBlanks(blanks); });
                     LogFileReader.Result result = LogFileReader.read(reader, lineParser,
                             LogFileReader.DEFAULT_CHECK_INTERVAL, memory::isLow, this::isCancelled,
                             e -> {
                                 if (anchoring != null) anchoring.accept(e.rawLine());
                                 publish(e);
-                            });
+                            }, blanks);
                     if (result.partial()) {
                         stoppedAtLine = result.stoppedAtLine();
                         log.warn("Low memory: stopped loading {} after {} lines (max heap {} MiB)",

@@ -62,14 +62,17 @@ public final class FileIndexer {
                 : Files.newInputStream(file);
         long end;
         try (InputStream in = source) {
-            end = LineScanner.scan(in, (offset, length, text) -> {
-                LogEntry e = parser.parse(text);
-                index.add(offset, length, e);
-                if (anchoring != null) anchoring.accept(e.rawLine());
-                sink.entry(e);
-                if (++count[0] % LogFileReader.DEFAULT_CHECK_INTERVAL == 0 && lowMemory.getAsBoolean()) {
-                    low[0] = true;
+            end = LineScanner.scan(in, new LineScanner.Sink() {
+                @Override public void line(long offset, int length, String text) {
+                    LogEntry e = parser.parse(text);
+                    index.add(offset, length, e);
+                    if (anchoring != null) anchoring.accept(e.rawLine());
+                    sink.entry(e);
+                    if (++count[0] % LogFileReader.DEFAULT_CHECK_INTERVAL == 0 && lowMemory.getAsBoolean()) {
+                        low[0] = true;
+                    }
                 }
+                @Override public void blank() { index.addBlank(); }
             }, () -> low[0] || halt.getAsBoolean());
         }
         boolean diskFull = false;

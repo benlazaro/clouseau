@@ -63,6 +63,15 @@ final class LogTableView {
         logTable = new JTable(model) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
 
+            /** On the number column: an entry's line range, when lines are folded into it. */
+            @Override public String getToolTipText(MouseEvent e) {
+                int viewRow = rowAtPoint(e.getPoint()), viewCol = columnAtPoint(e.getPoint());
+                if (viewRow >= 0 && viewCol >= 0 && convertColumnIndexToModel(viewCol) == 0) {
+                    return foldedLinesTip(convertRowIndexToModel(viewRow));
+                }
+                return super.getToolTipText(e);
+            }
+
             @Override
             public boolean getScrollableTracksViewportWidth() {
                 // During a column resize drag, release the viewport constraint so the column
@@ -214,6 +223,7 @@ final class LogTableView {
                 }
                 label.setForeground(ClouseauColors.dimForeground());
                 label.setFont(label.getFont().deriveFont(Font.PLAIN, 12f));
+                label.setToolTipText(numberColumn ? numberHeaderTip() : null);
             }
             return c;
         });
@@ -377,7 +387,9 @@ final class LogTableView {
             if (logTable.getColumnModel().getColumn(col).getModelIndex() == 0) {
                 // Room for the note marker on any row, not just the sampled ones.
                 FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
-                maxWidth = Math.max(maxWidth, fm.stringWidth("✎ " + logTable.getRowCount()) + 16);
+                // # is the entry's number in its file, so it can exceed the rows shown.
+                long widest = Math.max(logTable.getRowCount(), logTableModel.getTotalCount() + logTableModel.getTrimmedCount());
+                maxWidth = Math.max(maxWidth, fm.stringWidth("✎ " + widest) + 16);
             }
             maxWidth += 8;
             logTable.getColumnModel().getColumn(col).setPreferredWidth(maxWidth);
@@ -672,5 +684,47 @@ final class LogTableView {
         }
         @Override public Insets getBorderInsets(Component c) { return new Insets(0, 0, 0, 0); }
         @Override public boolean isBorderOpaque() { return false; }
+    }
+
+    // ── The number column: what it counts, and lines folded into an entry ───────────
+
+    /** The number column's title follows what it counts (Line on a file, # otherwise). */
+    void numberingChanged() {
+        for (int i = 0; i < logTable.getColumnModel().getColumnCount(); i++) {
+            javax.swing.table.TableColumn c = logTable.getColumnModel().getColumn(i);
+            if (c.getModelIndex() == 0) c.setHeaderValue(logTableModel.getColumnName(0));
+        }
+        logTable.getTableHeader().repaint();
+    }
+
+    /** The number column's header tooltip: what the number is, and why it can skip. */
+    private String numberHeaderTip() {
+        return Messages.get(switch (logTableModel.numbering()) {
+            case FILE_LINES -> "table.col.line.tooltip";
+            case POSITION   -> "table.col.position.tooltip";
+            case RECEIVED   -> "table.col.received.tooltip";
+        });
+    }
+
+    /**
+     * "Lines 49–56: one entry, with its continuation lines folded in", when lines after the
+     * entry belong to it (a stack trace) and aren't rows of their own, so the next number
+     * jumps. In a merged view it names the file. Null otherwise.
+     */
+    String foldedLinesTip(int modelRow) {
+        int ord = logTableModel.ordinalAt(modelRow);
+        if (ord < 0 || logTableModel.numbering() == LogTableModel.Numbering.RECEIVED) return null;
+        if (logTableModel.rowOfOrdinal(ord + 1) >= 0) return null;     // the next line is a row: no gap
+        int folded = logTableModel.getContinuationLines(modelRow).size();
+        if (folded == 0) return null;
+        int first = logTableModel.lineNumberOfOrdinal(ord);
+        int last = logTableModel.lineNumberOfOrdinal(ord + folded);
+        if (logTableModel.numbering() == LogTableModel.Numbering.POSITION) {
+            String file = logTableModel.sourceNameAt(modelRow);
+            return java.text.MessageFormat.format(Messages.get("table.lines.folded.file"),
+                    file, String.valueOf(first), String.valueOf(last));
+        }
+        return java.text.MessageFormat.format(Messages.get("table.lines.folded"),
+                String.valueOf(first), String.valueOf(last));
     }
 }

@@ -74,4 +74,22 @@ class FileIndexerTest {
         assertThat(r.partial()).isTrue();
         assertThat(r.lines()).isEqualTo(LogFileReader.DEFAULT_CHECK_INTERVAL);
     }
+
+    @Test
+    void lineNumbersCountTheBlankLinesItSkips() throws Exception {
+        Path log = Files.writeString(dir.resolve("banner.log"), """
+
+                  banner
+
+                2026-11-04 10:00:01 INFO one
+                \r
+                2026-11-04 10:00:02 INFO two
+                """, StandardCharsets.UTF_8);
+        EntryIndex index = new EntryIndex();
+        FileIndexer.index(log, null, null, lines, index, null, e -> {}, () -> false, () -> false);
+        assertThat(index.size()).isEqualTo(3);           // banner, one, two
+        assertThat(index.lineNumber(0)).isEqualTo(2);    // after one blank line
+        assertThat(index.lineNumber(1)).isEqualTo(4);
+        assertThat(index.lineNumber(2)).isEqualTo(6);    // a line of only \r is blank too
+    }
 }
