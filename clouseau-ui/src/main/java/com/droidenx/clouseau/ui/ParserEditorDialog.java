@@ -126,7 +126,7 @@ public final class ParserEditorDialog extends JDialog {
         root.add(buildButtonBar(), BorderLayout.SOUTH);
         setContentPane(root);
 
-        setSize(980, 720);
+        setSize(980, 760);
         setMinimumSize(new Dimension(760, 560));
         setLocationRelativeTo(owner);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
