@@ -102,6 +102,9 @@ final class DetailPanel extends JPanel {
         this.formatters = formatters;
         this.syntaxHighlighters = syntaxHighlighters;
         this.current = current;
+        // The text is colored when an entry is drawn (labels, values, level, JSON), so a theme
+        // switch must draw it again, or it keeps the old theme's colors until the next selection.
+        ClouseauColors.onThemeChange(this, this::refresh);
 
         detailArea = new JTextPane() {
             // Always at least as wide and tall as the pane: with Wrap off a short entry would
