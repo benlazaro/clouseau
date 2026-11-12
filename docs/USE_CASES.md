@@ -166,10 +166,12 @@ responsive (about 1.6 s for 1M lines). Times are compared to the millisecond.
 **Actor:** Developer
 **Goal:** Watch a running application's log, locally or on a remote host, for hours.
 
-1. User opens a file with follow mode on, or connects to a remote host over SSH.
-2. New entries appear as they are written. While the view is at the bottom it scrolls to
-   them; once the user scrolls up to read earlier rows it stays put, and scrolling back
-   to the end (or Ctrl+End, or turning Follow on) scrolls with new rows again.
+1. User opens a file (it opens at its newest line), or connects to a remote host over SSH.
+2. New entries appear as they are written, in every tab, whatever Follow says. Follow
+   keeps the newest row in view: scrolling up to read earlier rows turns it off and the
+   view stays put; scrolling back to the end (or Ctrl+End, or clicking Follow) turns it on
+   again. Clicking Follow off stops the view moving where it is. On a live source, rows
+   dropped at the entry limit while the user reads earlier ones don't move the view.
 3. If the file is rotated, Clouseau keeps existing rows and continues with the new file.
 4. Clouseau stays responsive and does not crash, however long it is left running.
 
@@ -396,7 +398,7 @@ one column. Filters, Find and the detail panel work across all files, and the fi
 bar's **Sources** button hides whole files. Notes and highlights are saved with the file
 each entry came from, so they show again when that file is opened alone, and the
 annotations panel names each note's file. Files no parser recognizes, or whose lines
-have no timestamps, are listed and offered in their own tabs. With Follow on, every
+have no timestamps, are listed and offered in their own tabs. Every
 plain file is followed (compressed ones stay as they are): new lines are held back for
 up to a second so files written a moment apart still land in time order, and a line
 that arrives later than that moves to its place, with the selection, highlights and

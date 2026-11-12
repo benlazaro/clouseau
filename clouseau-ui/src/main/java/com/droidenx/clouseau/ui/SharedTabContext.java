@@ -34,7 +34,7 @@ final class SharedTabContext {
     interface Host {
         /** What the tab shows, or null. */
         TabContent content();
-        /** The user turned follow mode on or off (the filter bar's checkbox). */
+        /** Follow turned on or off: the filter bar's toggle, or the user scrolling away from the newest row or back to it. */
         void setFollow(boolean on);
         /** The user changed a filter. */
         void filtersChanged();
@@ -116,6 +116,10 @@ final class SharedTabContext {
             @Override public void editNote(int modelRow) { if (menu[0] != null) menu[0].editNote(modelRow); }
         });
         table = tableView.table();
+        // Follow is on while the view is at the newest row: scrolling up turns it off,
+        // scrolling back to the end turns it on.
+        tableView.onAtNewestChanged(this::atNewestChanged);
+        if (!follow) tableView.stopAtNewest();
         HighlightNavBar[] nav = new HighlightNavBar[1];
         menu[0] = new RowMenu(model, table, new RowMenu.Host() {
             @Override public Notes notes() { return notes; }
@@ -236,13 +240,26 @@ final class SharedTabContext {
     boolean follow() { return follow; }
 
     /**
-     * Records follow mode and ticks the filter bar's checkbox; the content starts or stops
-     * following. Turning it on goes to the newest row, wherever the view was scrolled to.
+     * Follow turned on or off (the toggle, the View menu, a restored session). Follow only
+     * decides whether the view keeps the newest row in sight; new rows arrive either way.
+     * On goes to the newest row, wherever the view was; off leaves the view where it is.
      */
     void setFollow(boolean on) {
-        if (on && !follow) SwingUtilities.invokeLater(tableView::scrollToBottom);
+        boolean was = follow;
         follow = on;
         filterBar.setFollowSelected(on);
+        if (on && !was) SwingUtilities.invokeLater(tableView::scrollToBottom);
+        else if (!on && was) tableView.stopAtNewest();
+    }
+
+    /**
+     * The user scrolled away from the newest row, or back to it: Follow follows, as if
+     * toggled, without moving the view.
+     */
+    private void atNewestChanged(boolean atNewest) {
+        if (atNewest == follow) return;
+        follow = atNewest;
+        host.setFollow(atNewest);   // the toggle, the plain-text view and the menu catch up
     }
 
     ZoneId timezone() { return timezone; }

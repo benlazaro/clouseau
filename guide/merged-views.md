@@ -86,7 +86,7 @@ timestamps, the offset corrects a clock that's off.
 
 ## Following a merged view
 
-With **Follow** on, every plain file in the view is followed (compressed files stay as
+Every plain file in the view is followed (compressed files stay as
 they are). New lines are held back for up to a second, so lines written a moment apart in
 different files still land in time order. A line that arrives later than that moves to its
 place, and your selection, highlights and notes stay on their lines.

@@ -49,7 +49,7 @@ readable in any theme.
 | Tabs | Confirm when closing a tab | Ask before closing a tab |
 | | Confirm when clearing all highlights | Ask before **Clear all highlights** |
 | | Confirm when deleting a note | Ask before deleting a note |
-| | Follow new lines by default | Start new tabs with [Follow](following.md) on |
+| | Start at the newest line | Open files at their newest line, with [Follow](following.md) on; off opens them at the top |
 | | Max entries per tab | How many lines an SSH or plugin-source tab keeps in memory (10,000 to 2,000,000; default 200,000). Files you open are never trimmed. |
 | Files | Max recent files | How many files **Recent Files** lists |
 | | When opening several files | **Ask each time**, **Merge them** into a [merged view](merged-views.md), or open **Separate tabs** |

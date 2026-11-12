@@ -150,7 +150,7 @@ final class MergedContent implements TabContent {
                 files.stream().map(f -> setup.get(f).zone()).toList(),
                 files.stream().map(f -> setup.get(f).parserOr(parser)).toList(),
                 tab.parsers(), tailerHost());
-        if (tab.follow()) tailer.start();
+        tailer.start();   // new lines are always read; Follow only decides whether the view keeps up
         sizeColumnsWhenRowsArrive();
         tab.model().applyFilter(tab.filterBar().buildFilter());
         tab.statusChanged();
@@ -173,6 +173,7 @@ final class MergedContent implements TabContent {
                 // Every file's name, not just those in the sampled rows.
                 tableView.widenColumnToFit(Messages.get("table.col.source"), sourceLabels(view));
                 tableView.applyDefaultLayoutIfSet();
+                if (tab.follow()) tableView.scrollToBottomWhenShown();   // opens at the newest line
             });
         };
         model.addTableModelListener(sizeColumns);
@@ -220,9 +221,7 @@ final class MergedContent implements TabContent {
 
     @Override
     public void setFollow(boolean on) {
-        if (tailer == null) return;
-        if (on) tailer.start();
-        else tailer.stop();
+        // The files are read whatever Follow says; the table keeps up with them, or not, itself.
     }
 
     @Override

@@ -12,19 +12,25 @@ nav_order: 5
 
 ## Follow mode
 
-**Follow** (at the right of the filter bar) shows new lines as the application writes
-them, like `tail -f`. It's on by default for files you open; **Follow new lines by
-default** in [Settings](settings.md) changes that. Turn it off and on per tab at any time:
-no line is lost or repeated.
+New lines appear as the application writes them, like `tail -f`, in every tab: files,
+merged views, SSH and other live sources. Clouseau wakes up as soon as the operating system
+reports that a file changed, so they appear without delay, and no line is lost or repeated.
 
-While you're at the bottom of the table, it scrolls to show new lines as they arrive.
-Scroll up to read earlier lines and the table stays where you put it, though new lines
-keep coming in below. Scroll back down to the end, press **Ctrl+End**, or turn Follow off
-and on, and it scrolls with new lines again. This works the same for files, merged views,
-SSH and other live sources.
+**Follow** (at the right of the filter bar, and in the **View** menu) keeps the newest line
+in view:
 
-A file always opens at the top. Clouseau wakes up as soon as the operating system reports
-that the file changed, so new lines appear without delay.
+- While it's on, the table scrolls to show new lines as they arrive.
+- **Scroll up** to read earlier lines and Follow turns off by itself. The table stays where
+  you put it while new lines keep coming in below.
+- **Scroll back down** to the newest line, or press **Ctrl+End**, and Follow turns back on.
+- **Click Follow** on to jump to the newest line, or off to stop the table moving where it is.
+
+A file opens at its newest line, with Follow on. To open files at the top instead, turn off
+**Start at the newest line** in [Settings](settings.md).
+
+On an SSH or plugin source, the oldest rows are dropped once the tab passes its entry
+limit. If you're reading earlier rows when that happens, the table keeps them where they are
+on the screen.
 
 A followed file is indexed like any other, so it can run for hours or days without
 running out of memory, and no line is ever dropped.

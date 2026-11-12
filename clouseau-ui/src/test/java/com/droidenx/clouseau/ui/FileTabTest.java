@@ -76,4 +76,64 @@ class FileTabTest {
             onEdt(() -> { panel.dispose(); return null; });
         }
     }
+
+    /** Lays out {@code c} and everything in it, as showing it in a window would. */
+    private static void layOut(java.awt.Container c) {
+        c.doLayout();
+        for (java.awt.Component child : c.getComponents()) {
+            if (child instanceof java.awt.Container inner) layOut(inner);
+        }
+    }
+
+    /**
+     * Follow only keeps the newest row in view: lines are read with it off, scrolling up
+     * turns it off, scrolling back to the end turns it on, and turning it on goes there.
+     */
+    @Test
+    void followIsWhetherTheViewIsAtTheNewestRow() throws Exception {
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < 200; i++) text.append("2026-11-07 10:00:00 INFO line ").append(i).append('\n');
+        Path file = Files.writeString(dir.resolve("app.log"), text);
+        TabPanel panel = onEdt(() -> new TabPanel(List.of(PARSER), List.of(), List.of()));
+        JTable table = panel.getLogTable();
+        LogTableModel model = (LogTableModel) table.getModel();
+        Callable<JViewport> viewport = () -> (JViewport) table.getParent();
+        Callable<Boolean> atBottom = () -> {
+            JViewport vp = viewport.call();
+            return vp.getViewPosition().y + vp.getHeight() >= table.getHeight() - table.getRowHeight();
+        };
+        try {
+            onEdt(() -> {
+                panel.setSize(900, 700);
+                layOut(panel);
+                panel.setFollow(false);
+                panel.load(file, Optional.of(PARSER));
+                return null;
+            });
+            await(() -> model.getRowCount() == 200);
+            onEdt(() -> { layOut(panel); return null; });
+
+            Files.writeString(file, "2026-11-07 10:00:01 WARN while not following\n", StandardOpenOption.APPEND);
+            await(() -> model.getRowCount() == 201);   // read with Follow off
+            assertThat(onEdt(panel::isFollow)).isFalse();
+            assertThat(onEdt(() -> viewport.call().getViewPosition().y)).isZero();   // the view stayed put
+
+            onEdt(() -> { panel.setFollow(true); return null; });
+            onEdt(() -> { layOut(panel); return null; });
+            await(atBottom);
+            assertThat(onEdt(panel::isFollow)).isTrue();
+
+            onEdt(() -> { viewport.call().setViewPosition(new java.awt.Point(0, 0)); return null; });   // scroll up
+            assertThat(onEdt(panel::isFollow)).isFalse();
+
+            onEdt(() -> {   // and back to the end
+                JViewport vp = viewport.call();
+                vp.setViewPosition(new java.awt.Point(0, table.getHeight() - vp.getHeight()));
+                return null;
+            });
+            assertThat(onEdt(panel::isFollow)).isTrue();
+        } finally {
+            onEdt(() -> { panel.dispose(); return null; });
+        }
+    }
 }
