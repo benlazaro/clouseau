@@ -195,6 +195,9 @@ final class SharedTabContext {
             if (follow && !loading && e.getType() == TableModelEvent.INSERT)
                 SwingUtilities.invokeLater(tableView::scrollToBottom);
             updateStatusBar();
+            // Filtering, loading or trimming changes which highlighted rows show.
+            if (e.getType() != TableModelEvent.UPDATE || e.getLastRow() == Integer.MAX_VALUE)
+                highlightNavBar.refresh();
         });
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {

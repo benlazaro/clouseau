@@ -82,7 +82,7 @@ final class FindBar extends JPanel {
         super(new MigLayout("insets 3 8 3 8, gap 4", "[][grow][][][]8[][]", "[center]"));
         this.table = table;
         this.searcher = searcher;
-        setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
+        setBorder(new BarSeparator());
         setVisible(false);
 
         JLabel label = new JLabel(Messages.get("find.label"));
@@ -200,6 +200,36 @@ final class FindBar extends JPanel {
         popup.add(clear);
         // Right-aligned with the button: it sits at the window's right edge.
         popup.show(highlightBtn, highlightBtn.getWidth() - popup.getPreferredSize().width, highlightBtn.getHeight());
+    }
+
+    /**
+     * The hairline under a bar above the table (this one and {@link HighlightNavBar}), drawn
+     * only when another bar follows: the table's frame already draws the line above itself,
+     * and both together read as one thick line. In the separator color, read when painted, so
+     * it follows a theme switch.
+     */
+    static final class BarSeparator extends javax.swing.border.AbstractBorder {
+        @Override public void paintBorder(Component c, Graphics g, int x, int y, int w, int h) {
+            if (!followedByBar(c)) return;
+            g.setColor(ClouseauColors.separatorColor());
+            g.fillRect(x, y + h - 1, w, 1);
+        }
+
+        @Override public Insets getBorderInsets(Component c, Insets insets) {
+            insets.set(0, 0, 1, 0);      // the same height either way, so nothing shifts
+            return insets;
+        }
+
+        private static boolean followedByBar(Component c) {
+            Container parent = c.getParent();
+            if (parent == null) return false;
+            boolean after = false;
+            for (Component sibling : parent.getComponents()) {
+                if (sibling == c) { after = true; continue; }
+                if (after && sibling.isVisible()) return sibling instanceof FindBar || sibling instanceof HighlightNavBar;
+            }
+            return false;
+        }
     }
 
     /** A small up/down arrow button, shared with {@link HighlightNavBar}. */
