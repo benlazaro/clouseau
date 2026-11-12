@@ -1828,7 +1828,11 @@ between 90 and 400.
      `close`.**
    - **Clearing the table** is a shared step: stop following, empty the model, then the
      content's `cleared()` (a file re-indexes from its end; a merged view stops showing
-     and following), then follow again.
+     and following), then follow again. *Since changed:* a file tab no longer empties the
+     model. `LogTableModel.hideBefore` hides its rows so far and keeps them in the index, so
+     line numbers, notes and highlights stay on their entries (a fresh index numbered the
+     next line 1). Clear Table is offered on live sources and single files, not on merged
+     views or plain text.
    - `currentWorker`, `tailWorker`, `currentFile`, `currentEntry`, `cacheCopy`,
      `fileFollow`, `currentParser` and the plain-text fields are gone from `TabPanel`.
 6. ✅ Mark D-21 Adopted, close G-9, update CLAUDE.md's key classes.

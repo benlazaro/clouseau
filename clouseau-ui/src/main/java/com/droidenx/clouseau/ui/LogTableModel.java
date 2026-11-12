@@ -79,6 +79,8 @@ public final class LogTableModel extends AbstractTableModel {
     private int                          trimmedCount = 0;
     /** Entries added by static loads since the last {@link #clear()}; see {@link #entryCap()}. */
     private int                          staticCount  = 0;
+    /** Clear Table on a file: entries with a lower ordinal stay in the index but never show. */
+    private int                          hiddenBefore = 0;
 
     private final ExecutorService filterExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "clouseau-filter");
@@ -279,6 +281,24 @@ public final class LogTableModel extends AbstractTableModel {
         return counts;
     }
 
+    /**
+     * Clear Table on a file tab: hides every entry so far, so only entries added from here on
+     * show, whatever the filters. The entries stay where they are (in the index), so line
+     * numbers, notes and highlights keep pointing at the right entries; reloading shows them
+     * again. Must be called on the EDT.
+     */
+    public void hideBefore(int ordinal) {
+        if (ordinal <= hiddenBefore) return;
+        hiddenBefore = ordinal;
+        int hidden = rows.countBelow(ordinal);
+        if (hidden == 0) return;
+        rows.removeRange(0, hidden);
+        fireTableRowsDeleted(0, hidden - 1);
+    }
+
+    /** Entries with an ordinal below this were cleared from the table ({@link #hideBefore}); 0 if none. */
+    public int hiddenBefore() { return hiddenBefore; }
+
     // ── Loading ──────────────────────────────────────────────────────────────
 
     public void clear() {
@@ -294,6 +314,7 @@ public final class LogTableModel extends AbstractTableModel {
             memoryBlanks = null;
             trimmedCount = 0;
             staticCount  = 0;
+            hiddenBefore = 0;
             highlights.clear();
             knownFieldKeys.clear();
             customFields = List.of();
@@ -545,6 +566,7 @@ public final class LogTableModel extends AbstractTableModel {
                 for (int ord = Math.max(base + snapshot.size(), listBase()); ord < end; ord++) {
                     if (passesOnEdt(filter, ord)) newRows.add(ord);
                 }
+                newRows.removeRange(0, newRows.countBelow(hiddenBefore));   // cleared from the table
                 rows = newRows;
                 fireTableDataChanged();
                 List<Runnable> waiting = List.copyOf(afterFilter);

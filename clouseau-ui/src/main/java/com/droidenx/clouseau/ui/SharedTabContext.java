@@ -328,8 +328,15 @@ final class SharedTabContext {
         tableView.numberingChanged();
     }
 
-    /** Clear Table empties what a live source streamed; a file is reloaded instead. */
-    boolean canClearTable() { return host.content() instanceof LiveContent; }
+    /**
+     * Clear Table empties what a live source streamed, or hides what a file tab has shown so
+     * far once it has loaded. Not on a merged view: clearing it would stop it following.
+     */
+    boolean canClearTable() {
+        TabContent content = host.content();
+        if (content instanceof LiveContent) return true;
+        return content instanceof FileContent file && !file.isPlain() && !file.loading();
+    }
 
     boolean hasEntry() { return plainView == null && detailPanel.hasEntry(); }
 
@@ -424,22 +431,33 @@ final class SharedTabContext {
         updateTimezoneBadge();
     }
 
-    /** Empties the table after asking; the content follows on from here (or stops showing what it loaded). */
+    /**
+     * Empties the table after asking. A file tab hides its rows so far and shows what is
+     * written from here on: its rows stay in the index, so line numbers, notes and highlights
+     * stay right, and Reload shows them again. Other content is emptied and follows on from
+     * here (or stops showing what it loaded).
+     */
     void clearTable() {
+        if (!canClearTable()) return;
         int confirm = JOptionPane.showConfirmDialog(window(),
                 Messages.get("table.clear.confirm.message"),
                 Messages.get("table.clear.confirm.title"),
                 JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
         TabContent content = host.content();
-        if (content != null) content.setFollow(false);
-        model.clear();
-        textLost = false;
-        if (content != null) content.cleared();
+        if (content instanceof FileContent) {
+            // Followed rows are appended on the EDT, so none slips in between.
+            model.hideBefore(model.nextOrdinal());
+        } else {
+            if (content != null) content.setFollow(false);
+            model.clear();
+            textLost = false;
+            if (content != null) content.cleared();
+            if (follow && content != null) content.setFollow(true);
+        }
         refreshDetail();
         findBar.clearMatches();
         updateStatusBar();
-        if (follow && content != null) content.setFollow(true);
     }
 
     void updateStatusBar() {

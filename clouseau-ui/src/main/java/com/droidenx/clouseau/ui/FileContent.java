@@ -315,20 +315,11 @@ final class FileContent implements TabContent {
     }
 
     /**
-     * The user cleared the table: follow on from the end of the file. A plain file stays
-     * indexed, so what is followed from here on starts a new index.
+     * Not called: Clear Table on a file hides its rows ({@link LogTableModel#hideBefore})
+     * rather than emptying the model, so following carries on into the same index.
      */
     @Override
-    public void cleared() {
-        try { follower.setPosition(Files.size(file)); } catch (IOException ignored) { follower.setPosition(0); }
-        if (!indexed || cacheCopy != null) return;
-        try {
-            tab.model().beginIndexedLoad(IndexedEntries.open(file, new EntryIndex(),
-                    new LineParser(parser, tab.parsers(), tab.timezone()), Messages.get("table.rotated.text")));
-        } catch (IOException ex) {
-            log.warn("Can't open {} for indexing; followed lines will be held in memory", file, ex);
-        }
-    }
+    public void cleared() {}
 
     @Override
     public void dispose() {

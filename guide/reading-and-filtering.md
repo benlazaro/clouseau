@@ -34,7 +34,12 @@ are shown from how many lines, such as **57 rows · 108 lines**.
 - `Ctrl+Home` and `Ctrl+End` jump to the first and last row.
 - Right-click a row for [highlights](#highlights), [notes](annotations-and-review.md),
   **Reload File** (read the file again from the start, also **File → Reload File**,
-  `Ctrl+R`) and, on a live source, **Clear Table** (remove every row so far).
+  `Ctrl+R`) and **Clear Table** (also **Edit → Clear Table**).
+- **Clear Table** empties the table so you see only what's written from now on, for example
+  while you reproduce a bug. On a file, the rows are only hidden: new rows keep their line
+  numbers in the file, your notes and highlights stay, and **Reload File** brings every row
+  back. On an SSH or plugin source, the rows so far are removed. It isn't available on a
+  merged view or a file shown as plain text.
 - The **Edit** menu has the copy commands, Find (`Ctrl+F`, then `F3` / `Shift+F3` for the
   next and previous match) and notes for the selected row. The **View** menu has Follow,
   **Detail Pane** (Wrap Lines and text size, `Ctrl+=` / `Ctrl+-`), the tab's Time Zone and
