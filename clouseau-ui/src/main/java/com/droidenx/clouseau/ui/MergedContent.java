@@ -303,9 +303,16 @@ final class MergedContent implements TabContent {
     }
 
     /** A merged view's Source column labels, with their offset marks. */
+    /**
+     * The widest each file's Source cell can be: its label and ":" with its largest line
+     * number ("db.log:10482"), so the column fits them all.
+     */
     static List<String> sourceLabels(MergedEntries view) {
         List<String> labels = new ArrayList<>();
-        for (int s = 0; s < view.sourceCount(); s++) labels.add(view.sourceLabel(s));
+        for (int s = 0; s < view.sourceCount(); s++) {
+            long lines = view.sources().get(s).entries().lineCount();
+            labels.add(LogTableModel.sourceCell(view, s, Math.max(1, lines)));
+        }
         return labels;
     }
 }

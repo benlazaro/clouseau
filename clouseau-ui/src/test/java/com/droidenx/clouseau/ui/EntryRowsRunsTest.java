@@ -29,6 +29,7 @@ class EntryRowsRunsTest {
         @Override public boolean testIndex(EntryFilter filter, int ordinal) { return true; }
         @Override public boolean needsText(EntryFilter filter) { return true; }
         @Override public void close() {}
+        @Override public long lineCount() { return entries.size(); }
 
         @Override
         public boolean scan(int from, int to, Visitor visitor, BooleanSupplier cancelled) {

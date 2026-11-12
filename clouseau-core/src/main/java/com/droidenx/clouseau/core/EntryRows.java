@@ -27,6 +27,12 @@ public interface EntryRows extends Closeable {
     /** The source (its index among {@link #sourceCount()}) of the entry at {@code ordinal}. */
     default int sourceOf(int ordinal) { return 0; }
 
+    /** The entry's line number in its own file, from 1, blank lines included. */
+    default int lineNumber(int ordinal) { return ordinal + 1; }
+
+    /** How many lines the entries came from, blank lines included (all files of a merge). */
+    long lineCount();
+
     /** A short name for a source, such as its file name; null for a single file. */
     default String sourceName(int source) { return null; }
 

@@ -157,7 +157,7 @@ public final class AnnotationsPanel extends JPanel {
         for (AnnotationStore.Placed p : store.placed()) {
             int modelRow = logTableModel.rowOfOrdinal(p.ordinal());
             rowKeys.add(p.ordinal());
-            panelModel.addRow(row(modelRow >= 0 ? modelRow + 1 : null, p.annotation(), store.sourceName(p.ordinal())));
+            panelModel.addRow(row(modelRow >= 0 ? logTableModel.lineNumber(modelRow) : null, p.annotation(), store.sourceName(p.ordinal())));
         }
         for (AnnotationStore.Annotation a : store.orphans()) {
             rowKeys.add(a);

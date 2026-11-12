@@ -94,7 +94,7 @@ class MergedViewTest {
                 }
                 return out;
             });
-            assertThat(rows).containsExactly("app.log app starts", "db.log db slow", "app.log app fails");
+            assertThat(rows).containsExactly("app.log:1 app starts", "db.log:1 db slow", "app.log:2 app fails");
         } finally {
             onEdt(() -> { panel.dispose(); return null; });
         }
@@ -169,7 +169,7 @@ class MergedViewTest {
             await(() -> "db 2".equals(model.getEntry(2).message()));
             assertThat(messages(model)).containsExactly("app 1", "app 3", "db 2", "app 5");
             assertThat(onEdt(() -> panel.getLogTable().getSelectedRow())).isEqualTo(2);
-            assertThat(onEdt(() -> model.getValueAt(2, 6))).isEqualTo("db.log (+2.500s)");
+            assertThat((String) onEdt(() -> model.getValueAt(2, 6))).matches("db\\.log:\\d+ \\(\\+2\\.500s\\)");
             assertThat(onEdt(() -> model.getEntry(2).rawLine())).startsWith("2026-11-04 10:00:02");
         } finally {
             onEdt(() -> { panel.dispose(); return null; });
@@ -209,7 +209,7 @@ class MergedViewTest {
             LogTableModel model = (LogTableModel) panel.getLogTable().getModel();
             await(() -> model.getRowCount() == 3);
             assertThat(messages(model)).containsExactly("app 1", "app 3", "db 2");   // db 2 is 10:00:04
-            assertThat(onEdt(() -> model.getValueAt(2, 6))).isEqualTo("db.log (+2s)");
+            assertThat((String) onEdt(() -> model.getValueAt(2, 6))).matches("db\\.log:\\d+ \\(\\+2s\\)");
             assertThat(onEdt(panel::reviewParts)).extracting(com.droidenx.clouseau.core.ReviewBundle.Part::offsetMillis)
                     .containsExactly(0L, 2_000L);
         } finally {

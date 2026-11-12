@@ -48,9 +48,11 @@ final class DetailPanel extends JPanel {
      *                      wrapped lines), folded into the message
      * @param shiftMillis   the time offset of the entry's file in a merged view (D-17), already
      *                      added to its timestamp; 0 if none
+     * @param where         where the entry is, after "Log entry ·" in the title: "file line 13",
+     *                      "db.log, line 13" or "#1042 since connecting"; null for nothing
      */
     record Content(LogEntry entry, Color highlight, AnnotationStore.Annotation annotation,
-                   List<LogEntry> continuations, long shiftMillis, Object lineNumber, String source) {}
+                   List<LogEntry> continuations, long shiftMillis, String where) {}
 
     private static final int MIN_FONT = 8, MAX_FONT = 36, DEFAULT_FONT = 12;
 
@@ -489,13 +491,9 @@ final class DetailPanel extends JPanel {
         shown = entry != null ? content : null;
         copyBtn.setEnabled(entry != null);
         updateFontSizeLabel();
-        // "Log entry", then "· line 41", then "· db.log" in a merged view (line numbers repeat there).
+        // "Log entry", then where it is: "· file line 41", "· db.log, line 41" or "· #1042 since connecting".
         StringBuilder heading = new StringBuilder(Messages.get("detail.title.none"));
-        if (entry != null && content.lineNumber() != null) {
-            heading.append("  \u00b7  ").append(java.text.MessageFormat.format(
-                    Messages.get("detail.title.line"), String.valueOf(content.lineNumber())));
-        }
-        if (entry != null && content.source() != null) heading.append("  \u00b7  ").append(content.source());
+        if (entry != null && content.where() != null) heading.append("  \u00b7  ").append(content.where());
         title.setText(heading.toString());
         StyledDocument doc = detailArea.getStyledDocument();
         try { doc.remove(0, doc.getLength()); } catch (BadLocationException ignored) {}

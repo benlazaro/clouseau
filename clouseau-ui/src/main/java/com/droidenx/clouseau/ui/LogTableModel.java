@@ -131,6 +131,74 @@ public final class LogTableModel extends AbstractTableModel {
         return modelRow >= 0 && modelRow < rows.size() ? rows.get(modelRow) : -1;
     }
 
+    /**
+     * What the first column counts, by what the tab shows. On a file it's the line in the
+     * file, as an editor counts it; in a merged view the row's place in the timeline (each
+     * file's line numbers go down and up as the files interleave, so they'd look shuffled,
+     * and go in the Source column instead); on a live source, entries since it opened.
+     * Each stays the same whatever the filters show.
+     */
+    public enum Numbering { FILE_LINES, POSITION, RECEIVED }
+
+    private volatile Numbering numbering = Numbering.FILE_LINES;
+    /** Where blank lines were skipped in a file held in memory (not indexed), or null. */
+    private volatile com.droidenx.clouseau.core.BlankLines memoryBlanks;
+
+    public Numbering numbering() { return numbering; }
+
+    public void setNumbering(Numbering n) { numbering = n; }
+
+    /** For a file loaded into memory: where its reader skipped blank lines. */
+    public void setMemoryBlanks(com.droidenx.clouseau.core.BlankLines blanks) { memoryBlanks = blanks; }
+
+    /**
+     * The entry's line number in its own file, counted from 1 with blank lines included, as an
+     * editor counts. Entries of a live source count from the first one received. -1 if
+     * there's no such row.
+     */
+    public int lineNumber(int modelRow) {
+        int ord = ordinalAt(modelRow);
+        return ord < 0 ? -1 : lineNumberOfOrdinal(ord);
+    }
+
+    public int lineNumberOfOrdinal(int ord) {
+        if (indexed != null && ord < indexedCount) return indexed.lineNumber(ord);
+        com.droidenx.clouseau.core.BlankLines b = memoryBlanks;
+        return b != null ? b.lineNumber(ord) : ord + 1;
+    }
+
+    /**
+     * A merged row's Source cell: its file and its line there, "db.log:13", as compilers and
+     * stack traces say it, then the file's time offset if it has one: "db.log:13 (+2s)".
+     */
+    static String sourceCell(EntryRows rows, int source, long line) {
+        String name = rows.sourceName(source), label = rows.sourceLabel(source);
+        if (name == null) return "";
+        String rest = label != null && label.startsWith(name) ? label.substring(name.length()) : "";
+        return name + ":" + line + rest;
+    }
+
+    /** The file a merged view's row comes from, or null on a tab that shows one source. */
+    public String sourceNameAt(int modelRow) {
+        int ord = ordinalAt(modelRow);
+        return indexed != null && ord >= 0 && ord < indexedCount && indexed.sourceCount() > 1
+                ? indexed.sourceName(indexed.sourceOf(ord)) : null;
+    }
+
+    /** What the first column shows for a model row: see {@link Numbering}. */
+    public int numberAt(int modelRow) {
+        int ord = ordinalAt(modelRow);
+        if (ord < 0) return -1;
+        return numbering == Numbering.FILE_LINES ? lineNumberOfOrdinal(ord) : ord + 1;
+    }
+
+    /** How many lines the held entries came from, blank lines included (not dropped live ones). */
+    public long lineCount() {
+        long n = indexed != null ? indexed.lineCount() : 0;
+        com.droidenx.clouseau.core.BlankLines b = memoryBlanks;
+        return n + allEntries.size() + (b != null ? b.count() : 0);
+    }
+
     /** The model row showing the entry with this ordinal, or -1 if it's filtered out or gone. */
     public int rowOfOrdinal(int ordinal) {
         return rows.binarySearch(ordinal);
@@ -213,6 +281,7 @@ public final class LogTableModel extends AbstractTableModel {
             allEntries.clear();
             afterFilter.clear();
             closeIndexed();
+            memoryBlanks = null;
             trimmedCount = 0;
             staticCount  = 0;
             highlights.clear();
@@ -742,6 +811,7 @@ public final class LogTableModel extends AbstractTableModel {
     @Override public int getColumnCount() { return FIXED_COLUMNS + customFields.size(); }
 
     @Override public String getColumnName(int col) {
+        if (col == 0 && numbering == Numbering.FILE_LINES) return Messages.get("table.col.line");
         if (col < FIXED_COLUMNS) return Messages.get(COLUMN_KEYS[col]);
         String field = customFields.get(col - FIXED_COLUMNS);
         return SOURCE_COLUMN.equals(field) ? Messages.get("table.col.source") : field;
@@ -757,7 +827,7 @@ public final class LogTableModel extends AbstractTableModel {
         LogEntry e = getEntry(row);
         if (e == null) return "";
         if (col < FIXED_COLUMNS) return switch (col) {
-            case 0 -> row + 1;
+            case 0 -> numberAt(row);
             case 1 -> e.timestamp() != null ? tsFmt.format(e.timestamp()) : "";
             case 2 -> e.level()     != null ? e.level().name()             : "";
             case 3 -> e.thread()    != null ? e.thread()                   : "";
@@ -767,8 +837,8 @@ public final class LogTableModel extends AbstractTableModel {
         };
         String field = customFields.get(col - FIXED_COLUMNS);
         if (SOURCE_COLUMN.equals(field)) {
-            String name = indexed != null ? indexed.sourceLabel(indexed.sourceOf(ordinalAt(row))) : null;
-            return name != null ? name : "";
+            int ord = ordinalAt(row);
+            return indexed != null ? sourceCell(indexed, indexed.sourceOf(ord), lineNumberOfOrdinal(ord)) : "";
         }
         Map<String, String> fields = e.fields();
         return fields != null ? fields.getOrDefault(field, "") : "";

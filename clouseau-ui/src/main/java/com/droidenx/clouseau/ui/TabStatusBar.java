@@ -64,18 +64,24 @@ final class TabStatusBar extends JPanel {
      * The row counts: {@code visible} of {@code total} after filtering, {@code trimmed}
      * dropped by the entry limit, then {@code note} (partial load, rotation, filtering).
      */
-    void setRows(int visible, int total, long trimmed, String note) {
+    /**
+     * "57 rows · 106 lines": the rows shown, and the lines they come from. Not "57 of 106
+     * lines", which reads as lines missing: most of the difference is usually continuation
+     * lines folded into their entry (a stack trace), not lines the app failed to show.
+     */
+    void setRows(int rows, long lines, long trimmed, String note) {
         String text;
         if (trimmed > 0) {
-            text = (visible == total)
-                    ? MessageFormat.format(Messages.get("status.lines.trimmed"), total, trimmed)
-                    : MessageFormat.format(Messages.get("status.lines.filtered.trimmed"), visible, total, trimmed);
+            text = (rows == lines)
+                    ? MessageFormat.format(Messages.get("status.lines.trimmed"), lines, trimmed)
+                    : MessageFormat.format(Messages.get("status.lines.filtered.trimmed"), rows, lines, trimmed);
         } else {
-            text = (visible == total)
-                    ? MessageFormat.format(Messages.get("status.lines"), total)
-                    : MessageFormat.format(Messages.get("status.lines.filtered"), visible, total);
+            text = (rows == lines)
+                    ? MessageFormat.format(Messages.get("status.lines"), lines)
+                    : MessageFormat.format(Messages.get("status.lines.filtered"), rows, lines);
         }
         countsLabel.setText(text + note);
+        countsLabel.setToolTipText(rows == lines ? null : Messages.get("status.rows.tooltip"));
     }
 
     /** The line count of a file shown as plain text (UC-13). */

@@ -19,8 +19,17 @@ are colored by level, so errors and warnings stand out. Formats with extra field
 a request ID or a process ID) get a column for each. Continuation lines, such as the lines
 of a stack trace, stay with the entry they belong to.
 
-The status bar shows the file's path, the [source timezone](#timezones), and how many lines
-are shown out of how many there are.
+The first column numbers the rows, and keeps each row's number when filters hide others:
+
+- **Line**, on a file: the line in the file, as your editor counts it. Gaps are lines folded
+  into the entry above (point at the number to see them, such as "Lines 66–75"), blank
+  lines, or rows your filters hide.
+- **#**, in a merged view: the row's place in the merged timeline. Its line in its own file
+  is in the **Source** column, as `db.log:13`.
+- **#**, on a live source: entries received since the tab opened.
+
+The status bar shows the file's path, the [source timezone](#timezones), and how many rows
+are shown from how many lines, such as **57 rows · 108 lines**.
 
 - `Ctrl+Home` and `Ctrl+End` jump to the first and last row.
 - Right-click a row for [highlights](#highlights), [notes](annotations-and-review.md),
@@ -34,9 +43,9 @@ are shown out of how many there are.
 ## The detail panel
 
 Select a row to see the whole entry below the table: every field, the full message and
-its stack trace. The panel's header names the line it shows, such as **Line 41** (with the
-file, **Line 41 · db.log**, in a merged view; even with the **#** column hidden),
-and holds its controls:
+its stack trace. The panel's header says where the entry is, even with the first column
+hidden: **Log entry · file line 41**, **Log entry · db.log, line 41** in a merged view, or
+**Log entry · #1042 since connecting** on a live source. It also holds the panel's controls:
 
 - **JSON** appears when the message is JSON. Pressed (the default), the message is
   pretty-printed and colored; released, it's shown exactly as logged. Plugin formats get a

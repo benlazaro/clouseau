@@ -81,4 +81,23 @@ class IndexedFollowTest {
         t.interrupt();
         t.join(5_000);
     }
+
+    @Test
+    void followedLinesKeepCountingBlankLinesAndASplitCrlfIsNotOne() throws Exception {
+        Path log = Files.writeString(dir.resolve("app.log"), "one\n");
+        EntryIndex index = new EntryIndex();
+        index.add(0, 3, lines.parse("one"));
+        try (IndexedEntries entries = IndexedEntries.open(log, index, lines)) {
+            IndexedFollow follow = new IndexedFollow(log, Files.size(log));
+            Thread t = run(follow, entries, new AtomicBoolean());
+            append(log, "\ntwo\r");                  // a blank line, then a \r\n cut after its \r
+            await(1);
+            append(log, "\nthree\n");
+            await(2);
+            t.interrupt();
+            t.join(5_000);
+            assertThat(index.lineNumber(1)).isEqualTo(3);   // two: after line 1 and a blank line
+            assertThat(index.lineNumber(2)).isEqualTo(4);   // three: the \n finishing two's \r\n isn't a line
+        }
+    }
 }

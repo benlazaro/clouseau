@@ -71,6 +71,11 @@ public final class IndexedFollow {
                 }
 
                 @Override
+                public void blank() {
+                    if (entries != null) entries.index().addBlank();
+                }
+
+                @Override
                 public void rotated(FileFollower.Rotation how) {
                     log.info("{} was rotated ({})", file, how);
                     if (entries != null && entries.rotated()) listener.textLost();

@@ -48,6 +48,9 @@ public final class FileFollower {
          */
         void line(long offset, int length, String text);
 
+        /** A blank line was skipped (when not following with {@code keepBlank}). */
+        default void blank() {}
+
         /**
          * The file was rotated. Lines after this call are from the start of the file the
          * path names now.
@@ -98,6 +101,10 @@ public final class FileFollower {
      */
     public static void follow(Path file, long start, Listener listener, BooleanSupplier cancelled,
                               long pollMillis, boolean keepBlank) throws InterruptedException {
+        LineScanner.Sink sink = new LineScanner.Sink() {
+            @Override public void line(long offset, int length, String text) { listener.line(offset, length, text); }
+            @Override public void blank() { listener.blank(); }
+        };
         long position = start;
         SeekableByteChannel channel = null;
         Object fileKey = null;
@@ -114,14 +121,14 @@ public final class FileFollower {
                         listener.rotated(Rotation.TRUNCATED);
                         listener.position(position);
                     }
-                    long read = FileTail.readAppendedLines(channel, position, listener::line, cancelled, keepBlank);
+                    long read = FileTail.readAppendedLines(channel, position, sink, cancelled, keepBlank);
                     if (read != position) {
                         position = read;
                         listener.position(position);
                     }
                     if (!cancelled.getAsBoolean() && replaced(file, fileKey, position)) {
                         // Read what was written to the old file since, then switch to the new one.
-                        read = FileTail.readAppendedLines(channel, position, listener::line, cancelled, keepBlank);
+                        read = FileTail.readAppendedLines(channel, position, sink, cancelled, keepBlank);
                         if (read != position) {
                             position = read;
                             listener.position(position);

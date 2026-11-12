@@ -28,6 +28,12 @@ public final class LineScanner {
          * @param text   the line decoded as UTF-8
          */
         void line(long offset, int length, String text);
+
+        /**
+         * A blank line was skipped. It isn't an entry, but it still counts toward the line
+         * numbers an editor shows, so an index can record where it was.
+         */
+        default void blank() {}
     }
 
     static final int BUFFER_SIZE = 64 * 1024;
@@ -137,5 +143,6 @@ public final class LineScanner {
         // new String(..., UTF_8) replaces malformed input, like the decoder LogReaders uses.
         String text = new String(bytes, from, len, StandardCharsets.UTF_8);
         if (keepBlank || !text.isBlank()) sink.line(offset, len, text);
+        else sink.blank();
     }
 }

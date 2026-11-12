@@ -660,7 +660,11 @@ If the log's folder is not writable, the sidecar goes in `<data>/annotations/`, 
 after a hash of the log's absolute path.
 
 The "line number" is the entry number: blank lines are skipped when reading, so they
-aren't counted. It is stable for an unchanged file, which is all the anchor needs. When
+aren't counted. (The # column and the detail pane show the file's own line number instead:
+`EntryIndex` records where blank lines were skipped, and `lineNumber(row)` adds those
+before the row. What the first column shows follows the tab, `LogTableModel.Numbering`:
+file lines on a file, the merged timeline's position in a merged view (with `file:line` in
+Source), entries received on a live source.) It is stable for an unchanged file, which is all the anchor needs. When
 lines are inserted above a group of identical lines, a note can move to a different one
 of them; the content still matches, so this is accepted. Details in section 6.6.
 

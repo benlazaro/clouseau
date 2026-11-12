@@ -306,6 +306,12 @@ final class SharedTabContext {
 
     // ── The window's Edit and View menus act on the active tab through these ──────────
 
+    /** Sets what the first column counts, and its title: Line on a file, # otherwise. */
+    void setNumbering(LogTableModel.Numbering n) {
+        model.setNumbering(n);
+        tableView.numberingChanged();
+    }
+
     /** Clear Table empties what a live source streamed; a file is reloaded instead. */
     boolean canClearTable() { return host.content() instanceof LiveContent; }
 
@@ -429,7 +435,7 @@ final class SharedTabContext {
         String note = content != null ? content.statusNote() : "";
         if (textLost) note += Messages.get("status.rotated");
         if (filterPercent >= 0) note += MessageFormat.format(Messages.get("status.filtering"), filterPercent);
-        statusBar.setRows(model.getRowCount(), model.getTotalCount(), model.getTrimmedCount(), note);
+        statusBar.setRows(model.getRowCount(), model.lineCount(), model.getTrimmedCount(), note);
     }
 
     // ── Notes and the detail pane ────────────────────────────────────────────
@@ -497,11 +503,26 @@ final class SharedTabContext {
         MergedEntries merged = mergedView();
         long shift = merged != null && ordinal >= 0 && ordinal < merged.size()
                 ? merged.offsetMillis(merged.sourceOf(ordinal)) : 0;
-        // In a merged view line numbers repeat across files, so the title also names the file.
-        String source = merged != null && ordinal >= 0 && ordinal < merged.size()
-                ? merged.sources().get(merged.sourceOf(ordinal)).name() : null;
         return new DetailPanel.Content(entry, model.getHighlight(modelRow),
-                notes.at(ordinal), model.getContinuationLines(modelRow), shift, model.getValueAt(modelRow, 0), source);
+                notes.at(ordinal), model.getContinuationLines(modelRow), shift, where(modelRow, ordinal, merged));
+    }
+
+    /**
+     * Where an entry is, said so it can't be taken for anything else: "file line 13" on a
+     * file, "db.log, line 13" in a merged view (the file named, so just "line"), and
+     * "#1042 since connecting" on a live source, which isn't a line of any file.
+     */
+    private String where(int modelRow, int ordinal, MergedEntries merged) {
+        if (ordinal < 0) return null;
+        String line = String.valueOf(model.lineNumber(modelRow));
+        return switch (model.numbering()) {
+            case FILE_LINES -> MessageFormat.format(Messages.get("detail.title.file.line"), line);
+            case POSITION -> merged != null && ordinal < merged.size()
+                    ? MessageFormat.format(Messages.get("detail.title.merged.line"),
+                            merged.sources().get(merged.sourceOf(ordinal)).name(), line)
+                    : null;
+            case RECEIVED -> MessageFormat.format(Messages.get("detail.title.received"), String.valueOf(ordinal + 1));
+        };
     }
 
     void refreshDetail() {

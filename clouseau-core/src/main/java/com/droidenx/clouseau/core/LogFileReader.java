@@ -35,14 +35,29 @@ public final class LogFileReader {
     public static Result read(BufferedReader reader, LineParser parser, int checkInterval,
                               BooleanSupplier memoryLow, BooleanSupplier cancelled,
                               Consumer<LogEntry> sink) throws IOException {
+        return read(reader, parser, checkInterval, memoryLow, cancelled, sink, null);
+    }
+
+    /**
+     * Like {@link #read(BufferedReader, LineParser, int, BooleanSupplier, BooleanSupplier, Consumer)},
+     * recording in {@code blanks} where blank lines were skipped, for line numbers.
+     */
+    public static Result read(BufferedReader reader, LineParser parser, int checkInterval,
+                              BooleanSupplier memoryLow, BooleanSupplier cancelled,
+                              Consumer<LogEntry> sink, BlankLines blanks) throws IOException {
         String line;
         long lineNo = 0;
+        int entries = 0;
         while ((line = reader.readLine()) != null && !cancelled.getAsBoolean()) {
             if (++lineNo % checkInterval == 0 && memoryLow.getAsBoolean()) {
                 return new Result(lineNo - 1);
             }
-            if (line.isBlank()) continue;
+            if (line.isBlank()) {
+                if (blanks != null) blanks.add(entries);
+                continue;
+            }
             sink.accept(parser.parse(line));
+            entries++;
         }
         return new Result(-1);
     }

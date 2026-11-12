@@ -130,6 +130,17 @@ public final class MergedEntries implements EntryRows {
 
     @Override public int sourceOf(int ordinal) { return layout.order().source(ordinal); }
 
+    @Override public long lineCount() {
+        long n = 0;
+        for (int s = 0; s < sources.size(); s++) n += index(s).lineCount();
+        return n;
+    }
+
+    @Override public int lineNumber(int ordinal) {
+        MergeOrder o = layout.order();
+        return index(o.source(ordinal)).lineNumber(o.row(ordinal));
+    }
+
     @Override public String sourceName(int source) { return sources.get(source).name(); }
 
     /** The name, with the offset if it has one: {@code device.log (+3m 12s)}. */
