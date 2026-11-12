@@ -32,6 +32,24 @@ final class ToolIcons {
         g.drawLine(x + 7, y + 6, x + 7, y + 11);
     }
 
+    /**
+     * A 12×12 outline pencil, tip at the lower left: the note marker. Drawn, not the ✎
+     * character, which some monospace fonts lack (it showed as a box on Windows).
+     */
+    static void paintPencil(Graphics2D g, int x, int y, Color c) {
+        g.setColor(c);
+        g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        Path2D.Float body = new Path2D.Float();
+        body.moveTo(x + 1f, y + 11f);          // tip
+        body.lineTo(x + 1.6f, y + 8.4f);
+        body.lineTo(x + 8.6f, y + 1.4f);
+        body.lineTo(x + 10.6f, y + 3.4f);
+        body.lineTo(x + 3.6f, y + 10.4f);
+        body.closePath();
+        g.draw(body);
+        g.drawLine(x + 7, y + 3, x + 9, y + 5);  // the band behind the eraser
+    }
+
     /** Two overlapping 9×10 rounded sheets, the back one offset up and left. */
     static void paintDuplicate(Graphics2D g, int x, int y, Color c) {
         g.setColor(c);

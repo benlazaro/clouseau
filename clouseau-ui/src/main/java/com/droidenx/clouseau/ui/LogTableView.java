@@ -41,6 +41,9 @@ final class LogTableView {
 
         /** Right-click on rows (model rows, possibly empty) at a point in the table. */
         void showRowMenu(List<Integer> modelRows, int x, int y);
+
+        /** Opens the note dialog for a model row: Add Note, or Edit Note if it has one. */
+        void editNote(int modelRow);
     }
 
     /** Model column index of the Message column — always stretched to fill remaining width. */
@@ -62,6 +65,12 @@ final class LogTableView {
         this.host = host;
         logTable = new JTable(model) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
+
+            /** The gutter shows the same rows: it repaints with them (a note added, a filter, a scroll). */
+            @Override public void repaint(long tm, int x, int y, int width, int height) {
+                super.repaint(tm, x, y, width, height);
+                if (gutter != null) gutter.repaint();
+            }
 
             /** On the number column: an entry's line range, when lines are folded into it. */
             @Override public String getToolTipText(MouseEvent e) {
@@ -180,12 +189,6 @@ final class LogTableView {
                 setHorizontalAlignment(modelCol == 0 ? SwingConstants.RIGHT : SwingConstants.LEFT);
                 boolean isLevel = modelCol == 2;
                 setFont(getFont().deriveFont(sel || isLevel ? Font.BOLD : Font.PLAIN));
-
-                // Annotation indicator in the # column
-                if (modelCol == 0 && host.notes().has(logTableModel.ordinalAt(rowModel))) {
-                    setText("\u270e " + getText());
-                    if (!sel) setForeground(ClouseauColors.annotationIndicatorColor());
-                }
 
                 return this;
             }
@@ -335,6 +338,12 @@ final class LogTableView {
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         ClouseauColors.themedBackground(tableScrollPane.getViewport(), ClouseauColors::viewportBackground);
+        // The note gutter: at the table's left edge, outside the columns, so hiding or moving
+        // a column never hides a note.
+        gutter = new NoteGutter();
+        tableScrollPane.setRowHeaderView(gutter);
+        tableScrollPane.setCorner(JScrollPane.UPPER_LEFT_CORNER, new GutterCorner());
+        ClouseauColors.themedBackground(tableScrollPane.getRowHeader(), ClouseauColors::tableBackground);
         tableScrollPane.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
         logTable.addFocusListener(new java.awt.event.FocusListener() {
             @Override public void focusGained(java.awt.event.FocusEvent e) { logTable.repaint(); }
@@ -385,11 +394,10 @@ final class LogTableView {
                 maxWidth = Math.max(maxWidth, rc.getPreferredSize().width);
             }
             if (logTable.getColumnModel().getColumn(col).getModelIndex() == 0) {
-                // Room for the note marker on any row, not just the sampled ones.
+                // The number is the line in the file (or position), so it can exceed the rows shown.
                 FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
-                // # is the entry's number in its file, so it can exceed the rows shown.
-                long widest = Math.max(logTable.getRowCount(), logTableModel.getTotalCount() + logTableModel.getTrimmedCount());
-                maxWidth = Math.max(maxWidth, fm.stringWidth("✎ " + widest) + 16);
+                long widest = Math.max(logTable.getRowCount(), logTableModel.lineCount() + logTableModel.getTrimmedCount());
+                maxWidth = Math.max(maxWidth, fm.stringWidth(String.valueOf(widest)) + 16);
             }
             maxWidth += 8;
             logTable.getColumnModel().getColumn(col).setPreferredWidth(maxWidth);
@@ -726,5 +734,102 @@ final class LogTableView {
         }
         return java.text.MessageFormat.format(Messages.get("table.lines.folded"),
                 String.valueOf(first), String.valueOf(last));
+    }
+
+    // ── The note gutter ───────────────────────────────────────────────────────────
+
+    private NoteGutter gutter;
+
+    /**
+     * A strip at the table's left edge, like an IDE's gutter: a pencil on every row with a
+     * note, whatever columns are shown. Pointing at one shows the note; clicking it opens the
+     * note. On a row without one, a dim pencil appears under the mouse to add one.
+     */
+    private final class NoteGutter extends JComponent {
+        static final int WIDTH = 20;
+        private int hoverRow = -1;
+
+        NoteGutter() {
+            setOpaque(true);
+            ToolTipManager.sharedInstance().registerComponent(this);
+            MouseAdapter mouse = new MouseAdapter() {
+                @Override public void mouseMoved(MouseEvent e)  { hover(logTable.rowAtPoint(new Point(0, e.getY()))); }
+                @Override public void mouseExited(MouseEvent e) { hover(-1); }
+                @Override public void mousePressed(MouseEvent e) {
+                    if (!SwingUtilities.isLeftMouseButton(e)) return;
+                    int viewRow = logTable.rowAtPoint(new Point(0, e.getY()));
+                    if (viewRow < 0) return;
+                    logTable.setRowSelectionInterval(viewRow, viewRow);
+                    int modelRow = logTable.convertRowIndexToModel(viewRow);
+                    SwingUtilities.invokeLater(() -> host.editNote(modelRow));
+                }
+            };
+            addMouseListener(mouse);
+            addMouseMotionListener(mouse);
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            // As tall as the table, so it scrolls with it in the row header's viewport.
+            logTable.addComponentListener(new java.awt.event.ComponentAdapter() {
+                @Override public void componentResized(java.awt.event.ComponentEvent e) { revalidate(); repaint(); }
+            });
+        }
+
+        private void hover(int viewRow) {
+            if (viewRow != hoverRow) { hoverRow = viewRow; repaint(); }
+        }
+
+        @Override public Dimension getPreferredSize() {
+            return new Dimension(WIDTH, logTable.getPreferredSize().height);
+        }
+
+        private boolean hasNote(int viewRow) {
+            int ord = logTableModel.ordinalAt(logTable.convertRowIndexToModel(viewRow));
+            return ord >= 0 && host.notes().has(ord);
+        }
+
+        @Override protected void paintComponent(Graphics g) {
+            g.setColor(ClouseauColors.tableBackground());
+            Rectangle clip = g.getClipBounds();
+            g.fillRect(clip.x, clip.y, clip.width, clip.height);
+            if (logTable.getRowCount() == 0) return;
+            int first = logTable.rowAtPoint(new Point(0, clip.y));
+            int last = logTable.rowAtPoint(new Point(0, clip.y + clip.height - 1));
+            if (first < 0) return;
+            if (last < 0) last = logTable.getRowCount() - 1;
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int rowHeight = logTable.getRowHeight();
+            for (int r = first; r <= last; r++) {
+                boolean note = hasNote(r);
+                if (!note && r != hoverRow) continue;
+                int y = r * rowHeight + (rowHeight - 12) / 2;
+                ToolIcons.paintPencil(g2, (WIDTH - 12) / 2, y,
+                        note ? ClouseauColors.annotationIndicatorColor() : ClouseauColors.mutedForeground());
+            }
+            g2.dispose();
+        }
+
+        @Override public String getToolTipText(MouseEvent e) {
+            int viewRow = logTable.rowAtPoint(new Point(0, e.getY()));
+            if (viewRow < 0) return null;
+            int ord = logTableModel.ordinalAt(logTable.convertRowIndexToModel(viewRow));
+            com.droidenx.clouseau.core.AnnotationStore.Annotation a = ord >= 0 ? host.notes().at(ord) : null;
+            if (a == null) return Messages.get("gutter.note.add.tooltip");
+            String esc = a.note() == null ? "" : a.note().replace("&", "&amp;").replace("<", "&lt;").replace("\n", "<br>");
+            return "<html><div style='width:280px'><b>" + java.text.MessageFormat.format(
+                    Messages.get("gutter.note.by"), a.author() == null ? "" : a.author()) + "</b><br>" + esc
+                    + "<br><br><i>" + Messages.get("gutter.note.edit.hint") + "</i></div></html>";
+        }
+    }
+
+    /** Above the gutter: the header's own background and bottom line, so the header runs edge to edge. */
+    private static final class GutterCorner extends JComponent {
+        @Override protected void paintComponent(Graphics g) {
+            Color bg = UIManager.getColor("TableHeader.background");
+            g.setColor(bg != null ? bg : ClouseauColors.tableBackground());
+            g.fillRect(0, 0, getWidth(), getHeight());
+            Color line = UIManager.getColor("TableHeader.bottomSeparatorColor");
+            g.setColor(line != null ? line : ClouseauColors.separatorColor());
+            g.fillRect(0, getHeight() - 1, getWidth(), 1);
+        }
     }
 }
