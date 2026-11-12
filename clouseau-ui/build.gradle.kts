@@ -324,6 +324,7 @@ runtime {
     // java.desktop  — Swing / AWT
     // java.logging  — java.util.logging (used internally)
     // java.management — JMX (Guava, log4j2)
+    // java.net.http — HttpClient (update checks, Maven Central and Nexus plugin search)
     // java.naming   — JNDI (log4j2 lookups)
     // java.prefs    — Preferences API
     // java.sql      — JDBC stubs pulled in transitively
@@ -335,6 +336,7 @@ runtime {
         "java.desktop",
         "java.logging",
         "java.management",
+        "java.net.http",
         "java.naming",
         "java.prefs",
         "java.sql",

@@ -468,6 +468,10 @@ public final class MainFrame extends JFrame {
 
         helpMenu.addSeparator();
 
+        JMenuItem updatesItem = menuItem(Messages.get("menu.help.updates"));
+        updatesItem.addActionListener(e -> manager.updates().checkNow(this));
+        helpMenu.add(updatesItem);
+
         JMenuItem aboutItem = menuItem(Messages.get("menu.help.about"));
         aboutItem.addActionListener(e -> openAbout());
         helpMenu.add(aboutItem);

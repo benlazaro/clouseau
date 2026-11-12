@@ -56,6 +56,31 @@ readable in any theme.
 | | On startup | **Restore last session** (the default) reopens the windows and tabs you had open; **Start empty** opens one empty window. See [Picking up where you left off](opening-files.md#picking-up-where-you-left-off). |
 | Appearance | Theme | The theme, with a live preview (also in **View → Theme**) |
 | | Show times in | The timezone timestamps are shown in, in every tab. The status bar's timezone popup changes the same setting. See [Timezones](reading-and-filtering.md#timezones). |
+| Updates | Tell me when a new version is available | On by default. See [New versions](#new-versions). |
+
+## New versions
+
+When a new version of Clouseau is released, a small window tells you so a few seconds
+after Clouseau starts. It doesn't block what you're doing:
+
+- **Download** opens the release's page, where you download the zip for your system and
+  unzip it as you did the first time. Clouseau doesn't update itself.
+- **Later** closes the notice. You'll hear about it again tomorrow.
+- **Skip This Version** closes it for good for that version; you'll hear about the next one.
+
+Clouseau checks at most once a day, and again each day it stays open. If it can't reach
+GitHub (no network, a proxy), it says nothing. The check only asks GitHub for the list of
+releases; nothing about you or your logs is sent.
+
+**Help → Check for Updates…** checks at once, and tells you when you already have the
+latest version.
+
+To stop the notices, untick **Tell me about new versions** on the notice, or **Tell me when
+a new version is available** in **File → Settings… → Updates**. Check for Updates… still
+works when they're off.
+
+The edge build (`clouseau-edge.jar`) and Clouseau run from source never check by
+themselves: they're ahead of the latest release.
 
 ## Keyboard shortcuts
 

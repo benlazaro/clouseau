@@ -39,7 +39,8 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     AnnotationStore, Notes, MergedNotes, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
-                    MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection
+                    MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
+                    UpdateCheck
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -169,6 +170,8 @@ tags.
   and writing `session.json` (atomic, `.bad` if damaged) and named sessions, and the autosave
   (debounced, compared before writing). `WindowManager.restore` reopens it at startup;
   `WindowManager.openNamedSession` opens a named session (File → Sessions).
+- `UpdateCheck` (core), `UpdateNotifier` (ui) — UC-18, D-23: find a newer release on GitHub's
+  releases list, and the daily check, notice and Help → Check for Updates… (`WindowManager.updates()`).
 - `FilterBar`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`, `AppDirs` (ui) — filters,
   parser editor, themes, settings, data folder. `FilterBar`'s time range sits behind its
   **Time** button (a From/To popup); `RowMenu` can set either end from a line.

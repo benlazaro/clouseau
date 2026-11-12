@@ -34,6 +34,7 @@ final class WindowManager {
     private final ClouseauPluginManager pluginManager;
     private final List<MainFrame> windows = new ArrayList<>();
     private MainFrame lastActive;
+    private final UpdateNotifier updates = new UpdateNotifier(this);
 
     private List<LogParser> parsers = List.of();
     private List<LogFormatter> formatters = List.of();
@@ -47,6 +48,9 @@ final class WindowManager {
     }
 
     ClouseauPluginManager pluginManager() { return pluginManager; }
+
+    /** Tells the user about new versions (UC-18); Help → Check for Updates… uses it too. */
+    UpdateNotifier updates() { return updates; }
 
     // ── Extensions ────────────────────────────────────────────────────────────
 
