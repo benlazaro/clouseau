@@ -205,6 +205,11 @@ for accounts without a password, common on embedded devices. "None" works with
 servers that let such accounts in by any of the usual methods (none, an empty password,
 or keyboard-interactive).
 
+**Clear Table:** Empties the table so only lines written from then on show. On a file the
+rows are hidden, not dropped: new rows keep their line in the file, notes and highlights
+stay, and Reload File shows everything again. On an SSH or plugin source the rows so far
+are removed. Not offered on a merged view or a file shown as plain text.
+
 **Memory limit:** A followed local file is indexed (UC-1, D-16), so its lines cost about
 29 bytes of heap each and are never dropped. SSH and plugin sources hold their entries
 in memory, at most a configurable number per tab (default 200,000); the oldest are

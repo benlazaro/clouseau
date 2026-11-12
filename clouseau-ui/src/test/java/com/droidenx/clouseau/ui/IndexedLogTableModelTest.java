@@ -332,4 +332,47 @@ class IndexedLogTableModelTest {
             assertThat(model.getEntry(0).rawLine()).isEqualTo("after clear");
         });
     }
+
+    @Test
+    void clearTableOnAFileHidesItsRowsButKeepsThemInTheIndex() throws Exception {
+        Path file = loadIndexed(lines(50), NO_PARSERS);
+        onEdt(() -> {
+            model.setHighlight(10, java.awt.Color.RED);
+            model.hideBefore(model.nextOrdinal());
+            assertThat(model.getRowCount()).isZero();
+            assertThat(model.hiddenBefore()).isEqualTo(50);
+
+            // Lines followed afterwards go into the same index, numbered as in the file.
+            IndexedEntries entries = model.indexedEntries();
+            long offset = Files.size(file);
+            List<LogEntry> followed = new ArrayList<>();
+            StringBuilder appended = new StringBuilder();
+            for (int i = 0; i < 3; i++) {
+                String text = "new " + i;
+                LogEntry e = NO_PARSERS.parse(text);
+                entries.index().add(offset, text.length(), e);
+                followed.add(e);
+                appended.append(text).append('\n');
+                offset += text.length() + 1;
+            }
+            Files.writeString(file, appended, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+            model.appendFollowed(followed);
+            assertThat(model.getRowCount()).isEqualTo(3);
+            assertThat(model.getEntry(0).rawLine()).isEqualTo("new 0");
+            assertThat(model.getValueAt(0, 0)).isEqualTo(51);   // its line in the file, not 1
+
+            model.applyFilter(e -> true);   // a filter change doesn't bring the cleared rows back
+        });
+        Thread.sleep(200);
+        await(() -> model.getRowCount() == 3);
+        onEdt(() -> {
+            assertThat(model.getRowCount()).isEqualTo(3);
+            assertThat(model.ordinalAt(0)).isEqualTo(50);
+            // The cleared row's highlight is kept, though no row shows it.
+            assertThat(model.highlightCounts().get(java.awt.Color.RED)).containsExactly(1, 0);
+
+            model.clear();   // a reload starts again with nothing hidden
+            assertThat(model.hiddenBefore()).isZero();
+        });
+    }
 }

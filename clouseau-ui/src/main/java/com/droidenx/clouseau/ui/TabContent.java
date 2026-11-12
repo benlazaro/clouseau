@@ -13,7 +13,10 @@ sealed interface TabContent permits FileContent, MergedContent, LiveContent {
     /** Follow mode turned on or off: start or stop following what this content reads. */
     void setFollow(boolean on);
 
-    /** The user cleared the table (already emptied): carry on from here, or stop showing what was loaded. */
+    /**
+     * The user cleared the table (already emptied): carry on from here, or stop showing what
+     * was loaded. A file tab hides its rows instead, so this isn't called for one.
+     */
     void cleared();
 
     /** Stops for good: cancels workers, closes sources, deletes copies. The tab is about to show something else, or close. */
