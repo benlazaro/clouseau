@@ -145,6 +145,10 @@ public final class ClouseauApp {
 
     /** Sets up FlatLaf and the user's theme. Call once, before the first window. */
     private static void applyTheme() {
+        // Message boxes (Yes/No, OK/Cancel, prompts) put Cancel or No before the default
+        // button, as every Clouseau dialog does. Swing lays them out the other way round by
+        // default. Set as a developer default, so it outlasts theme changes.
+        UIManager.put("OptionPane.isYesLast", Boolean.TRUE);
         FlatLaf.registerCustomDefaultsSource("com.droidenx.clouseau.ui.theme");
         ThemeManager.applyTheme(AppPrefs.getTheme());
     }

@@ -97,8 +97,9 @@ final class SourceSettingsDialog extends JDialog {
 
     // ── Layout ───────────────────────────────────────────────────────────────
 
+    /** Laid out like Settings: labels left-aligned, then a footer below a divider, Cancel before Open. */
     private JPanel buildContent() {
-        JPanel panel = new JPanel(new MigLayout("insets 20, wrap 2, gapy 8, gapx 10", "[right][grow, fill]"));
+        JPanel panel = new JPanel(new MigLayout("insets 20 20 12 20, wrap 2, gapy 8, gapx 16", "[][grow, fill]"));
         Map<String, String> saved = AppPrefs.getSourceSettings(providerId(), secretKeys());
 
         for (SourceSetting s : settings) {
@@ -115,17 +116,22 @@ final class SourceSettingsDialog extends JDialog {
                 ? UIManager.getColor("Component.error.focusedBorderColor") : Color.RED);
         panel.add(errorLabel, "span 2, growx, gaptop 4");
 
-        panel.add(new JSeparator(), "span 2, growx, gaptop 4, gapbottom 4");
         JButton openBtn = new JButton(Messages.get("source.dialog.open"));
         openBtn.addActionListener(e -> onOpen());
         JButton cancelBtn = new JButton(Messages.get("ssh.dialog.cancel"));
         cancelBtn.addActionListener(e -> dispose());
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel buttons = new JPanel(new MigLayout("insets 12 20 12 20, align right", "[][]"));
+        buttons.add(cancelBtn);   // Cancel before the default button, as in every dialog
         buttons.add(openBtn);
-        buttons.add(cancelBtn);
-        panel.add(buttons, "span 2, growx");
+        JPanel footer = new JPanel(new BorderLayout());
+        footer.add(new JSeparator(), BorderLayout.NORTH);
+        footer.add(buttons, BorderLayout.CENTER);
         getRootPane().setDefaultButton(openBtn);
-        return panel;
+
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(panel, BorderLayout.CENTER);
+        root.add(footer, BorderLayout.SOUTH);
+        return root;
     }
 
     private static JComponent buildField(SourceSetting s, String initial) {
