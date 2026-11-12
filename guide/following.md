@@ -58,12 +58,13 @@ Clouseau keeps your rows when the log is rotated:
    **Passphrase** empty if the key has none.
 3. Under **Log**, enter the **Remote path** of the log, and pick a **Parser** if
    auto-detection isn't right.
-4. Click **Connect**. While it's grayed out, the line above the buttons says what's still
+4. Click **Connect**. While it's grayed out, the note above the buttons says what's still
    missing.
 
 The tab is named after the file and the host, such as `app.log — 10.0.0.5`, so the same
-log followed on two servers gets two distinct tabs. Point at the name to see the user, the
-full path, and the port if it isn't 22.
+log followed on two servers gets two distinct tabs; a server you named shows its name
+instead (`app.log — Payments prod`). Point at the name to see the user, the host, the full
+path, and the port if it isn't 22.
 
 Clouseau runs `tail -F` on the server, so lines arrive as soon as they're written, and it
 keeps going when the log is rotated or replaced. If the path is wrong or you can't read
@@ -73,9 +74,14 @@ instead of the tab quietly going still. Closing an SSH tab is immediate, even if
 dropped. To keep a connection for next time, tick
 **Save this connection** before you click **Connect** (passwords and passphrases are stored
 encrypted). Saved connections are listed on the left of the dialog, grouped by host, each
-log by its file name with its folder below; type in the filter box to narrow the list by host
-or file. Click one to fill in the form, or double-click to connect right away.
+log by its file name with its folder below; type in the filter box to narrow the list by host,
+server name or file. Click one to fill in the form, or double-click to connect right away.
+Drag the divider, or make the window bigger, to see long names; a list wider than the
+sidebar scrolls sideways. The dialog keeps its size and divider for next time.
 
+- **To name a server**, type a name such as *Payments prod* in **Name** before you connect
+  with **Save this connection** ticked. Saved connections then show the name with the host
+  beside it (`Payments prod  10.0.3.17`), and every log on that server shares it.
 - **To change a saved connection**, click it, edit anything (the host, user and path
   included), and click **Connect**: it's updated in place.
 - **To follow another file on the same server**, point at a saved log and click the

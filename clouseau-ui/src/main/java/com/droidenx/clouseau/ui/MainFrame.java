@@ -1350,10 +1350,15 @@ public final class MainFrame extends JFrame {
 
     // ── Tab management ────────────────────────────────────────────────────────
 
-    /** An SSH tab's title: the remote file's name and the host, e.g. "app.log — 10.0.0.5". */
+    /**
+     * An SSH tab's title: the remote file's name and the server, e.g. "app.log — 10.0.0.5", or
+     * "app.log — Payments prod" when the server was given a name in the SSH dialog (the
+     * tooltip still shows the host).
+     */
     static String sshTabTitle(SshConfig config) {
+        String name = AppPrefs.getSshHostNames().get(config.host());
         return MessageFormat.format(Messages.get("ssh.tab.title"),
-                config.fileName(), config.host());
+                config.fileName(), name != null ? name : config.host());
     }
 
     /** An SSH tab's tooltip: user, host, path, and the port if it isn't 22. */
