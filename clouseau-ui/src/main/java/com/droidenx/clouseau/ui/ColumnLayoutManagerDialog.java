@@ -53,13 +53,11 @@ final class ColumnLayoutManagerDialog extends JDialog {
         scroll.setPreferredSize(new Dimension(340, 160));
         content.add(scroll, "grow, h 160!");
 
-        JPanel buttons = new JPanel(new MigLayout("insets 0", "[][]push[]"));
-        buttons.add(setDefaultBtn);
-        buttons.add(deleteBtn);
-        buttons.add(closeBtn);
-        content.add(buttons, "growx");
-
-        setContentPane(content);
+        // The list's actions on the left, Close on the right, as in the Plugin Manager.
+        JPanel root = new JPanel(new java.awt.BorderLayout());
+        root.add(content, java.awt.BorderLayout.CENTER);
+        root.add(DialogFooter.of(new JComponent[]{ setDefaultBtn, deleteBtn }, closeBtn), java.awt.BorderLayout.SOUTH);
+        setContentPane(root);
         // No default button: the actions apply at once, so there is nothing to confirm, and
         // Close shouldn't be the amber one. Escape closes.
         getRootPane().registerKeyboardAction(

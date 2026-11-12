@@ -58,9 +58,11 @@ final class ManageSessionsDialog extends JDialog {
         buttons.add(openButton);
         buttons.add(renameButton);
         buttons.add(deleteButton);
-        buttons.add(close, "gaptop push");
-        content.add(buttons, "growy");
-        setContentPane(content);
+        content.add(buttons, "top");
+        JPanel root = new JPanel(new java.awt.BorderLayout());
+        root.add(content, java.awt.BorderLayout.CENTER);
+        root.add(DialogFooter.of(close), java.awt.BorderLayout.SOUTH);
+        setContentPane(root);
         getRootPane().registerKeyboardAction(e -> dispose(),
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
 

@@ -88,10 +88,13 @@ public final class ParserEditorDialog extends JDialog {
         loadDefs();
         parserList = buildParserJList();
 
-        setLayout(new MigLayout("fill, insets 12, gap 10", "[200!][grow]", "[grow][]"));
-        add(buildListPanel(), "grow");
-        add(buildEditPanel(), "grow, wrap");
-        add(buildButtonBar(), "span 2, growx");
+        JPanel main = new JPanel(new MigLayout("fill, insets 12, gap 10", "[200!][grow]", "[grow]"));
+        main.add(buildListPanel(), "grow");
+        main.add(buildEditPanel(), "grow");
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(main, BorderLayout.CENTER);
+        root.add(buildButtonBar(), BorderLayout.SOUTH);
+        setContentPane(root);
 
         setSize(900, 680);
         setMinimumSize(new Dimension(720, 540));
@@ -597,14 +600,14 @@ public final class ParserEditorDialog extends JDialog {
     // ── Save ──────────────────────────────────────────────────────────────────
 
     private JPanel buildButtonBar() {
-        JPanel bar = new JPanel(new MigLayout("insets 0", "push[][]"));
         JButton saveBtn  = new JButton(Messages.get("settings.button.ok"));
         JButton closeBtn = new JButton(Messages.get("settings.button.cancel"));
         saveBtn.addActionListener(e -> save());
         closeBtn.addActionListener(e -> dispose());
-        bar.add(closeBtn);   // Cancel before the default button, as in Settings
-        bar.add(saveBtn);
-        return bar;
+        getRootPane().setDefaultButton(saveBtn);     // amber, like OK in every dialog
+        getRootPane().registerKeyboardAction(e -> dispose(),
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        return DialogFooter.of(closeBtn, saveBtn);   // Cancel before the default button
     }
 
     private void save() {

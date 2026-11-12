@@ -111,12 +111,7 @@ public final class PluginManagerDialog extends JDialog {
         JButton close = new JButton(Messages.get("plugins.dialog.close"));
         close.addActionListener(e -> dispose());
 
-        JPanel buttons = new JPanel(new MigLayout("insets 10 22 10 16", "[]push[]"));
-        buttons.add(openFolder);
-        buttons.add(close);
-        JPanel footer = new JPanel(new BorderLayout());
-        footer.add(new JSeparator(), BorderLayout.NORTH);
-        footer.add(buttons, BorderLayout.CENTER);
+        JPanel footer = DialogFooter.of(new JComponent[]{ openFolder }, close);
 
         JPanel root2 = new JPanel(new BorderLayout());
         root2.add(tabs, BorderLayout.CENTER);

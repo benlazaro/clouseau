@@ -515,11 +515,7 @@ final class FileChooserDialog extends JDialog {
         openBtn.setEnabled(false);
         openBtn.addActionListener(e -> chooser.approveSelection());
 
-        JPanel bar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
-        bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, ClouseauColors.borderColor()));
-        bar.add(cancelBtn);
-        bar.add(openBtn);
         getRootPane().setDefaultButton(openBtn);
-        return bar;
+        return DialogFooter.of(cancelBtn, openBtn);
     }
 }

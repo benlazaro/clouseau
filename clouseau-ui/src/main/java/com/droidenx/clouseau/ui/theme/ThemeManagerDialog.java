@@ -57,13 +57,12 @@ public final class ThemeManagerDialog extends JDialog {
         hint.setForeground(UIManager.getColor("Label.disabledForeground"));
         content.add(hint);
 
-        JPanel buttons = new JPanel(new MigLayout("insets 0", "[][]push[]"));
-        buttons.add(installBtn);
-        buttons.add(uninstallBtn);
-        buttons.add(closeBtn);
-        content.add(buttons, "growx");
-
-        setContentPane(content);
+        // The list's actions on the left, Close on the right, as in the Plugin Manager.
+        JPanel root = new JPanel(new java.awt.BorderLayout());
+        root.add(content, java.awt.BorderLayout.CENTER);
+        root.add(com.droidenx.clouseau.ui.DialogFooter.of(new JComponent[]{ installBtn, uninstallBtn }, closeBtn),
+                java.awt.BorderLayout.SOUTH);
+        setContentPane(root);
         // No default button: the actions apply at once, so there is nothing to confirm, and
         // Close shouldn't be the amber one. Escape closes.
         getRootPane().registerKeyboardAction(

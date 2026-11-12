@@ -164,13 +164,7 @@ public final class AnnotationsPanel extends JPanel {
         JButton closeBtn = new JButton(Messages.get("annotations.panel.close"));
         closeBtn.addActionListener(e -> { if (onDismiss != null) onDismiss.run(); });
 
-        JPanel buttons = new JPanel(new MigLayout("insets 10 16 10 12", "[0:pref, grow]16[]"));
-        buttons.add(hint, "growx, wmin 0");
-        buttons.add(closeBtn);
-        JPanel footer = new JPanel(new BorderLayout());
-        footer.add(new JSeparator(), BorderLayout.NORTH);
-        footer.add(buttons, BorderLayout.CENTER);
-        add(footer, BorderLayout.SOUTH);
+        add(DialogFooter.of(new JComponent[]{ hint }, closeBtn), BorderLayout.SOUTH);
     }
 
     private JComponent buildEmptyState() {
