@@ -659,6 +659,43 @@ A restored filter strip names the session (*"Filters restored from session "Paym
 …"*). Manage Sessions… opens, renames and deletes (after asking) sessions, and marks the
 one in use; renaming or deleting it updates the window titles. Design: DESIGN.md D-19.
 
+### UC-18 · Hear about new versions ✅
+
+**Actor:** Developer, Field engineer
+**Goal:** Know when a new Clouseau is out, without watching the releases page, and stop
+being told if they'd rather not be.
+
+1. User starts Clouseau. A few seconds later, if a newer version has been released, a
+   small window says so: *"Clouseau 0.10.0-alpha is available"*, with the release's
+   title and the version they have.
+2. **Download** opens the release's page in the browser; **Later** closes the notice;
+   **Skip This Version** closes it and doesn't mention that version again.
+3. User can untick **Tell me about new versions** on the notice, or in Settings →
+   **Updates**, to stop the notices.
+4. **Help → Check for Updates…** checks at once, whatever the setting, and says so when
+   they already have the latest version.
+
+**Success:** Users hear about a release on the day it's published, and nobody who turned
+the notices off sees one.
+
+**Rules:**
+- **On by default, and optional.** Settings → Updates → *Tell me when a new version is
+  available*.
+- **Never in the way.** The notice doesn't block the window, never appears while Clouseau
+  is starting, and a check that fails (no network, a proxy) says nothing unless the user
+  asked with Check for Updates….
+- **At most once a day.** Clouseau checks at startup and again each day it stays open, but
+  not more than once a day, however often it's restarted.
+- **Only what fits.** Someone on a stable release isn't offered a pre-release; while
+  Clouseau's releases are all pre-releases (alpha), they're offered the newest one.
+  Development builds (the edge jar, running from source) never check by themselves.
+- **Clouseau doesn't update itself.** It points to the release page; the user downloads and
+  unzips the new version as they did the first.
+- **Nothing about the user is sent.** The check is one request to GitHub's public releases
+  list, carrying only Clouseau's version.
+
+**Current behavior:** All of the above works. Design: DESIGN.md D-23.
+
 ---
 
 ## 5. Quality goals

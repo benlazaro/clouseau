@@ -58,7 +58,9 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 Each release's zip is portable and brings its own Java runtime: unzip it and run the
 launcher (`Clouseau.exe` on Windows). Releases are pre-releases while the plugin API
 settles. The Edge build is a single jar for trying the newest changes; run it with
-`java -jar clouseau-edge.jar` on Java 21 or later.
+`java -jar clouseau-edge.jar` on Java 21 or later. Clouseau tells you when a new release
+is out; [Settings → Updates](https://benlazaro.github.io/clouseau/guide/settings.html#new-versions)
+turns that off.
 
 ## Getting started
 

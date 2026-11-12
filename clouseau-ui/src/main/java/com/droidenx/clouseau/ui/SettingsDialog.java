@@ -53,6 +53,9 @@ final class SettingsDialog extends JDialog {
     private final String originalThemeName;
     private final JComboBox<TimezoneEntry> timezoneCombo;
 
+    // Updates settings
+    private final JCheckBox updateCheckBox;
+
     SettingsDialog(Frame owner, TabPanel tabPanel, Runnable onApply) {
         super(owner, Messages.get("settings.title"), true);
         this.tabPanel = tabPanel;
@@ -77,6 +80,7 @@ final class SettingsDialog extends JDialog {
         maxEntriesSpinner      = new JSpinner(new SpinnerNumberModel(AppPrefs.getMaxEntriesPerTab(), 10_000, 2_000_000, 10_000));
 
         timezoneCombo = buildTimezoneCombo(AppPrefs.getDisplayTimezone());
+        updateCheckBox = new JCheckBox(Messages.get("settings.update.check"), AppPrefs.isUpdateCheck());
 
         originalThemeName = AppPrefs.getTheme();
         themeCombo = new JComboBox<>();
@@ -145,6 +149,10 @@ final class SettingsDialog extends JDialog {
         content.add(themeRow, "growx, wrap");
         content.add(new JLabel(Messages.get("settings.timezone")), INDENT);
         content.add(timezoneCombo, "growx, wrap");
+
+        // ── Updates section ───────────────────────────────────────────────
+        content.add(sectionLabel(Messages.get("settings.section.updates")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
+        content.add(updateCheckBox, "span 3, wrap, " + INDENT);
 
         // ── Buttons ──────────────────────────────────────────────────────
         JButton ok     = new JButton(Messages.get("settings.button.ok"));
@@ -223,6 +231,7 @@ final class SettingsDialog extends JDialog {
         if (selTheme != null) AppPrefs.setTheme(selTheme);
         TimezoneEntry selTz = (TimezoneEntry) timezoneCombo.getSelectedItem();
         if (selTz != null) AppPrefs.setDisplayTimezone(selTz.zone());
+        AppPrefs.setUpdateCheck(updateCheckBox.isSelected());
         if (onApply != null) onApply.run();
     }
 

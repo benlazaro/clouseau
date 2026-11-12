@@ -128,6 +128,7 @@ public final class ClouseauApp {
                 pendingOpens.forEach(windows::openFile);
                 pendingOpens.clear();
                 if (AppPrefs.isRestoreSession()) sessions.start();
+                windows.updates().start();
                 if (damagedReason != null) {
                     log.warn("Last session could not be read ({}); set aside as session.json.bad", damagedReason);
                     JOptionPane.showMessageDialog(shown.get(0), Messages.get("session.damaged.message"),

@@ -522,6 +522,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `plugins/` | Installed plugin JARs |
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
+| `settings.json` → `update.*` | The new-version check (D-23): `update.check` (on/off), `update.skipped` (a version the user skipped), `update.last.check` (epoch milliseconds). |
 | `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |
 | `sessions/` | Named sessions (D-19), one `<name>.json` each, in the `session.json` format. |
 | `<logfile>.clouseau` | **Next to the log, not in the data folder.** Annotations for that file. |
@@ -1883,6 +1884,44 @@ review export, plugin search and download) stay on `execute()`. They end by them
 so the worst case is a short wait for a free thread, and the shared pool keeps many of
 them (a restored session opening twenty tabs) from all reading the disk at once.
 
+### D-23 · New versions are found on GitHub's releases list · Adopted
+
+UC-18 tells the user about new versions. Releases are already published on GitHub by the
+Release workflow, so that list is the source of truth and nothing else needs publishing.
+
+**The decision.**
+- `UpdateCheck` (core) asks `https://api.github.com/repos/benlazaro/clouseau/releases`
+  (unauthenticated, 10-second timeouts, `User-Agent: Clouseau/<version>`) and picks the
+  newest release newer than the running one. Drafts are skipped, and so is the rolling
+  `edge` pre-release, whose tag isn't a version. Versions compare as Semantic Versioning
+  (`0.10.0-alpha` > `0.9.0-alpha`, `1.0.0` > `1.0.0-rc.1`). Pre-releases are offered only
+  to a pre-release, so a stable user isn't offered an alpha. The list, not
+  `/releases/latest`, is read because `latest` never returns a pre-release, and every
+  release so far is one. A `-SNAPSHOT` or unversioned build is a development build and is
+  never compared.
+- `UpdateNotifier` (ui), owned by `WindowManager`, checks five seconds after the windows
+  are shown and then on an hourly timer, but only when `update.last.check` in
+  `settings.json` is a day old, so restarts don't add requests and sleep doesn't skip a
+  day. The check is a one-shot `SwingWorker` (`execute()`, D-22). A newer release shows a
+  modeless notice owned by the last active window; Skip This Version saves
+  `update.skipped`, and later automatic checks ignore that version and anything older.
+  Failures are logged at INFO and otherwise silent. Help → Check for Updates… runs the
+  same check at once, ignoring the setting, the day limit and the skipped version, and
+  answers every outcome.
+- `update.check` (default true) turns the automatic check off.
+- The jlink image needs `java.net.http` for `HttpClient`, which this adds to the
+  runtime's module list. (Maven Central and Nexus plugin search used it already, and
+  were missing it in release builds.)
+
+**Rejected:**
+- *Self-update* (download and replace the install): the portable zip can live anywhere,
+  including a read-only folder, and replacing a running JRE's files is platform-specific.
+  The release page is one click away.
+- *A version file on the GitHub Pages site*: one more thing to keep current on each
+  release, when the releases list already is.
+- *Checking on every start*: a user who restarts often would hit GitHub's anonymous rate
+  limit (60 requests an hour per IP, shared with everyone behind the same NAT).
+
 *Considered:* virtual threads. Follow loops block in `WatchService`, file reads and, for
 SSH and plugin sources, socket reads inside libraries that may hold monitors and pin a
 carrier thread; there are few enough follow loops that platform threads cost nothing worth
@@ -1890,7 +1929,8 @@ saving. A bounded pool was rejected: any bound brings the hang back one file lat
 
 ## 10. Planned features
 
-Accepted in the use cases: none at the moment (UC-17, sessions, is built).
+Accepted in the use cases: none at the moment (UC-17, sessions, and UC-18, new-version
+notices, are built).
 
 **Ideas, not yet accepted.** Raised while designing UC-16 and kept for later; each needs a
 use case before it is built.

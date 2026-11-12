@@ -207,6 +207,37 @@ public final class AppPrefs {
         putBool(KEY_STARTUP_RESTORE, value);
     }
 
+    /** Whether Clouseau tells the user when a new version is released; on by default. */
+    public static boolean isUpdateCheck() {
+        return getBool("update.check", true);
+    }
+
+    public static void setUpdateCheck(boolean value) {
+        putBool("update.check", value);
+    }
+
+    /** The version the user chose to skip ("Skip This Version"), or null. */
+    public static String getSkippedVersion() {
+        return getString("update.skipped", null);
+    }
+
+    public static void setSkippedVersion(String version) {
+        putString("update.skipped", version);
+    }
+
+    /** When the last automatic update check ran (epoch milliseconds), or 0 if never. */
+    public static long getLastUpdateCheck() {
+        try {
+            return Long.parseLong(getString("update.last.check", "0"));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    public static void setLastUpdateCheck(long epochMillis) {
+        putString("update.last.check", Long.toString(epochMillis));
+    }
+
     /** What opening several files at once does (D-17). */
     public enum MultiOpen { ASK, MERGE, SEPARATE }
 
