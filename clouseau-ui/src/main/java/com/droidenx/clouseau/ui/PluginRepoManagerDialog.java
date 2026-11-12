@@ -84,7 +84,10 @@ final class PluginRepoManagerDialog extends JDialog {
         content.add(buttons, "span 2, growx");
 
         setContentPane(content);
-        getRootPane().setDefaultButton(closeBtn);
+        // No default button: the actions apply at once, so there is nothing to confirm, and
+        // Close shouldn't be the amber one. Escape closes.
+        getRootPane().registerKeyboardAction(e -> dispose(),
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
     }
 
     private void editSelected() {

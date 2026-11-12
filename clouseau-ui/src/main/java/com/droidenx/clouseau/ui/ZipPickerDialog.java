@@ -122,9 +122,11 @@ final class ZipPickerDialog extends JDialog {
         });
         JButton cancel = new JButton(Messages.get("zip.picker.cancel"));
         cancel.addActionListener(e -> dispose());
+        // Cancel before the default button, as in every dialog. Not MigLayout's "tag ok/cancel":
+        // that follows the platform, which puts OK first on Windows.
         p.add(mergeBox, "split 3, pushx");
-        p.add(openButton, "tag ok");
-        p.add(cancel, "tag cancel");
+        p.add(cancel);
+        p.add(openButton);
         return p;
     }
 

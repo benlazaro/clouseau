@@ -64,7 +64,8 @@ public final class ThemeManagerDialog extends JDialog {
         content.add(buttons, "growx");
 
         setContentPane(content);
-        getRootPane().setDefaultButton(closeBtn);
+        // No default button: the actions apply at once, so there is nothing to confirm, and
+        // Close shouldn't be the amber one. Escape closes.
         getRootPane().registerKeyboardAction(
                 e -> dispose(),
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
