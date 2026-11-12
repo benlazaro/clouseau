@@ -269,23 +269,23 @@ public final class ParserEditorDialog extends JDialog {
 
         // ── Parser
         form.add(SettingsDialog.sectionLabel(Messages.get("parsereditor.section.parser")), "span 2, growx");
-        form.add(new JLabel(Messages.get("parsereditor.field.name")), "gapleft 16");
+        form.add(new JLabel(Messages.get("parsereditor.field.name")), SettingsDialog.INDENT);
         form.add(nameField);
         form.add(nameError, "skip 1");
-        form.add(new JLabel(Messages.get("parsereditor.field.type")), "gapleft 16");
+        form.add(new JLabel(Messages.get("parsereditor.field.type")), SettingsDialog.INDENT);
         form.add(typeCombo, "growx 0");
         JTextArea noteText = wrapText(Messages.get("parsereditor.builtin.note"));
         JButton dupBuiltin = new JButton(Messages.get("parsereditor.duplicate"));
         dupBuiltin.addActionListener(e -> duplicate(shown));
         builtinNote.add(noteText, "growx, wmin 0");
         builtinNote.add(dupBuiltin);
-        form.add(builtinNote, "span 2, gapleft 16, gaptop 4, growx");
+        form.add(builtinNote, "span 2, gapleft 28, gaptop 4, growx");
 
         // ── Template / Pattern: the source, and the regex made from it
         form.add(sourceSection, "span 2, growx, gaptop 16");
         sourceArea.setLineWrap(true);
         sourceArea.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
-        form.add(sourceTitle, "gapleft 16, top");
+        form.add(sourceTitle, SettingsDialog.INDENT + ", top");
         form.add(sourceScroll, "hmin 64");
         form.add(sourceError, "skip 1");
         keywordRow.setOpaque(false);
@@ -295,7 +295,7 @@ public final class ParserEditorDialog extends JDialog {
 
         patternArea.setLineWrap(true);
         patternArea.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
-        form.add(patternLabel, "gapleft 16, top, gaptop 8");
+        form.add(patternLabel, SettingsDialog.INDENT + ", top, gaptop 8");
         form.add(patternScroll, "hmin 84, gaptop 8");
         form.add(regexWarning, "skip 1");
         form.add(patternError, "skip 1");
@@ -303,13 +303,13 @@ public final class ParserEditorDialog extends JDialog {
         copyRegexBtn.addActionListener(e -> Toolkit.getDefaultToolkit().getSystemClipboard()
                 .setContents(new StringSelection(patternArea.getText()), null));
         form.add(copyRegexBtn, "skip 1, growx 0");
-        form.add(formatLabel, "gapleft 16");
+        form.add(formatLabel, SettingsDialog.INDENT);
         form.add(formatField);
         form.add(formatError, "skip 1");
 
         // ── Test
         form.add(SettingsDialog.sectionLabel(Messages.get("parsereditor.test.title")), "span 2, growx, gaptop 16");
-        form.add(new JLabel(Messages.get("parsereditor.test.sample")), "gapleft 16");
+        form.add(new JLabel(Messages.get("parsereditor.test.sample")), SettingsDialog.INDENT);
         sampleField.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
         form.add(sampleField);
         matchLabel.setFont(matchLabel.getFont().deriveFont(Font.BOLD));
@@ -317,7 +317,7 @@ public final class ParserEditorDialog extends JDialog {
         fieldsPanel.setOpaque(false);
         form.add(fieldsPanel, "skip 1, growx");
 
-        form.add(new JLabel(Messages.get("parsereditor.test.file.label")), "gapleft 16, gaptop 12");
+        form.add(new JLabel(Messages.get("parsereditor.test.file.label")), SettingsDialog.INDENT + ", gaptop 12");
         JPanel fileRow = new JPanel(new MigLayout("insets 0, gap 10", "[][grow, 0::]", "[center]"));
         fileRow.setOpaque(false);
         fileBtn.addActionListener(e -> testWithFile());

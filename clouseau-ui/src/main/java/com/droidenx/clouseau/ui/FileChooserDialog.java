@@ -90,7 +90,8 @@ final class FileChooserDialog extends JDialog {
     private final JComboBox<String> parserCombo;
     private final ZoneCombo tzCombo;
     private final JTextArea readNote = wrapText("", true);
-    private final JLabel previewTitle = new JLabel(Messages.get("filechooser.preview.label"));
+    private final JComponent previewSection = SettingsDialog.sectionLabel(Messages.get("filechooser.preview.label"));
+    private final JLabel previewTitle = (JLabel) previewSection.getComponent(0);
     private final JTextPane preview = new JTextPane();
 
     // Left panel
@@ -582,20 +583,21 @@ final class FileChooserDialog extends JDialog {
         JPanel p = new JPanel(new MigLayout("insets 12 16 12 16, wrap 1, fillx, hidemode 3, gapy 4",
                 "[grow, fill, 0::]"));
         p.add(SettingsDialog.sectionLabel(Messages.get("filechooser.section.files")), "growx");
-        p.add(summary, "wmin 0");
+        String in = SettingsDialog.INDENT_NARROW;        // the section's contents, under its title
+        p.add(summary, "wmin 0, " + in);
         // Four rows, always: no sideways scrollbar for a long verdict (it's cut short, with
         // the full text as a tooltip), so nothing below moves as the selection changes.
         fileScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        p.add(fileScroll, "wmin 0, h " + (4 * 38 + 4) + "!");
-        p.add(openAsRow, "gapleft 4");
+        p.add(fileScroll, "wmin 0, h " + (4 * 38 + 4) + "!, " + in);
+        p.add(openAsRow, "gapleft 16");
         p.add(SettingsDialog.sectionLabel(Messages.get("filechooser.section.read")), "growx, gaptop 12");
-        p.add(new JLabel(Messages.get("filechooser.parser.label")));
-        p.add(parserCombo, "wmin 0");
-        p.add(new JLabel(Messages.get("filechooser.source.timezone.label")), "gaptop 6");
-        p.add(tzCombo, "wmin 0");
-        p.add(readNote, "wmin 0, h 34!");             // two lines, whatever the note says
-        p.add(previewTitle, "gaptop 12");
-        p.add(previewScroll, "grow, push, h 80::");
+        p.add(new JLabel(Messages.get("filechooser.parser.label")), in);
+        p.add(parserCombo, "wmin 0, " + in);
+        p.add(new JLabel(Messages.get("filechooser.source.timezone.label")), "gaptop 6, " + in);
+        p.add(tzCombo, "wmin 0, " + in);
+        p.add(readNote, "wmin 0, h 34!, " + in);      // two lines, whatever the note says
+        p.add(previewSection, "growx, gaptop 12");
+        p.add(previewScroll, "grow, push, h 80::, " + in);
         p.setMinimumSize(new Dimension(260, 0));
         p.setPreferredSize(new Dimension(RIGHT_WIDTH, 10));
         return p;
@@ -609,7 +611,7 @@ final class FileChooserDialog extends JDialog {
         (merge ? asMerged : asTabs).setSelected(true);
         asMerged.addActionListener(e -> { updateReadNote(); debounce.restart(); });
         asTabs.addActionListener(e -> { updateReadNote(); debounce.restart(); });
-        JPanel row = new JPanel(new MigLayout("insets 0, gap 14", "[][][]", "[center]"));
+        JPanel row = new JPanel(new MigLayout("insets 0, gap 10", "[][][]", "[center]"));
         row.add(new JLabel(Messages.get("filechooser.as.label")));
         row.add(asMerged);
         row.add(asTabs);
