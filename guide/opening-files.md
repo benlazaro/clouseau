@@ -186,7 +186,9 @@ update it with what is open now, choose **File → Sessions → Save Session "Pa
 To leave it, choose **File → Sessions → Close Session "Payments"**: its windows close,
 one empty window stays, and files you open from then on aren't part of it. If the tabs
 changed since you saved it, Clouseau asks first whether to **Save** them to it (moving or
-resizing windows doesn't count as a change).
+resizing windows doesn't count as a change). Quitting Clouseau (**File → Exit**, or
+closing the last window) asks the same; **Don't Save** leaves the session as you saved it,
+and that is what opens next time.
 **File → Sessions → Manage Sessions…** opens, renames and deletes saved sessions;
 deleting one never touches the log files themselves. The session in use is remembered
 when you quit, so its name is back in the titles next time.

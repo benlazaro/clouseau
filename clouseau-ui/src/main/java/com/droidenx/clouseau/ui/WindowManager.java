@@ -148,14 +148,53 @@ final class WindowManager {
         windows.remove(window);
         if (lastActive == window) lastActive = null;
         sessionChanged();
-        if (windows.isEmpty()) exit();
+        if (windows.isEmpty()) quit(null);
     }
 
-    /** Quits Clouseau: File → Exit, or closing the last window. Saves the session first. */
+    /**
+     * Quits Clouseau: File → Exit, or closing the last window. With a named session in use
+     * whose tabs changed, asks first, as Close Session does (Save, Don't Save or Cancel).
+     * Don't Save leaves the session as saved, and the next start reopens it that way rather
+     * than the tabs open now.
+     */
     void exit() {
+        String name = session != null ? session.active() : null;
+        Session instead = null;
+        if (name != null) {
+            switch (askToSaveNamed(lastActive(), name, "session.exit.title", "session.exit.message")) {
+                case CANCEL -> { return; }
+                case DISCARD -> instead = session.savedNamed(name);
+                default -> { }
+            }
+        }
+        quit(instead);
+    }
+
+    /** Saves the session ({@code instead} of what is open now, if given) and quits. */
+    private void quit(Session instead) {
         log.info("Exiting");
-        if (session != null) session.saveNow();
+        if (session != null) session.saveNow(instead);
         System.exit(0);
+    }
+
+    /** What the user chose when asked to save a named session whose tabs changed. */
+    private enum SaveAnswer { UNCHANGED, SAVED, DISCARD, CANCEL }
+
+    /**
+     * If the tabs open now differ from named session {@code name}, asks whether to save them
+     * to it: Save (the default), Don't Save or Cancel. A failed save counts as Cancel.
+     */
+    private SaveAnswer askToSaveNamed(Component parent, String name, String titleKey, String messageKey) {
+        if (allPanels().isEmpty() || !session.differsFromSaved(name)) return SaveAnswer.UNCHANGED;
+        // Save is the default; Cancel lays out first (OptionPane.isYesLast).
+        Object[] options = { Messages.get("session.close.save"), Messages.get("session.close.discard"),
+                Messages.get("session.open.cancel") };
+        int answer = JOptionPane.showOptionDialog(parent,
+                java.text.MessageFormat.format(Messages.get(messageKey), name),
+                Messages.get(titleKey), JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+                null, options, options[0]);
+        if (answer == 0) return session.saveNamed(parent, name) ? SaveAnswer.SAVED : SaveAnswer.CANCEL;
+        return answer == 1 ? SaveAnswer.DISCARD : SaveAnswer.CANCEL;
     }
 
     // ── Session (UC-17, D-19) ─────────────────────────────────────────────────
@@ -314,20 +353,7 @@ final class WindowManager {
     void closeNamedSession(Component parent) {
         String name = session.active();
         if (name == null) return;
-        if (!allPanels().isEmpty() && session.differsFromSaved(name)) {
-            // Save is the default; Cancel lays out first (OptionPane.isYesLast).
-            Object[] options = { Messages.get("session.close.save"), Messages.get("session.close.discard"),
-                    Messages.get("session.open.cancel") };
-            int answer = JOptionPane.showOptionDialog(parent,
-                    java.text.MessageFormat.format(Messages.get("session.close.message"), name),
-                    Messages.get("session.close.title"), JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
-                    null, options, options[0]);
-            if (answer == 0) {
-                if (!session.saveNamed(parent, name)) return;
-            } else if (answer != 1) {
-                return;
-            }
-        }
+        if (askToSaveNamed(parent, name, "session.close.title", "session.close.message") == SaveAnswer.CANCEL) return;
         List<MainFrame> old = windows();
         MainFrame first = old.isEmpty() ? null : old.get(0);
         Rectangle bounds = first != null ? first.getBounds() : null;
