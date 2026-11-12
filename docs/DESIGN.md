@@ -507,6 +507,28 @@ after the drop completes, so a dialog never holds up the drag source.
   `TabPanel.retryWithParsers` reloads with auto-detection if a parser now recognizes the
   sample, and otherwise updates the banner.
 
+### 6.12 Dialog buttons
+
+Two kinds of dialog, each with its own button row:
+
+- **Dialogs with a body** (a form, a list, a preview: Settings, Open, SSH, the Parser
+  Editor, the managers, the update notice) end with `DialogFooter`: a hairline in the
+  border color across the top, extra controls (a check box, a list's actions) on the left,
+  and the closing buttons on the right. The hairline marks where a large or scrolling body
+  ends and its actions begin.
+- **Message boxes** (`JOptionPane`: an icon, a sentence or two, and buttons, such as the
+  Exit prompt or "Check for Updates…" answers) keep Swing's own button row, **without a
+  hairline**. There is no body to separate from the buttons, and a line would make a
+  quick question look like a form. IntelliJ's message dialogs and macOS alerts don't draw
+  one either.
+
+In both, the default button is on the right, with Cancel, No or Close before it.
+`ClouseauApp` sets `OptionPane.isYesLast`, which lays a message box's options out in
+reverse, so **the default is listed first** in the options array and passed as the
+initial value. Choose the default for what the user most likely wants next: a message box
+that only informs (a development build can't check for updates) defaults to Close, with
+the optional action (Open Releases Page) beside it.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:
