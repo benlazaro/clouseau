@@ -849,6 +849,32 @@ final class FilterBar extends JPanel {
         if (at != null) setTimeRange(fromText, formatRowTime(at));
     }
 
+    /** True while a time range narrows the table (either end set). */
+    boolean hasTimeRange() {
+        return !fromText.isEmpty() || !toText.isEmpty();
+    }
+
+    /** The range's start and end as typed; empty for an open end. */
+    String timeFrom() { return fromText; }
+    String timeTo()   { return toText; }
+
+    /** Drops the time range, both ends (the row menu's "Show All Times"). */
+    void showAllTimes() {
+        setTimeRange("", "");
+    }
+
+    /** The range as the Time button shows it ("10:00:00 → …"), or "" with none. */
+    String timeRangeLabel() {
+        if (!hasTimeRange()) return "";
+        String a = fromText, b = toText;
+        if (a.length() > 11 && b.length() > 11 && a.charAt(10) == ' ' && a.startsWith(b.substring(0, 11))) {
+            a = a.substring(11);
+            b = b.substring(11);
+        }
+        return MessageFormat.format(Messages.get("filter.time.range"),
+                a.isEmpty() ? "\u2026" : a, b.isEmpty() ? "\u2026" : b);
+    }
+
     /** A row's time as the range takes it, to the millisecond so the row itself stays in. */
     static String formatRowTime(Instant at) {
         return ROW_TIME.format(at.atZone(AppPrefs.getDisplayTimezone()));
@@ -870,13 +896,7 @@ final class FilterBar extends JPanel {
             label = Messages.get("filter.time");
             timeButton.setToolTipText(Messages.get("filter.time.tooltip"));
         } else {
-            String a = fromText, b = toText;
-            if (a.length() > 11 && b.length() > 11 && a.charAt(10) == ' ' && a.startsWith(b.substring(0, 11))) {
-                a = a.substring(11);
-                b = b.substring(11);
-            }
-            label = MessageFormat.format(Messages.get("filter.time.range"),
-                    a.isEmpty() ? "\u2026" : a, b.isEmpty() ? "\u2026" : b);
+            label = timeRangeLabel();
             timeButton.setToolTipText(MessageFormat.format(Messages.get("filter.time.range"),
                     fromText.isEmpty() ? "\u2026" : fromText, toText.isEmpty() ? "\u2026" : toText));
         }

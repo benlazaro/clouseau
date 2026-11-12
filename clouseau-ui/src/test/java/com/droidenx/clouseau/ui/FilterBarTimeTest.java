@@ -118,4 +118,28 @@ class FilterBarTimeTest {
             assertThat(bar.timeButtonText()).isEqualTo("10:00:00.250 \u2192 10:30:00.000");
         });
     }
+
+    @Test
+    void showAllTimesDropsBothEnds() throws Exception {
+        onEdt(() -> {
+            FilterBar bar = new FilterBar(() -> {});
+            assertThat(bar.hasTimeRange()).isFalse();
+            assertThat(bar.timeRangeLabel()).isEmpty();
+            bar.setTimeRange("2026-03-27 10:00:00", "");
+            assertThat(bar.hasTimeRange()).isTrue();
+            assertThat(bar.timeRangeLabel()).isEqualTo("2026-03-27 10:00:00 \u2192 \u2026");
+
+            // Two days: both dates stay, so the range can't be mistaken for one day's.
+            bar.setTimeRange("2026-03-27 23:58:00.000", "2026-03-28 00:05:00.000");
+            assertThat(bar.timeRangeLabel()).isEqualTo("2026-03-27 23:58:00.000 \u2192 2026-03-28 00:05:00.000");
+            bar.setTimeRange("2026-03-27 23:58:00.000", "2026-03-27 23:59:30.000");
+            assertThat(bar.timeRangeLabel()).isEqualTo("23:58:00.000 \u2192 23:59:30.000");
+
+            bar.showAllTimes();
+            assertThat(bar.hasTimeRange()).isFalse();
+            assertThat(bar.state()).isNull();                // nothing left to save: no filters
+            assertThat(bar.timeButtonText()).isEqualTo("Time");
+            assertThat(bar.buildFilter().test(at("2020-01-01T00:00:00"))).isTrue();
+        });
+    }
 }
