@@ -30,9 +30,15 @@ lines (as in retry loops), and follows that line if lines are added above it.
 
 ## Seeing all notes
 
-**View All Notes…** in the row menu (`Ctrl+Shift+N`) opens the **Annotations** window: every
-note with its line, author and date. Click a note to jump to its line. In a
-[merged view](merged-views.md), each note names its file.
+**Edit → All Notes…** (`Ctrl+Shift+N`, or **View All Notes…** in the row menu) opens the
+**Notes** window: every note with its line, the log line, author and date. Click a note to
+jump to its line; double-click it (or press `Enter`) to edit it. The trash can on the row
+under the mouse, or `Delete`, removes it. The list updates as you add or change notes, and
+keeps the column widths you set.
+
+The **Line** column numbers lines the way the log table does: the file line, or `db.log:16`
+in a [merged view](merged-views.md); on a live source it's **#**, the entry's position.
+A note whose line is filtered out shows –.
 
 ## Where notes are saved
 

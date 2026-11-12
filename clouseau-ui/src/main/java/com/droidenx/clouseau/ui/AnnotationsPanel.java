@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.core.AnnotationStore;
 import com.droidenx.clouseau.core.Notes;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
@@ -8,42 +9,51 @@ import net.miginfocom.swing.MigLayout;
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
+import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
- * Self-contained panel listing all annotations for the current log.
+ * Every note on the current log (Edit → All Notes…), laid out like the managers: a list
+ * styled like the log table, a trash can on the row under the mouse, and a footer with a
+ * short hint and Close.
  * <p>
- * Clicking a row selects and scrolls to the matching log line. Designed so that
- * the panel itself has no dependency on how it is hosted — it can be wrapped in
- * a floating {@link JDialog} now and docked into a split-pane or tab later with
- * no changes to this class.
+ * A click goes to the note's line; a double-click or Enter edits the note. The list follows
+ * changes while it's open (the host calls {@link #refresh()}), so there's no Refresh button,
+ * and refreshing keeps the column widths the user set.
  * <p>
- * The {@code onDismiss} callback lets the host (dialog, dock, etc.) react when
- * the user clicks the close button inside the panel.
+ * The panel doesn't know how it's hosted: a floating {@link JDialog} now, possibly docked
+ * later. {@code onDismiss} lets the host react to Close.
  */
 public final class AnnotationsPanel extends JPanel {
 
-    private static final String[] COLUMN_KEYS = {
-        "annotations.col.line",
-        "annotations.col.preview",
-        "annotations.col.note",
-        "annotations.col.author",
-        "annotations.col.date"
-    };
+    private static final int COL_LINE = 0, COL_NOTE = 1, COL_PREVIEW = 2, COL_AUTHOR = 3, COL_DATE = 4;
+    /** The trash can's hit area, from the row's right edge. */
+    private static final int TRASH = 30;
+    private static final String CARD_LIST = "list", CARD_EMPTY = "empty";
 
     private final Supplier<Notes> storeSupplier;
-    private final LogTableModel             logTableModel;
-    private final JTable                    logTable;
-    private final Runnable                  onDismiss;
-    private final Consumer<Boolean>          onAnnotationChanged;
+    private final LogTableModel   logTableModel;
+    private final JTable          logTable;
+    private final Runnable        onDismiss;
+    private final Consumer<Boolean> onAnnotationChanged;
+    private final IntConsumer     editNoteAtOrdinal;
 
     private final DefaultTableModel panelModel;
-    private final JTable            annotationsTable;
+    private final NotesTable        annotationsTable;
+    private final CardLayout        cards = new CardLayout();
+    private final JPanel            body  = new JPanel(cards);
+    private final JLabel            hint  = new JLabel(Messages.get("annotations.panel.hint"));
 
     /**
      * Parallel to the panel rows: the entry ordinal (Integer) of an attached annotation, or
@@ -51,161 +61,225 @@ public final class AnnotationsPanel extends JPanel {
      */
     private final List<Object> rowKeys = new ArrayList<>();
 
+    /**
+     * @param editNoteAtOrdinal opens the note dialog for the entry with this ordinal
+     */
     public AnnotationsPanel(Supplier<Notes> storeSupplier,
                             LogTableModel logTableModel,
                             JTable logTable,
                             Runnable onDismiss,
-                            Consumer<Boolean> onAnnotationChanged) {
+                            Consumer<Boolean> onAnnotationChanged,
+                            IntConsumer editNoteAtOrdinal) {
         super(new BorderLayout());
         this.storeSupplier        = storeSupplier;
         this.logTableModel        = logTableModel;
         this.logTable             = logTable;
         this.onDismiss            = onDismiss;
         this.onAnnotationChanged  = onAnnotationChanged;
+        this.editNoteAtOrdinal    = editNoteAtOrdinal;
 
         panelModel = new DefaultTableModel(columnNames(), 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
-            @Override public Class<?> getColumnClass(int c) { return c == 0 ? Integer.class : String.class; }
         };
-        annotationsTable = new JTable(panelModel);
+        annotationsTable = new NotesTable(panelModel);
 
         buildUI();
         refresh();
+        setInitialColumnWidths();
     }
 
     // ── Build ─────────────────────────────────────────────────────────────────
 
     private void buildUI() {
-        annotationsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        annotationsTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        annotationsTable.setRowHeight(AppPrefs.getRowHeight());
-        annotationsTable.setShowHorizontalLines(true);
-        annotationsTable.setShowVerticalLines(false);
-        annotationsTable.setGridColor(ClouseauColors.separatorColor());
-        annotationsTable.setBackground(ClouseauColors.tableBackground());
+        JTable t = annotationsTable;
+        t.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        // The note takes whatever width the others leave; dragging one border moves only it.
+        t.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
+        t.setRowHeight(AppPrefs.getRowHeight());
+        t.setShowGrid(false);                                   // like the log table: no lines between rows
+        t.setIntercellSpacing(new Dimension(0, 0));
+        t.setFillsViewportHeight(true);
+        ClouseauColors.themedBackground(t, ClouseauColors::tableBackground);
 
-        // Left-pad all cells
-        DefaultTableCellRenderer padded = new DefaultTableCellRenderer();
-        padded.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
-        annotationsTable.setDefaultRenderer(String.class,  padded);
-        annotationsTable.setDefaultRenderer(Integer.class, padded);
+        DefaultTableCellRenderer cells = new DefaultTableCellRenderer() {
+            @Override public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean sel, boolean focus, int row, int col) {
+                super.getTableCellRendererComponent(table, value, sel, false, row, col);
+                setBorder(BorderFactory.createEmptyBorder(0, 8, 0, col == COL_DATE ? TRASH : 8));
+                int model = table.convertColumnIndexToModel(col);
+                setHorizontalAlignment(model == COL_LINE ? SwingConstants.RIGHT : SwingConstants.LEFT);
+                if (!sel) setForeground(model == COL_NOTE ? table.getForeground() : ClouseauColors.dimForeground());
+                return this;
+            }
+        };
+        t.setDefaultRenderer(Object.class, cells);
 
-        // Jump to line on selection change
-        annotationsTable.getSelectionModel().addListSelectionListener(e -> {
+        // Headers like the log table's: left-aligned (numbers right), dim, a size smaller.
+        JTableHeader header = t.getTableHeader();
+        TableCellRenderer base = header.getDefaultRenderer();
+        header.setDefaultRenderer((table, value, s, f, row, col) -> {
+            Component c = base.getTableCellRendererComponent(table, value, s, f, row, col);
+            if (c instanceof JLabel l) {
+                l.setHorizontalAlignment(table.convertColumnIndexToModel(col) == COL_LINE
+                        ? SwingConstants.RIGHT : SwingConstants.LEFT);
+                l.setForeground(ClouseauColors.dimForeground());
+                l.setFont(l.getFont().deriveFont(Font.PLAIN, 12f));
+                l.setBorder(BorderFactory.createCompoundBorder(l.getBorder(),
+                        BorderFactory.createEmptyBorder(0, 8, 0, 8)));
+            }
+            return c;
+        });
+        header.setReorderingAllowed(false);
+
+        // A click goes to the line; a double-click (or Enter) edits the note.
+        t.getSelectionModel().addListSelectionListener(e -> {
             if (e.getValueIsAdjusting()) return;
-            int sel = annotationsTable.getSelectedRow();
-            if (sel >= 0 && sel < rowKeys.size() && rowKeys.get(sel) instanceof Integer ordinal)
-                jumpToOrdinal(ordinal);
+            Integer ordinal = selectedOrdinal();
+            if (ordinal != null) jumpToOrdinal(ordinal);
         });
-
-        // Delete key removes the selected annotation
-        annotationsTable.getInputMap(JComponent.WHEN_FOCUSED)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deleteAnnotation");
-        annotationsTable.getActionMap().put("deleteAnnotation", new AbstractAction() {
-            @Override public void actionPerformed(java.awt.event.ActionEvent e) { deleteSelected(); }
+        t.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) editSelected();
+            }
         });
+        t.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "editNote");
+        t.getActionMap().put("editNote", action(this::editSelected));
+        t.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deleteNote");
+        t.getActionMap().put("deleteNote", action(() -> delete(annotationsTable.getSelectedRow())));
 
-        JScrollPane scroll = new JScrollPane(annotationsTable,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        ClouseauColors.themedBackground(scroll.getViewport(), ClouseauColors::viewportBackground);
-        add(scroll, BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(t);
+        scroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
+        ClouseauColors.themedBackground(scroll.getViewport(), ClouseauColors::tableBackground);
+        body.add(scroll, CARD_LIST);
+        body.add(buildEmptyState(), CARD_EMPTY);
 
-        // Footer: empty-state label on the left, buttons on the right
-        JLabel emptyLabel = new JLabel(Messages.get("annotations.panel.empty"));
-        ClouseauColors.themedForeground(emptyLabel, ClouseauColors::dimForeground);
-        emptyLabel.setFont(emptyLabel.getFont().deriveFont(11f));
+        JPanel center = new JPanel(new BorderLayout());
+        center.setBorder(BorderFactory.createEmptyBorder(12, 12, 8, 12));
+        center.add(body, BorderLayout.CENTER);
+        add(center, BorderLayout.CENTER);
 
-        JButton deleteBtn = new JButton(Messages.get("annotations.panel.delete"));
-        deleteBtn.setMargin(new Insets(2, 8, 2, 8));
-        deleteBtn.setEnabled(false);
-        deleteBtn.addActionListener(e -> deleteSelected());
-
-        JButton refreshBtn = new JButton(Messages.get("annotations.panel.refresh"));
-        refreshBtn.setMargin(new Insets(2, 8, 2, 8));
-        refreshBtn.addActionListener(e -> refresh());
-
+        // Footer: a short hint that gives way before the button does, and Close.
+        ClouseauColors.themedForeground(hint, ClouseauColors::dimForeground);
+        hint.setToolTipText(Messages.get("annotations.panel.saved"));
         JButton closeBtn = new JButton(Messages.get("annotations.panel.close"));
-        closeBtn.setMargin(new Insets(2, 8, 2, 8));
         closeBtn.addActionListener(e -> { if (onDismiss != null) onDismiss.run(); });
 
-        annotationsTable.getSelectionModel().addListSelectionListener(
-                e -> deleteBtn.setEnabled(annotationsTable.getSelectedRow() >= 0));
-
-        JPanel footer = new JPanel(new MigLayout("insets 4 8 4 8", "[grow][]4[]4[]", "[]"));
-        footer.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, ClouseauColors.separatorColor()));
-        footer.add(emptyLabel, "grow");
-        footer.add(deleteBtn);
-        footer.add(refreshBtn);
-        footer.add(closeBtn);
+        JPanel buttons = new JPanel(new MigLayout("insets 10 16 10 12", "[0:pref, grow]16[]"));
+        buttons.add(hint, "growx, wmin 0");
+        buttons.add(closeBtn);
+        JPanel footer = new JPanel(new BorderLayout());
+        footer.add(new JSeparator(), BorderLayout.NORTH);
+        footer.add(buttons, BorderLayout.CENTER);
         add(footer, BorderLayout.SOUTH);
+    }
+
+    private JComponent buildEmptyState() {
+        JPanel empty = new JPanel(new MigLayout("fill, insets 16", "[center]", "push[]6[]push"));
+        ClouseauColors.themedBackground(empty, ClouseauColors::tableBackground);
+        JLabel title = new JLabel(Messages.get("annotations.panel.empty.title"));
+        ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
+        JLabel how = new JLabel(Messages.get("annotations.panel.empty.hint"));
+        ClouseauColors.themedForeground(how, ClouseauColors::mutedForeground);
+        how.setFont(how.getFont().deriveFont(how.getFont().getSize2D() - 1f));
+        empty.add(title, "wrap");
+        empty.add(how);
+        empty.setBorder(UIManager.getBorder("ScrollPane.border"));
+        return empty;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
-     * Rebuilds the table from the current annotation store. Annotations are listed in
-     * entry order; the # column shows the row number in the log table, or – when the
-     * entry is filtered out. Orphans (annotations whose line is no longer in the file)
-     * come last.
+     * Rebuilds the rows from the current notes, in entry order, keeping the selection and
+     * the column widths. Line reads as the log table does: the file line ("16", or
+     * "db.log:16" in a merged view), "#1042" on a live source, or – when the entry is
+     * filtered out or gone. Notes whose line is no longer in the file come last.
      */
     public void refresh() {
+        Object selected = annotationsTable.getSelectedRow() >= 0 && annotationsTable.getSelectedRow() < rowKeys.size()
+                ? rowKeys.get(annotationsTable.getSelectedRow()) : null;
         Notes store = storeSupplier.get();
         panelModel.setRowCount(0);
         rowKeys.clear();
 
         for (AnnotationStore.Placed p : store.placed()) {
-            int modelRow = logTableModel.rowOfOrdinal(p.ordinal());
             rowKeys.add(p.ordinal());
-            panelModel.addRow(row(modelRow >= 0 ? logTableModel.lineNumber(modelRow) : null, p.annotation(), store.sourceName(p.ordinal())));
+            panelModel.addRow(row(where(p.ordinal(), store.sourceName(p.ordinal())), p.annotation()));
         }
         for (AnnotationStore.Annotation a : store.orphans()) {
             rowKeys.add(a);
-            panelModel.addRow(row(null, a, store.orphanSource(a)));
+            String source = store.orphanSource(a);
+            panelModel.addRow(row(source != null ? source + ":–" : "–", a));
         }
+        // The first column's title follows the log table's: Line, or # on a live source.
+        annotationsTable.getColumnModel().getColumn(COL_LINE).setHeaderValue(Messages.get(
+                logTableModel.numbering() == LogTableModel.Numbering.RECEIVED
+                        ? "annotations.col.number" : "annotations.col.line"));
+        annotationsTable.getTableHeader().repaint();
 
-        applyColumnWidths();
+        cards.show(body, rowKeys.isEmpty() ? CARD_EMPTY : CARD_LIST);
+        hint.setVisible(!rowKeys.isEmpty());                  // the empty state says how instead
+        int keep = selected != null ? rowKeys.indexOf(selected) : -1;
+        if (keep >= 0) annotationsTable.getSelectionModel().setSelectionInterval(keep, keep);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private static String[] columnNames() {
-        String[] names = new String[COLUMN_KEYS.length];
-        for (int i = 0; i < COLUMN_KEYS.length; i++) names[i] = Messages.get(COLUMN_KEYS[i]);
-        return names;
+        return new String[] {
+            Messages.get("annotations.col.line"), Messages.get("annotations.col.note"),
+            Messages.get("annotations.col.preview"), Messages.get("annotations.col.author"),
+            Messages.get("annotations.col.date")
+        };
     }
 
-    /** {@code source} is the file a merged view's note belongs to, shown before the line; null for one file. */
-    private static Object[] row(Integer lineNumber, AnnotationStore.Annotation a, String source) {
-        String preview = a.logPreview() != null
-                ? a.logPreview().substring(0, Math.min(80, a.logPreview().length())) : "";
-        if (source != null) preview = "[" + source + "] " + preview;
-        String note    = a.note()       != null ? a.note().replace('\n', ' ') : "";
-        String author  = a.author()     != null ? a.author() : "";
-        String date    = a.createdAt()  != null
-                ? a.createdAt().replace("T", " ").replaceFirst("\\.\\d+Z$", " UTC") : "";
-        return new Object[]{ lineNumber != null ? lineNumber : "–", preview, note, author, date };
+    /** The note's place, as the log table shows it, or "–" when its row isn't there. */
+    private String where(int ordinal, String source) {
+        if (logTableModel.rowOfOrdinal(ordinal) < 0) return source != null ? source + ":–" : "–";
+        int line = logTableModel.lineNumberOfOrdinal(ordinal);
+        if (source != null) return source + ":" + line;
+        return logTableModel.numbering() == LogTableModel.Numbering.RECEIVED ? "#" + line : String.valueOf(line);
     }
 
-    private void applyColumnWidths() {
-        if (annotationsTable.getColumnCount() < 5) return;
-        int[] fixed = { 55, 220, 0, 100, 165 }; // 0 = stretch
-        int taken   = 0;
-        for (int w : fixed) taken += w;
-
-        int viewport   = getWidth() > 0 ? getWidth() - 20 : 700;
-        int noteWidth  = Math.max(150, viewport - taken);
-
-        annotationsTable.getColumnModel().getColumn(0).setPreferredWidth(fixed[0]);
-        annotationsTable.getColumnModel().getColumn(0).setMaxWidth(fixed[0]);
-        annotationsTable.getColumnModel().getColumn(1).setPreferredWidth(fixed[1]);
-        annotationsTable.getColumnModel().getColumn(2).setPreferredWidth(noteWidth);
-        annotationsTable.getColumnModel().getColumn(3).setPreferredWidth(fixed[3]);
-        annotationsTable.getColumnModel().getColumn(4).setPreferredWidth(fixed[4]);
+    private Object[] row(String where, AnnotationStore.Annotation a) {
+        String preview = a.logPreview() != null ? a.logPreview() : "";
+        String note    = a.note()   != null ? a.note().replace('\n', ' ') : "";
+        String author  = a.author() != null ? a.author() : "";
+        return new Object[]{ where, note, preview, author, when(a.createdAt()) };
     }
 
-    private void deleteSelected() {
+    /** When a note was written, in the display time zone and the Timestamp field's format, to the second. */
+    private static String when(String createdAt) {
+        if (createdAt == null || createdAt.isBlank()) return "";
+        try {
+            return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(AppPrefs.getDisplayTimezone())
+                    .format(Instant.parse(createdAt));
+        } catch (java.time.DateTimeException e) {
+            return createdAt;
+        }
+    }
+
+    /** Widths to start with, once: refreshing never undoes the user's resizing. */
+    private void setInitialColumnWidths() {
+        int[] widths = { 80, 300, 240, 80, 180 };
+        for (int i = 0; i < widths.length; i++) {
+            annotationsTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        }
+        annotationsTable.getColumnModel().getColumn(COL_LINE).setMinWidth(50);
+        annotationsTable.getColumnModel().getColumn(COL_DATE).setMinWidth(170);   // the full time, and room for the trash can
+    }
+
+    private Integer selectedOrdinal() {
         int sel = annotationsTable.getSelectedRow();
+        return sel >= 0 && sel < rowKeys.size() && rowKeys.get(sel) instanceof Integer o ? o : null;
+    }
+
+    private void editSelected() {
+        Integer ordinal = selectedOrdinal();
+        if (ordinal != null && editNoteAtOrdinal != null) editNoteAtOrdinal.accept(ordinal);
+    }
+
+    private void delete(int sel) {
         if (sel < 0 || sel >= rowKeys.size()) return;
         if (AppPrefs.isAnnotationDeleteConfirm()) {
             JCheckBox dontAsk = new JCheckBox(Messages.get("annotation.delete.dontask"));
@@ -225,9 +299,11 @@ public final class AnnotationsPanel extends JPanel {
         logTable.repaint();
         refresh();
         if (onAnnotationChanged != null) onAnnotationChanged.accept(saved);
-        // keep selection on the next row if possible
         int newCount = annotationsTable.getRowCount();
-        if (newCount > 0) annotationsTable.setRowSelectionInterval(Math.min(sel, newCount - 1), Math.min(sel, newCount - 1));
+        if (newCount > 0) {
+            int next = Math.min(sel, newCount - 1);
+            annotationsTable.setRowSelectionInterval(next, next);
+        }
     }
 
     private void jumpToOrdinal(int ordinal) {
@@ -237,7 +313,83 @@ public final class AnnotationsPanel extends JPanel {
         if (viewRow >= 0) {
             logTable.setRowSelectionInterval(viewRow, viewRow);
             logTable.scrollRectToVisible(logTable.getCellRect(viewRow, 0, true));
-            logTable.requestFocusInWindow();
+        }
+    }
+
+    private static Action action(Runnable r) {
+        return new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { r.run(); }
+        };
+    }
+
+    /**
+     * The notes, with a trash can at the right of the row under the mouse (red when pointed
+     * at). A press on it deletes that note without moving the selection.
+     */
+    private final class NotesTable extends JTable {
+        private int hoverRow = -1;
+        private boolean overTrash;
+
+        NotesTable(DefaultTableModel model) {
+            super(model);
+            MouseAdapter hover = new MouseAdapter() {
+                @Override public void mouseMoved(MouseEvent e)  { track(e.getPoint()); }
+                @Override public void mouseExited(MouseEvent e) { hoverRow = -1; overTrash = false; repaint(); }
+            };
+            addMouseListener(hover);
+            addMouseMotionListener(hover);
+        }
+
+        private void track(Point p) {
+            int row = rowAtPoint(p);
+            boolean trash = row >= 0 && p.x >= getVisibleRect().x + getVisibleRect().width - TRASH;
+            if (row != hoverRow || trash != overTrash) {
+                hoverRow = row;
+                overTrash = trash;
+                repaint();
+            }
+        }
+
+        @Override protected void processMouseEvent(MouseEvent e) {
+            if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e)) {
+                track(e.getPoint());
+                if (overTrash && hoverRow >= 0) {
+                    int row = hoverRow;
+                    e.consume();
+                    SwingUtilities.invokeLater(() -> delete(row));
+                    return;
+                }
+            }
+            if (e.getID() == MouseEvent.MOUSE_CLICKED && overTrash) return;
+            super.processMouseEvent(e);
+        }
+
+        @Override public String getToolTipText(MouseEvent e) {
+            track(e.getPoint());
+            if (overTrash) return Messages.get("annotations.panel.delete.tooltip");
+            int row = rowAtPoint(e.getPoint()), col = columnAtPoint(e.getPoint());
+            if (row >= 0 && col >= 0 && convertColumnIndexToModel(col) == COL_NOTE) {
+                String note = String.valueOf(getValueAt(row, col));
+                // Only when the column cuts it short.
+                int room = getCellRect(row, col, false).width - 16;
+                if (note.isBlank() || getFontMetrics(getFont()).stringWidth(note) <= room) return null;
+                return "<html><div style='width:320px'>"
+                        + note.replace("&", "&amp;").replace("<", "&lt;") + "</div></html>";
+            }
+            return super.getToolTipText(e);
+        }
+
+        @Override protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if (hoverRow < 0 || hoverRow >= getRowCount()) return;
+            Rectangle r = getCellRect(hoverRow, 0, true);
+            Rectangle v = getVisibleRect();
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            Color base = isRowSelected(hoverRow) ? getSelectionForeground() : ClouseauColors.dimForeground();
+            ToolIcons.paintTrash(g2, v.x + v.width - TRASH + 9, r.y + (r.height - 14) / 2,
+                    overTrash ? ClouseauColors.levelColor(LogEntry.LogLevel.ERROR) : base);
+            g2.dispose();
         }
     }
 }
