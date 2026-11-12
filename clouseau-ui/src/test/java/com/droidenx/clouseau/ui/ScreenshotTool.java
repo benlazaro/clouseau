@@ -157,9 +157,10 @@ public final class ScreenshotTool {
         SwingUtilities.invokeLater(() -> new ParserEditorDialog(frame, null).setVisible(true));
         JDialog dialog = waitForDialog();
         onEdt(() -> {
+            // The seeded Edge Router parser: the first under YOURS (row 0 is the group title).
             @SuppressWarnings("unchecked")
             JList<Object> list = find(dialog, JList.class, l -> true);
-            list.setSelectedIndex(list.getModel().getSize() - 1);
+            list.setSelectedIndex(1);
             return null;
         });
         settle(500);
