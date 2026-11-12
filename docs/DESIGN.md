@@ -351,8 +351,8 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   with the same hash. Annotations that match nothing are kept as orphans, listed last
   in the annotations panel and written back on save, so they're never lost.
 - **Saving:** After every change, through a temp file and a rename, to
-  `<logfile>.annotations` next to the log. If that fails, it saves to
-  `<data>/annotations/<hash of the log's path>.annotations` and stays there. When both
+  `<logfile>.clouseau` next to the log. If that fails, it saves to
+  `<data>/annotations/<hash of the log's path>.clouseau` and stays there. When both
   exist, the newer one is read. If neither can be written, the tab warns once and keeps
   the notes in memory.
 - **Highlights (D-15):** stored in the same sidecar under `highlights`, each with the
@@ -511,7 +511,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
 | `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |
 | `sessions/` | Named sessions (D-19), one `<name>.json` each, in the `session.json` format. |
-| `<logfile>.annotations` | **Next to the log, not in the data folder.** Annotations for that file. |
+| `<logfile>.clouseau` | **Next to the log, not in the data folder.** Annotations for that file. |
 | `annotations/` | Annotations for logs whose own folder is read-only, named after a hash of the log's path (D-9). |
 | `cache/` | Decompressed copies of the compressed logs open in tabs (D-16), named `<hash of path and entry>-<unique>.log`. Not persistent: a copy is deleted when its tab closes, and the folder is emptied at startup (by the running instance only) and at exit. |
 
@@ -525,7 +525,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 
 ### 7.1 Interchange formats
 
-**Annotations sidecar** (`<log>.annotations`, `annotations.json` in a bundle). UTF-8
+**Annotations sidecar** (`<log>.clouseau`, `annotations.json` in a bundle). UTF-8
 JSON, written by `AnnotationStore`:
 
 ```json
@@ -688,7 +688,7 @@ action.
   Other zips have a `manifest.json` too (browser extensions, for one), and those must
   still open as logs.
 - **The reviewer's notes are saved next to the bundle, not in it.** The log is a zip
-  entry, so its sidecar is the zip-entry one, `<bundle>.zip!<log>.annotations` (section
+  entry, so its sidecar is the zip-entry one, `<bundle>.zip!<log>.clouseau` (section
   6.2, step 0). Until that file exists the store starts from the bundle's
   `annotations.json`; the first change writes the whole store, bundled notes included,
   and from then on the sidecar is what loads (so deleting a bundled note sticks). The
@@ -1208,7 +1208,7 @@ as a reusable "workspace".
    it, mapping merged ordinals to each store's own entry numbers through `MergeOrder`
    (`setOrder` takes a new order, for steps 5 and 6). `MergeLoad` loads and anchors each
    file's store on that file's indexing thread, so notes and highlights are saved in
-   the file's own `.annotations` sidecar (or `annotations/`) and show again when the
+   the file's own `.clouseau` sidecar (or `annotations/`) and show again when the
    file is opened alone. The annotations panel prefixes each preview with `[file]`.
    `MergedNotesTest`.
 5. ✅ Following: hold-back, late entries, per-source rotation. As built:

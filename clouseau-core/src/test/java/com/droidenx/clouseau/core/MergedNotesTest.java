@@ -41,8 +41,8 @@ class MergedNotesTest {
         assertThat(dbStore.at(1).note()).isEqualTo("db second line");
         assertThat(dbStore.at(1).line()).isEqualTo(2);           // db.log's own entry number
         assertThat(appStore.size()).isZero();
-        assertThat(Files.readString(dir.resolve("db.log.annotations"))).contains("db second line");
-        assertThat(Files.exists(dir.resolve("app.log.annotations"))).isFalse();
+        assertThat(Files.readString(dir.resolve("db.log.clouseau"))).contains("db second line");
+        assertThat(Files.exists(dir.resolve("app.log.clouseau"))).isFalse();
 
         assertThat(notes.at(3).note()).isEqualTo("db second line");
         assertThat(notes.has(2)).isFalse();

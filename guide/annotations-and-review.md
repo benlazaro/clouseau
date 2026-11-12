@@ -43,7 +43,7 @@ A note whose line is filtered out shows –.
 ## Where notes are saved
 
 Notes and [highlights](reading-and-filtering.md#highlights) are saved automatically, in a
-file next to the log named after it: `app.log` gets `app.log.annotations`. Anyone who opens
+file next to the log named after it: `app.log` gets `app.log.clouseau`. Anyone who opens
 the same log with that file beside it sees the same notes.
 
 If the log's folder is read-only, notes go to the `annotations` folder of the

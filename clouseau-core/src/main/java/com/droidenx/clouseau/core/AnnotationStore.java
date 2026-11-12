@@ -39,8 +39,8 @@ import java.util.function.BiConsumer;
  * there; otherwise to the nearest entry with a matching hash that isn't taken. Ones that
  * match nothing are kept as orphans, so they're never lost.
  * <p>
- * Everything is saved to {@code <log>.annotations} next to the log. If that folder can't
- * be written, it goes to {@code <fallbackDir>/<hash of the log's path>.annotations}
+ * Everything is saved to {@code <log>.clouseau} next to the log. If that folder can't
+ * be written, it goes to {@code <fallbackDir>/<hash of the log's path>.clouseau}
  * instead. On load, whichever of the two is newer wins.
  * <p>
  * Threading: {@link #load} and an {@link Anchoring} run on a background thread; once the
@@ -86,7 +86,7 @@ public final class AnnotationStore implements Notes {
     /** An annotation with the 0-based entry ordinal it is attached to. */
     public record Placed(int ordinal, Annotation annotation) {}
 
-    static final String SUFFIX = ".annotations";
+    static final String SUFFIX = ".clouseau";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final char[] HEX = "0123456789abcdef".toCharArray();
 
@@ -363,7 +363,7 @@ public final class AnnotationStore implements Notes {
 
     /**
      * Everything in the store, attached and orphaned, in the sidecar format: what
-     * {@code <log>.annotations} contains, and what a review bundle carries (D-10).
+     * {@code <log>.clouseau} contains, and what a review bundle carries (D-10).
      */
     public String toJson() {
         List<Annotation> notes = new ArrayList<>(byOrdinal.values());

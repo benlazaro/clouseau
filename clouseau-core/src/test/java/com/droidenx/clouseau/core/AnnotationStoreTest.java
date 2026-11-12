@@ -77,7 +77,7 @@ class AnnotationStoreTest {
     @Test
     void oldSidecarsWithoutLineNumbersStillAttach() throws IOException {
         writeLog("x", "boom", "y");
-        Files.writeString(dir.resolve("app.log.annotations"), """
+        Files.writeString(dir.resolve("app.log.clouseau"), """
                 {"annotations": [{"lineHash": "%s", "note": "old note", "author": "me"}]}
                 """.formatted(AnnotationStore.hashOf("boom")));
 
@@ -104,7 +104,7 @@ class AnnotationStoreTest {
     void savesToTheDataFolderWhenTheLogFolderCantBeWritten() throws IOException {
         writeLog("a", "b");
         // A directory where the sidecar should go makes writing it fail on every OS.
-        Files.createDirectory(dir.resolve("app.log.annotations"));
+        Files.createDirectory(dir.resolve("app.log.clouseau"));
 
         AnnotationStore store = open("a", "b");
         assertThat(store.put(1, note("b", "saved elsewhere"))).isTrue();
@@ -117,13 +117,13 @@ class AnnotationStoreTest {
     @Test
     void theNewerOfTheTwoSidecarsWins() throws IOException {
         writeLog("a");
-        Path nextToLog = dir.resolve("app.log.annotations");
+        Path nextToLog = dir.resolve("app.log.clouseau");
         Files.writeString(nextToLog, """
                 {"annotations": [{"lineHash": "%s", "line": 1, "note": "old"}]}
                 """.formatted(AnnotationStore.hashOf("a")));
         Files.setLastModifiedTime(nextToLog, FileTime.fromMillis(1_000_000));
         Path fallback = fallbackDir.resolve(
-                AnnotationStore.hashOf(log.toAbsolutePath().normalize().toString()) + ".annotations");
+                AnnotationStore.hashOf(log.toAbsolutePath().normalize().toString()) + ".clouseau");
         Files.createDirectories(fallbackDir);
         Files.writeString(fallback, """
                 {"annotations": [{"lineHash": "%s", "line": 1, "note": "new"}]}

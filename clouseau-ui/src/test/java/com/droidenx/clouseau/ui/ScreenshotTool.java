@@ -215,7 +215,7 @@ public final class ScreenshotTool {
                 break;
             }
         }
-        Files.writeString(logs.resolve("app.log.annotations"),
+        Files.writeString(logs.resolve("app.log.clouseau"),
                 "{\n  \"version\": 2,\n  \"annotations\": [],\n  \"highlights\": [\n" + marks + "\n  ]\n}\n",
                 StandardCharsets.UTF_8);
     }
