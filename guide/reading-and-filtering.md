@@ -131,6 +131,11 @@ Highlights mark rows you want to come back to.
 3. **Clear highlight** removes the color from the selected rows; **Clear all highlights**
    removes every highlight in the tab.
 
+Filters don't remove highlights, they only hide them. The bar stays while any row is
+highlighted and says how many the filters hide: **2 / 4 · 3 hidden**, or **3 hidden by
+filters** when none show (▲ and ▼ then have nowhere to go). A color whose rows are all
+hidden shows a faded chip; point at a chip for its count.
+
 Highlights are saved with the file's [notes](annotations-and-review.md), so they're back
 when you open the file again, and they travel in review bundles. Each color follows the
 current theme.

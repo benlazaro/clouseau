@@ -145,6 +145,25 @@ class LogTableModelTest {
     }
 
     @Test
+    void highlightCountsKeepTheRowsTheFiltersHide() throws Exception {
+        model.appendBatch(entries(10));
+        model.setHighlight(2, java.awt.Color.RED);
+        model.setHighlight(5, java.awt.Color.RED);
+        model.setHighlight(7, java.awt.Color.BLUE);
+        model.applyFilter(e -> e.message().endsWith("5"));
+        for (int i = 0; i < 50 && model.getRowCount() != 1; i++) {
+            Thread.sleep(20);
+            drainEdt();
+        }
+
+        java.util.Map<java.awt.Color, int[]> counts = model.highlightCounts();
+        assertThat(counts.get(java.awt.Color.RED)).containsExactly(2, 1);    // one of two shown
+        assertThat(counts.get(java.awt.Color.BLUE)).containsExactly(1, 0);   // all hidden, still counted
+        assertThat(model.getHighlightedModelRows(null)).containsExactly(0);
+        assertThat(model.getHighlightedModelRows(java.awt.Color.BLUE)).isEmpty();
+    }
+
+    @Test
     void theNumberColumnShowsTheEntrysNumberInTheFileWhateverIsFiltered() throws Exception {
         model.appendBatch(entries(10));
         assertThat(model.getValueAt(7, 0)).isEqualTo(8);

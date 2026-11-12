@@ -249,24 +249,34 @@ public final class LogTableModel extends AbstractTableModel {
         return !highlights.isEmpty();
     }
 
-    /** Returns model row indices of visible entries highlighted with the given color (null = any color). */
+    /**
+     * Model rows of the visible entries highlighted with the given color (null = any color),
+     * in order. Looks up each highlight rather than walking every row.
+     */
     public List<Integer> getHighlightedModelRows(Color filter) {
         List<Integer> result = new ArrayList<>();
-        for (int i = 0; i < rows.size(); i++) {
-            Color c = highlights.get(rows.get(i));
-            if (c != null && (filter == null || filter.equals(c))) result.add(i);
-        }
+        highlights.forEach((ord, c) -> {
+            if (filter != null && !filter.equals(c)) return;
+            int row = rows.binarySearch(ord);
+            if (row >= 0) result.add(row);
+        });
+        result.sort(null);
         return result;
     }
 
-    /** Returns the set of colors currently in use, in row order. */
-    public Set<Color> getActiveHighlightColors() {
-        Set<Color> set = new LinkedHashSet<>();
-        for (int i = 0; i < rows.size(); i++) {
-            Color c = highlights.get(rows.get(i));
-            if (c != null) set.add(c);
-        }
-        return set;
+    /**
+     * Each highlight color in use, with how many entries have it and how many of those the
+     * filters show: {@code color → {highlighted, shown}}. A color whose rows are all
+     * filtered out is still here, with 0 shown.
+     */
+    public Map<Color, int[]> highlightCounts() {
+        Map<Color, int[]> counts = new HashMap<>();
+        highlights.forEach((ord, c) -> {
+            int[] n = counts.computeIfAbsent(c, k -> new int[2]);
+            n[0]++;
+            if (rows.binarySearch(ord) >= 0) n[1]++;
+        });
+        return counts;
     }
 
     // ── Loading ──────────────────────────────────────────────────────────────
