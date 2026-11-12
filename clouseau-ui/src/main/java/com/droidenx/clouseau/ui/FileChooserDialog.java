@@ -88,7 +88,7 @@ final class FileChooserDialog extends JDialog {
     private final JRadioButton asTabs = new JRadioButton(Messages.get("filechooser.as.tabs"));
     private final JComponent openAsRow;
     private final JComboBox<String> parserCombo;
-    private final JComboBox<SettingsDialog.TimezoneEntry> tzCombo;
+    private final ZoneCombo tzCombo;
     private final JTextArea readNote = wrapText("", true);
     private final JLabel previewTitle = new JLabel(Messages.get("filechooser.preview.label"));
     private final JTextPane preview = new JTextPane();
@@ -480,9 +480,7 @@ final class FileChooserDialog extends JDialog {
     private void setZone(ZoneId zone) {
         selectedSourceTimezone = zone;
         settingZone = true;
-        for (int i = 0; i < tzCombo.getItemCount(); i++) {
-            if (tzCombo.getItemAt(i).zone().equals(zone)) { tzCombo.setSelectedIndex(i); break; }
-        }
+        tzCombo.setZone(zone);
         settingZone = false;
     }
 
@@ -566,9 +564,7 @@ final class FileChooserDialog extends JDialog {
         });
         tzCombo.addActionListener(e -> {
             if (settingZone) return;
-            SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) tzCombo.getSelectedItem();
-            if (sel == null) return;
-            selectedSourceTimezone = sel.zone();
+            selectedSourceTimezone = tzCombo.selectedZone();
             zoneChosen = true;
         });
 

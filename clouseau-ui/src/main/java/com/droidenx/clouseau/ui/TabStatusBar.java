@@ -17,7 +17,7 @@ import java.time.ZoneId;
 final class TabStatusBar extends JPanel {
 
     private final JLabel pathLabel = label(new Insets(6, 8, 8, 8));
-    private final JLabel timezoneLabel = label(new Insets(6, 0, 8, 0));
+    private final JLabel timezoneLabel = label(new Insets(6, 0, 8, 4));
     private final JLabel countsLabel = label(new Insets(6, 8, 8, 8));
 
     /** {@code onTimezoneClick} runs when the user clicks the timezone badge. */
@@ -28,6 +28,10 @@ final class TabStatusBar extends JPanel {
         countsLabel.setText(" ");
         countsLabel.setHorizontalAlignment(SwingConstants.RIGHT);
         timezoneLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        // A chevron after the text, as on the buttons that open a popup.
+        timezoneLabel.setIcon(new FilterBar.ChevronDown());
+        timezoneLabel.setHorizontalTextPosition(SwingConstants.LEADING);
+        timezoneLabel.setIconTextGap(6);
         timezoneLabel.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) { onTimezoneClick.run(); }
         });
@@ -50,14 +54,39 @@ final class TabStatusBar extends JPanel {
         pathLabel.setToolTipText(tooltip);
     }
 
-    /** The source timezone badge; {@code perFile} when a merged tab's files differ. */
-    void setTimezone(ZoneId zone, boolean perFile) {
-        String id = perFile ? Messages.get("merge.timezone.perfile") : zone.getId();
-        timezoneLabel.setText("[src: " + id + "]  ");
-        boolean isSystem = zone.equals(ZoneId.systemDefault());
-        timezoneLabel.setToolTipText(isSystem
-                ? "Source timezone: " + id + " (system default) — click to change"
-                : "Source timezone: " + id + " — click to change");
+    /** Where the timezone popup opens from. */
+    JComponent timezoneAnchor() { return timezoneLabel; }
+
+    /**
+     * The timezones: just one when the log is read and shown in the same zone
+     * ("America/Chicago"), else how it's read, then how it's shown ("UTC → America/Chicago");
+     * "Mixed" when a merged tab's files are read in different zones ({@code perFile}).
+     */
+    void setTimezone(ZoneId source, boolean perFile) {
+        ZoneId display = AppPrefs.getDisplayTimezone();
+        boolean same = !perFile && sameOffsets(source, display);
+        String src = perFile ? Messages.get("status.timezone.mixed") : source.getId();
+        timezoneLabel.setText(same ? display.getId() : src + "  \u2192  " + display.getId());
+        String tip;
+        if (perFile) tip = MessageFormat.format(Messages.get("status.timezone.tip.mixed"), display.getId());
+        else if (same) tip = MessageFormat.format(Messages.get("status.timezone.tip.same"), display.getId());
+        else tip = MessageFormat.format(Messages.get("status.timezone.tip"), source.getId(), display.getId(),
+                difference(source, display));
+        timezoneLabel.setToolTipText("<html>" + tip + "<br>" + Messages.get("status.timezone.tip.click") + "</html>");
+    }
+
+    /** Whether two zones give the same time now and all year (UTC and Etc/UTC, say). */
+    static boolean sameOffsets(ZoneId a, ZoneId b) {
+        return a.equals(b) || a.getRules().equals(b.getRules());
+    }
+
+    /** How far the shown time is from the written one, now: "−6h", "+5h 30m", "same time". */
+    static String difference(ZoneId source, ZoneId display) {
+        java.time.Instant now = java.time.Instant.now();
+        int s = display.getRules().getOffset(now).getTotalSeconds() - source.getRules().getOffset(now).getTotalSeconds();
+        if (s == 0) return Messages.get("status.timezone.same.time");
+        int h = Math.abs(s) / 3600, m = Math.abs(s) % 3600 / 60;
+        return (s < 0 ? "\u2212" : "+") + (h > 0 ? h + "h" : "") + (m > 0 ? (h > 0 ? " " : "") + m + "m" : "");
     }
 
     /**

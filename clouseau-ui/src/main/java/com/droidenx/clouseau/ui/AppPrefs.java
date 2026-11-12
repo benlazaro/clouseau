@@ -360,7 +360,24 @@ public final class AppPrefs {
     }
 
     public static void setDisplayTimezone(ZoneId zone) {
+        addRecentTimezone(zone);
         putString(KEY_DISPLAY_TIMEZONE, zone.getId());
+    }
+
+    /** Zones chosen lately, newest first: a timezone drop-down lists them near the top. */
+    public static List<ZoneId> getRecentTimezones() {
+        List<ZoneId> zones = new ArrayList<>();
+        for (String id : getStringList("timezone.recent")) {
+            try { zones.add(ZoneId.of(id)); } catch (Exception ignored) { }
+        }
+        return zones;
+    }
+
+    static void addRecentTimezone(ZoneId zone) {
+        List<String> ids = new ArrayList<>(getStringList("timezone.recent"));
+        ids.remove(zone.getId());
+        ids.add(0, zone.getId());
+        putStringList("timezone.recent", ids.subList(0, Math.min(8, ids.size())));
     }
 
     /** Returns the saved source timezone for a specific log file, or {@code null} if none saved. */
@@ -377,6 +394,7 @@ public final class AppPrefs {
     }
 
     public static void setSourceTimezone(Path file, ZoneId zone) {
+        addRecentTimezone(zone);
         if (!ROOT.has(KEY_SOURCE_TIMEZONES)) ROOT.add(KEY_SOURCE_TIMEZONES, new JsonObject());
         ROOT.get(KEY_SOURCE_TIMEZONES).getAsJsonObject()
                 .addProperty(file.toAbsolutePath().toString(), zone.getId());

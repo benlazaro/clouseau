@@ -100,6 +100,12 @@ final class MergedFileSettings {
         return own != null ? Optional.of(own) : host.tabParser();
     }
 
+    /** The timezone file {@code source} is read in, or the tab's if there's no such file. */
+    ZoneId zoneOf(int source) {
+        List<MergeLoad.File> files = host.files();
+        return files != null && source >= 0 && source < files.size() ? zoneOf(files.get(source)) : host.tabZone();
+    }
+
     /** Whether the files are read in more than one timezone. */
     boolean zonesDiffer() {
         List<MergeLoad.File> files = host.files();
@@ -162,7 +168,7 @@ final class MergedFileSettings {
         List<MergeLoad.File> files = host.files();
         if (files == null || source < 0 || source >= files.size()) return;
         MergeLoad.File f = files.get(source);
-        JComboBox<SettingsDialog.TimezoneEntry> combo = SettingsDialog.buildTimezoneCombo(zoneOf(f));
+        ZoneCombo combo = SettingsDialog.buildTimezoneCombo(zoneOf(f));
         JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
         note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
         String title = MessageFormat.format(Messages.get("merge.timezone.title"), sourceName(source));
@@ -170,10 +176,9 @@ final class MergedFileSettings {
         int res = JOptionPane.showConfirmDialog(parent, message, title,
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (res != JOptionPane.OK_OPTION) return;
-        SettingsDialog.TimezoneEntry sel = (SettingsDialog.TimezoneEntry) combo.getSelectedItem();
-        if (sel == null) return;
-        if (zones.containsKey(f)) zones.put(f, sel.zone());   // from a bundle: this tab only
-        else AppPrefs.setSourceTimezone(f.path(), sel.zone());
+        ZoneId zone = combo.selectedZone();
+        if (zones.containsKey(f)) zones.put(f, zone);   // from a bundle: this tab only
+        else AppPrefs.setSourceTimezone(f.path(), zone);
         host.zonesChanged();
         host.reload();
     }

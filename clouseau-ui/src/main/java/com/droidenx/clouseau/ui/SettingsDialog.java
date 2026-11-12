@@ -51,7 +51,7 @@ final class SettingsDialog extends JDialog {
     // Appearance settings
     private final JComboBox<String> themeCombo;
     private final String originalThemeName;
-    private final JComboBox<TimezoneEntry> timezoneCombo;
+    private final ZoneCombo timezoneCombo;
 
     SettingsDialog(Frame owner, TabPanel tabPanel, Runnable onApply) {
         super(owner, Messages.get("settings.title"), true);
@@ -221,49 +221,22 @@ final class SettingsDialog extends JDialog {
         AppPrefs.setMaxEntriesPerTab((int) maxEntriesSpinner.getValue());
         String selTheme = (String) themeCombo.getSelectedItem();
         if (selTheme != null) AppPrefs.setTheme(selTheme);
-        TimezoneEntry selTz = (TimezoneEntry) timezoneCombo.getSelectedItem();
-        if (selTz != null) AppPrefs.setDisplayTimezone(selTz.zone());
+        if (!timezoneCombo.selectedZone().equals(AppPrefs.getDisplayTimezone())) {
+            AppPrefs.setDisplayTimezone(timezoneCombo.selectedZone());
+        }
         if (onApply != null) onApply.run();
     }
 
     // ── Timezone helpers ──────────────────────────────────────────────────────
 
-    record TimezoneEntry(ZoneId zone, String label) {
+    /** A zone in a {@link ZoneCombo}; {@code groupEnd} marks the last of those listed first. */
+    record TimezoneEntry(ZoneId zone, String label, boolean groupEnd) {
         @Override public String toString() { return label; }
     }
 
-    private static final String[] CURATED_ZONE_IDS = {
-        "UTC",
-        "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
-        "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
-        "America/Sao_Paulo", "America/Toronto", "America/Vancouver",
-        "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Amsterdam",
-        "Europe/Moscow", "Europe/Istanbul",
-        "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Shanghai",
-        "Asia/Tokyo", "Asia/Seoul", "Asia/Jakarta",
-        "Australia/Sydney", "Australia/Melbourne", "Pacific/Auckland",
-        "Africa/Johannesburg", "Africa/Cairo",
-    };
-
-    static JComboBox<TimezoneEntry> buildTimezoneCombo(ZoneId current) {
-        ZoneId systemZone = ZoneId.systemDefault();
-
-        JComboBox<TimezoneEntry> combo = new JComboBox<>();
-        combo.addItem(new TimezoneEntry(systemZone, "System default (" + systemZone.getId() + ")"));
-        TimezoneEntry selected = (TimezoneEntry) combo.getItemAt(0);
-
-        for (String id : CURATED_ZONE_IDS) {
-            try {
-                ZoneId zone = ZoneId.of(id);
-                if (zone.equals(systemZone)) continue; // already shown as System default
-                TimezoneEntry entry = new TimezoneEntry(zone, id);
-                combo.addItem(entry);
-                if (zone.equals(current)) selected = entry;
-            } catch (Exception ignored) {}
-        }
-
-        combo.setSelectedItem(selected);
-        return combo;
+    /** A searchable timezone drop-down with {@code current} chosen (see {@link ZoneCombo}). */
+    static ZoneCombo buildTimezoneCombo(ZoneId current) {
+        return new ZoneCombo(current);
     }
 
     /** A section title, as IntelliJ's settings show one: regular weight, with a hairline to the right edge. */

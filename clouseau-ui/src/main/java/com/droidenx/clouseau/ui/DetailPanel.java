@@ -51,8 +51,9 @@ final class DetailPanel extends JPanel {
      * @param where         where the entry is, after "Log entry ·" in the title: "file line 13",
      *                      "db.log, line 13" or "#1042 since connecting"; null for nothing
      */
+    /** {@code sourceZone}: the timezone the entry's log is read in, or null if unknown. */
     record Content(LogEntry entry, Color highlight, AnnotationStore.Annotation annotation,
-                   List<LogEntry> continuations, long shiftMillis, String where) {}
+                   List<LogEntry> continuations, long shiftMillis, String where, java.time.ZoneId sourceZone) {}
 
     private static final int MIN_FONT = 8, MAX_FONT = 36, DEFAULT_FONT = 12;
 
@@ -568,6 +569,18 @@ final class DetailPanel extends JPanel {
             appendField(doc, key, dim, Messages.get("detail.shifted.label"), java.text.MessageFormat.format(
                     Messages.get("detail.shifted"), com.droidenx.clouseau.core.TimeOffset.format(content.shiftMillis()),
                     tsFmt.format(entry.timestamp().minusMillis(content.shiftMillis()))));
+        }
+        java.time.ZoneId written = content.sourceZone();
+        if (written != null && entry.timestamp() != null) {
+            java.time.Instant at = entry.timestamp().minusMillis(content.shiftMillis());
+            if (!written.getRules().getOffset(at).equals(tsFmt.getZone().getRules().getOffset(at))) {
+                // Read in one zone, shown in another: the time as the file has it, to check
+                // the source timezone against the raw line.
+                SimpleAttributeSet dim = new SimpleAttributeSet(val);
+                StyleConstants.setForeground(dim, ClouseauColors.dimForeground());
+                appendField(doc, key, dim, Messages.get("detail.written.label"), java.text.MessageFormat.format(
+                        Messages.get("detail.written"), tsFmt.withZone(written).format(at), written.getId()));
+            }
         }
         appendField(doc, key, levelVal, Messages.get("table.col.level"),     level);
         appendField(doc, key, val,      Messages.get("table.col.thread"),    thread);

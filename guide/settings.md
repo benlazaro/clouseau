@@ -55,7 +55,7 @@ readable in any theme.
 | | When opening several files | **Ask each time**, **Merge them** into a [merged view](merged-views.md), or open **Separate tabs** |
 | | On startup | **Restore last session** (the default) reopens the windows and tabs you had open; **Start empty** opens one empty window. See [Picking up where you left off](opening-files.md#picking-up-where-you-left-off). |
 | Appearance | Theme | The theme, with a live preview (also in **View → Theme**) |
-| | Display timezone | The timezone timestamps are shown in. See [Timezones](reading-and-filtering.md#timezones). |
+| | Show times in | The timezone timestamps are shown in, in every tab. The status bar's timezone popup changes the same setting. See [Timezones](reading-and-filtering.md#timezones). |
 
 ## Keyboard shortcuts
 
