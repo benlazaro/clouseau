@@ -120,12 +120,7 @@ final class SourceSettingsDialog extends JDialog {
         openBtn.addActionListener(e -> onOpen());
         JButton cancelBtn = new JButton(Messages.get("ssh.dialog.cancel"));
         cancelBtn.addActionListener(e -> dispose());
-        JPanel buttons = new JPanel(new MigLayout("insets 12 20 12 20, align right", "[][]"));
-        buttons.add(cancelBtn);   // Cancel before the default button, as in every dialog
-        buttons.add(openBtn);
-        JPanel footer = new JPanel(new BorderLayout());
-        footer.add(new JSeparator(), BorderLayout.NORTH);
-        footer.add(buttons, BorderLayout.CENTER);
+        JPanel footer = DialogFooter.of(cancelBtn, openBtn);   // Cancel before the default button
         getRootPane().setDefaultButton(openBtn);
 
         JPanel root = new JPanel(new BorderLayout());

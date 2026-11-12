@@ -168,12 +168,7 @@ final class SettingsDialog extends JDialog {
             }
         });
 
-        JPanel buttons = new JPanel(new MigLayout("insets 14 28 14 28, align right", "[][]"));
-        buttons.add(cancel);
-        buttons.add(ok);
-        JPanel footer = new JPanel(new BorderLayout());
-        footer.add(new JSeparator(), BorderLayout.NORTH);
-        footer.add(buttons, BorderLayout.CENTER);
+        JPanel footer = DialogFooter.of(cancel, ok);
 
         JPanel root = new JPanel(new BorderLayout());
         root.add(scroll, BorderLayout.CENTER);

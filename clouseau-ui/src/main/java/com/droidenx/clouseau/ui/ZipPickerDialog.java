@@ -67,7 +67,7 @@ final class ZipPickerDialog extends JDialog {
     }
 
     private JPanel buildContent() {
-        JPanel p = new JPanel(new MigLayout("insets 12, fill", "[grow]", "[][][grow][]"));
+        JPanel p = new JPanel(new MigLayout("insets 12, fill", "[grow]", "[][][grow]"));
         p.add(new JLabel(MessageFormat.format(Messages.get("zip.picker.message"), entries.size())), "wrap");
 
         filterField.putClientProperty("JTextField.placeholderText", Messages.get("zip.picker.filter"));
@@ -124,10 +124,10 @@ final class ZipPickerDialog extends JDialog {
         cancel.addActionListener(e -> dispose());
         // Cancel before the default button, as in every dialog. Not MigLayout's "tag ok/cancel":
         // that follows the platform, which puts OK first on Windows.
-        p.add(mergeBox, "split 3, pushx");
-        p.add(cancel);
-        p.add(openButton);
-        return p;
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(p, BorderLayout.CENTER);
+        root.add(DialogFooter.of(new JComponent[]{ mergeBox }, cancel, openButton), BorderLayout.SOUTH);
+        return root;
     }
 
     private void applyFilter() {

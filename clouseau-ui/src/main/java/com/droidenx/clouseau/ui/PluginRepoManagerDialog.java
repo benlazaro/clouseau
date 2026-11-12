@@ -32,7 +32,7 @@ final class PluginRepoManagerDialog extends JDialog {
     }
 
     private void buildUI() {
-        JPanel content = new JPanel(new MigLayout("fill, insets 16", "[grow][]", "[grow][]"));
+        JPanel content = new JPanel(new MigLayout("fill, insets 16", "[grow][]", "[grow]"));
 
         rebuildListModel();
         repoList = new JList<>(listModel);
@@ -79,11 +79,11 @@ final class PluginRepoManagerDialog extends JDialog {
 
         JButton closeBtn = new JButton(Messages.get("plugins.repos.close"));
         closeBtn.addActionListener(e -> dispose());
-        JPanel buttons = new JPanel(new MigLayout("insets 0", "push[]"));
-        buttons.add(closeBtn);
-        content.add(buttons, "span 2, growx");
 
-        setContentPane(content);
+        JPanel root = new JPanel(new java.awt.BorderLayout());
+        root.add(content, java.awt.BorderLayout.CENTER);
+        root.add(DialogFooter.of(closeBtn), java.awt.BorderLayout.SOUTH);
+        setContentPane(root);
         // No default button: the actions apply at once, so there is nothing to confirm, and
         // Close shouldn't be the amber one. Escape closes.
         getRootPane().registerKeyboardAction(e -> dispose(),
@@ -201,10 +201,7 @@ final class PluginRepoManagerDialog extends JDialog {
         JButton okBtn     = new JButton(Messages.get("settings.button.ok"));
         JButton cancelBtn = new JButton(Messages.get("settings.button.cancel"));
 
-        JPanel buttons = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 8));
-        buttons.setBorder(javax.swing.BorderFactory.createMatteBorder(1, 0, 0, 0, new java.awt.Color(0x3C3C3C)));
-        buttons.add(cancelBtn);
-        buttons.add(okBtn);
+        JPanel buttons = DialogFooter.of(cancelBtn, okBtn);
 
         JPanel content = new JPanel(new java.awt.BorderLayout());
         content.add(form,    java.awt.BorderLayout.CENTER);

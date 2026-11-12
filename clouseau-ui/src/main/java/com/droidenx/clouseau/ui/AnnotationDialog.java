@@ -49,12 +49,7 @@ public final class AnnotationDialog extends JDialog {
                 KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
 
-        JPanel buttons = new JPanel(new MigLayout("insets 12 20 12 20, align right", "[][]"));
-        buttons.add(cancel);
-        buttons.add(ok);
-        JPanel footer = new JPanel(new BorderLayout());
-        footer.add(new JSeparator(), BorderLayout.NORTH);
-        footer.add(buttons, BorderLayout.CENTER);
+        JPanel footer = DialogFooter.of(cancel, ok);
 
         JPanel root = new JPanel(new BorderLayout());
         root.add(form, BorderLayout.CENTER);

@@ -221,12 +221,7 @@ public class SshConnectionDialog extends JDialog {
         cancelBtn.addActionListener(e -> dispose());
         saveBox.setToolTipText(Messages.get("ssh.dialog.save.tooltip"));
 
-        JPanel buttons = new JPanel(new MigLayout("insets 14 28 14 28", "push[][]"));
-        buttons.add(cancelBtn);
-        buttons.add(connectBtn);
-        JPanel footer = new JPanel(new BorderLayout());
-        footer.add(new JSeparator(), BorderLayout.NORTH);
-        footer.add(buttons, BorderLayout.CENTER);
+        JPanel footer = DialogFooter.of(cancelBtn, connectBtn);
 
         // Live validation
         DocumentListener validator = new DocumentListener() {
