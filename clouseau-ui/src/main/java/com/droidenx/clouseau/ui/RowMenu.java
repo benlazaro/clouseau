@@ -168,8 +168,19 @@ final class RowMenu {
             upToItem.addActionListener(e -> host.showUpTo(at));
             menu.add(fromItem);
             menu.add(upToItem);
-            menu.addSeparator();
         }
+        // Undoes the two above, and a range typed in the Time popup; it names the range it drops.
+        FilterBar timeFilters = host.filterBar();
+        boolean ranged = timeFilters.hasTimeRange();
+        String from = timeFilters.timeFrom(), to = timeFilters.timeTo();
+        JMenuItem allTimes = new JMenuItem(!ranged ? Messages.get("table.context.time.all")
+                : to.isEmpty()   ? java.text.MessageFormat.format(Messages.get("table.context.time.all.from"), from)
+                : from.isEmpty() ? java.text.MessageFormat.format(Messages.get("table.context.time.all.upto"), to)
+                : java.text.MessageFormat.format(Messages.get("table.context.time.all.range"), timeFilters.timeRangeLabel()));
+        allTimes.setEnabled(ranged);
+        allTimes.addActionListener(e -> timeFilters.showAllTimes());
+        menu.add(allTimes);
+        menu.addSeparator();
 
         // ── Loggers: hide the rows' loggers, or show only them ──────────────────
         addLoggerItems(menu, entries);

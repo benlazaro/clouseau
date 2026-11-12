@@ -97,7 +97,8 @@ fold and unfold), `Space` ticks or unticks the row you're on, and `Esc` closes t
     and `-90s` in **From** means 90 seconds before **To** (`ms`, `s`, `m`, `h`, `d`).
 
   While a range is set, the button shows it, for example **10:00:00 → 10:15:00**;
-  **Clear** in the same popup removes it.
+  **Clear** in the same popup removes it, and so does **Show All Times** when you
+  right-click a line (it names the range it drops).
 - **Filter message…**: show only lines containing the text, in any column. The **×** at
   its right end clears it.
 
