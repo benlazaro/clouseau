@@ -120,6 +120,7 @@ final class DetailPanel extends JPanel {
                 return getParent() != null && getUI().getPreferredSize(this).height <= getParent().getHeight();
             }
         };
+        detailArea.setEditorKit(new WrapAnywhereKit());
         detailArea.setEditable(false);
         ClouseauColors.themedBackground(detailArea, ClouseauColors::detailBackground);
         ClouseauColors.themedForeground(detailArea, ClouseauColors::foreground);
@@ -509,6 +510,7 @@ final class DetailPanel extends JPanel {
         StyleConstants.setFontSize(key, fontSize);
         StyleConstants.setBold(key, true);
         StyleConstants.setForeground(key, ClouseauColors.detailKeyColor());
+        key.addAttribute(WrapAnywhereKit.NO_BREAK, Boolean.TRUE);
 
         SimpleAttributeSet val = new SimpleAttributeSet();
         StyleConstants.setFontFamily(val, ClouseauFonts.MONO_FAMILY);
@@ -734,6 +736,45 @@ final class DetailPanel extends JPanel {
         SimpleAttributeSet first = new SimpleAttributeSet();
         StyleConstants.setFirstLineIndent(first, -valueIndent);
         doc.setParagraphAttributes(start, 0, first, false);
+    }
+
+    /**
+     * Lets Wrap break inside a word when the word alone is wider than the pane. Swing wraps only
+     * at spaces otherwise, so a long URL, token or Base64 run went past the right edge with no
+     * way to scroll to it. A text run with no minimum width can be split anywhere; it's still
+     * split at a space whenever one fits.
+     *
+     * <p>Text carrying {@link #NO_BREAK} (the field labels) is never a break point, so a long
+     * value starts beside its label and breaks inside, instead of leaving the label alone on
+     * its line because the space after it was the only space to break at.
+     */
+    private static final class WrapAnywhereKit extends javax.swing.text.StyledEditorKit {
+        static final Object NO_BREAK = new Object() {
+            @Override public String toString() { return "noBreak"; }
+        };
+
+        private final javax.swing.text.ViewFactory factory = elem -> {
+            if (javax.swing.text.AbstractDocument.ContentElementName.equals(elem.getName())) {
+                boolean noBreak = elem.getAttributes().getAttribute(NO_BREAK) != null;
+                return new javax.swing.text.LabelView(elem) {
+                    @Override
+                    public float getMinimumSpan(int axis) {
+                        return axis == X_AXIS ? 0 : super.getMinimumSpan(axis);
+                    }
+
+                    @Override
+                    public int getBreakWeight(int axis, float pos, float len) {
+                        return noBreak && axis == X_AXIS ? BadBreakWeight : super.getBreakWeight(axis, pos, len);
+                    }
+                };
+            }
+            return super.getViewFactory().create(elem);
+        };
+
+        @Override
+        public javax.swing.text.ViewFactory getViewFactory() {
+            return factory;
+        }
     }
 
     /**
