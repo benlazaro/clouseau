@@ -118,6 +118,17 @@ final class SessionManager {
         return !tabsOnly(snapshot()).equals(tabsOnly(saved.session()));
     }
 
+    /**
+     * Named session {@code name} as saved, in use, for the next start to reopen (Exit, Don't
+     * Save); null if it can't be read, and then what is open now is kept.
+     */
+    Session savedNamed(String name) {
+        var named = SessionStore.find(sessionsDir(), name);
+        if (named.isEmpty()) return null;
+        if (!(SessionStore.read(named.get().file()) instanceof SessionStore.ReadResult.Read saved)) return null;
+        return new Session(name, saved.session().windows());
+    }
+
     private static String tabsOnly(Session s) {
         return SessionStore.toJson(new Session(null, s.windows().stream()
                 .map(w -> new Session.Window(null, null, false, 0, w.tabs())).toList()));
@@ -181,9 +192,17 @@ final class SessionManager {
 
     /** Exit: saves now, and waits for any write in progress, before Clouseau quits. */
     void saveNow() {
+        saveNow(null);
+    }
+
+    /**
+     * Exit: saves {@code instead} (or, if null, what the windows show now), and waits for any
+     * write in progress, before Clouseau quits.
+     */
+    void saveNow(Session instead) {
         timer.stop();
         if (saving && !windows.windows().isEmpty()) {
-            Session session = snapshot();
+            Session session = instead != null ? instead : snapshot();
             String json = SessionStore.toJson(session);
             if (!json.equals(written)) {
                 written = json;

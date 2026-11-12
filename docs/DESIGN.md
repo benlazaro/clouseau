@@ -1486,7 +1486,10 @@ crash or a power cut would otherwise restore an old session or none.
   in one step, so an interruption leaves the previous complete file. A move that fails
   (a scanner holding the file) is retried briefly; if it still fails, that save is skipped
   and logged, and the next trigger tries again.
-- **Exit:** **File → Exit**, or closing the last window, cancels a pending save, writes
+- **Exit:** **File → Exit**, or closing the last window, first asks Save · Don't Save ·
+  Cancel when a named session is active and the tabs differ from it (as Close Session
+  does); Don't Save writes that session as saved to `session.json` in place of the
+  windows, so the next start reopens it unchanged. Then it cancels a pending save, writes
   the snapshot of every window if it changed, waits up to 5 s for the writer, and quits
   without closing the windows one by one, so nothing can overwrite that snapshot with an
   empty session. Closing a window that isn't the last is an ordinary trigger: the next

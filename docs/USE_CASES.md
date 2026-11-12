@@ -598,7 +598,9 @@ switch between them.
 - **On by default, and optional.** Settings → **On startup** offers **Restore last
   session** (the default) and **Start empty**.
 - **The last session is what was open when Clouseau quit.** If a named session was
-  active, it is still active after the restart. **File → Exit** quits with every window;
+  active, it is still active after the restart; if its tabs changed, quitting first asks
+  whether to save them to it (Save · Don't Save · Cancel), and with Don't Save the next
+  start reopens it as saved. **File → Exit** quits with every window;
   closing windows one at a time takes each out of the session, so only the last one is
   restored. Files passed at startup ("Open with", the command line) open alongside the
   restored session.
