@@ -20,11 +20,10 @@ request or incident across the logs of several services or servers.
 
 Any of these opens several files as one view:
 
-- Select several files in the open dialog, drag several onto the window, or pass several
-  on the command line, then choose **Merged View**. Tick **Remember my choice** to skip the
-  question next time; **When opening several files** in [Settings](settings.md) changes it
-  later.
-- **File → Open Merged…** merges the files you pick without asking.
+- Select several files in the open dialog and leave **Open as** on **One merged view**.
+- Drag several files onto the window, or pass several on the command line, then choose
+  **Merged View**. Tick **Remember my choice** to skip the question next time; **When
+  opening several files** in [Settings](settings.md) changes it later.
 - Type a pattern such as `app.log*` in the open dialog's **File Name** to open every
   matching file in that folder, merged.
 - Open a `.zip` with several logs, tick the ones you want, and tick **Merge into one

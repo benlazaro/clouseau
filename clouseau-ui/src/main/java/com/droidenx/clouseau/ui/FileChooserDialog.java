@@ -38,7 +38,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * File → Open… and Open Merged…: one dialog for both. Favorites and recent folders on the
+ * File → Open…. Favorites and recent folders on the
  * left, the files in the middle, and on the right what the selection will become: each
  * file's verdict (which parser reads it, or why it opens as plain text), how several open
  * (one merged view or separate tabs), what reads them (parser, source time zone) and a
@@ -64,7 +64,6 @@ final class FileChooserDialog extends JDialog {
 
     private final List<LogParser> parsers;
     private final JFileChooser chooser = new JFileChooser();
-    private final boolean merged;
     private int selectedParserIndex;
     private ZoneId selectedSourceTimezone = ZoneId.systemDefault();
     /** The user picked a zone for this selection, so moving to another file keeps it. */
@@ -81,7 +80,8 @@ final class FileChooserDialog extends JDialog {
     private Path previewing;
 
     // Right panel
-    private final JTextArea summary = wrapText("", false);
+    /** One line, cut short with … rather than wrapped, so the section's height never changes. */
+    private final JLabel summary = new JLabel(" ");
     private final JList<Object> fileList = new JList<>(verdicts);
     private final JScrollPane fileScroll = new JScrollPane(fileList);
     private final JRadioButton asMerged = new JRadioButton(Messages.get("filechooser.as.merged"));
@@ -102,13 +102,7 @@ final class FileChooserDialog extends JDialog {
     private final javax.swing.Timer debounce;
 
     FileChooserDialog(Frame owner, List<LogParser> parsers, int initialParserIndex) {
-        this(owner, parsers, initialParserIndex, false);
-    }
-
-    /** {@code merged}: File → Open Merged…, which starts with "One merged view" chosen (D-17). */
-    FileChooserDialog(Frame owner, List<LogParser> parsers, int initialParserIndex, boolean merged) {
-        super(owner, Messages.get(merged ? "filechooser.title.merged" : "filechooser.title"), true);
-        this.merged = merged;
+        super(owner, Messages.get("filechooser.title"), true);
         this.parsers = parsers;
         this.selectedParserIndex = initialParserIndex;
         parserCombo = new JComboBox<>(Stream.concat(Stream.of(Messages.get("filechooser.parser.autodetect")),
@@ -338,10 +332,9 @@ final class FileChooserDialog extends JDialog {
 
         verdicts.clear();
         files.stream().limit(CHECK_LIMIT).forEach(verdicts::addElement);
-        fileScroll.setVisible(several);
-        fileList.setVisibleRowCount(Math.max(2, Math.min(verdicts.size(), 4)));
-        openAsRow.setVisible(logs >= 2);
-        if (logs >= 2) asMerged.setText(MessageFormat.format(Messages.get("filechooser.as.merged.count"), logs));
+        // The section keeps its size whatever is selected: the list always shows four rows,
+        // and Open as stays, enabled once two logs are selected.
+        for (Component c : openAsRow.getComponents()) c.setEnabled(logs >= 2);
         openBtn.setEnabled(!files.isEmpty());
         updateReadNote();
 
@@ -356,7 +349,7 @@ final class FileChooserDialog extends JDialog {
                 ? MessageFormat.format(Messages.get(fromPattern ? "filechooser.summary.pattern" : "filechooser.summary.several"),
                         files.size(), typedPattern() != null ? typedPattern().getName() : "")
                 : Messages.get("filechooser.summary.checking"), ClouseauColors.dimForeground());
-        if (several) fileList.setSelectedIndex(0);
+        if (!files.isEmpty()) fileList.setSelectedIndex(0);
         revalidate();
 
         Optional<LogParser> chosen = selectedParserIndex == 0
@@ -467,6 +460,7 @@ final class FileChooserDialog extends JDialog {
 
     private void setSummary(String text, Color color) {
         summary.setText(text);
+        summary.setToolTipText(text);
         summary.setForeground(color);
     }
 
@@ -593,14 +587,17 @@ final class FileChooserDialog extends JDialog {
                 "[grow, fill, 0::]"));
         p.add(SettingsDialog.sectionLabel(Messages.get("filechooser.section.files")), "growx");
         p.add(summary, "wmin 0");
-        p.add(fileScroll, "hmin 78, wmin 0");
+        // Four rows, always: no sideways scrollbar for a long verdict (it's cut short, with
+        // the full text as a tooltip), so nothing below moves as the selection changes.
+        fileScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        p.add(fileScroll, "wmin 0, h " + (4 * 38 + 4) + "!");
         p.add(openAsRow, "gapleft 4");
         p.add(SettingsDialog.sectionLabel(Messages.get("filechooser.section.read")), "growx, gaptop 12");
         p.add(new JLabel(Messages.get("filechooser.parser.label")));
         p.add(parserCombo, "wmin 0");
         p.add(new JLabel(Messages.get("filechooser.source.timezone.label")), "gaptop 6");
         p.add(tzCombo, "wmin 0");
-        p.add(readNote, "wmin 0");
+        p.add(readNote, "wmin 0, h 34!");             // two lines, whatever the note says
         p.add(previewTitle, "gaptop 12");
         p.add(previewScroll, "grow, push, h 80::");
         p.setMinimumSize(new Dimension(260, 0));
@@ -612,7 +609,7 @@ final class FileChooserDialog extends JDialog {
         ButtonGroup group = new ButtonGroup();
         group.add(asMerged);
         group.add(asTabs);
-        boolean merge = merged || AppPrefs.getMultiOpen() != AppPrefs.MultiOpen.SEPARATE;
+        boolean merge = AppPrefs.getMultiOpen() != AppPrefs.MultiOpen.SEPARATE;
         (merge ? asMerged : asTabs).setSelected(true);
         asMerged.addActionListener(e -> { updateReadNote(); debounce.restart(); });
         asTabs.addActionListener(e -> { updateReadNote(); debounce.restart(); });
@@ -634,6 +631,7 @@ final class FileChooserDialog extends JDialog {
             setText("<html>" + esc(p.getFileName().toString()) + "<br><font color='" + hex + "' size='-1'>"
                     + esc(what) + "</font></html>");
             setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+            setToolTipText(p.getFileName() + ": " + what);
             return this;
         }
 
@@ -752,6 +750,7 @@ final class FileChooserDialog extends JDialog {
                 setFont(getFont().deriveFont(title ? Font.PLAIN : Font.ITALIC, title ? 11f : getFont().getSize2D()));
                 setBorder(BorderFactory.createEmptyBorder(i == 0 || !title ? 2 : 12, title ? 4 : 12, 4, 4));
                 setToolTipText(null);
+                setOpaque(false);
                 return this;
             }
             Path p = v instanceof Favorite f ? f.path() : ((Recent) v).path();
@@ -759,6 +758,7 @@ final class FileChooserDialog extends JDialog {
             setToolTipText(p.toString());
             setBorder(BorderFactory.createEmptyBorder(3, 12, 3, v instanceof Favorite ? 28 : 6));
             if (!Files.exists(p) && !sel) setForeground(ClouseauColors.mutedForeground());
+            setOpaque(sel);                       // rows sit on the sidebar; only the selection is filled
             return this;
         }
     }

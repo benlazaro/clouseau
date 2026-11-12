@@ -1086,7 +1086,8 @@ Sources list, like Loggers, for hiding whole files.
 - **Several files** chosen in the open dialog, or dropped on the window, ask once:
   "Open 3 files in one merged view, or each in its own tab?" The answer can be
   remembered (Settings). Today they always open in separate tabs.
-- **File → Open Merged…** opens the file dialog, preselected for merging.
+- **The open dialog** has an **Open as** choice (one merged view or separate tabs), enabled
+  once two logs are selected; there is no separate Open Merged menu item.
 - **Zip picker:** with several entries ticked, a "Merge into one view" checkbox.
 - **A pattern** typed in the dialog's file name field (`app.log*`) is expanded in its
   folder, sorted by name, and opened as a merged view. The file set is fixed once
@@ -1272,8 +1273,8 @@ as a reusable "workspace".
 7. ✅ Zip picker merge, file patterns, Open Merged…, review bundle version 2. As built:
    - The zip picker has "Merge into one view" (on unless the "When opening several
      files" setting is Separate Tabs), enabled once two files are ticked.
-   - **File → Open Merged…** opens the dialog in merged mode: what is chosen opens merged
-     without asking. A pattern typed in the file name field (`app.log*`, `*` and `?` in
+   - **File → Open Merged…** opened the dialog in merged mode (since removed: the open
+     dialog's **Open as** choice covers it). A pattern typed in the file name field (`app.log*`, `*` and `?` in
      one folder) is expanded by `FilePattern`, sorted by name, and opened merged; the
      set is fixed.
    - `ReviewBundle.writeMerged` writes version 2 (section 7, review bundle): log entries keep their
