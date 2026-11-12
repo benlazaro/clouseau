@@ -17,6 +17,7 @@ import javax.swing.event.PopupMenuListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeCellRenderer;
 import javax.swing.tree.TreePath;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.*;
@@ -484,37 +485,18 @@ final class FilterBar extends JPanel {
         tree.setToggleClickCount(0); // expand/collapse only via handle; click = checkbox toggle
         for (int i = 0; i < tree.getRowCount(); i++) tree.expandRow(i);
 
-        JCheckBox rendererCb = new JCheckBox();
-        rendererCb.setOpaque(false);
-        // FlatLaf fills a non-opaque check box whose background differs from its parent's; in a
-        // tree cell that box hid the row highlight. No content area, so the highlight shows through.
-        rendererCb.setContentAreaFilled(false);
-        tree.setCellRenderer((TreeCellRenderer) (t, value, selected, expanded, leaf, row, hasFocus) -> {
-            if (!(((DefaultMutableTreeNode) value).getUserObject() instanceof LoggerNode ln))
-                return new JLabel();
-            DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
-            CheckState state = getCheckState(node);
-            rendererCb.setText(ln.segment());
-            rendererCb.setSelected(state != CheckState.UNCHECKED);
-            rendererCb.putClientProperty("JCheckBox.indeterminate", state == CheckState.INDETERMINATE);
+        tree.setCellRenderer(checkRenderer(this::getCheckState, (node, cb) -> {
+            if (!(node.getUserObject() instanceof LoggerNode ln)) return;
+            cb.setText(ln.segment());
             Color[] depthColors = ClouseauColors.loggerDepthColors();
-            int depth = (node.getLevel() - 1) % depthColors.length;
-            rendererCb.setForeground(depthColors[depth]);
-            return rendererCb;
-        });
+            cb.setForeground(depthColors[(node.getLevel() - 1) % depthColors.length]);
+        }));
 
-        tree.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent e) {
-                TreePath path = tree.getPathForLocation(e.getX(), e.getY());
-                if (path == null) return;
-                DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
-                if (!(node.getUserObject() instanceof LoggerNode)) return;
-                boolean nowChecked = getCheckState(node) != CheckState.CHECKED;
-                setNodeChecked(node, nowChecked);
-                tree.repaint();
-                updateLoggerButtonLabel();
-                onChanged.run();
-            }
+        toggleOnClickOrSpace(tree, node -> {
+            if (!(node.getUserObject() instanceof LoggerNode)) return;
+            setNodeChecked(node, getCheckState(node) != CheckState.CHECKED);
+            updateLoggerButtonLabel();
+            onChanged.run();
         });
 
         JScrollPane treeScroll = new JScrollPane(tree);
@@ -548,6 +530,58 @@ final class FilterBar extends JPanel {
 
         popup.add(content);
         showBelow(popup, invoker);
+        focusFirstRow(tree);
+    }
+
+    /**
+     * A check-box tree's toggle: a click on a row, or Space on the row the arrow keys are on,
+     * flips it (a parent flips all its children). Arrows move and Left/Right fold, as in any
+     * tree.
+     */
+    private static void toggleOnClickOrSpace(JTree tree, java.util.function.Consumer<DefaultMutableTreeNode> toggle) {
+        tree.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+                if (path == null) return;
+                toggle.accept((DefaultMutableTreeNode) path.getLastPathComponent());
+                tree.repaint();
+            }
+        });
+        tree.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "toggleCheck");
+        tree.getActionMap().put("toggleCheck", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                TreePath path = tree.getLeadSelectionPath();
+                if (path == null) return;
+                toggle.accept((DefaultMutableTreeNode) path.getLastPathComponent());
+                tree.repaint();
+            }
+        });
+    }
+
+    /** Starts the keyboard on the first row, so arrows and Space work as soon as the popup opens. */
+    private static void focusFirstRow(JTree tree) {
+        if (tree.getRowCount() > 0) tree.setSelectionRow(0);
+        SwingUtilities.invokeLater(tree::requestFocusInWindow);
+    }
+
+    /** One check box per tree row, its state from {@code state} and its text and color from {@code look}. */
+    private static TreeCellRenderer checkRenderer(java.util.function.Function<DefaultMutableTreeNode, CheckState> state,
+                                                  java.util.function.BiConsumer<DefaultMutableTreeNode, JCheckBox> look) {
+        JCheckBox cb = new JCheckBox();
+        cb.setOpaque(false);
+        // FlatLaf fills a non-opaque check box whose background differs from its parent's; in a
+        // tree cell that box hid the row highlight. No content area, so the highlight shows through.
+        cb.setContentAreaFilled(false);
+        return (t, value, selected, expanded, leaf, row, hasFocus) -> {
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
+            CheckState st = state.apply(node);
+            cb.setSelected(st != CheckState.UNCHECKED);
+            // FlatLaf's tri-state: a partly checked parent shows a dash, not a tick.
+            cb.putClientProperty(com.formdev.flatlaf.FlatClientProperties.SELECTED_STATE,
+                    st == CheckState.INDETERMINATE ? com.formdev.flatlaf.FlatClientProperties.SELECTED_STATE_INDETERMINATE : null);
+            look.accept(node, cb);
+            return cb;
+        };
     }
 
     private DefaultMutableTreeNode buildLoggerTree() {
@@ -617,42 +651,33 @@ final class FilterBar extends JPanel {
         JPanel content = new JPanel(new MigLayout("fill, insets 6", "[grow]", "[grow][]"));
         content.setPreferredSize(new Dimension(280, 320));
 
-        JPanel listPanel = new JPanel();
-        listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
-        listPanel.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+        // Like the Loggers tree: each field a parent of its values, so arrows, Left/Right and
+        // Space work the same way, and a field's box turns all its values on or off.
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("ROOT");
+        allFieldValues.forEach((key, values) -> {
+            excludedFieldValues.computeIfAbsent(key, k -> new LinkedHashSet<>());
+            DefaultMutableTreeNode field = new DefaultMutableTreeNode(new FieldNode(key, null));
+            values.forEach(v -> field.add(new DefaultMutableTreeNode(new FieldNode(key, v))));
+            root.add(field);
+        });
+        JTree tree = new JTree(root);
+        tree.setRootVisible(false);
+        tree.setShowsRootHandles(true);
+        tree.setToggleClickCount(0); // expand/collapse only via handle; click = checkbox toggle
+        for (int i = 0; i < tree.getRowCount(); i++) tree.expandRow(i);
+        tree.setCellRenderer(checkRenderer(this::fieldCheckState, (node, cb) -> {
+            if (!(node.getUserObject() instanceof FieldNode fn)) return;
+            cb.setText(fn.value() == null ? fn.key() : fn.value());
+            cb.setForeground(fn.value() == null ? ClouseauColors.dimForeground() : tree.getForeground());
+        }));
+        toggleOnClickOrSpace(tree, node -> {
+            if (!(node.getUserObject() instanceof FieldNode)) return;
+            setFieldChecked(node, fieldCheckState(node) != CheckState.CHECKED);
+            fieldsChangedByUser();
+        });
 
-        List<JCheckBox> allBoxes = new ArrayList<>();
-
-        for (Map.Entry<String, TreeSet<String>> fieldEntry : allFieldValues.entrySet()) {
-            String fieldKey = fieldEntry.getKey();
-            Set<String> excluded = excludedFieldValues.computeIfAbsent(fieldKey, k -> new LinkedHashSet<>());
-
-            JLabel sectionLabel = new JLabel(fieldKey);
-            sectionLabel.setForeground(ClouseauColors.dimForeground());
-            sectionLabel.setFont(sectionLabel.getFont().deriveFont(Font.BOLD, 11f));
-            sectionLabel.setBorder(BorderFactory.createEmptyBorder(6, 4, 2, 4));
-            sectionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-            listPanel.add(sectionLabel);
-
-            for (String value : fieldEntry.getValue()) {
-                JCheckBox cb = new JCheckBox(value, !excluded.contains(value));
-                cb.setFont(cb.getFont().deriveFont(12f));
-                cb.setAlignmentX(Component.LEFT_ALIGNMENT);
-                cb.addActionListener(e -> {
-                    if (cb.isSelected()) excluded.remove(value);
-                    else                 excluded.add(value);
-                    pendingFieldValues.clear();   // the user has taken over field filters
-                    updateFieldsButtonLabel();
-                    onChanged.run();
-                });
-                listPanel.add(cb);
-                allBoxes.add(cb);
-            }
-        }
-
-        JScrollPane scroll = new JScrollPane(listPanel,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        JScrollPane scroll = new JScrollPane(tree);
+        // The popup's own hairline, as in the Loggers and Sources popups, not a field's focus border.
         scroll.setBorder(UIManager.getBorder("PopupMenu.border"));
         content.add(scroll, "grow, wrap");
 
@@ -662,18 +687,14 @@ final class FilterBar extends JPanel {
 
         allBtn.addActionListener(e -> {
             excludedFieldValues.values().forEach(Set::clear);
-            allBoxes.forEach(cb -> cb.setSelected(true));
-            pendingFieldValues.clear();   // the user has taken over field filters
-            updateFieldsButtonLabel();
-            onChanged.run();
+            tree.repaint();
+            fieldsChangedByUser();
         });
         noneBtn.addActionListener(e -> {
             allFieldValues.forEach((k, vals) ->
                     excludedFieldValues.computeIfAbsent(k, key -> new LinkedHashSet<>()).addAll(vals));
-            allBoxes.forEach(cb -> cb.setSelected(false));
-            pendingFieldValues.clear();   // the user has taken over field filters
-            updateFieldsButtonLabel();
-            onChanged.run();
+            tree.repaint();
+            fieldsChangedByUser();
         });
         closeBtn.addActionListener(e -> popup.setVisible(false));
 
@@ -687,6 +708,35 @@ final class FilterBar extends JPanel {
 
         popup.add(content);
         showBelow(popup, invoker);
+        focusFirstRow(tree);
+    }
+
+    /** A field ({@code value} null) or one of its values, in the Fields tree. */
+    private record FieldNode(String key, String value) {}
+
+    private CheckState fieldCheckState(DefaultMutableTreeNode node) {
+        if (!(node.getUserObject() instanceof FieldNode fn)) return CheckState.CHECKED;
+        Set<String> excluded = excludedFieldValues.getOrDefault(fn.key(), Set.of());
+        if (fn.value() != null) return excluded.contains(fn.value()) ? CheckState.UNCHECKED : CheckState.CHECKED;
+        int off = 0;
+        for (String v : allFieldValues.getOrDefault(fn.key(), new TreeSet<>())) if (excluded.contains(v)) off++;
+        return off == 0 ? CheckState.CHECKED
+             : off == node.getChildCount() ? CheckState.UNCHECKED : CheckState.INDETERMINATE;
+    }
+
+    private void setFieldChecked(DefaultMutableTreeNode node, boolean checked) {
+        if (!(node.getUserObject() instanceof FieldNode fn)) return;
+        Set<String> excluded = excludedFieldValues.computeIfAbsent(fn.key(), k -> new LinkedHashSet<>());
+        Collection<String> values = fn.value() != null ? List.of(fn.value())
+                : allFieldValues.getOrDefault(fn.key(), new TreeSet<>());
+        if (checked) excluded.removeAll(values);
+        else         excluded.addAll(values);
+    }
+
+    private void fieldsChangedByUser() {
+        pendingFieldValues.clear();   // the user has taken over field filters
+        updateFieldsButtonLabel();
+        onChanged.run();
     }
 
     // ── Time range popup ──────────────────────────────────────────────────────
@@ -850,25 +900,27 @@ final class FilterBar extends JPanel {
         JPopupMenu popup = new JPopupMenu();
         JPanel content = new JPanel(new MigLayout("fill, insets 6", "[grow]", "[grow][]"));
 
-        JPanel listPanel = new JPanel();
-        listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
-        listPanel.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
-        List<JCheckBox> boxes = new ArrayList<>();
-        for (int i = 0; i < allSources.size(); i++) {
-            int source = i;
-            JCheckBox cb = new JCheckBox(allSources.get(i), !excludedSources.contains(i));
-            cb.setFont(cb.getFont().deriveFont(12f));
-            cb.setAlignmentX(Component.LEFT_ALIGNMENT);
-            cb.addActionListener(e -> {
-                if (cb.isSelected()) excludedSources.remove(source);
-                else                 excludedSources.add(source);
-                updateSourcesButtonLabel();
-                onChanged.run();
-            });
-            listPanel.add(cb);
-            boxes.add(cb);
-        }
-        JScrollPane scroll = new JScrollPane(listPanel,
+        // A flat check-box tree, so arrows and Space work as in the Loggers and Fields popups.
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("ROOT");
+        for (int i = 0; i < allSources.size(); i++) root.add(new DefaultMutableTreeNode(i));
+        JTree tree = new JTree(root);
+        tree.setRootVisible(false);
+        tree.setShowsRootHandles(false);
+        tree.setToggleClickCount(0);
+        tree.setCellRenderer(checkRenderer(
+                node -> node.getUserObject() instanceof Integer i && excludedSources.contains(i)
+                        ? CheckState.UNCHECKED : CheckState.CHECKED,
+                (node, cb) -> {
+                    if (node.getUserObject() instanceof Integer i) cb.setText(allSources.get(i));
+                    cb.setForeground(tree.getForeground());
+                }));
+        toggleOnClickOrSpace(tree, node -> {
+            if (!(node.getUserObject() instanceof Integer source)) return;
+            if (!excludedSources.remove(source)) excludedSources.add(source);
+            updateSourcesButtonLabel();
+            onChanged.run();
+        });
+        JScrollPane scroll = new JScrollPane(tree,
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.setBorder(UIManager.getBorder("PopupMenu.border"));
         content.add(scroll, "grow, wrap, hmax 320");
@@ -877,7 +929,7 @@ final class FilterBar extends JPanel {
         JButton closeBtn = new JButton(Messages.get("filter.loggers.close"));
         allBtn.addActionListener(e -> {
             excludedSources.clear();
-            boxes.forEach(cb -> cb.setSelected(true));
+            tree.repaint();
             updateSourcesButtonLabel();
             onChanged.run();
         });
@@ -889,6 +941,7 @@ final class FilterBar extends JPanel {
 
         popup.add(content);
         showBelow(popup, invoker);
+        focusFirstRow(tree);
     }
 
     private void updateSourcesButtonLabel() {

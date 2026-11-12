@@ -78,9 +78,13 @@ them.
   Right-click a row for **Hide Logger** or **Show Only Logger** (its logger, or those of
   all selected rows), and **Show All Loggers**, which says how many are hidden. Showing
   them all again leaves the other filters as they are.
-- **Fields**: for formats with extra fields, untick values to hide their lines. The button
-  shows a dot while a field filter is active.
+- **Fields**: for formats with extra fields, untick values to hide their lines, or a
+  field to hide or show all its values. The button shows a dot while a field filter is
+  active.
 - **Sources**: in a [merged view](merged-views.md), hide whole files.
+
+These popups work from the keyboard too: the arrow keys move between rows (Left and Right
+fold and unfold), `Space` ticks or unticks the row you're on, and `Esc` closes the popup.
 - **Time**: a time range. The quickest way is from the table: right-click a line and
   choose **Show From This Line** or **Show Up to This Line**; do both to bracket an
   incident. Or click **Time** and fill in **From**, **To** or both, then press **Apply**
