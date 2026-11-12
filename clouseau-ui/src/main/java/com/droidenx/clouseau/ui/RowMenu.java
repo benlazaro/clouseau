@@ -117,19 +117,7 @@ final class RowMenu {
 
             JMenuItem clearAllItem = new JMenuItem(Messages.get("highlight.clear.all"));
             if (hasHL) {
-                clearAllItem.addActionListener(e -> {
-                    if (AppPrefs.isHighlightClearAllConfirm()) {
-                        int confirm = JOptionPane.showConfirmDialog(
-                                SwingUtilities.getWindowAncestor(logTable),
-                                Messages.get("highlight.clear.all.confirm.message"),
-                                Messages.get("highlight.clear.all.confirm.title"),
-                                JOptionPane.YES_NO_OPTION);
-                        if (confirm != JOptionPane.YES_OPTION) return;
-                    }
-                    logTableModel.clearAllHighlights();
-                    host.notesSaved(host.notes().clearHighlights());
-                    host.highlightsChanged();
-                });
+                clearAllItem.addActionListener(e -> clearAllHighlights());
             } else {
                 clearAllItem.putClientProperty("FlatLaf.style", "disabledForeground: " + colorToHex(ClouseauColors.borderColor()));
                 clearAllItem.setEnabled(false);
@@ -238,6 +226,25 @@ final class RowMenu {
     }
 
     /** Highlights model rows (null clears them) and saves them with the annotations (D-15). */
+    /**
+     * Removes every highlight in the tab, the ones the filters hide too, after asking (unless
+     * the user turned that off), and saves. The row menu's and the highlight bar's Clear All.
+     */
+    void clearAllHighlights() {
+        if (!logTableModel.hasHighlights() && host.notes().highlights().isEmpty()) return;
+        if (AppPrefs.isHighlightClearAllConfirm()) {
+            int confirm = JOptionPane.showConfirmDialog(
+                    SwingUtilities.getWindowAncestor(logTable),
+                    Messages.get("highlight.clear.all.confirm.message"),
+                    Messages.get("highlight.clear.all.confirm.title"),
+                    JOptionPane.YES_NO_OPTION);
+            if (confirm != JOptionPane.YES_OPTION) return;
+        }
+        logTableModel.clearAllHighlights();
+        host.notesSaved(host.notes().clearHighlights());
+        host.highlightsChanged();
+    }
+
     /**
      * A 22×22 highlight color button, ringed in white when every row it would color already
      * has that color. Shared with the Find bar's Highlight popup.
