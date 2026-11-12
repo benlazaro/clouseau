@@ -26,7 +26,7 @@ final class HighlightNavBar extends JPanel {
     private Color navColor = null;
 
     HighlightNavBar(JTable table, LogTableModel model) {
-        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][grow][]", "[center]"));
+        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][]10[]8[grow]", "[center]"));
         this.table = table;
         this.model = model;
         setBorder(new FindBar.BarSeparator());
@@ -48,17 +48,20 @@ final class HighlightNavBar extends JPanel {
         prevBtn.addActionListener(e -> navigate(-1));
         nextBtn.addActionListener(e -> navigate(+1));
 
-        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]6[]4[]", "[]"));
-        rightPanel.setOpaque(false);
-        rightPanel.add(position);
-        rightPanel.add(prevBtn);
-        rightPanel.add(nextBtn);
+        JPanel arrows = new JPanel(new MigLayout("insets 0", "[]4[]", "[]"));
+        arrows.setOpaque(false);
+        arrows.add(prevBtn);
+        arrows.add(nextBtn);
 
+        // One group on the left: the chips, the arrows right after them, then the count. Pick
+        // a color and step through it without crossing the window, and the arrows stay put
+        // while the count's text changes length.
         // Everything centered on one line, the chips included (a FlowLayout put them at the
         // top of their row, above the label's middle).
         add(label, "aligny center");
-        add(swatches, "growx, aligny center");
-        add(rightPanel, "aligny center");
+        add(swatches, "aligny center");
+        add(arrows, "aligny center");
+        add(position, "aligny center");
     }
 
     /** The find bar above draws its line only while this bar is under it. */
