@@ -12,7 +12,8 @@ nav_order: 1
 
 ## Ways to open a file
 
-- **File → Open** (`Ctrl+O`) opens the file dialog.
+- **File → Open…** (`Ctrl+O`) opens the [open dialog](#the-open-dialog), and **File → Open
+  Merged…** the same dialog set to open several files as one merged view.
 - **Drag** one or more files onto the window: the table, the detail panel, the tab strip
   or the welcome screen. Folders are ignored.
 - **File → Recent Files** lists the files you opened last (how many is set in
@@ -31,18 +32,32 @@ Each file opens in its own tab. Opening a file that's already open switches to i
 
 ## The open dialog
 
+**File → Open…** (`Ctrl+O`) and **File → Open Merged…** open the same dialog; Open Merged
+just starts with **One merged view** chosen.
+
 ![Open file dialog](../docs/screenshots/open-dialog.png)
 
-- **Favorites** on the left: click **+** to pin the current folder, **−** to remove one.
-- **Parser** on the right: leave it on **Auto-detect**, or pick a format. The status line
-  under it says which parser recognizes the selected file, and the **Preview** shows its
-  first lines.
-- If no parser recognizes the file, the status says so in amber and **Open** still works:
-  the file opens as [plain text](#files-no-parser-recognizes).
-- Select several files to open them together, either in tabs or as one
-  [merged view](merged-views.md).
-- Type a pattern such as `app.log*` in **File Name** to open every matching file in that
-  folder as one merged view.
+- **Favorites** and **Recent folders** on the left: click one to go there. **Add This
+  Folder** adds the folder shown to Favorites; the trash can on a favorite under the mouse
+  (or `Delete`) removes it. Recent folders are the folders of your recent files.
+- **Files** on the right says what the selection will become. For one file, which parser
+  reads it, or that no parser does and it will open as
+  [plain text](#files-no-parser-recognizes). For several, each file with its own verdict,
+  so a file that won't join a merged view (no parser, or no times to merge on) shows
+  before you open. Click a file in that list to preview it.
+- **Open as**, with two or more logs selected: **One merged view** or **Separate tabs**.
+  It starts on your choice in [Settings](settings.md), so opening several files no longer
+  asks afterwards.
+- **Read with**: the **Parser** (leave it on **Auto-detect**, which tries your parsers, then
+  the built-in ones) and the **Source time zone** the times are written in. They apply to
+  every file selected; in a merged view, **Sources** sets a file's own parser, time zone or
+  clock offset later. A file whose time zone you set before gets it back when you select it.
+- **Preview** shows a file's first lines as the table will: the time, the level in its
+  color, and the message.
+- Type a pattern such as `app.log*` in **File Name** to select every matching file in that
+  folder; **Files** lists them as you type.
+
+The dialog remembers its size and the width of its panes.
 
 ## Compressed files
 
