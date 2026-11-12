@@ -29,7 +29,9 @@ class JsonDetectionTest {
                 "Retrying [attempt 2/3]",
                 "Config: {'single': 'quotes'}",
                 "Values: [1, 2,]",
-                "Payload: {\"a\":1} and more text"}) {
+                "Payload: {\"a\":1} and more text",
+                "Entering Bootstrap.init(), args=[]",
+                "Headers: {}"}) {
             assertThat(JsonDetection.findJsonStart(msg)).as(msg).isEqualTo(-1);
         }
     }
