@@ -9,6 +9,7 @@ import java.awt.dnd.DragSource;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -226,12 +227,24 @@ final class TabDragHandler extends MouseAdapter {
         if (tab.width <= 0 || tab.height <= 0 || header.getWidth() <= 0) return null;
         Rectangle h = SwingUtilities.convertRectangle(header.getParent(), header.getBounds(), tabs);
 
-        BufferedImage img = new BufferedImage(tab.width, tab.height, BufferedImage.TYPE_INT_ARGB);
+        // Drawn at the screen's pixel density (150% scaling means 1.5 pixels per point), so
+        // the text is as sharp as the real tab rather than a 1x picture stretched to fit.
+        GraphicsConfiguration gc = tabs.getGraphicsConfiguration();
+        AffineTransform screen = gc != null ? gc.getDefaultTransform() : new AffineTransform();
+        double sx = screen.getScaleX();
+        double sy = screen.getScaleY();
+        BufferedImage img = new BufferedImage((int) Math.ceil(tab.width * sx),
+                (int) Math.ceil(tab.height * sy), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
         try {
+            g.scale(sx, sy);
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            // Subpixel (LCD) text needs an opaque destination; grayscale is the sharp choice here.
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
             int arc = UIManager.getInt("TabbedPane.tabArc");
-            Shape shape = new RoundRectangle2D.Float(0, 0, tab.width - 1, tab.height - 1, arc, arc);
+            Shape shape = new RoundRectangle2D.Float(0.5f, 0.5f, tab.width - 1, tab.height - 1, arc, arc);
             g.setColor(color("TabbedPane.selectedBackground", ClouseauColors.tableBackground()));
             g.fill(shape);
             g.setColor(color("Component.borderColor", Color.GRAY));
@@ -256,8 +269,22 @@ final class TabDragHandler extends MouseAdapter {
         } catch (UnsupportedOperationException | IllegalComponentStateException e) {
             log.debug("Per-pixel translucency not supported: {}", e.getMessage());
         }
-        JLabel content = new JLabel(new ImageIcon(img));
-        content.setOpaque(false);
+        // Drawn into the window's size in points: on a scaled screen that maps the image's
+        // pixels one to one onto the screen's.
+        int w = tab.width;
+        int ht = tab.height;
+        JComponent content = new JComponent() {
+            @Override protected void paintComponent(Graphics gr) {
+                Graphics2D g2 = (Graphics2D) gr.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                            RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                    g2.drawImage(img, 0, 0, w, ht, null);
+                } finally {
+                    g2.dispose();
+                }
+            }
+        };
         window.setContentPane(content);
         window.setSize(tab.width, tab.height);
         return window;
