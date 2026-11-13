@@ -195,6 +195,7 @@ final class SharedTabContext {
         });
         highlightNavBar = nav[0] = new HighlightNavBar(table, model);
         highlightNavBar.setOnClearAll(() -> { if (rowMenu[0] != null) rowMenu[0].clearAllHighlights(); });
+        highlightNavBar.setOnClearColor(slot -> { if (rowMenu[0] != null) rowMenu[0].clearHighlightColor(slot); });
         ClouseauColors.onThemeChange(table, this::reapplyHighlightsForTheme);
 
         model.addTableModelListener(e -> {

@@ -315,6 +315,20 @@ public final class LogTableModel extends AbstractTableModel {
         if (rows.size() > 0) fireTableRowsUpdated(0, rows.size() - 1);
     }
 
+    /** Ordinals of the entries highlighted with {@code color}, the ones the filters hide included. */
+    public List<Integer> highlightOrdinals(Color color) {
+        List<Integer> result = new ArrayList<>();
+        highlights.forEach((ord, c) -> { if (c.equals(color)) result.add(ord); });
+        return result;
+    }
+
+    /** Removes {@code color} from every entry that has it, the ones the filters hide included. */
+    public void clearHighlights(Color color) {
+        if (highlights.values().removeIf(color::equals) && rows.size() > 0) {
+            fireTableRowsUpdated(0, rows.size() - 1);
+        }
+    }
+
     public boolean hasHighlights() {
         return !highlights.isEmpty();
     }
