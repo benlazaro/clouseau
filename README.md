@@ -13,7 +13,7 @@ Open logs of any size, merge the logs of several services into one timeline, fil
 ![Gradle 8.8](https://img.shields.io/badge/Gradle-8.8-02303A)
 [![License MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**[⬇ Download](#download)** · **[User Guide](https://benlazaro.github.io/clouseau/guide/)** · **[Coming from OtrosLogViewer?](https://benlazaro.github.io/clouseau/guide/from-otroslogviewer.html)** · **[For developers](https://benlazaro.github.io/clouseau/guide/developers.html)**
+**[⬇ Download](#download)** · **[User Guide](https://benlazaro.github.io/clouseau/guide/)** · **[For developers](https://benlazaro.github.io/clouseau/guide/developers.html)**
 
 ![Main view](docs/screenshots/main-view.png)
 
