@@ -671,7 +671,7 @@ final class FileChooserDialog extends JDialog {
                 KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), JComponent.WHEN_FOCUSED);
         rebuildPlaces();
 
-        JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(placesList));
+        JScrollPane scroll = new JScrollPane(placesList);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.setOpaque(false);
         scroll.getViewport().setOpaque(false);
