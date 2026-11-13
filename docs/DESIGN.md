@@ -1435,7 +1435,11 @@ re-parent, not a reload, and everything shared stays shared.
   tab will land. Within a tab's height of the strip the copy slides along it, and
   `slotFor` moves the tab past a neighbour once the copy's edge crosses that neighbour's
   middle; the answer doesn't change after the swap, so unequal widths don't oscillate.
-  Only tabs in the dragged tab's row count. Esc (a `KeyEventDispatcher` held for the
+  The strip is one row (`SCROLL_TAB_LAYOUT`, FlatLaf's ▾ hidden-tabs list, no scroll
+  arrows), so the copy is kept inside the visible part of it (the scroll viewport):
+  hidden tabs are never passed by their off-screen middles. Pushed past either end, a
+  Swing `Timer` moves the tab one place that way every 180 ms (after 300 ms), and
+  selecting it scrolls the strip, bringing the next hidden tab into view. Esc (a `KeyEventDispatcher` held for the
   drag) puts it back. The drag ends in `dropTab`: released over its own window it
   stays where the drag put it; over another Clouseau window it moves there, at the tab
   under the cursor (else at the end); anywhere else it opens a new window with its tab

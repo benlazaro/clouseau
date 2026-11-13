@@ -219,7 +219,9 @@ closed when the test ends, when a field changes, or when the dialog closes. **Br
 next to Remote path signs in the same way and lists the server's folders over SFTP,
 starting in the typed path's folder, else `/var/log`, else home. It lists folders, then
 the files the user can read (from the file's owner, group and mode against the user's
-`id`), and counts the files it left out.
+`id`), and counts the files it left out. A server without SFTP (it turns the subsystem
+down, or ends its channel at once) gets a note saying so and to type the path instead,
+not sshj's bare "EOF while reading packet".
 
 **Clear Table:** Empties the table so only lines written from then on show. On a file the
 rows are hidden, not dropped: new rows keep their line in the file, notes and highlights
@@ -511,7 +513,10 @@ always agree.
 **Goal:** Keep several logs open at once and move between them easily, for example the
 logs from a ticket alongside my local one.
 
-1. Each file the user opens appears in its own tab.
+1. Each file the user opens appears in its own tab. As in IntelliJ, the tabs stay on one
+   row however many there are: tabs that don't fit scroll out of sight (the mouse wheel
+   over the strip scrolls it, and selecting a tab scrolls it into view), and a ▾ button at
+   the end of the strip lists the hidden tabs to pick from.
 2. User switches between logs by clicking their tabs, or from the keyboard:
    - `Ctrl+Tab` / `Ctrl+Shift+Tab` go to the next / previous tab, wrapping around at
      the ends;
@@ -520,7 +525,9 @@ logs from a ticket alongside my local one.
 3. User rearranges tabs by dragging one to a new position. As in IntelliJ, once the mouse
    has moved a few pixels the tab lifts out: a copy of it slides along the tab strip and an
    empty slot shows where it will land. Its neighbours make way once the copy's edge passes
-   their middle, so tabs of different widths don't flicker back and forth. Dragged away
+   their middle, so tabs of different widths don't flicker back and forth. Held at either
+   end of the strip, the tab moves on past the tabs scrolled out of sight, one at a time,
+   and the strip scrolls with it. Dragged away
    from the strip, the copy floats with the mouse (see UC-16). `Esc` cancels the drag and
    puts the tab back.
 4. User closes a tab with its close button or `Ctrl+W`. Clouseau asks for confirmation

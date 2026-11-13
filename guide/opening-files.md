@@ -100,11 +100,14 @@ If a file looks binary rather than text, Clouseau asks before showing it.
 
 ## Tabs
 
+- Tabs stay on one row. When there are more than fit, scroll the row with the mouse
+  wheel, or click **▾** at its right end to pick from the tabs out of sight.
 - `Ctrl+Tab` / `Ctrl+Shift+Tab`, or `Ctrl+PageDown` / `Ctrl+PageUp`, go to the next or
   previous tab.
 - `Ctrl+1` to `Ctrl+8` jump to that tab, and `Ctrl+9` to the last one.
-- Drag a tab to move it. An empty slot shows where it will land; press `Esc` while
-  dragging to put it back.
+- Drag a tab to move it. An empty slot shows where it will land; hold it at either end
+  of the row to carry it past the tabs out of sight. Press `Esc` while dragging to put it
+  back.
 - `Ctrl+W` or the tab's **×** closes it. Clouseau asks first, unless you tick "Don't ask
   again" (you can turn the question back on in [Settings](settings.md)).
 - Click the timezone at the right of the status bar to set the [timezone](reading-and-filtering.md#timezones)

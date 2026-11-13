@@ -54,9 +54,19 @@ class TabDragSlotTest {
     }
 
     @Test
-    void onlyTabsInTheSameRowCount() {
-        List<Rectangle> tabs = row(100, 100);
-        tabs.add(new Rectangle(0, 30, 100, 30));   // wrapped onto a second row
-        assertThat(TabDragHandler.slotFor(tabs, 1, 400)).isEqualTo(1);
+    void aTabHeldAtTheEdgeDoesNotPassTabsScrolledOutOfSight() {
+        // The visible strip is 0..300; the fourth tab (300..400) is scrolled out of sight.
+        // The drag keeps the tab inside the strip, so its right edge stops at 300.
+        List<Rectangle> tabs = row(100, 100, 100, 100);
+        assertThat(TabDragHandler.slotFor(tabs, 1, 200)).isEqualTo(2);
+    }
+
+    @Test
+    void edgeSaysWhichEndOfTheStripTheTabIsPushedPast() {
+        Rectangle strip = new Rectangle(10, 0, 300, 30);
+        assertThat(TabDragHandler.edge(10, 100, strip)).isZero();
+        assertThat(TabDragHandler.edge(210, 100, strip)).isZero();   // right edge exactly at 310
+        assertThat(TabDragHandler.edge(9, 100, strip)).isEqualTo(-1);
+        assertThat(TabDragHandler.edge(211, 100, strip)).isEqualTo(1);
     }
 }

@@ -17,6 +17,7 @@ import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import com.droidenx.clouseau.ui.theme.ThemeManager;
 import com.droidenx.clouseau.ui.theme.ThemeManagerDialog;
+import com.formdev.flatlaf.FlatClientProperties;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
@@ -64,6 +65,13 @@ public final class MainFrame extends JFrame {
         setMinimumSize(new Dimension(800, 500));
         setIconImages(loadAppIcons());
 
+        // One row of tabs, as in IntelliJ: tabs that don't fit scroll (mouse wheel over the
+        // strip), and a ▾ button at the end lists the hidden ones. No scroll arrows.
+        tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_SCROLL_BUTTONS_POLICY,
+                FlatClientProperties.TABBED_PANE_POLICY_NEVER);
+        tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_TABS_POPUP_POLICY,
+                FlatClientProperties.TABBED_PANE_POLICY_AS_NEEDED);
         contentArea.add(buildWelcomePanel(), CARD_WELCOME);
         contentArea.add(tabbedPane,          CARD_TABS);
 

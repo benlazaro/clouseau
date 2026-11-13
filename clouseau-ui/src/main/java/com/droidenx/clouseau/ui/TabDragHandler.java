@@ -18,8 +18,9 @@ import java.util.List;
  * Drags one tab the way IntelliJ does. Past the drag threshold the tab lifts out: a copy of
  * it follows the mouse and its own header goes blank, leaving an empty slot where it will
  * land. Near the tab strip the copy slides along the strip, and a neighbour swaps with it
- * once the copy's edge passes the neighbour's middle; further away it floats free, and on
- * release the tab goes to another window or a new one. Esc puts it back where it started.
+ * once the copy's edge passes the neighbour's middle. Held at either end of the strip, it
+ * moves on past the tabs scrolled out of sight. Further away it floats free, and on release
+ * the tab goes to another window or a new one. Esc puts it back where it started.
  */
 @Slf4j
 final class TabDragHandler extends MouseAdapter {
@@ -37,6 +38,9 @@ final class TabDragHandler extends MouseAdapter {
 
     private static final float PINNED_OPACITY = 0.9f;
     private static final float FLOATING_OPACITY = 0.7f;
+    /** How long a tab is held at an end of the strip before the strip scrolls, then how often. */
+    private static final int EDGE_DELAY_MS = 300;
+    private static final int EDGE_STEP_MS = 180;
 
     private final JTabbedPane tabs;
     private final JComponent header;
@@ -50,11 +54,15 @@ final class TabDragHandler extends MouseAdapter {
     private JWindow ghost;
     private boolean pinned;
     private KeyEventDispatcher escape;
+    /** -1 or 1 while the tab is held past the left or right end of the visible strip, else 0. */
+    private int edge;
+    private final Timer edgeScroll = new Timer(EDGE_STEP_MS, e -> stepPastEdge());
 
     TabDragHandler(JTabbedPane tabs, JComponent header, Host host) {
         this.tabs = tabs;
         this.header = header;
         this.host = host;
+        edgeScroll.setInitialDelay(EDGE_DELAY_MS);
     }
 
     /** Listens on the header and on any child that takes mouse events of its own. */
@@ -93,17 +101,21 @@ final class TabDragHandler extends MouseAdapter {
         Point origin = tabs.getLocationOnScreen();
         boolean near = nearStrip(screen, origin);
         if (near) {
-            int left = screen.x - origin.x - grab.x;
+            int wanted = screen.x - origin.x - grab.x;
+            Rectangle area = visibleStrip();
+            // Kept inside the visible part of the strip: tabs scrolled out of sight are
+            // reached by holding the tab at the edge, not by passing their hidden middles.
+            int left = Math.max(area.x, Math.min(wanted, area.x + area.width - ghost.getWidth()));
             int dst = slotFor(tabBounds(), src, left);
             if (dst != src) {
                 host.moveTab(src, dst);
                 src = dst;
             }
-            // Slide along the strip, kept inside it.
             Rectangle tab = tabs.getBoundsAt(src);
-            int x = Math.max(0, Math.min(left, tabs.getWidth() - ghost.getWidth()));
-            ghost.setLocation(origin.x + x, origin.y + tab.y);
+            ghost.setLocation(origin.x + left, origin.y + tab.y);
+            setEdge(edge(wanted, ghost.getWidth(), area));
         } else {
+            setEdge(0);
             ghost.setLocation(screen.x - grab.x, screen.y - grab.y);
         }
         if (near != pinned || !ghost.isVisible()) {
@@ -154,6 +166,7 @@ final class TabDragHandler extends MouseAdapter {
     }
 
     private void finish() {
+        setEdge(0);
         if (ghost != null) {
             ghost.dispose();
             ghost = null;
@@ -187,26 +200,59 @@ final class TabDragHandler extends MouseAdapter {
     /**
      * Where the dragged tab belongs when its left edge is at {@code left}: past a neighbour
      * once its right edge crosses that neighbour's middle (left edge, going left). Bounds
-     * are as laid out now, with the dragged tab at {@code src}. Only tabs in the dragged
-     * tab's row count. Swapping keeps the answer the same, so tabs of different widths
-     * don't flip back and forth.
+     * are as laid out now, with the dragged tab at {@code src}. Swapping keeps the answer
+     * the same, so tabs of different widths don't flip back and forth.
      */
     static int slotFor(List<Rectangle> bounds, int src, int left) {
         Rectangle self = bounds.get(src);
         int dst = src;
-        while (dst + 1 < bounds.size() && sameRow(bounds.get(dst + 1), self)
-                && left + self.width > middle(bounds.get(dst + 1))) {
+        while (dst + 1 < bounds.size() && left + self.width > middle(bounds.get(dst + 1))) {
             dst++;
         }
         if (dst != src) return dst;
-        while (dst > 0 && sameRow(bounds.get(dst - 1), self) && left < middle(bounds.get(dst - 1))) {
+        while (dst > 0 && left < middle(bounds.get(dst - 1))) {
             dst--;
         }
         return dst;
     }
 
-    private static boolean sameRow(Rectangle a, Rectangle b) {
-        return a.y == b.y;
+    /**
+     * Which end of the visible strip {@code area} a tab {@code width} wide, wanted at
+     * {@code left}, is pushed past: -1 the left, 1 the right, 0 neither.
+     */
+    static int edge(int left, int width, Rectangle area) {
+        if (left < area.x) return -1;
+        if (left + width > area.x + area.width) return 1;
+        return 0;
+    }
+
+    /**
+     * The part of the tab strip that shows tabs, in the tabbed pane's coordinates: the
+     * scrolling viewport (tabs scroll in one row), or the whole pane if there is none.
+     */
+    private Rectangle visibleStrip() {
+        for (Component c : tabs.getComponents()) {
+            if (c instanceof JViewport v && v.isVisible()) return v.getBounds();
+        }
+        return new Rectangle(0, 0, tabs.getWidth(), tabs.getHeight());
+    }
+
+    private void setEdge(int edge) {
+        if (edge == this.edge) return;
+        this.edge = edge;
+        if (edge == 0) edgeScroll.stop();
+        else edgeScroll.restart();
+    }
+
+    /**
+     * Held at an end of the strip: the tab moves one place that way. Selecting it scrolls
+     * the strip to keep it in sight, which brings the next hidden tab into view.
+     */
+    private void stepPastEdge() {
+        int src = tabs.indexOfTabComponent(header);
+        int dst = src + edge;
+        if (ghost == null || src < 0 || dst < 0 || dst >= tabs.getTabCount()) return;
+        host.moveTab(src, dst);
     }
 
     private static int middle(Rectangle r) {
