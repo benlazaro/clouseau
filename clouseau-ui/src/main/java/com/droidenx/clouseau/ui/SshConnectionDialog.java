@@ -886,6 +886,7 @@ public class SshConnectionDialog extends JDialog {
             case MISSING      -> Messages.format("ssh.test.missing", c.remotePath());
             case UNREADABLE   -> Messages.format("ssh.test.unreadable", c.remotePath(), c.user());
             case FOLDER       -> Messages.format("ssh.test.folder", c.remotePath());
+            case NO_SFTP      -> Messages.format("ssh.browse.no.sftp", c.host());
             case OTHER        -> Messages.format(switch (f.step()) {
                 case CONNECT -> "ssh.test.other.connect";
                 case SIGN_IN -> "ssh.test.other.sign.in";

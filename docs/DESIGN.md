@@ -305,7 +305,7 @@ starting state.
   status of a command, with keepalives as for the source. `close` disconnects from any
   thread and ends a `connect` still running. A failure is a `SshRemote.Failure` with its
   `Step` (connect, sign in, file) and `Reason` (unknown host, refused, timed out, rejected,
-  key file, missing, unreadable, folder, other); the key file is loaded before the server is
+  key file, missing, unreadable, folder, no SFTP, other); the key file is loaded before the server is
   asked, so a bad key or passphrase reads as `KEY_FILE`, not as a refused sign-in. The
   dialog turns those into its own sentences (`SshConnectionDialog.describe`).
   **Test** runs `connect` then `check`, which runs `test -e`, `test -d` and `test -r` under
@@ -319,6 +319,15 @@ starting state.
   file's uid, gid and mode against the user's `id -u` and `id -G`. A server that won't
   run `id` (SFTP only) gets every file listed. ACLs aren't read, so a file readable only
   through an ACL is left out. Host keys are trusted as for the source.
+  **Without SFTP** (the subsystem is turned down, or its channel ends before SFTP's first
+  reply, sshj's "EOF while reading packet", while the connection is up) `SshRemote` lists
+  through the shell for the rest of the dialog, as WinSCP's SCP mode does:
+  `folderCommand` (`cd`, `pwd`) and `listCommand`, which prints for each folder and regular
+  file its type, `test -r`, and size and mtime from `stat -L -c` (GNU, BusyBox), else
+  `stat -L -f` (BSD), else unknown. Output starts after a marker, so text a login script
+  prints is skipped, and fields are NUL-separated, so any name survives. Readability here
+  is `test -r`'s, so ACLs count. Only when the shell can't list either is it
+  `Reason.NO_SFTP`. The fallback is logged, not shown: the dialog looks the same.
 - **Plugin sources (D-14):** **File → Open Remote** lists SSH, then every `LogSourceProvider` by its own name, then Browse Plugins… (the Plugin Manager's Browse tab);
   rebuilt each time the menu opens. Choosing one opens `SourceSettingsDialog`, a form
   with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`

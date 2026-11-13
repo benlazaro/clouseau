@@ -81,6 +81,12 @@ public final class SshRemote implements AutoCloseable {
         UNREADABLE,
         /** The remote path is a folder. */
         FOLDER,
+        /**
+         * The server has no SFTP (it turned the {@code sftp} subsystem down, or closed it at once:
+         * Dropbear without {@code sftp-server}, a wrong {@code Subsystem} line) and its shell
+         * couldn't list folders instead. Test and following need neither.
+         */
+        NO_SFTP,
         /** Anything else; {@link Failure#getMessage()} says what. */
         OTHER
     }
@@ -114,6 +120,8 @@ public final class SshRemote implements AutoCloseable {
     private volatile SSHClient client;
     private volatile boolean closed;
     private SFTPClient sftp;
+    /** The server turned SFTP down; folders are listed through its shell ({@link #shellOnly}). */
+    private boolean noSftp;
     /** The signed-in user's id and groups, from {@code id}; null if {@code id} couldn't be run. */
     private Identity identity;
     private boolean identityRead;
@@ -200,32 +208,57 @@ public final class SshRemote implements AutoCloseable {
     /**
      * The folder to start browsing in: the folder of {@code remotePath} when it has one that
      * exists, else {@code /var/log}, else the user's home folder. Needs {@link #connect} first.
+     *
+     * @throws Failure {@link Reason#NO_SFTP} if the server has no SFTP and its shell can't list folders either
      */
     public String startFolder(String remotePath) throws IOException {
-        SFTPClient s = sftp();
         if (remotePath != null && !remotePath.isBlank()) {
             String p = remotePath.strip();
             String folder = p.endsWith("/") ? p : p.contains("/") ? p.substring(0, p.lastIndexOf('/') + 1) : "";
             if (!folder.isEmpty()) {
-                String resolved = resolve(folder);
-                if (isFolder(s, resolved)) return resolved;
+                String resolved = folderOrNull(folder);
+                if (resolved != null) return resolved;
             }
         }
-        if (isFolder(s, "/var/log")) return "/var/log";
-        return s.canonicalize(".");
+        String varLog = folderOrNull("/var/log");
+        if (varLog != null) return varLog;
+        return resolve("~");
     }
 
-    /** {@code path} made absolute: a leading {@code ~} or a relative path is taken from the home folder. */
+    /**
+     * {@code path} made absolute: a leading {@code ~} or a relative path is taken from the home folder.
+     * Without SFTP, {@code path} must be a folder that can be opened.
+     */
     public String resolve(String path) throws IOException {
-        SFTPClient s = sftp();
         String p = path.strip();
-        if (p.equals("~") || p.isEmpty()) return s.canonicalize(".");
+        if (p.isEmpty()) p = "~";
+        if (shellOnly()) {
+            String dir = shellFolder(p);
+            if (dir == null) throw new IOException("no such folder, or no permission to open it");
+            return dir;
+        }
+        SFTPClient s = sftp();
+        if (p.equals("~")) return s.canonicalize(".");
         if (p.startsWith("~/")) p = p.substring(2);
         return s.canonicalize(p);
     }
 
+    /** {@code path} resolved, if it's a folder; null if it isn't, or doesn't exist. */
+    private String folderOrNull(String path) throws IOException {
+        if (shellOnly()) return shellFolder(path);
+        try {
+            String resolved = resolve(path);
+            return isFolder(sftp(), resolved) ? resolved : null;
+        } catch (Failure f) {
+            throw f;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     /** Lists {@code folder} (absolute, or resolved as {@link #resolve} does). Needs {@link #connect} first. */
     public Listing list(String folder) throws IOException {
+        if (shellOnly()) return shellList(folder);
         SFTPClient s = sftp();
         String dir = resolve(folder);
         Identity id = identity();
@@ -251,10 +284,150 @@ public final class SshRemote implements AutoCloseable {
                 else unreadable++;
             }
         }
+        return listing(dir, folders, files, unreadable);
+    }
+
+    private static Listing listing(String dir, List<Entry> folders, List<Entry> files, int unreadable) {
         Comparator<Entry> byName = Comparator.comparing(Entry::name, String.CASE_INSENSITIVE_ORDER);
         folders.sort(byName);
         files.sort(byName);
         return new Listing(dir, List.copyOf(folders), List.copyOf(files), unreadable);
+    }
+
+    // ── Without SFTP: folders listed through the server's shell ──────────────
+
+    /** Exit status of {@link #folderCommand} and {@link #listCommand} when the folder can't be opened. */
+    static final int EXIT_NO_FOLDER = 5;
+    /** Written before the output proper, so text a login script prints first is skipped. */
+    static final String MARK = "@@clouseau-list@@";
+
+    /**
+     * Whether folders are listed through the shell: true once the server has turned SFTP down
+     * ({@link Reason#NO_SFTP}), as WinSCP's SCP mode does it. Asks for SFTP the first time.
+     */
+    private boolean shellOnly() throws IOException {
+        if (!noSftp) {
+            try {
+                sftp();
+            } catch (Failure f) {
+                if (f.reason() != Reason.NO_SFTP) throw f;
+                noSftp = true;
+                log.info("No SFTP on {} ({}); listing folders through its shell", config.host(), f.getMessage());
+            }
+        }
+        return noSftp;
+    }
+
+    /** {@code path} as an absolute folder, from {@code cd} and {@code pwd}; null if it can't be opened. */
+    private String shellFolder(String path) throws IOException {
+        Exec r = shell(folderCommand(path));
+        String out = afterMark(r.stdout());
+        if (out == null) {
+            if (r.status() != null && r.status() == EXIT_NO_FOLDER) return null;
+            throw shellFailure(r);
+        }
+        String dir = out.split("\0", 2)[0];
+        return dir.isEmpty() ? null : dir;
+    }
+
+    private Listing shellList(String folder) throws IOException {
+        String p = folder.strip().isEmpty() ? "~" : folder.strip();
+        Exec r = shell(listCommand(p));
+        Listing l = parseListing(r.stdout());
+        if (l != null) return l;
+        if (r.status() != null && r.status() == EXIT_NO_FOLDER) {
+            throw new IOException("no such folder, or no permission to open it");
+        }
+        throw shellFailure(r);
+    }
+
+    private Exec shell(String command) throws IOException {
+        try {
+            return exec(command);
+        } catch (IOException e) {
+            if (closed) throw closedFailure(Step.FILE);
+            if (timedOut(e)) throw new Failure(Step.FILE, Reason.TIMED_OUT, message(e), e);
+            throw e;
+        }
+    }
+
+    /** The shell didn't run the command as a POSIX shell would: no SFTP, and no listing through the shell. */
+    private Failure shellFailure(Exec r) {
+        String detail = !r.stderr().isBlank() ? r.stderr().strip()
+                : r.status() != null ? "exit status " + r.status() : "no answer from the shell";
+        log.info("Can't list folders through {}'s shell: {}", config.host(), detail);
+        return new Failure(Step.FILE, Reason.NO_SFTP, detail, null);
+    }
+
+    /**
+     * The command that opens {@code path} and prints {@link #MARK}, NUL, the folder's absolute
+     * path, NUL; it exits {@link #EXIT_NO_FOLDER} if the folder can't be opened.
+     */
+    static String folderCommand(String path) {
+        String script = "cd -- \"$1\" 2>/dev/null || exit " + EXIT_NO_FOLDER
+                + "; printf '%s\\0%s\\0' " + MARK + " \"$(pwd)\"";
+        return "sh -c " + SshLogSource.shellQuote(script) + " sh " + SshLogSource.remoteArg(path);
+    }
+
+    /**
+     * The command that lists a folder: {@link #folderCommand}'s output, then for each folder
+     * and regular file (links followed, dangling ones left out) {@code "d|f r|- size mtime"},
+     * NUL, the name, NUL. Readability is {@code test -r}'s; size and time come from GNU or
+     * BusyBox {@code stat -c}, else BSD {@code stat -f}, else are unknown ({@code -1 0}).
+     * Separating with NUL keeps any name intact, newlines included.
+     */
+    static String listCommand(String path) {
+        String script = "cd -- \"$1\" 2>/dev/null || exit " + EXIT_NO_FOLDER
+                + "; printf '%s\\0%s\\0' " + MARK + " \"$(pwd)\""
+                + "; for f in .* *; do"
+                + " case $f in .|..) continue;; esac;"
+                + " if [ -d \"$f\" ]; then t=d; elif [ -f \"$f\" ]; then t=f; else continue; fi;"
+                + " if [ -r \"$f\" ]; then r=r; else r=-; fi;"
+                + " m=$(stat -L -c '%s %Y' -- \"$f\" 2>/dev/null || stat -L -f '%z %m' -- \"$f\" 2>/dev/null);"
+                + " printf '%s %s %s\\0%s\\0' \"$t\" \"$r\" \"${m:--1 0}\" \"$f\";"
+                + " done";
+        return "sh -c " + SshLogSource.shellQuote(script) + " sh " + SshLogSource.remoteArg(path);
+    }
+
+    /** What follows {@link #MARK} in {@code out}; null if it isn't there. */
+    private static String afterMark(String out) {
+        int at = out.indexOf(MARK + "\0");
+        return at < 0 ? null : out.substring(at + MARK.length() + 1);
+    }
+
+    /**
+     * Reads {@link #listCommand}'s output; null if it has no {@link #MARK}. Files {@code test -r}
+     * turned down are counted, not listed; an unknown size is -1, an unknown time the epoch.
+     */
+    static Listing parseListing(String out) {
+        String body = afterMark(out);
+        if (body == null) return null;
+        String[] parts = body.split("\0", -1);
+        String dir = parts[0];
+        List<Entry> folders = new ArrayList<>(), files = new ArrayList<>();
+        int unreadable = 0;
+        for (int i = 1; i + 1 < parts.length; i += 2) {
+            String[] meta = parts[i].strip().split("\\s+");
+            String name = parts[i + 1];
+            if (meta.length < 2 || name.isEmpty()) continue;
+            boolean folder = meta[0].equals("d");
+            long size = meta.length > 2 ? number(meta[2], -1) : -1;
+            long mtime = meta.length > 3 ? number(meta[3], 0) : 0;
+            String path = dir.endsWith("/") ? dir + name : dir + "/" + name;
+            Entry e = new Entry(name, path, folder, size, Instant.ofEpochSecond(Math.max(mtime, 0)));
+            if (folder) folders.add(e);
+            else if (meta[1].equals("r")) files.add(e);
+            else unreadable++;
+        }
+        return listing(dir, folders, files, unreadable);
+    }
+
+    private static long number(String s, long otherwise) {
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            return otherwise;
+        }
     }
 
     /**
@@ -306,11 +479,27 @@ public final class SshRemote implements AutoCloseable {
         }
     }
 
+    /**
+     * The SFTP client, started on first use.
+     *
+     * @throws Failure {@link Reason#NO_SFTP} when the server has no SFTP: the subsystem is turned
+     *                 down, or its channel ends before SFTP's first reply (sshj's "EOF while reading
+     *                 packet") while the connection itself is still up
+     */
     private SFTPClient sftp() throws IOException {
         if (sftp == null) {
             SSHClient c = signedIn();
-            sftp = c.newSFTPClient();
-            sftp.getSFTPEngine().setTimeoutMs(TIMEOUT_SECONDS * 1000);
+            SFTPClient s;
+            try {
+                s = c.newSFTPClient();
+            } catch (IOException e) {
+                if (closed) throw closedFailure(Step.FILE);
+                if (timedOut(e)) throw new Failure(Step.FILE, Reason.TIMED_OUT, message(e), e);
+                if (c.isConnected()) throw new Failure(Step.FILE, Reason.NO_SFTP, message(e), e);
+                throw e;
+            }
+            s.getSFTPEngine().setTimeoutMs(TIMEOUT_SECONDS * 1000);
+            sftp = s;
         }
         return sftp;
     }

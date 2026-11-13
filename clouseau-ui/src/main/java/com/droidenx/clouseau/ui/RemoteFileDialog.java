@@ -293,7 +293,7 @@ final class RemoteFileDialog extends JDialog {
             SshRemote.Entry e = rows.get(row);
             return switch (col) {
                 case 0 -> e;
-                case 1 -> e.folder() ? "" : ZipPickerDialog.formatSize(e.size());
+                case 1 -> e.folder() || e.size() < 0 ? "" : ZipPickerDialog.formatSize(e.size());
                 default -> e.modified().getEpochSecond() > 0 ? MODIFIED.format(e.modified()) : "";
             };
         }

@@ -38,6 +38,7 @@ class SshTestMessageTest {
         assertThat(describe(Step.FILE, Reason.MISSING, "password")).contains("/var/log/app.log").contains("doesn't exist");
         assertThat(describe(Step.FILE, Reason.UNREADABLE, "password")).contains("ops can't read /var/log/app.log");
         assertThat(describe(Step.FILE, Reason.OTHER, "password")).startsWith("Signed in").contains("detail here");
+        assertThat(describe(Step.FILE, Reason.NO_SFTP, "password")).contains("db01").contains("Remote path").doesNotContain("SFTP").doesNotContain("EOF");
     }
 
     @Test

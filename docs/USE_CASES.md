@@ -220,8 +220,10 @@ next to Remote path signs in the same way and lists the server's folders over SF
 starting in the typed path's folder, else `/var/log`, else home. It lists folders, then
 the files the user can read (from the file's owner, group and mode against the user's
 `id`), and counts the files it left out. A server without SFTP (it turns the subsystem
-down, or ends its channel at once) gets a note saying so and to type the path instead,
-not sshj's bare "EOF while reading packet".
+down, or ends its channel at once, e.g. Dropbear without `sftp-server`) is browsed through
+its shell instead, with no change in the dialog: the same folders, files, sizes and dates.
+Only if the shell can't list either does a note say the folders couldn't be shown and
+suggest typing the path.
 
 **Clear Table:** Empties the table so only lines written from then on show. On a file the
 rows are hidden, not dropped: new rows keep their line in the file, notes and highlights

@@ -66,7 +66,9 @@ starts in the folder of the path you typed, or in `/var/log`, or in your home fo
 Double-click a folder (or press Enter) to open it, and **Up** (or Backspace) to go back up;
 you can also type a folder into the path box. Only files you can read are listed. A note
 under the list says how many were left out. Double-click a file, or select it and click
-**Choose**, to put its path in **Remote path**.
+**Choose**, to put its path in **Remote path**. Browsing uses SFTP when the server offers
+it, and otherwise lists folders with ordinary shell commands, so it works on servers
+without SFTP too (Dropbear without `sftp-server`, for example).
 
 **Test** checks the connection without opening a tab. It signs in and checks that the
 file exists and you can read it, then reports in the note above the buttons: **Signed in ·
