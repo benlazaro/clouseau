@@ -107,8 +107,8 @@ If a file looks binary rather than text, Clouseau asks before showing it.
   dragging to put it back.
 - `Ctrl+W` or the tab's **×** closes it. Clouseau asks first, unless you tick "Don't ask
   again" (you can turn the question back on in [Settings](settings.md)).
-- Right-click a tab and choose **Timezones…** to set the [timezone](reading-and-filtering.md#timezones)
-  it's read in (this tab or every tab) and the one times are shown in.
+- Click the timezone at the right of the status bar to set the [timezone](reading-and-filtering.md#timezones)
+  a tab is read in (this tab or every tab) and the one times are shown in.
 
 Each tab keeps its own filters, follow mode, highlights and column layout.
 

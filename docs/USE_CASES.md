@@ -525,8 +525,9 @@ logs from a ticket alongside my local one.
    puts the tab back.
 4. User closes a tab with its close button or `Ctrl+W`. Clouseau asks for confirmation
    first, unless the user has turned that off with "Don't ask again".
-5. Right-clicking a tab offers per-tab actions, such as setting its source timezone or
-   applying a timezone to all tabs.
+5. Right-clicking a tab offers per-tab actions, such as Reconnect, moving it to another
+   window, and a merged tab's per-file settings. A tab's timezones are set from the
+   status bar's timezone badge or View → Timezones….
 
 **Success:** Juggling several logs never means losing track of which is which or
 opening the same file twice.

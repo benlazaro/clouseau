@@ -197,7 +197,7 @@ in the same timezone, or `UTC → America/Chicago` when it's read in one and sho
 another (`Mixed → …` in a merged view whose files have different ones). Point at it to
 see how far apart they are.
 
-Click it (or right-click the tab, or **View → Timezones…**) to change either. Type in a
+Click it (or choose **View → Timezones…**) to change either. Type in a
 timezone box to search it: "chic" finds America/Chicago. Your computer's timezone and UTC
 are listed first, then the ones you've used lately. Tick **Apply to all open tabs** to read
 every open tab, in every window, in the same timezone; otherwise only this tab changes.

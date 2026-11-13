@@ -1521,13 +1521,9 @@ public final class MainFrame extends JFrame {
             menu.addSeparator();
         }
 
-        JMenuItem tzItem = new JMenuItem(Messages.get("tab.context.timezones"));
-        tzItem.addActionListener(ev -> showTimezonePopup(panel));
-        menu.add(tzItem);
-
         // Moving between windows (UC-16). Moving a window's only tab to a new window would
-        // just swap one window for another, so that item needs a second tab.
-        menu.addSeparator();
+        // just swap one window for another, so that item needs a second tab. Timezones aren't
+        // here: the status bar's timezone badge and View → Timezones… open them.
         JMenuItem newWindow = new JMenuItem(Messages.get("tab.context.move.new.window"));
         newWindow.setEnabled(tabbedPane.getTabCount() > 1);
         newWindow.addActionListener(ev -> moveToNewWindow(panel));
