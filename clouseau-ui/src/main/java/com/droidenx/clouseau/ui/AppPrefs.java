@@ -296,6 +296,18 @@ public final class AppPrefs {
         save();
     }
 
+    /**
+     * The servers and folders folded in the SSH dialog's Saved connections, as keys the dialog
+     * makes ("h:" + host, "f:" + host + "\n" + folder), so they stay folded the next time.
+     */
+    public static java.util.Set<String> getSshCollapsed() {
+        return new java.util.HashSet<>(getStringList("ssh.savedCollapsed"));
+    }
+
+    public static void setSshCollapsed(java.util.Set<String> keys) {
+        putStringList("ssh.savedCollapsed", new ArrayList<>(new java.util.TreeSet<>(keys)));
+    }
+
     /** The SSH dialog's size and its divider (saved connections | form); null before the first time. */
     public static int[] getSshDialogLayout() {
         String v = getString("ssh.dialog.layout", null);

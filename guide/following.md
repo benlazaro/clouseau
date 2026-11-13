@@ -70,7 +70,8 @@ under the list says how many were left out. Double-click a file, or select it an
 it, and otherwise lists folders with ordinary shell commands, so it works on servers
 without SFTP too (Dropbear without `sftp-server`, for example).
 
-**Test** checks the connection without opening a tab. It signs in and checks that the
+**Test**, after **Browse…** on the **Remote path** line, checks the connection without
+opening a tab. It signs in and checks that the
 file exists and you can read it, then reports in the note above the buttons: **Signed in ·
 /var/log/app.log is readable**, or which step failed and why, such as a host that can't be
 found, a port that isn't taking connections, a password the server turned down, a key file
@@ -89,15 +90,21 @@ timing it out), Clouseau notices within about a minute and a quarter and shows a
 instead of the tab quietly going still. Closing an SSH tab is immediate, even if the connection has
 dropped. To keep a connection for next time, tick
 **Save this connection** before you click **Connect** (passwords and passphrases are stored
-encrypted). Saved connections are listed on the left of the dialog, grouped by host, each
-log by its file name with its folder below; type in the filter box to narrow the list by host,
-server name or file. Click one to fill in the form, or double-click to connect right away.
+encrypted). Saved connections are listed on the left of the dialog as a tree: each server
+in bold, the folders of its saved logs under it, and the logs in each folder. Click the
+arrow beside a server or folder (or double-click it, or press Left and Right) to fold it;
+the dialog remembers what you folded. Type in the filter box to narrow the list by host,
+server name or file; every match shows while you filter. Click a log to fill in the form,
+or double-click it to connect right away.
 Drag the divider, or make the window bigger, to see long names; a list wider than the
 sidebar scrolls sideways. The dialog keeps its size and divider for next time.
 
-- **To name a server**, type a name such as *Payments prod* in **Name** before you connect
-  with **Save this connection** ticked. Saved connections then show the name with the host
-  beside it (`Payments prod  10.0.3.17`), and every log on that server shares it.
+- **To name a server**, right-click it in Saved connections and choose **Rename** (or
+  select it and press `F2`), type a name such as *Payments prod*, and press `Enter` (`Esc`
+  cancels). The list then shows the name with the host beside it (`Payments prod
+  10.0.3.17`), every log on that server shares it, and the form shows it under **Server**.
+  Clear the name to show the host again. Two servers can't share a name. A server you're
+  adding for the first time can be named once it's saved.
 - **To change a saved connection**, click it, edit anything (the host, user and path
   included), and click **Connect**: it's updated in place.
 - **To follow another file on the same server**, point at a saved log and click the
@@ -105,7 +112,9 @@ sidebar scrolls sideways. The dialog keeps its size and divider for next time.
   and selects the file name in **Remote path**; type the new one and click **Connect** to
   save it as a new entry.
 - **To forget one**, click the trash can at the right of its row (or select it and press
-  `Delete`). The trash can on a host forgets every log saved on it, after asking.
+  `Delete`). The trash can on a folder or a server forgets every log in it, after asking
+  when there's more than one. Right-clicking a row offers the same, with **Rename** on a
+  server and **Duplicate** on a log.
 
 The **Save this connection** box remembers whether you ticked it last time.
 

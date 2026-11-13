@@ -210,7 +210,8 @@ for accounts without a password, common on embedded devices. "None" works with
 servers that let such accounts in by any of the usual methods (none, an empty password,
 or keyboard-interactive).
 
-**Checking the details first (SSH):** The dialog's **Test** button signs in and checks
+**Checking the details first (SSH):** The dialog's **Test** button (after Browse… on the
+Remote path line) signs in and checks
 the remote file with `test`, without opening a tab, and reports in the note above the
 buttons that the file is readable, or which step failed and why (unknown host, nothing
 listening on the port, no answer, sign-in turned down, unusable key file, missing file,

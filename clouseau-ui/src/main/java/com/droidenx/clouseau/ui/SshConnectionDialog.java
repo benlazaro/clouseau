@@ -33,8 +33,9 @@ import java.util.regex.Pattern;
  * <p>Laid out like the Settings window: sections (Server, Authentication, Log) with a hairline
  * title, labels on the left, each section's fields indented under its title, and Cancel before
  * the default button in a footer below a divider. Saved connections are a sidebar on the left,
- * grouped by host (the way people look for a log: which machine, then which file), with a
- * filter on top, and a trash can on the row under the mouse; a connection is saved by ticking
+ * grouped by server, then folder (the way people look for a log: which machine, where, then
+ * which file), with a filter on top, and a trash can on the row under the mouse. A server's
+ * name is set on its row there, and the form shows it read-only. A connection is saved by ticking
  * "Save this connection", the form's last line, which remembers whether it was ticked last time.
  */
 public class SshConnectionDialog extends JDialog {
@@ -59,8 +60,11 @@ public class SshConnectionDialog extends JDialog {
     private final JTextField hostField       = new JTextField(22);
     private final JTextField portField       = new JTextField("22", 5);
     private final JTextField userField       = new JTextField(22);
-    /** An optional name for the server, shown in Saved connections with the host beside it. */
-    private final JTextField nameField       = new JTextField(22);
+    /**
+     * The server's name, read-only: it's renamed on its row in Saved connections (right-click,
+     * or F2), since a name belongs to the server, not to one saved log.
+     */
+    private final JLabel     nameValue       = new JLabel();
     /** Server names by host, as saved. */
     private final java.util.Map<String, String> hostNames = AppPrefs.getSshHostNames();
 
@@ -82,7 +86,7 @@ public class SshConnectionDialog extends JDialog {
     private final JComboBox<String> parserCombo;
     private final List<LogParser>   parsers;
 
-    // Saved connections: a sidebar tree, host → logs
+    // Saved connections: a sidebar tree, host → folder → logs
     private final JTextField                   savedFilter = new JTextField(14);
     private final DefaultMutableTreeNode       savedRoot   = new DefaultMutableTreeNode();
     private final SavedTree                    savedTree   = new SavedTree(savedRoot);
@@ -90,6 +94,10 @@ public class SshConnectionDialog extends JDialog {
     private final JPanel                       savedBody   = new JPanel(savedCards);
     private final JCheckBox                    saveBox     = new JCheckBox(Messages.get("ssh.dialog.save"));
     private       List<AppPrefs.SshFavorite>   favorites;
+    /** Servers and folders the user folded (see {@link #foldKey}), remembered between visits. */
+    private final java.util.Set<String>        collapsed   = AppPrefs.getSshCollapsed();
+    /** Set while the tree is rebuilt, so the expanding it does isn't taken for the user's. */
+    private boolean                            rebuilding;
 
     // Footer
     private final JButton connectBtn = new JButton(Messages.get("ssh.dialog.connect"));
@@ -186,9 +194,7 @@ public class SshConnectionDialog extends JDialog {
         content.add(SettingsDialog.sectionLabel(Messages.get("ssh.dialog.section.server")),
                 "span 2, growx, wrap, gapbottom 4");
         content.add(new JLabel(Messages.get("ssh.dialog.name")), SettingsDialog.INDENT);
-        content.add(nameField, "wrap");
-        nameField.putClientProperty("JTextField.placeholderText", Messages.get("ssh.dialog.name.placeholder"));
-        nameField.setToolTipText(Messages.get("ssh.dialog.name.tooltip"));
+        content.add(nameValue, "wrap");
         content.add(new JLabel(Messages.get("ssh.dialog.host")), SettingsDialog.INDENT);
         JPanel hostRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][][]"));
         hostRow.setOpaque(false);
@@ -206,11 +212,15 @@ public class SshConnectionDialog extends JDialog {
         hostField.addFocusListener(new FocusAdapter() {
             @Override public void focusLost(FocusEvent e) {
                 applyHostSpec();
-                // A server named before fills in its name, unless one is typed already.
-                String known = hostNames.get(hostField.getText().trim());
-                if (known != null && nameField.getText().isBlank()) nameField.setText(known);
             }
         });
+        // The name shown is the one the host in the field has.
+        hostField.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e)  { showName(); }
+            public void removeUpdate(DocumentEvent e)  { showName(); }
+            public void changedUpdate(DocumentEvent e) { showName(); }
+        });
+        showName();
 
         // ── Authentication ───────────────────────────────────────────────
         content.add(SettingsDialog.sectionLabel(Messages.get("ssh.dialog.section.auth")),
@@ -241,10 +251,13 @@ public class SshConnectionDialog extends JDialog {
         content.add(SettingsDialog.sectionLabel(Messages.get("ssh.dialog.section.log")),
                 "span 2, growx, wrap, gaptop 20, gapbottom 4");
         content.add(new JLabel(Messages.get("ssh.dialog.remote.path")), SettingsDialog.INDENT);
-        JPanel remotePathRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][]"));
+        // Test sits by the path it checks, not in the footer: there, beside the saved
+        // connections, it read as testing whichever server was selected in the list.
+        JPanel remotePathRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][][]"));
         remotePathRow.setOpaque(false);
         remotePathRow.add(remotePathField);
         remotePathRow.add(remoteBrowseBtn);
+        remotePathRow.add(testBtn);
         content.add(remotePathRow, "wrap");
         remoteBrowseBtn.setToolTipText(Messages.get("ssh.dialog.remote.browse.tooltip"));
         remoteBrowseBtn.addActionListener(e -> browseRemote());
@@ -268,7 +281,7 @@ public class SshConnectionDialog extends JDialog {
 
         testBtn.setToolTipText(Messages.get("ssh.dialog.test.tooltip"));
         testBtn.addActionListener(e -> onTest());
-        JPanel footer = DialogFooter.of(new JComponent[]{testBtn}, cancelBtn, connectBtn);
+        JPanel footer = DialogFooter.of(cancelBtn, connectBtn);
 
         // Live validation. Any change to what a test checked also drops its result.
         DocumentListener validator = new DocumentListener() {
@@ -382,9 +395,10 @@ public class SshConnectionDialog extends JDialog {
     // ── Saved connections ─────────────────────────────────────────────────────
 
     /**
-     * The sidebar: a filter field, the saved connections grouped by host (hosts A–Z, logs by
-     * file name, the folder dimmed under it), and Remove. With nothing saved, it says how to
-     * save one instead.
+     * The sidebar: a filter field and the saved connections as a tree, server › folder › log
+     * (servers A–Z by name, folders and logs A–Z), each server and folder folding. A server is
+     * renamed on its row; a right-click offers Rename, Duplicate and Forget as they apply. With
+     * nothing saved, it says how to save one instead.
      */
     private JComponent buildSavedSidebar() {
         savedFilter.putClientProperty("JTextField.placeholderText", Messages.get("ssh.dialog.saved.filter"));
@@ -400,6 +414,15 @@ public class SshConnectionDialog extends JDialog {
         savedTree.setShowsRootHandles(true);
         savedTree.setRowHeight(0);                       // rows size to their renderer: logs take two lines
         savedTree.setCellRenderer(new SavedRenderer(hostNames));
+        // A server is renamed on its row (F2, or Rename in its right-click menu); a click away
+        // keeps the name typed, unless another server has it.
+        savedTree.setEditable(true);
+        savedTree.setCellEditor(new ServerNameEditor());
+        savedTree.setInvokesStopCellEditing(true);
+        savedTree.addTreeExpansionListener(new javax.swing.event.TreeExpansionListener() {
+            @Override public void treeExpanded(javax.swing.event.TreeExpansionEvent e)  { folded(e.getPath(), false); }
+            @Override public void treeCollapsed(javax.swing.event.TreeExpansionEvent e) { folded(e.getPath(), true); }
+        });
         savedTree.getSelectionModel().setSelectionMode(javax.swing.tree.TreeSelectionModel.SINGLE_TREE_SELECTION);
         javax.swing.ToolTipManager.sharedInstance().registerComponent(savedTree);
         savedTree.registerKeyboardAction(e -> { AppPrefs.SshFavorite f = selectedFavorite(); if (f != null) duplicate(f); },
@@ -415,6 +438,8 @@ public class SshConnectionDialog extends JDialog {
             @Override public void mouseClicked(java.awt.event.MouseEvent e) {
                 if (e.getClickCount() == 2 && selectedFavorite() != null && connectBtn.isEnabled()) onConnect();
             }
+            @Override public void mousePressed(java.awt.event.MouseEvent e)  { if (e.isPopupTrigger()) showSavedMenu(e); }
+            @Override public void mouseReleased(java.awt.event.MouseEvent e) { if (e.isPopupTrigger()) showSavedMenu(e); }
         });
         savedTree.registerKeyboardAction(e -> {
                     Object n = savedTree.getLastSelectedPathComponent();
@@ -447,37 +472,95 @@ public class SshConnectionDialog extends JDialog {
         return side;
     }
 
-    /** Rebuilds the tree from the saved connections that match the filter, all hosts expanded. */
+    /** A folder of saved logs on one server: the tree's middle level. */
+    private record SavedFolder(String host, String path) {
+        @Override public String toString() { return folderLabel(path); }
+    }
+
+    /** A folder as its row shows it: the path, or ~ for a path relative to the home folder. */
+    static String folderLabel(String path) {
+        return path == null || path.isEmpty() ? "~" : path;
+    }
+
+    /** The key a folded server or folder is remembered by; null for a log. */
+    private static String foldKey(Object o) {
+        if (o instanceof SavedFolder f) return "f:" + f.host() + "\n" + f.path();
+        return o instanceof String host ? "h:" + host : null;
+    }
+
+    /**
+     * Rebuilds the tree from the saved connections that match the filter: servers, the folders
+     * of their logs, then the logs. What the user folded stays folded, except while filtering,
+     * when every match shows. The selected row stays selected.
+     */
     private void rebuildSavedTree() {
-        AppPrefs.SshFavorite selected = selectedFavorite();
+        Object selected = savedTree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode n
+                ? n.getUserObject() : null;
         String q = savedFilter.getText().trim().toLowerCase(java.util.Locale.ROOT);
         // Servers in order of what their row shows: the name if they have one, else the host.
-        java.util.TreeMap<String, List<AppPrefs.SshFavorite>> byHost = new java.util.TreeMap<>(
+        java.util.TreeMap<String, java.util.TreeMap<String, List<AppPrefs.SshFavorite>>> byHost = new java.util.TreeMap<>(
                 java.util.Comparator.comparing((String h) -> hostNames.getOrDefault(h, h), String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(String.CASE_INSENSITIVE_ORDER));
         for (AppPrefs.SshFavorite f : favorites) {
             String hay = (f.host() + " " + hostNames.getOrDefault(f.host(), "") + " " + f.remotePath()
                     + " " + f.user()).toLowerCase(java.util.Locale.ROOT);
-            if (q.isEmpty() || hay.contains(q)) byHost.computeIfAbsent(f.host(), h -> new ArrayList<>()).add(f);
+            if (!q.isEmpty() && !hay.contains(q)) continue;
+            byHost.computeIfAbsent(f.host(), h -> new java.util.TreeMap<>(
+                            String.CASE_INSENSITIVE_ORDER.thenComparing(java.util.Comparator.naturalOrder())))
+                    .computeIfAbsent(folder(f.remotePath()), k -> new ArrayList<>()).add(f);
         }
         savedRoot.removeAllChildren();
         DefaultMutableTreeNode toSelect = null;
-        for (var entry : byHost.entrySet()) {
-            DefaultMutableTreeNode hostNode = new DefaultMutableTreeNode(entry.getKey());
-            entry.getValue().sort(java.util.Comparator.comparing((AppPrefs.SshFavorite f) -> fileName(f.remotePath()),
-                    String.CASE_INSENSITIVE_ORDER).thenComparing(AppPrefs.SshFavorite::remotePath));
-            for (AppPrefs.SshFavorite f : entry.getValue()) {
-                DefaultMutableTreeNode n = new DefaultMutableTreeNode(f);
-                hostNode.add(n);
-                if (selected != null && f.name().equals(selected.name())) toSelect = n;
+        List<DefaultMutableTreeNode> hosts = new ArrayList<>();
+        for (var host : byHost.entrySet()) {
+            DefaultMutableTreeNode hostNode = new DefaultMutableTreeNode(host.getKey());
+            if (host.getKey().equals(selected)) toSelect = hostNode;
+            for (var folder : host.getValue().entrySet()) {
+                SavedFolder sf = new SavedFolder(host.getKey(), folder.getKey());
+                DefaultMutableTreeNode folderNode = new DefaultMutableTreeNode(sf);
+                if (sf.equals(selected)) toSelect = folderNode;
+                folder.getValue().sort(java.util.Comparator.comparing((AppPrefs.SshFavorite f) -> fileName(f.remotePath()),
+                        String.CASE_INSENSITIVE_ORDER).thenComparing(AppPrefs.SshFavorite::remotePath));
+                for (AppPrefs.SshFavorite f : folder.getValue()) {
+                    DefaultMutableTreeNode n = new DefaultMutableTreeNode(f);
+                    folderNode.add(n);
+                    if (selected instanceof AppPrefs.SshFavorite s && f.name().equals(s.name())) toSelect = n;
+                }
+                hostNode.add(folderNode);
             }
             savedRoot.add(hostNode);
+            hosts.add(hostNode);
         }
-        ((javax.swing.tree.DefaultTreeModel) savedTree.getModel()).reload();
-        for (int i = 0; i < savedTree.getRowCount(); i++) savedTree.expandRow(i);
-        if (toSelect != null) savedTree.setSelectionPath(new javax.swing.tree.TreePath(toSelect.getPath()));
+        rebuilding = true;
+        try {
+            ((javax.swing.tree.DefaultTreeModel) savedTree.getModel()).reload();
+            boolean filtering = !q.isEmpty();
+            for (DefaultMutableTreeNode hostNode : hosts) {
+                // Folders first: expanding one opens its server too, and the server folds after,
+                // the tree keeping its folders' state for when it opens again.
+                for (int i = 0; i < hostNode.getChildCount(); i++) {
+                    DefaultMutableTreeNode folderNode = (DefaultMutableTreeNode) hostNode.getChildAt(i);
+                    if (filtering || !collapsed.contains(foldKey(folderNode.getUserObject()))) {
+                        savedTree.expandPath(new javax.swing.tree.TreePath(folderNode.getPath()));
+                    }
+                }
+                javax.swing.tree.TreePath hostPath = new javax.swing.tree.TreePath(hostNode.getPath());
+                if (!filtering && collapsed.contains(foldKey(hostNode.getUserObject()))) savedTree.collapsePath(hostPath);
+                else savedTree.expandPath(hostPath);
+            }
+            if (toSelect != null) savedTree.setSelectionPath(new javax.swing.tree.TreePath(toSelect.getPath()));
+        } finally {
+            rebuilding = false;
+        }
         savedCards.show(savedBody, favorites.isEmpty() ? "empty" : "list");
         savedFilter.setEnabled(!favorites.isEmpty());
+    }
+
+    /** Remembers a server or folder the user folded or opened (not while filtering). */
+    private void folded(javax.swing.tree.TreePath path, boolean folded) {
+        if (rebuilding || !savedFilter.getText().isBlank()) return;
+        String key = foldKey(((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject());
+        if (key != null && (folded ? collapsed.add(key) : collapsed.remove(key))) AppPrefs.setSshCollapsed(collapsed);
     }
 
     private AppPrefs.SshFavorite selectedFavorite() {
@@ -485,27 +568,33 @@ public class SshConnectionDialog extends JDialog {
         return last instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof AppPrefs.SshFavorite f ? f : null;
     }
 
+    /** The saved logs at or under a row: one log, a folder's, or a server's. */
+    private static List<AppPrefs.SshFavorite> logsUnder(DefaultMutableTreeNode node) {
+        List<AppPrefs.SshFavorite> logs = new ArrayList<>();
+        for (var e = node.depthFirstEnumeration(); e.hasMoreElements(); ) {
+            if (((DefaultMutableTreeNode) e.nextElement()).getUserObject() instanceof AppPrefs.SshFavorite f) logs.add(f);
+        }
+        return logs;
+    }
+
     /**
-     * Forgets a saved log, or every saved log on a host (after asking, since that's several at
-     * once). The form keeps what it shows.
+     * Forgets a saved log, or every saved log in a folder or on a server (after asking, when
+     * that's several at once). The form keeps what it shows.
      */
     private void forget(DefaultMutableTreeNode node) {
-        List<AppPrefs.SshFavorite> gone = new ArrayList<>();
-        if (node.getUserObject() instanceof AppPrefs.SshFavorite f) {
-            gone.add(f);
-        } else {
-            for (int i = 0; i < node.getChildCount(); i++) {
-                if (((DefaultMutableTreeNode) node.getChildAt(i)).getUserObject() instanceof AppPrefs.SshFavorite f) gone.add(f);
-            }
-            if (gone.isEmpty()) return;
-            if (gone.size() > 1) {
-                int answer = JOptionPane.showConfirmDialog(this,
-                        java.text.MessageFormat.format(Messages.get("ssh.dialog.saved.forget.host.confirm"),
-                                gone.size(), node.getUserObject()),
-                        Messages.get("ssh.dialog.saved.forget.host.title"),
-                        JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
-                if (answer != JOptionPane.OK_OPTION) return;
-            }
+        List<AppPrefs.SshFavorite> gone = logsUnder(node);
+        if (gone.isEmpty()) return;
+        Object o = node.getUserObject();
+        if (!(o instanceof AppPrefs.SshFavorite) && gone.size() > 1) {
+            String message = o instanceof SavedFolder sf
+                    ? java.text.MessageFormat.format(Messages.get("ssh.dialog.saved.forget.folder.confirm"),
+                            gone.size(), folderLabel(sf.path()))
+                    : java.text.MessageFormat.format(Messages.get("ssh.dialog.saved.forget.host.confirm"),
+                            gone.size(), hostNames.getOrDefault((String) o, (String) o));
+            int answer = JOptionPane.showConfirmDialog(this, message,
+                    Messages.get("ssh.dialog.saved.forget.host.title"),
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (answer != JOptionPane.OK_OPTION) return;
         }
         java.util.Set<String> names = new java.util.HashSet<>();
         gone.forEach(f -> names.add(f.name()));
@@ -519,8 +608,152 @@ public class SshConnectionDialog extends JDialog {
                 AppPrefs.setSshHostName(f.host(), null);
             }
         }
+        // Nor does it keep the folding of servers and folders that are gone.
+        java.util.Set<String> live = new java.util.HashSet<>();
+        for (AppPrefs.SshFavorite f : favorites) {
+            live.add(foldKey(f.host()));
+            live.add(foldKey(new SavedFolder(f.host(), folder(f.remotePath()))));
+        }
+        if (collapsed.retainAll(live)) AppPrefs.setSshCollapsed(collapsed);
         if (selected != null && names.contains(selected.name())) savedTree.clearSelection();
         rebuildSavedTree();
+        showName();
+    }
+
+    /** The problem with naming {@code host} {@code name}: another server has that name; else null. */
+    private String renameProblem(String host, String name) {
+        String n = name.strip();
+        if (n.isEmpty()) return null;
+        for (var e : hostNames.entrySet()) {
+            if (!e.getKey().equals(host) && e.getValue().equalsIgnoreCase(n)) {
+                return java.text.MessageFormat.format(Messages.get("ssh.dialog.saved.rename.duplicate"), e.getValue());
+            }
+        }
+        return null;
+    }
+
+    /** Names a server, or forgets its name when {@code name} is blank, and shows it everywhere. */
+    private void renameServer(String host, String name) {
+        String n = name.strip();
+        if (n.equals(hostNames.getOrDefault(host, "")) || renameProblem(host, n) != null) return;
+        if (n.isEmpty()) hostNames.remove(host);
+        else hostNames.put(host, n);
+        AppPrefs.setSshHostName(host, n);
+        showName();
+        // After the editor has closed: the server may move, since servers sort by name.
+        SwingUtilities.invokeLater(this::rebuildSavedTree);
+    }
+
+    /**
+     * The row's right-click menu: Rename on a server, Duplicate on a log, then Forget, which
+     * names what it forgets. The row is selected first, as in any list.
+     */
+    private void showSavedMenu(java.awt.event.MouseEvent e) {
+        int row = savedTree.getClosestRowForLocation(e.getX(), e.getY());
+        Rectangle r = row >= 0 ? savedTree.getRowBounds(row) : null;
+        if (r == null || e.getY() < r.y || e.getY() >= r.y + r.height) return;
+        savedTree.setSelectionRow(row);
+        DefaultMutableTreeNode node = (DefaultMutableTreeNode) savedTree.getPathForRow(row).getLastPathComponent();
+        Object o = node.getUserObject();
+        JPopupMenu menu = new JPopupMenu();
+        if (o instanceof String) {
+            JMenuItem rename = new JMenuItem(Messages.get("ssh.dialog.saved.menu.rename"));
+            rename.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F2, 0));
+            rename.addActionListener(a -> savedTree.startEditingAtPath(savedTree.getPathForRow(row)));
+            menu.add(rename);
+            menu.addSeparator();
+        } else if (o instanceof AppPrefs.SshFavorite f) {
+            JMenuItem dup = new JMenuItem(Messages.get("ssh.dialog.saved.menu.duplicate"));
+            dup.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+            dup.addActionListener(a -> duplicate(f));
+            menu.add(dup);
+            menu.addSeparator();
+        }
+        int count = logsUnder(node).size();
+        String key = o instanceof String ? "ssh.dialog.saved.menu.forget.server"
+                   : o instanceof SavedFolder ? "ssh.dialog.saved.menu.forget.folder"
+                   : "ssh.dialog.saved.menu.forget";
+        // "…" when it will ask first: several logs at once.
+        JMenuItem forget = new JMenuItem(Messages.get(key) + (count > 1 ? "…" : ""));
+        forget.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_DELETE, 0));
+        forget.addActionListener(a -> forget(node));
+        menu.add(forget);
+        menu.show(savedTree, e.getX(), e.getY());
+    }
+
+    /**
+     * Renames a server on its row: its name in a field (empty shows the host as a hint), Enter
+     * saves, Esc cancels. A name another server has is refused, with the field outlined in red
+     * and the reason on a line under it, which the row keeps while renaming. Only F2 and the row's Rename start it, never a click.
+     */
+    private final class ServerNameEditor extends AbstractCellEditor implements javax.swing.tree.TreeCellEditor {
+        private final JTextField field = new JTextField();
+        private final JLabel error = new JLabel();
+        /** As wide as the sidebar shows from the row's indent to the right edge, less its tools. */
+        private int width = 160;
+        private final JPanel panel = new JPanel(new BorderLayout(0, 2)) {
+            @Override public Dimension getPreferredSize() {
+                Dimension d = super.getPreferredSize();
+                return new Dimension(Math.max(width, 120), d.height);
+            }
+        };
+        private String host;
+        private DefaultMutableTreeNode node;
+
+        ServerNameEditor() {
+            panel.setOpaque(false);
+            panel.add(field, BorderLayout.NORTH);
+            panel.add(error, BorderLayout.SOUTH);
+            field.addActionListener(e -> stopCellEditing());
+            field.getDocument().addDocumentListener(new DocumentListener() {
+                public void insertUpdate(DocumentEvent e)  { showProblem(renameProblem(host, field.getText())); }
+                public void removeUpdate(DocumentEvent e)  { showProblem(renameProblem(host, field.getText())); }
+                public void changedUpdate(DocumentEvent e) { showProblem(renameProblem(host, field.getText())); }
+            });
+        }
+
+        @Override public boolean isCellEditable(java.util.EventObject e) {
+            return e == null;   // F2 and Rename start it with no event; clicks never do
+        }
+
+        @Override public Component getTreeCellEditorComponent(JTree tree, Object value, boolean selected,
+                boolean expanded, boolean leaf, int row) {
+            node = (DefaultMutableTreeNode) value;
+            host = (String) node.getUserObject();
+            error.setFont(tree.getFont().deriveFont(tree.getFont().getSize2D() * 0.92f));
+            error.setForeground(ClouseauColors.statusError());
+            field.setText(hostNames.getOrDefault(host, ""));
+            field.putClientProperty("JTextField.placeholderText", host);
+            field.selectAll();
+            showProblem(null);
+            panel.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 4));
+            Rectangle rb = tree.getRowBounds(row);
+            int visible = tree.getParent() instanceof JViewport v ? v.getWidth() : tree.getWidth();
+            width = visible - (rb != null ? rb.x : 0) - 4;
+            SwingUtilities.invokeLater(field::requestFocusInWindow);
+            return panel;
+        }
+
+        @Override public Object getCellEditorValue() {
+            return field.getText();
+        }
+
+        @Override public boolean stopCellEditing() {
+            String problem = renameProblem(host, field.getText());
+            if (problem != null) {
+                showProblem(problem);
+                return false;
+            }
+            return super.stopCellEditing();
+        }
+
+        private void showProblem(String problem) {
+            // The message line is there from the start, empty until needed, so the row keeps
+            // its height: the tree sizes an editing row once, when the editing starts.
+            field.putClientProperty("JComponent.outline", problem != null ? "error" : null);
+            error.setText(problem != null ? problem : " ");
+            field.repaint();
+        }
     }
 
     /**
@@ -536,12 +769,30 @@ public class SshConnectionDialog extends JDialog {
 
         SavedTree(DefaultMutableTreeNode root) {
             super(root);
+            // A rename comes back here as the edited text: it names the server, not the node.
+            setModel(new javax.swing.tree.DefaultTreeModel(root) {
+                @Override public void valueForPathChanged(javax.swing.tree.TreePath path, Object newValue) {
+                    if (((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject() instanceof String host) {
+                        renameServer(host, String.valueOf(newValue));
+                    }
+                }
+            });
             java.awt.event.MouseAdapter hover = new java.awt.event.MouseAdapter() {
                 @Override public void mouseMoved(java.awt.event.MouseEvent e)  { track(e.getPoint()); }
                 @Override public void mouseExited(java.awt.event.MouseEvent e) { hoverRow = -1; overTool = Tool.NONE; repaint(); }
             };
             addMouseListener(hover);
             addMouseMotionListener(hover);
+        }
+
+        /** Only a server's row can be edited: renaming it. */
+        @Override public boolean isPathEditable(javax.swing.tree.TreePath path) {
+            return isEditable() && ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject() instanceof String;
+        }
+
+        private boolean isFolder(int row) {
+            javax.swing.tree.TreePath path = row >= 0 ? getPathForRow(row) : null;
+            return path != null && ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject() instanceof SavedFolder;
         }
 
         private boolean isLog(int row) {
@@ -591,8 +842,9 @@ public class SshConnectionDialog extends JDialog {
             track(e.getPoint());
             if (overTool == Tool.DUPLICATE) return Messages.get("ssh.dialog.saved.duplicate.tooltip");
             if (overTool == Tool.TRASH) {
-                return isLog(hoverRow) ? Messages.get("ssh.dialog.saved.remove.tooltip")
-                                       : Messages.get("ssh.dialog.saved.forget.host.tooltip");
+                return isLog(hoverRow)    ? Messages.get("ssh.dialog.saved.remove.tooltip")
+                     : isFolder(hoverRow) ? Messages.get("ssh.dialog.saved.forget.folder.tooltip")
+                                          : Messages.get("ssh.dialog.saved.forget.host.tooltip");
             }
             return super.getToolTipText(e);
         }
@@ -630,29 +882,26 @@ public class SshConnectionDialog extends JDialog {
     }
 
     /**
-     * Host rows show the host; log rows show the file name with its folder dimmed below, in
-     * full. Each row keeps room on its right for the row's tools (trash can, and duplicate on a
-     * log), and the tree is never narrower than its widest row, so the tools, drawn at the
-     * tree's right edge, never cover a name; a sidebar too narrow for a row scrolls sideways.
+     * Three kinds of row. A server: its name in bold with the host dimmed beside it (or just the
+     * host, in bold, if it has no name), with more room above and below. A folder: its path. A
+     * log: its file name. Each row keeps room on its right for the row's tools (trash can, and
+     * duplicate on a log), and the tree is never narrower than its widest row, so the tools,
+     * drawn at the tree's right edge, never cover a name; a sidebar too narrow for a row
+     * scrolls sideways.
      */
     private static final class SavedRenderer extends JPanel implements javax.swing.tree.TreeCellRenderer {
-        /** Room kept free on the right for the tools: two on a log, one on a host. */
-        private static final int LOG_TOOLS = 2 * SavedTree.TOOL + 4, HOST_TOOLS = SavedTree.TOOL + 4;
+        /** Room kept free on the right for the tools: two on a log, one on a server or folder. */
+        private static final int LOG_TOOLS = 2 * SavedTree.TOOL + 4, GROUP_TOOLS = SavedTree.TOOL + 4;
         private final javax.swing.tree.DefaultTreeCellRenderer colors = new javax.swing.tree.DefaultTreeCellRenderer();
-        private final JLabel name = new JLabel(), host = new JLabel(), folder = new JLabel();
+        private final JLabel name = new JLabel(), host = new JLabel();
         private final java.util.Map<String, String> hostNames;
 
         SavedRenderer(java.util.Map<String, String> hostNames) {
-            super(new BorderLayout(0, 1));
+            super(new BorderLayout(8, 0));
             this.hostNames = hostNames;
             setOpaque(false);
-            // A named server's row: the name, then the host dimmed beside it.
-            JPanel top = new JPanel(new BorderLayout(8, 0));
-            top.setOpaque(false);
-            top.add(name, BorderLayout.WEST);
-            top.add(host, BorderLayout.CENTER);
-            add(top, BorderLayout.NORTH);
-            add(folder, BorderLayout.SOUTH);
+            add(name, BorderLayout.WEST);
+            add(host, BorderLayout.CENTER);
         }
 
         @Override public Component getTreeCellRendererComponent(JTree tree, Object value, boolean selected,
@@ -660,36 +909,55 @@ public class SshConnectionDialog extends JDialog {
             colors.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);
             Color fg = colors.getForeground();
             Object o = value instanceof DefaultMutableTreeNode n ? n.getUserObject() : null;
-            name.setFont(tree.getFont());
+            // A server is the level above everything under it: its name is bold (the host beside
+            // it stays regular and dim). Weight, not a fill: only the selected row is filled.
+            boolean server = o instanceof String;
+            name.setFont(server ? tree.getFont().deriveFont(Font.BOLD) : tree.getFont());
             name.setForeground(fg);
-            folder.setFont(tree.getFont().deriveFont(tree.getFont().getSize2D() * 0.92f));
-            folder.setForeground(selected ? fg : ClouseauColors.dimForeground());
             host.setFont(tree.getFont());
-            host.setForeground(folder.getForeground());
+            host.setForeground(selected ? fg : ClouseauColors.dimForeground());
             host.setVisible(false);
+            setToolTipText(null);
             if (o instanceof AppPrefs.SshFavorite f) {
                 name.setText(fileName(f.remotePath()));
-                folder.setText(folder(f.remotePath()));
-                folder.setVisible(true);
                 setToolTipText(f.user() + "@" + f.host() + (f.port() != 22 ? ":" + f.port() : "")
                         + "  " + f.remotePath());
+            } else if (o instanceof SavedFolder sf) {
+                name.setText(folderLabel(sf.path()));
             } else {
                 String h = o == null ? "" : o.toString();
                 String named = hostNames.get(h);
                 name.setText(named != null ? named : h);
                 host.setText(h);
                 host.setVisible(named != null);
-                folder.setVisible(false);
-                setToolTipText(null);
             }
-            setBorder(BorderFactory.createEmptyBorder(3, 0, 3, o instanceof AppPrefs.SshFavorite ? LOG_TOOLS : HOST_TOOLS));
+            // Servers get more room above and below, so each one starts a block. The room is
+            // even on both sides, so a selected server's fill stays centered on its text.
+            int pad = server ? 6 : 3;
+            setBorder(BorderFactory.createEmptyBorder(pad, 0, pad, o instanceof AppPrefs.SshFavorite ? LOG_TOOLS : GROUP_TOOLS));
             return this;
+        }
+    }
+
+    /**
+     * Shows the name of the server in Host, or a dim note saying where it's named: on its row
+     * in Saved connections (right-click, Rename), once it's saved there.
+     */
+    private void showName() {
+        String host = hostField.getText().trim();
+        String name = hostNames.get(host);
+        if (name != null) {
+            nameValue.setText(name);
+            nameValue.setForeground(ClouseauColors.foreground());
+        } else {
+            boolean saved = favorites != null && favorites.stream().anyMatch(f -> f.host().equals(host));
+            nameValue.setText(Messages.get(saved ? "ssh.dialog.name.none" : "ssh.dialog.name.none.unsaved"));
+            nameValue.setForeground(ClouseauColors.dimForeground());
         }
     }
 
     private void loadFavorite(AppPrefs.SshFavorite f) {
         hostField.setText(f.host());
-        nameField.setText(hostNames.getOrDefault(f.host(), ""));
         portField.setText(String.valueOf(f.port()));
         userField.setText(f.user());
         remotePathField.setText(f.remotePath());
@@ -919,8 +1187,6 @@ public class SshConnectionDialog extends JDialog {
                 : Optional.empty();
 
         if (saveBox.isSelected()) {
-            String name = nameField.getText().strip();
-            if (!name.equals(hostNames.getOrDefault(host, ""))) AppPrefs.setSshHostName(host, name);
             saveFavorite(config, authType, parser.map(LogParser::getName).orElse(null), selectedFavorite());
         }
         AppPrefs.setSshSaveConnection(saveBox.isSelected());
