@@ -108,7 +108,10 @@ the project's JDK) before running `./gradlew`.
 
 CI (`.github/workflows`): **Edge** runs tests and publishes `clouseau-edge.jar` on every
 push to `main`; **Release** runs tests and publishes a portable zip per platform on `v*`
-tags.
+tags. Write a release's notes for users in `docs/releases/<tag>.md` (first line
+`Title: Clouseau <version> — <headline>`, then Markdown) and commit them before tagging: the
+Release workflow publishes them as the release's title and notes, or GitHub's list of commits
+when there's no file.
 
 ## Key classes
 

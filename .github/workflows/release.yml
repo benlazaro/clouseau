@@ -78,6 +78,12 @@ jobs:
       TAG: ${{ github.ref_name }}
 
     steps:
+      # Only the release notes, written for users in docs/releases/<tag>.md.
+      - name: Check out the release notes
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: docs/releases
+
       - name: Download the zips
         uses: actions/download-artifact@v8
         with:
@@ -94,7 +100,20 @@ jobs:
           # which the update check offers only to pre-release users (D-23).
           prerelease=()
           if [[ "$TAG" == *-* ]]; then prerelease=(--prerelease); fi
-          gh release create "$TAG" --verify-tag --generate-notes "${prerelease[@]}"
+          # The notes written for the release, if there are any: docs/releases/<tag>.md, whose
+          # first line is "Title: <the release's title>". Else GitHub's list of commits.
+          notes=(--generate-notes)
+          file="docs/releases/$TAG.md"
+          if [[ -f "$file" ]]; then
+            title="$(head -n 1 "$file" | sed -n 's/^Title: *//p')"
+            if [[ -n "$title" ]]; then
+              tail -n +2 "$file" | sed '/./,$!d' > release-notes.md
+              notes=(--title "$title" --notes-file release-notes.md)
+            else
+              notes=(--notes-file "$file")
+            fi
+          fi
+          gh release create "$TAG" --verify-tag "${notes[@]}" "${prerelease[@]}"
 
       - name: Upload the zips, Windows first
         shell: bash

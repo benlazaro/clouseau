@@ -49,6 +49,7 @@ exclude:
   - CONTRIBUTING.md
   - docs/DESIGN.md
   - docs/USE_CASES.md
+  - docs/releases/
   - build/
   - gradle/
   - packaging/
