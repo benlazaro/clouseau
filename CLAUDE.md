@@ -130,6 +130,7 @@ tags.
 - `WindowManager` (ui) — UC-16, D-18: every window, the one used last, and what they share
   (parser/formatter/highlighter/source lists, "one tab per file" across windows).
 - `MainFrame` (ui) — one window: its menus and tabs, and moving tabs between windows.
+  `TabDragHandler` (ui) drags a tab IntelliJ-style (empty slot, midpoint swaps, Esc cancels).
 - `TabPanel` (ui) — one tab (D-21): lays out its parts, keeps the window's methods, and swaps what it shows.
   `SharedTabContext` (ui) owns what every tab has, whatever it shows (table, model, bars, detail pane, notes,
   follow mode, timezone, status bar, cards), and does the steps that touch several of them.

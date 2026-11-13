@@ -517,8 +517,12 @@ logs from a ticket alongside my local one.
      the ends;
    - `Ctrl+PageDown` / `Ctrl+PageUp` do the same;
    - `Ctrl+1` to `Ctrl+8` jump to that tab, and `Ctrl+9` jumps to the last tab.
-3. User rearranges tabs by dragging one to a new position; a floating preview of the tab
-   follows the mouse while dragging.
+3. User rearranges tabs by dragging one to a new position. As in IntelliJ, once the mouse
+   has moved a few pixels the tab lifts out: a copy of it slides along the tab strip and an
+   empty slot shows where it will land. Its neighbours make way once the copy's edge passes
+   their middle, so tabs of different widths don't flicker back and forth. Dragged away
+   from the strip, the copy floats with the mouse (see UC-16). `Esc` cancels the drag and
+   puts the tab back.
 4. User closes a tab with its close button or `Ctrl+W`. Clouseau asks for confirmation
    first, unless the user has turned that off with "Don't ask again".
 5. Right-clicking a tab offers per-tab actions, such as setting its source timezone or

@@ -1424,7 +1424,14 @@ re-parent, not a reload, and everything shared stays shared.
   window left with no tabs by a move closes. **Move to New Window** (greyed out for a
   window's only tab) and **Move to ▸ Window N: <selected tab>** are on the tab's
   right-click menu; N is the window's position in the list, so numbers close up when a
-  window closes. The tab drag of UC-15 ends in `dropTab`: released over its own window it
+  window closes. The tab drag of UC-15 is a `TabDragHandler` on each tab header. Past
+  the drag threshold it shows a copy of the tab in a `JWindow` and blanks the header (the
+  `PLACEHOLDER` client property makes it skip its children), so the slot shows where the
+  tab will land. Within a tab's height of the strip the copy slides along it, and
+  `slotFor` moves the tab past a neighbour once the copy's edge crosses that neighbour's
+  middle; the answer doesn't change after the swap, so unequal widths don't oscillate.
+  Only tabs in the dragged tab's row count. Esc (a `KeyEventDispatcher` held for the
+  drag) puts it back. The drag ends in `dropTab`: released over its own window it
   stays where the drag put it; over another Clouseau window it moves there, at the tab
   under the cursor (else at the end); anywhere else it opens a new window with its tab
   strip under the cursor.

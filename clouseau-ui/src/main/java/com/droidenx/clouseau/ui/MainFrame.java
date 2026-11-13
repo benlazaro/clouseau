@@ -1469,7 +1469,13 @@ public final class MainFrame extends JFrame {
     }
 
     private JPanel buildTabHeader(String title, TabPanel panel) {
-        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)) {
+            // While its tab is dragged, the header keeps its size but shows nothing: the slot
+            // where the tab will land.
+            @Override protected void paintChildren(Graphics g) {
+                if (getClientProperty(TabDragHandler.PLACEHOLDER) == null) super.paintChildren(g);
+            }
+        };
         header.setOpaque(false);
 
         JLabel label = new JLabel(title);
@@ -1494,52 +1500,12 @@ public final class MainFrame extends JFrame {
         header.add(led);
         header.add(close);
 
-        // Select on click + drag-to-reorder with floating ghost
-        int[] clickOff = {0, 0};
-        JWindow[] ghost = {null};
-
-        java.awt.event.MouseAdapter tabMouseAdapter = new java.awt.event.MouseAdapter() {
-            @Override public void mousePressed(java.awt.event.MouseEvent e) {
-                if (e.isPopupTrigger()) { showTabContextMenu(e, panel); return; }
-                int idx = tabbedPane.indexOfTabComponent(header);
-                if (idx >= 0) tabbedPane.setSelectedIndex(idx);
-                Point pt = SwingUtilities.convertPoint((Component) e.getSource(), e.getPoint(), header);
-                clickOff[0] = pt.x;
-                clickOff[1] = pt.y;
-            }
-            @Override public void mouseReleased(java.awt.event.MouseEvent e) {
-                if (e.isPopupTrigger()) { showTabContextMenu(e, panel); return; }
-                tabbedPane.setCursor(Cursor.getDefaultCursor());
-                if (ghost[0] != null) {
-                    ghost[0].dispose();
-                    ghost[0] = null;
-                    // After the release is handled, so the header isn't removed under it.
-                    Point screen = e.getLocationOnScreen();
-                    SwingUtilities.invokeLater(() -> dropTab(panel, screen));
-                }
-            }
-            @Override public void mouseDragged(java.awt.event.MouseEvent e) {
-                int src = tabbedPane.indexOfTabComponent(header);
-                if (src < 0) return;
-                tabbedPane.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-                if (ghost[0] == null) ghost[0] = createGhostWindow(header);
-                if (ghost[0] != null) {
-                    Point screen = e.getLocationOnScreen();
-                    ghost[0].setLocation(screen.x - clickOff[0], screen.y - clickOff[1]);
-                    if (!ghost[0].isVisible()) ghost[0].setVisible(true);
-                }
-                Point p = SwingUtilities.convertPoint((Component) e.getSource(), e.getPoint(), tabbedPane);
-                int dst = tabbedPane.indexAtLocation(p.x, p.y);
-                if (dst >= 0 && dst != src) moveTab(src, dst);
-            }
-        };
-        header.addMouseListener(tabMouseAdapter);
-        header.addMouseMotionListener(tabMouseAdapter);
-        label.addMouseListener(tabMouseAdapter);
-        label.addMouseMotionListener(tabMouseAdapter);
-        // The dot has a tooltip, so it takes mouse events: let it select and drag too.
-        led.addMouseListener(tabMouseAdapter);
-        led.addMouseMotionListener(tabMouseAdapter);
+        // Select on click; drag to reorder, or out to another window (IntelliJ style).
+        new TabDragHandler(tabbedPane, header, new TabDragHandler.Host() {
+            @Override public void moveTab(int from, int to) { MainFrame.this.moveTab(from, to); }
+            @Override public void dropTab(Point screen) { MainFrame.this.dropTab(panel, screen); }
+            @Override public void showContextMenu(java.awt.event.MouseEvent e) { showTabContextMenu(e, panel); }
+        }).install(header, label, led);   // the dot has a tooltip, so it takes mouse events too
 
         return header;
     }
@@ -1627,28 +1593,6 @@ public final class MainFrame extends JFrame {
                 panel.applySourceTimezone(choice.source());
             }
         }));
-    }
-
-    private JWindow createGhostWindow(JPanel tabHeader) {
-        int w = tabHeader.getWidth();
-        int h = tabHeader.getHeight();
-        if (w <= 0 || h <= 0) return null;
-
-        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g2 = img.createGraphics();
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        Color bg = UIManager.getColor("TabbedPane.selectedBackground");
-        g2.setColor(bg != null ? bg : ClouseauColors.tableBackground());
-        g2.fillRect(0, 0, w, h);
-        tabHeader.paint(g2);
-        g2.dispose();
-
-        JWindow window = new JWindow(this);
-        try { window.setOpacity(0.80f); } catch (Exception ignored) {}
-        JLabel content = new JLabel(new ImageIcon(img));
-        window.setContentPane(content);
-        window.setSize(w, h);
-        return window;
     }
 
     private void moveTab(int from, int to) {
