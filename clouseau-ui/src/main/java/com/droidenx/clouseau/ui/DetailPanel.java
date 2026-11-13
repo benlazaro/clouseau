@@ -130,7 +130,6 @@ final class DetailPanel extends JPanel {
         installKeys();
         installContextMenu();
         JScrollPane detailScroll = new JScrollPane(detailArea);
-        detailScroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
         ClouseauColors.themedBackground(detailScroll.getViewport(), ClouseauColors::detailBackground);
         // No frame of its own: the header's hairline is the only line between header and text
         // (a frame doubled it into a bright 2px band), as the main toolbar has one line.

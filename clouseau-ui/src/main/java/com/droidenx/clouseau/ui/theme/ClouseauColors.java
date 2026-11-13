@@ -170,6 +170,11 @@ public final class ClouseauColors {
      * frame when the view inside has focus. The frame would be the largest amber on screen and
      * says nothing the selection doesn't; focus shows through the selection (bright with focus,
      * dimmer without). Fields and buttons keep their focus ring.
+     * <p>
+     * Only for a scroll pane that keeps FlatLaf's own frame: FlatLaf hands these keys to the
+     * scroll pane's border, so on one given another border (empty, a popup's hairline) they're
+     * unknown and FlatLaf logs an {@code UnknownStyleException} each time it applies the style
+     * (theme switches). Such a pane has no focus frame to hide anyway.
      */
     public static final String NO_FOCUS_FRAME = "focusedBorderColor: $Component.borderColor; innerFocusWidth: 0";
 
@@ -182,10 +187,13 @@ public final class ClouseauColors {
     /**
      * {@link #NO_FOCUS_FRAME} on every scroll pane inside {@code root}, now and as they're added:
      * for components that build their views themselves, such as a JFileChooser switching between
-     * its list and details views.
+     * its list and details views. Scroll panes they gave another border are left alone (see
+     * {@link #NO_FOCUS_FRAME}).
      */
     public static void noFocusFrames(Container root) {
-        if (root instanceof JScrollPane s) noFocusFrame(s);
+        if (root instanceof JScrollPane s && s.getBorder() instanceof com.formdev.flatlaf.ui.FlatBorder) {
+            noFocusFrame(s);
+        }
         if (root instanceof JComponent jc) {
             if (jc.getClientProperty("Clouseau.noFocusFrames") != null) return;
             jc.putClientProperty("Clouseau.noFocusFrames", Boolean.TRUE);
