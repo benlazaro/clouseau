@@ -457,3 +457,14 @@ tasks.register<JavaExec>("socialPreview") {
             docsDir.resolve("social-preview.png").absolutePath)
     jvmArgs("-Djava.awt.headless=true")
 }
+
+// Dev-only: writes large logs to build/big-logs/ for checking speed by hand (four to merge,
+// one with lines out of time order). Same files every run. -Pentries=N sets entries per file.
+tasks.register<JavaExec>("bigLogs") {
+    group = "verification"
+    description = "Writes large test logs to build/big-logs/ (-Pentries=N, default 1000000)."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.droidenx.clouseau.ui.BigLogsTool")
+    args(layout.buildDirectory.dir("big-logs").get().asFile.absolutePath,
+            providers.gradleProperty("entries").getOrElse("1000000"))
+}

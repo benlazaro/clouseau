@@ -39,6 +39,18 @@ the main view screenshot: run `./gradlew :clouseau-ui:socialPreview` to redraw
 `docs/social-preview.png`, then upload it under the repository's **Settings → General →
 Social preview**. It draws off-screen, so it doesn't need the screen to itself.
 
+To check how Clouseau copes with big logs, run `./gradlew :clouseau-ui:bigLogs`. In about
+ten seconds it writes five logs of 1,000,000 entries each (about 125 MB apiece) to
+`clouseau-ui/build/big-logs/`, the same files every time:
+
+- `node1.log` to `node4.log` cover the same hours from four services: open them together
+  as a merged view of 4 million rows.
+- `out-of-order.log` has about 5% of its lines stamped up to ten minutes early, so sorting
+  by Timestamp has real reordering to do.
+
+Every 50th entry has a stack trace line under it. Add `-Pentries=N` for a different size.
+The files stay in `build/`, so they're never committed; `./gradlew clean` removes them.
+
 ## Project structure
 
 ```
