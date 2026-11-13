@@ -10,6 +10,11 @@ OtrosLogViewer.
 - **[docs/DESIGN.md](docs/DESIGN.md)** — how it works: modules, data model, extension
   points, threading, persistence, decisions (D-1…), and known gaps (G-1…). The gaps list
   is the technical roadmap.
+- **[Clouseau design system](https://claude.ai/artifact/8nUx714s2Jk1WsZHWgFJED)** — the visual reference: colors
+  and type for Dark and Light, and the rules for dialogs, bars, the log table and the detail
+  pane, with previews. It's a claude.ai artifact, so only sessions with access to Ben's
+  artifacts can read it; the theme files and DESIGN.md hold the same rules. Read it before
+  changing how something looks, and keep it in sync when you do.
 
 **Keep them current.** A change that adds or alters user-visible behavior updates the
 relevant use case (including its ✅/🟡/❌ status and "Current behavior" note). A change to

@@ -5,6 +5,11 @@
 > This document describes *how* Clouseau works and *why* it is built that way. It
 > complements [`USE_CASES.md`](USE_CASES.md), which describes *what* Clouseau is for.
 >
+> **Look and feel:** the colors, type and component rules for Dark and Light, with live
+> previews, are in the [Clouseau design system](https://claude.ai/artifact/8nUx714s2Jk1WsZHWgFJED) (a claude.ai
+> artifact, private to its owner). It mirrors the theme files and section 6; a change to
+> how the app looks updates both.
+>
 > **For contributors:** If your change alters a module boundary, an extension point, a
 > threading rule, a file format, or anything listed under [Decisions](#9-decisions),
 > update this document in the same pull request. If your change closes a
