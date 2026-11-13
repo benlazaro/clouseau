@@ -210,6 +210,17 @@ for accounts without a password, common on embedded devices. "None" works with
 servers that let such accounts in by any of the usual methods (none, an empty password,
 or keyboard-interactive).
 
+**Checking the details first (SSH):** The dialog's **Test** button signs in and checks
+the remote file with `test`, without opening a tab, and reports in the note above the
+buttons that the file is readable, or which step failed and why (unknown host, nothing
+listening on the port, no answer, sign-in turned down, unusable key file, missing file,
+unreadable file, a folder). Each step gives up after 15 seconds, and the connection is
+closed when the test ends, when a field changes, or when the dialog closes. **Browse…**
+next to Remote path signs in the same way and lists the server's folders over SFTP,
+starting in the typed path's folder, else `/var/log`, else home. It lists folders, then
+the files the user can read (from the file's owner, group and mode against the user's
+`id`), and counts the files it left out.
+
 **Clear Table:** Empties the table so only lines written from then on show. On a file the
 rows are hidden, not dropped: new rows keep their line in the file, notes and highlights
 stay, and Reload File shows everything again. On an SSH or plugin source the rows so far

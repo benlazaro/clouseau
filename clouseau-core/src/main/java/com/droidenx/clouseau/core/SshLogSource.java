@@ -2,18 +2,8 @@ package com.droidenx.clouseau.core;
 
 import com.droidenx.clouseau.api.ConnectingLogSource;
 import lombok.extern.slf4j.Slf4j;
-import net.schmizz.keepalive.KeepAliveProvider;
-import net.schmizz.sshj.DefaultConfig;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
-import net.schmizz.sshj.userauth.method.AuthKeyboardInteractive;
-import net.schmizz.sshj.userauth.method.AuthMethod;
-import net.schmizz.sshj.userauth.method.AuthNone;
-import net.schmizz.sshj.userauth.method.AuthPassword;
-import net.schmizz.sshj.userauth.method.PasswordResponseProvider;
-import net.schmizz.sshj.userauth.password.PasswordFinder;
-import net.schmizz.sshj.userauth.password.Resource;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -22,7 +12,6 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -33,8 +22,9 @@ import java.util.function.Consumer;
  * without being closed, so {@link #open} fails instead of waiting forever.
  * Call {@link #close()} to disconnect and unblock the streaming thread.
  *
- * <p>Note: uses {@link PromiscuousVerifier} (trust all hosts). For production use,
- * replace with an OpenSSH known-hosts verifier or a GUI "trust this host?" prompt.
+ * <p>Signs in as {@link SshRemote} does ({@link SshRemote#newClient},
+ * {@link SshRemote#authenticate}), so it trusts every host key. For production use,
+ * replace that with an OpenSSH known-hosts verifier or a GUI "trust this host?" prompt.
  */
 @Slf4j
 public class SshLogSource implements ConnectingLogSource {
@@ -89,20 +79,18 @@ public class SshLogSource implements ConnectingLogSource {
      */
     @Override
     public void open(Consumer<String> lineConsumer, Runnable onConnected) throws Exception {
-        DefaultConfig sshConfig = new DefaultConfig();
-        sshConfig.setKeepAliveProvider(KeepAliveProvider.KEEP_ALIVE);
-        SSHClient client = new SSHClient(sshConfig);
-        // Set before connect: sshj starts the keepalive thread on connect when it's enabled.
-        client.getConnection().getKeepAlive().setKeepAliveInterval(KEEP_ALIVE_SECONDS);
-        client.addHostKeyVerifier(new PromiscuousVerifier());
-        client.connect(config.host(), config.port());
+        SSHClient client = SshRemote.newClient();
+        // A server that never answers fails the connect instead of waiting on the OS.
+        client.setConnectTimeout(SshRemote.TIMEOUT_SECONDS * 1000);
         this.ssh = client;
+        if (closed) return;   // close() ran before the client existed
+        client.connect(config.host(), config.port());
         if (closed) {   // close() ran while connecting, before it could see the client
             client.disconnect();
             return;
         }
 
-        authenticate(client);
+        SshRemote.authenticate(client, config);
 
         Session s = client.startSession();
         Session.Command c = s.exec(tailCommand(config.remotePath()));
@@ -174,24 +162,25 @@ public class SshLogSource implements ConnectingLogSource {
      * missing file to appear instead of failing. Running it under {@code sh -c} makes it
      * work whatever the user's login shell is.
      *
-     * <p>The path is passed to the script as {@code $1}, quoted so the login shell treats
-     * it as one literal argument: spaces don't split it and metacharacters
+     * <p>The path is passed to the script as {@code $1}, quoted by {@link #remoteArg} so the
+     * login shell treats it as one literal argument: spaces don't split it and metacharacters
      * ({@code ; $ ` | &} …) are not executed. {@code --} stops a path starting with
-     * {@code -} from being read as an option. A leading {@code ~/} is left unquoted so it
-     * still expands to the remote user's home directory.
+     * {@code -} from being read as an option.
      */
     static String tailCommand(String remotePath) {
-        String target;
-        if (remotePath.equals("~")) {
-            target = "~";
-        } else if (remotePath.startsWith("~/")) {
-            target = "~/" + shellQuote(remotePath.substring(2));
-        } else {
-            target = shellQuote(remotePath);
-        }
         String script = "test -r \"$1\" || exit " + EXIT_UNREADABLE
                 + "; exec tail -n " + TAIL_LINES + " -F -- \"$1\"";
-        return "sh -c " + shellQuote(script) + " sh " + target;
+        return "sh -c " + shellQuote(script) + " sh " + remoteArg(remotePath);
+    }
+
+    /**
+     * {@code remotePath} quoted as one literal shell argument, except that a leading
+     * {@code ~} or {@code ~/} is left unquoted so it still expands to the remote user's home.
+     */
+    static String remoteArg(String remotePath) {
+        if (remotePath.equals("~")) return "~";
+        if (remotePath.startsWith("~/")) return "~/" + shellQuote(remotePath.substring(2));
+        return shellQuote(remotePath);
     }
 
     /** Wraps {@code s} in single quotes, encoding each embedded {@code '} as {@code '\''}. */
@@ -199,43 +188,8 @@ public class SshLogSource implements ConnectingLogSource {
         return "'" + s.replace("'", "'\\''") + "'";
     }
 
-    private void authenticate(SSHClient client) throws Exception {
-        if (config.keyFilePath() != null && !config.keyFilePath().isBlank()) {
-            String passphrase = config.keyPassphrase();
-            if (passphrase != null && !passphrase.isBlank()) {
-                client.authPublickey(config.user(),
-                        client.loadKeys(config.keyFilePath(), passphrase.toCharArray()));
-            } else {
-                client.authPublickey(config.user(), config.keyFilePath());
-            }
-        } else if (config.password() == null || config.password().isEmpty()) {
-            client.auth(config.user(), noPasswordMethods());
-        } else {
-            client.authPassword(config.user(), config.password());
-        }
-    }
-
     /**
-     * The sign-in methods tried, in order, for "No password" (and an empty password):
-     * SSH {@code none}, then {@code password} with an empty password, then
-     * {@code keyboard-interactive} answering password prompts with an empty password.
-     * Servers differ in which one an account without a password is let in by: OpenSSH
-     * with {@code PermitEmptyPasswords} uses {@code password} or
-     * {@code keyboard-interactive}, Dropbear started with {@code -B} uses {@code password}.
-     */
-    static List<AuthMethod> noPasswordMethods() {
-        PasswordFinder empty = new PasswordFinder() {
-            @Override public char[] reqPassword(Resource<?> resource) { return new char[0]; }
-            @Override public boolean shouldRetry(Resource<?> resource) { return false; }
-        };
-        return List.of(
-                new AuthNone(),
-                new AuthPassword(empty),
-                new AuthKeyboardInteractive(new PasswordResponseProvider(empty)));
-    }
-
-    /** Closes the SSH session and disconnects, unblocking any active {@link #open} call. */
-    /**
+     * Closes the SSH session and disconnects, unblocking any active {@link #open} call.
      * Disconnects without closing the channel first: a channel close waits for the
      * server's reply (up to sshj's 30 s timeout), which never comes on a connection that
      * went silent. Disconnecting fails the open streams at once and closes the socket;

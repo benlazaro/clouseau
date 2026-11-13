@@ -56,10 +56,24 @@ Clouseau keeps your rows when the log is rotated:
    **None** for an account without a password (common on embedded devices). For a key,
    Clouseau fills in `~/.ssh/id_ed25519`, `id_ecdsa` or `id_rsa`, whichever you have; leave
    **Passphrase** empty if the key has none.
-3. Under **Log**, enter the **Remote path** of the log, and pick a **Parser** if
-   auto-detection isn't right.
+3. Under **Log**, enter the **Remote path** of the log, or click **Browse…** to pick it
+   from the server's folders. Pick a **Parser** if auto-detection isn't right.
 4. Click **Connect**. While it's grayed out, the note above the buttons says what's still
    missing.
+
+**Browse…** signs in with the details you've entered and lists the server's folders. It
+starts in the folder of the path you typed, or in `/var/log`, or in your home folder.
+Double-click a folder (or press Enter) to open it, and **Up** (or Backspace) to go back up;
+you can also type a folder into the path box. Only files you can read are listed. A note
+under the list says how many were left out. Double-click a file, or select it and click
+**Choose**, to put its path in **Remote path**.
+
+**Test** checks the connection without opening a tab. It signs in and checks that the
+file exists and you can read it, then reports in the note above the buttons: **Signed in ·
+/var/log/app.log is readable**, or which step failed and why, such as a host that can't be
+found, a port that isn't taking connections, a password the server turned down, a key file
+that can't be used, or a file that's missing or that you can't read. Each step gives up
+after 15 seconds. Changing any field clears the result.
 
 The tab is named after the file and the host, such as `app.log — 10.0.0.5`, so the same
 log followed on two servers gets two distinct tabs; a server you named shows its name

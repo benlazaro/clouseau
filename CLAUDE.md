@@ -35,7 +35,7 @@ clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyn
                     LogSource, ConnectingLogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
 clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogReaders, LogFileReader, FileIndexer, IndexedFollow,
                     FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
-                    MemoryGuard, ParserList, SshLogSource, SshConfig, SourceSettings,
+                    MemoryGuard, ParserList, SshLogSource, SshRemote, SshConfig, SourceSettings,
                     AnnotationStore, Notes, MergedNotes, ZipLogs, LineScanner, EntryIndex, IndexedEntries,
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
@@ -148,6 +148,8 @@ tags.
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.
+- `SshRemote` (core), `SshConnectionDialog`, `RemoteFileDialog` (ui) — the SSH dialog's Test (sign in and
+  check the file) and Browse… (pick the file over SFTP); `SshRemote` also holds the sign-in `SshLogSource` uses.
 - `LogSniffer`, `TextLines` (core), `PlainTextView` (ui) — UC-13: a file no parser recognizes
   opens as plain text. `LogSniffer` samples the first lines (parser match, binary check),
   `TextLines` keeps every line's offset and reads text back from disk, `PlainTextView` shows it.

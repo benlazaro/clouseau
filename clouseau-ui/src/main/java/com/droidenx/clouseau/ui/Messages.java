@@ -28,4 +28,9 @@ public final class Messages {
             return "??" + key + "??";
         }
     }
+
+    /** The string for {@code key} with {@code {0}}, {@code {1}}… filled in, as {@link java.text.MessageFormat} does. */
+    public static String format(String key, Object... args) {
+        return java.text.MessageFormat.format(get(key), args);
+    }
 }

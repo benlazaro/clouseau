@@ -2,6 +2,7 @@ package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.core.SshConfig;
+import com.droidenx.clouseau.core.SshRemote;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
@@ -92,7 +93,15 @@ public class SshConnectionDialog extends JDialog {
 
     // Footer
     private final JButton connectBtn = new JButton(Messages.get("ssh.dialog.connect"));
+    /** Signs in and checks the file, without opening a tab (G-14). */
+    private final JButton testBtn    = new JButton(Messages.get("ssh.dialog.test"));
+    /** Lists the server's folders to pick Remote path from (G-13). */
+    private final JButton remoteBrowseBtn = new JButton(Messages.get("ssh.dialog.remote.browse"));
     private final NoticeLabel hintLabel = new NoticeLabel();
+    /** The test running now, closed if the form changes or the dialog closes; null if none. */
+    private SshRemote testRemote;
+    /** Set while a change comes from the dialog itself (a test result), not the user. */
+    private boolean selfChange;
     /** The saved connections | the form; its divider is remembered. */
     private JSplitPane split;
     private static final int SIDEBAR_WIDTH = 250, SIDEBAR_MIN = 160;
@@ -140,6 +149,7 @@ public class SshConnectionDialog extends JDialog {
     }
 
     @Override public void dispose() {
+        cancelTest();
         if (split != null && isDisplayable()) {
             AppPrefs.setSshDialogLayout(getWidth(), getHeight(), split.getDividerLocation());
         }
@@ -231,7 +241,13 @@ public class SshConnectionDialog extends JDialog {
         content.add(SettingsDialog.sectionLabel(Messages.get("ssh.dialog.section.log")),
                 "span 2, growx, wrap, gaptop 20, gapbottom 4");
         content.add(new JLabel(Messages.get("ssh.dialog.remote.path")), SettingsDialog.INDENT);
-        content.add(remotePathField, "wrap");
+        JPanel remotePathRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][]"));
+        remotePathRow.setOpaque(false);
+        remotePathRow.add(remotePathField);
+        remotePathRow.add(remoteBrowseBtn);
+        content.add(remotePathRow, "wrap");
+        remoteBrowseBtn.setToolTipText(Messages.get("ssh.dialog.remote.browse.tooltip"));
+        remoteBrowseBtn.addActionListener(e -> browseRemote());
         remotePathField.putClientProperty("JTextField.placeholderText",
                 Messages.get("ssh.dialog.remote.path.placeholder"));
         content.add(new JLabel(Messages.get("ssh.dialog.parser")), SettingsDialog.INDENT);
@@ -250,18 +266,24 @@ public class SshConnectionDialog extends JDialog {
         cancelBtn.addActionListener(e -> dispose());
         saveBox.setToolTipText(Messages.get("ssh.dialog.save.tooltip"));
 
-        JPanel footer = DialogFooter.of(cancelBtn, connectBtn);
+        testBtn.setToolTipText(Messages.get("ssh.dialog.test.tooltip"));
+        testBtn.addActionListener(e -> onTest());
+        JPanel footer = DialogFooter.of(new JComponent[]{testBtn}, cancelBtn, connectBtn);
 
-        // Live validation
+        // Live validation. Any change to what a test checked also drops its result.
         DocumentListener validator = new DocumentListener() {
-            public void insertUpdate(DocumentEvent e)  { validateForm(); }
-            public void removeUpdate(DocumentEvent e)  { validateForm(); }
-            public void changedUpdate(DocumentEvent e) { validateForm(); }
+            public void insertUpdate(DocumentEvent e)  { formChanged(); }
+            public void removeUpdate(DocumentEvent e)  { formChanged(); }
+            public void changedUpdate(DocumentEvent e) { formChanged(); }
         };
         hostField.getDocument().addDocumentListener(validator);
         portField.getDocument().addDocumentListener(validator);
         userField.getDocument().addDocumentListener(validator);
         remotePathField.getDocument().addDocumentListener(validator);
+        passwordField.getDocument().addDocumentListener(validator);
+        keyFileField.getDocument().addDocumentListener(validator);
+        keyPassphraseField.getDocument().addDocumentListener(validator);
+        authCombo.addActionListener(e -> formChanged());
 
         // Drag the divider to widen the saved connections; the form takes the rest.
         split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSavedSidebar(), content);
@@ -308,6 +330,9 @@ public class SshConnectionDialog extends JDialog {
         if (!portOk)  missing.add(Messages.get("ssh.dialog.missing.port"));
 
         connectBtn.setEnabled(missing.isEmpty());
+        testBtn.setEnabled(missing.isEmpty() && testRemote == null);
+        // Browsing needs a server to sign in to, not a path.
+        remoteBrowseBtn.setEnabled(hasHost && hasUser && portOk);
         hintLabel.setText(missing.isEmpty() ? " "
                 : java.text.MessageFormat.format(Messages.get("ssh.dialog.missing"), String.join(", ", missing)));
         portField.putClientProperty("JComponent.outline", portOk ? null : "error");
@@ -753,21 +778,139 @@ public class SshConnectionDialog extends JDialog {
 
     // ── Connect ───────────────────────────────────────────────────────────────
 
-    private void onConnect() {
-        applyHostSpec();
+    /** The connection the form describes, after moving a {@code user@host:port} in Host into its fields. */
+    private SshConfig formConfig() {
+        selfChange = true;
+        try {
+            applyHostSpec();
+        } finally {
+            selfChange = false;
+        }
         String host       = hostField.getText().trim();
         int    port       = port();
         String user       = userField.getText().trim();
         String remotePath = remotePathField.getText().trim();
-        String authType   = AUTH_TYPES[authCombo.getSelectedIndex()];
-
-        SshConfig config = switch (authType) {
+        return switch (AUTH_TYPES[authCombo.getSelectedIndex()]) {
             case AUTH_KEY  -> new SshConfig(host, port, user, null,
                     keyFileField.getText().trim(), new String(keyPassphraseField.getPassword()), remotePath);
             case AUTH_NONE -> new SshConfig(host, port, user, null, null, null, remotePath);
             default        -> new SshConfig(host, port, user,
                     new String(passwordField.getPassword()), null, null, remotePath);
         };
+    }
+
+    // ── Test (G-14) ───────────────────────────────────────────────────────────
+
+    /** A field changed: a test of the old details no longer says anything, so it stops and its result goes. */
+    private void formChanged() {
+        if (selfChange) return;
+        cancelTest();
+        validateForm();
+    }
+
+    /** Stops the running test, if any; its result is then ignored. */
+    private void cancelTest() {
+        SshRemote r = testRemote;
+        if (r == null) return;
+        testRemote = null;
+        closeQuietly(r);
+    }
+
+    /** Closes {@code r} off the EDT: a disconnect sends a last message to the server. */
+    static void closeQuietly(SshRemote r) {
+        Thread t = new Thread(r::close, "ssh-remote-close");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Signs in and checks the file with {@code test} on the server, reporting in the hint line
+     * which step failed and why, or that the file is readable. Opens no tab, and closes the
+     * connection when done. Each step waits at most {@link SshRemote#TIMEOUT_SECONDS}.
+     */
+    private void onTest() {
+        cancelTest();
+        SshConfig config = formConfig();
+        String authType = AUTH_TYPES[authCombo.getSelectedIndex()];
+        SshRemote remote = new SshRemote(config);
+        testRemote = remote;
+        testBtn.setEnabled(false);
+        hintLabel.setText(java.text.MessageFormat.format(Messages.get("ssh.test.running"), config.host()));
+        new SwingWorker<Void, Void>() {
+            @Override protected Void doInBackground() throws Exception {
+                try {
+                    remote.connect();
+                    remote.check(config.remotePath());
+                    return null;
+                } finally {
+                    remote.close();
+                }
+            }
+
+            @Override protected void done() {
+                if (testRemote != remote) return;   // cancelled: the form changed or the dialog closed
+                testRemote = null;
+                validateForm();
+                try {
+                    get();
+                    hintLabel.show(java.text.MessageFormat.format(Messages.get("ssh.test.ok"),
+                            config.remotePath()), NoticeLabel.Kind.OK);
+                    hintLabel.setToolTipText(null);
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    Throwable cause = ex.getCause();
+                    String text = cause instanceof SshRemote.Failure f
+                            ? describe(f, config, authType)
+                            : String.valueOf(cause.getMessage());
+                    hintLabel.show(text, NoticeLabel.Kind.ERROR);
+                    hintLabel.setToolTipText(cause.getMessage());
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }.execute();
+    }
+
+    /** What went wrong, for the user: the step that failed and the likely fix. */
+    static String describe(SshRemote.Failure f, SshConfig c, String authType) {
+        String detail = f.getMessage();
+        return switch (f.reason()) {
+            case UNKNOWN_HOST -> Messages.format("ssh.test.unknown.host", c.host());
+            case REFUSED      -> Messages.format("ssh.test.refused", c.host(), String.valueOf(c.port()));
+            case TIMED_OUT    -> Messages.format("ssh.test.timed.out", c.host(), SshRemote.TIMEOUT_SECONDS);
+            case REJECTED     -> Messages.format(switch (authType) {
+                case AUTH_KEY  -> "ssh.test.rejected.key";
+                case AUTH_NONE -> "ssh.test.rejected.none";
+                default        -> "ssh.test.rejected.password";
+            }, c.host(), c.user());
+            case KEY_FILE     -> Messages.format("ssh.test.key.file", detail);
+            case MISSING      -> Messages.format("ssh.test.missing", c.remotePath());
+            case UNREADABLE   -> Messages.format("ssh.test.unreadable", c.remotePath(), c.user());
+            case FOLDER       -> Messages.format("ssh.test.folder", c.remotePath());
+            case OTHER        -> Messages.format(switch (f.step()) {
+                case CONNECT -> "ssh.test.other.connect";
+                case SIGN_IN -> "ssh.test.other.sign.in";
+                case FILE    -> "ssh.test.other.file";
+            }, detail);
+        };
+    }
+
+    // ── Browse the server (G-13) ──────────────────────────────────────────────
+
+    /** Lets the user pick Remote path from the server's folders, signed in with the form's details. */
+    private void browseRemote() {
+        SshConfig config = formConfig();
+        new RemoteFileDialog(this, config, AUTH_TYPES[authCombo.getSelectedIndex()])
+                .showDialog()
+                .ifPresent(path -> {
+                    remotePathField.setText(path);
+                    remotePathField.requestFocusInWindow();
+                });
+    }
+
+    private void onConnect() {
+        SshConfig config = formConfig();
+        String host     = config.host();
+        String authType = AUTH_TYPES[authCombo.getSelectedIndex()];
 
         int parserIdx = parserCombo.getSelectedIndex();
         Optional<LogParser> parser = parserIdx > 0

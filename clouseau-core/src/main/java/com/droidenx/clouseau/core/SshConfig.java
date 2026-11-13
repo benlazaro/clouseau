@@ -3,7 +3,7 @@ package com.droidenx.clouseau.core;
 /**
  * Immutable SSH connection parameters.
  * Password auth sets {@code password}, key auth sets {@code keyFilePath}, and "No password"
- * leaves both null (see {@code SshLogSource.noPasswordMethods}).
+ * leaves both null (see {@code SshRemote.noPasswordMethods}).
  */
 public record SshConfig(
         String host,

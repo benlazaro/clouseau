@@ -44,7 +44,7 @@ clouseau-ui ─────────────┐   MainFrame, tabs, TabPan
 clouseau-core ◀──────────┘   RegexLogParser, ParserList, LineParser, LogReaders,
                              LogFileReader, FileIndexer, IndexedFollow, FileFollower,
                              FileTail, FileChangeWatcher,
-                             SshLogSource, SourceSettings, AnnotationStore, ZipLogs, …
+                             SshLogSource, SshRemote, SourceSettings, AnnotationStore, ZipLogs, …
    │
    ▼
 clouseau-api                 LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
@@ -291,7 +291,29 @@ starting state.
   method, then `password` with an empty password, then `keyboard-interactive` answering
   password prompts with an empty one; servers differ in which an account without a
   password is let in by. `SshLogSourceServerTest` runs the source against an embedded
-  Apache MINA SSHD server (a test-only dependency).
+  Apache MINA SSHD server (a test-only dependency). The source's TCP connect gives up
+  after `SshRemote.TIMEOUT_SECONDS` (15 s) instead of the OS's own timeout.
+- **Checking before Connect (formerly G-13, G-14):** `SshRemote` (core) is one sign-in for
+  the SSH dialog, set up and signed in the same way as the source (`SshRemote.newClient`,
+  `SshRemote.authenticate`, which `SshLogSource` calls). Each step is bounded by
+  `TIMEOUT_SECONDS`: the TCP connect, the transport's replies, SFTP replies and the exit
+  status of a command, with keepalives as for the source. `close` disconnects from any
+  thread and ends a `connect` still running. A failure is a `SshRemote.Failure` with its
+  `Step` (connect, sign in, file) and `Reason` (unknown host, refused, timed out, rejected,
+  key file, missing, unreadable, folder, other); the key file is loaded before the server is
+  asked, so a bad key or passphrase reads as `KEY_FILE`, not as a refused sign-in. The
+  dialog turns those into its own sentences (`SshConnectionDialog.describe`).
+  **Test** runs `connect` then `check`, which runs `test -e`, `test -d` and `test -r` under
+  `sh -c` with the path quoted as for `tail` (exit 2, 4, 3), on a `SwingWorker`, closing the
+  connection when done. Any edit to the form, or closing the dialog, closes a test still
+  running and drops its result. The hint line (`NoticeLabel`) shows it as `OK` or `ERROR`,
+  next to its usual `NOTE` for missing fields. **Browse…** (`RemoteFileDialog`) keeps one
+  `SshRemote` open while it's shown, with every call on its own single thread and a
+  request counter so a reply for a folder already left is dropped. It lists over SFTP
+  (`SFTPClient.ls`, with links followed by `stat`), and decides readability from each
+  file's uid, gid and mode against the user's `id -u` and `id -G`. A server that won't
+  run `id` (SFTP only) gets every file listed. ACLs aren't read, so a file readable only
+  through an ACL is left out. Host keys are trusted as for the source.
 - **Plugin sources (D-14):** **File → Open Remote** lists SSH, then every `LogSourceProvider` by its own name, then Browse Plugins… (the Plugin Manager's Browse tab);
   rebuilt each time the menu opens. Choosing one opens `SourceSettingsDialog`, a form
   with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`
@@ -1982,16 +2004,6 @@ is now the biggest UI class.
   the clock (a static log ends in the past), and *±1 min of selected row*, disabled with
   no selection. While following, "last" moves with the newest entry only when the preset
   is applied again; a range that slides by itself would need its own decision.
-- **G-13 · Browse the remote file.** The SSH dialog takes the remote path as typed
-  (with an example as its placeholder). Planned: a **Browse…** button beside Remote path
-  that signs in with the dialog's details and lists the server's directories over SFTP
-  (sshj has it), starting in `/var/log` or the user's home, showing readable files only.
-  It needs the dialog to sign in before Connect, so it shares the work with G-14.
-- **G-14 · Test the connection.** A wrong host, password or path is only found out after
-  Connect, as an error on a new tab. Planned: a **Test** button in the SSH dialog's footer
-  that signs in and checks the file with `test -r`, reporting the result inline in the
-  hint line (signed in · file readable, or which step failed and why), without opening a
-  tab. It must time out like the source does and never keep the session open.
 - **G-15 · Find Clouseau plugins, not any artifact.** Browse searches the whole repository,
   so "logfmt" on Maven Central returns any Java library, and finding a plugin means knowing
   its coordinates. Planned: a naming convention for published plugins (an artifact name
