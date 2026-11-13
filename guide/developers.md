@@ -34,6 +34,11 @@ its own empty data folder, so your settings aren't touched), saves them to
 `build/screenshots/`, and takes over the screen for about a minute. Check them, then copy
 them into `docs/screenshots/`.
 
+The repository's social preview (the picture shown when the repo is linked) is drawn from
+the main view screenshot: run `./gradlew :clouseau-ui:socialPreview` to redraw
+`docs/social-preview.png`, then upload it under the repository's **Settings → General →
+Social preview**. It draws off-screen, so it doesn't need the screen to itself.
+
 ## Project structure
 
 ```

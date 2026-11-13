@@ -444,3 +444,16 @@ tasks.register<JavaExec>("screenshots") {
         samplesDir.resolve("sample.log").copyTo(screensDir.resolve("app.log"))
     }
 }
+
+// Dev-only: draws the repository's social preview (docs/social-preview.png, 1280x640) from the
+// main view screenshot, off-screen. Upload it in the repo's Settings → General → Social preview.
+tasks.register<JavaExec>("socialPreview") {
+    group = "documentation"
+    description = "Draws docs/social-preview.png from docs/screenshots/main-view.png."
+    val docsDir = rootProject.layout.projectDirectory.dir("docs").asFile
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.droidenx.clouseau.ui.SocialPreviewTool")
+    args(docsDir.resolve("screenshots/main-view.png").absolutePath,
+            docsDir.resolve("social-preview.png").absolutePath)
+    jvmArgs("-Djava.awt.headless=true")
+}
