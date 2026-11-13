@@ -22,7 +22,9 @@ public final class ClouseauApp {
         // so Log4j2 does not auto-load it and create a log file before the data dir is known)
         configureLogging();
 
-        log.info("Starting Clouseau Log Viewer");
+        String version = AppPrefs.getAppVersion();
+        log.info("Starting Clouseau Log Viewer {} (Java {}, {} {})", version,
+                System.getProperty("java.version"), System.getProperty("os.name"), System.getProperty("os.arch"));
         log.info("Data dir: {}{}", AppDirs.dataDir(), AppDirs.isPortable() ? " (portable)" : "");
 
         // Use an array so the IPC lambda can capture the reference set later on the EDT.
@@ -32,7 +34,7 @@ public final class ClouseauApp {
 
         // Checked before the theme, splash and plugins, so a launch that only hands its files
         // to the running window shows nothing of its own and hands them over quickly.
-        boolean isPrimary = SingleInstanceManager.tryBecomePrimary(filePaths ->
+        boolean isPrimary = SingleInstanceManager.tryBecomePrimary(version, filePaths ->
                 SwingUtilities.invokeLater(() -> {
                     List<Path> files = filePaths.stream().map(Path::of).toList();
                     WindowManager windows = windowsRef[0];
@@ -50,9 +52,16 @@ public final class ClouseauApp {
             List<String> paths = java.util.Arrays.stream(args)
                     .map(a -> Path.of(a).toAbsolutePath().toString())
                     .toList();
-            switch (SingleInstanceManager.sendToPrimary(paths)) {
+            SingleInstanceManager.Reply reply = SingleInstanceManager.sendToPrimary(version, paths);
+            switch (reply.delivery()) {
                 case DELIVERED -> {
                     log.info("Delegated to existing instance — exiting.");
+                    System.exit(0);
+                }
+                // Handing over would show the running version, not the one the user started
+                // (after an upgrade, the old one still running): say so instead.
+                case OTHER_VERSION -> {
+                    showOtherVersionRunning(reply.running(), version);
                     System.exit(0);
                 }
                 case FAILED -> {
@@ -158,14 +167,29 @@ public final class ClouseauApp {
     private static void showNotDelivered(List<String> paths) {
         String message = java.text.MessageFormat.format(Messages.get("app.instance.unreachable.message"),
                 String.valueOf(SingleInstanceManager.PORT), String.join("\n", paths));
+        showInstanceMessage(message, JOptionPane.ERROR_MESSAGE);
+    }
+
+    /** Tells the user that another version is running, so this one won't start. */
+    private static void showOtherVersionRunning(String running, String version) {
+        showInstanceMessage(otherVersionMessage(running, version), JOptionPane.WARNING_MESSAGE);
+    }
+
+    /** The message for {@link #showOtherVersionRunning}; {@code running} is null for a version too old to say. */
+    static String otherVersionMessage(String running, String version) {
+        return running != null
+                ? Messages.format("app.instance.other.version.message", running, version)
+                : Messages.format("app.instance.older.version.message", version);
+    }
+
+    private static void showInstanceMessage(String message, int type) {
         applyTheme();
         try {
             SwingUtilities.invokeAndWait(() -> {
-                JOptionPane.showMessageDialog(null, message,
-                        Messages.get("app.instance.unreachable.title"), JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(null, message, Messages.get("app.instance.unreachable.title"), type);
             });
         } catch (Exception e) {
-            log.error("Could not show the unreachable-instance message", e);
+            log.error("Could not show the message about the running instance", e);
         }
     }
 

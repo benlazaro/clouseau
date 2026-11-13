@@ -438,11 +438,21 @@ are several (D-18). The check is the first thing startup does after logging, bef
 theme, the splash and plugin loading, so a launch that hands its files over shows no
 window of its own and finishes quickly.
 
-- **Protocol:** one connection per launch, carrying every path as an absolute path (the
-  running instance has its own working directory), one per line in UTF-8, until the
+- **Protocol:** one connection per launch. The running instance first writes
+  `clouseau <version>` on one line; the launch then writes every path as an absolute path
+  (the running instance has its own working directory), one per line in UTF-8, until the
   connection closes. The listener queues up to 50 connections, so many launches at once
   (selecting several files in Explorer and choosing "Open with") all get through. A
   connection with no paths is a launch without files; it only raises the window.
+- **Another version running:** a launch hands over only to the same version. Otherwise
+  the user would get the running version's window instead of the one they started: after
+  an upgrade with the old one still running, even with no window left, the new exe would
+  keep opening the old version. It writes `\0cancel` instead of paths (the running instance
+  drops that launch), says which version is running and to close it, and exits. A running
+  instance from before the greeting (0.11.2 and older) sends nothing; after
+  `GREETING_TIMEOUT_MS` (2 s) the launch takes it for an older version, says so, and
+  closes the connection empty, which raises that old window. The startup log line names
+  the version, Java and OS, so a log shows which build ran.
 - **Bringing the window forward:** after each launch the running instance restores the
   window used last if it's minimized (maximized again if it was) and raises it
   (`WindowActivator`). Windows doesn't let a background process take the foreground, so

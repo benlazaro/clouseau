@@ -98,9 +98,10 @@ the project's JDK) before running `./gradlew`.
   release builds skip the configuration cache.
 - `distZipImage` and `jpackage` are skipped for `-SNAPSHOT` versions, so pass a release
   version to build them locally.
-- Only one Clouseau runs at a time (localhost port 41823). A second launch forwards its
-  files to the running instance and exits, so close any running Clouseau before testing a
-  new build.
+- Only one Clouseau runs at a time (localhost port 41823). A second launch of the same
+  version forwards its files to the running instance and exits; a different version (a
+  new build, or `-SNAPSHOT` vs a release) says which version is running and exits. Close
+  any running Clouseau before testing a new build.
 - Running from source stores data in `./data/` under the working directory; see
   `AppDirs` for the release locations.
 - `samples/sample.log` and `samples/gen_log.ps1` provide test logs.

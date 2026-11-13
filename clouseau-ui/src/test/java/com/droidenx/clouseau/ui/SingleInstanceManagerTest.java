@@ -25,6 +25,18 @@ class SingleInstanceManagerTest {
         if (server != null) server.close();
     }
 
+    private static final String VERSION = "0.11.3-alpha";
+
+    /** A primary of {@link #VERSION}. */
+    private static ServerSocket listen(int port, java.util.function.Consumer<List<String>> onLaunch) {
+        return SingleInstanceManager.listen(port, VERSION, onLaunch);
+    }
+
+    /** A launch of {@link #VERSION}. */
+    private static Delivery send(int port, List<String> paths) {
+        return SingleInstanceManager.send(port, VERSION, paths).delivery();
+    }
+
     private int freePort() throws IOException {
         try (ServerSocket s = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
             return s.getLocalPort();
@@ -44,11 +56,11 @@ class SingleInstanceManagerTest {
     @Test
     void deliversEveryFileOfOneLaunchInOrder() throws Exception {
         int port = freePort();
-        server = SingleInstanceManager.listen(port, received::add);
+        server = listen(port, received::add);
         assertThat(server).isNotNull();
 
         List<String> paths = List.of("C:\\logs\\a.log", "C:\\logs\\b.log", "C:\\logs\\follow.log");
-        assertThat(SingleInstanceManager.send(port, paths)).isEqualTo(Delivery.DELIVERED);
+        assertThat(send(port, paths)).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(paths);
     }
@@ -56,7 +68,7 @@ class SingleInstanceManagerTest {
     @Test
     void deliversFilesFromManyLaunchesAtOnce() throws Exception {
         int port = freePort();
-        server = SingleInstanceManager.listen(port, received::add);
+        server = listen(port, received::add);
 
         int launches = 20;
         ExecutorService pool = Executors.newFixedThreadPool(launches);
@@ -67,7 +79,7 @@ class SingleInstanceManagerTest {
                 List<String> paths = List.of("/logs/" + i + "-1.log", "/logs/" + i + "-2.log");
                 results.add(pool.submit(() -> {
                     start.await();
-                    return SingleInstanceManager.send(port, paths);
+                    return send(port, paths);
                 }));
             }
             start.countDown();
@@ -83,9 +95,9 @@ class SingleInstanceManagerTest {
     @Test
     void launchWithoutFilesArrivesAsAnEmptyBatch() throws Exception {
         int port = freePort();
-        server = SingleInstanceManager.listen(port, received::add);
+        server = listen(port, received::add);
 
-        assertThat(SingleInstanceManager.send(port, List.of())).isEqualTo(Delivery.DELIVERED);
+        assertThat(send(port, List.of())).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(List.of());
     }
@@ -93,9 +105,9 @@ class SingleInstanceManagerTest {
     @Test
     void skipsBlankLines() throws Exception {
         int port = freePort();
-        server = SingleInstanceManager.listen(port, received::add);
+        server = listen(port, received::add);
 
-        assertThat(SingleInstanceManager.send(port, List.of("", "/logs/a.log", " "))).isEqualTo(Delivery.DELIVERED);
+        assertThat(send(port, List.of("", "/logs/a.log", " "))).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(List.of("/logs/a.log"));
     }
@@ -103,13 +115,13 @@ class SingleInstanceManagerTest {
     @Test
     void keepsServingAfterTheCallbackFails() throws Exception {
         int port = freePort();
-        server = SingleInstanceManager.listen(port, paths -> {
+        server = listen(port, paths -> {
             if (paths.contains("/logs/bad.log")) throw new IllegalStateException("boom");
             received.add(paths);
         });
 
-        assertThat(SingleInstanceManager.send(port, List.of("/logs/bad.log"))).isEqualTo(Delivery.DELIVERED);
-        assertThat(SingleInstanceManager.send(port, List.of("/logs/good.log"))).isEqualTo(Delivery.DELIVERED);
+        assertThat(send(port, List.of("/logs/bad.log"))).isEqualTo(Delivery.DELIVERED);
+        assertThat(send(port, List.of("/logs/good.log"))).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(List.of("/logs/good.log"));
     }
@@ -117,9 +129,9 @@ class SingleInstanceManagerTest {
     @Test
     void keepsNonAsciiPaths() throws Exception {
         int port = freePort();
-        server = SingleInstanceManager.listen(port, received::add);
+        server = listen(port, received::add);
 
-        assertThat(SingleInstanceManager.send(port, List.of("/logs/journal-é-日本.log"))).isEqualTo(Delivery.DELIVERED);
+        assertThat(send(port, List.of("/logs/journal-é-日本.log"))).isEqualTo(Delivery.DELIVERED);
 
         assertThat(drain(1)).containsExactly(List.of("/logs/journal-é-日本.log"));
     }
@@ -127,15 +139,60 @@ class SingleInstanceManagerTest {
     @Test
     void secondListenerOnTheSamePortIsNotPrimary() throws Exception {
         int port = freePort();
-        server = SingleInstanceManager.listen(port, received::add);
+        server = listen(port, received::add);
 
-        assertThat(SingleInstanceManager.listen(port, p -> {})).isNull();
+        assertThat(listen(port, p -> {})).isNull();
+    }
+
+    @Test
+    void anotherVersionHandsNothingOverAndSaysWhichRuns() throws Exception {
+        int port = freePort();
+        server = listen(port, received::add);
+
+        SingleInstanceManager.Reply reply = SingleInstanceManager.send(port, "0.12.0-alpha", List.of("/logs/a.log"));
+
+        assertThat(reply).isEqualTo(new SingleInstanceManager.Reply(Delivery.OTHER_VERSION, VERSION));
+        // The cancelled launch is dropped; the next one of the same version still gets through.
+        assertThat(send(port, List.of("/logs/b.log"))).isEqualTo(Delivery.DELIVERED);
+        assertThat(drain(2)).containsExactly(List.of("/logs/b.log"));
+    }
+
+    /** A primary from 0.11.2 or older: reads paths until the connection ends, never greets. */
+    @Test
+    void anOlderPrimaryThatNeverGreetsIsAnotherVersion() throws Exception {
+        int port = freePort();
+        server = new ServerSocket(port, 50, InetAddress.getLoopbackAddress());
+        CompletableFuture<String> got = CompletableFuture.supplyAsync(() -> {
+            try (var client = server.accept()) {
+                return new String(client.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+
+        long start = System.nanoTime();
+        SingleInstanceManager.Reply reply = SingleInstanceManager.send(port, VERSION, List.of("/logs/a.log"));
+
+        assertThat(reply).isEqualTo(new SingleInstanceManager.Reply(Delivery.OTHER_VERSION, null));
+        assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start))
+                .isLessThan(SingleInstanceManager.GREETING_TIMEOUT_MS + 2_000L);
+        // It got an empty connection, which brings its window forward, and no paths.
+        assertThat(got.get(5, TimeUnit.SECONDS)).isEmpty();
+    }
+
+    @Test
+    void otherVersionMessageNamesBothVersions() {
+        assertThat(ClouseauApp.otherVersionMessage("0.11.2-alpha", "0.11.3-alpha"))
+                .contains("Clouseau 0.11.2-alpha is already running").contains("Clouseau 0.11.3-alpha didn't start")
+                .doesNotContain("''");
+        assertThat(ClouseauApp.otherVersionMessage(null, "0.11.3-alpha"))
+                .startsWith("An older Clouseau is already running").contains("0.11.3-alpha");
     }
 
     @Test
     void reportsNoInstanceWhenNothingListens() throws Exception {
         int port = freePort();   // nothing listens here
 
-        assertThat(SingleInstanceManager.send(port, List.of("/logs/a.log"))).isEqualTo(Delivery.NO_INSTANCE);
+        assertThat(send(port, List.of("/logs/a.log"))).isEqualTo(Delivery.NO_INSTANCE);
     }
 }

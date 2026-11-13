@@ -68,6 +68,12 @@ after Clouseau starts. It doesn't block what you're doing:
 - **Later** closes the notice. You'll hear about it again tomorrow.
 - **Skip This Version** closes it for good for that version; you'll hear about the next one.
 
+To install a new version over an old one, close Clouseau first. On Windows, keep the old
+`Clouseau` folder's `data` folder (your settings, sessions and parsers), delete the rest,
+and unzip the new version in its place. If the old version is still running when you start
+the new one, Clouseau says which version is running and asks you to close it, rather than
+bringing up the old one.
+
 Clouseau checks at most once a day, and again each day it stays open. If it can't reach
 GitHub (no network, a proxy), it says nothing. The check only asks GitHub for the list of
 releases; nothing about you or your logs is sent.

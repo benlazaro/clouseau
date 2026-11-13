@@ -577,7 +577,9 @@ without running a second copy of Clouseau.
 **Rules:**
 - **One application, several windows.** Every window belongs to the same running
   Clouseau, so settings, parsers, plugins, themes and Recent Files are shared, and a
-  second launch still hands its files to the running one (UC-1).
+  second launch still hands its files to the running one (UC-1). A launch of another
+  version (a new release with the old one still running) doesn't: it says which version is
+  running and to close it, so an upgrade never silently opens the old version.
 - **Menus act on their own window.** Open, Close Tab, Export for Review and the other
   menu actions apply to the window whose menu was used.
 - **New files open where you'd expect.** The open dialog and Recent Files open in their
