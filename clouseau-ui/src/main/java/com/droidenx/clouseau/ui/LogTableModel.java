@@ -73,6 +73,8 @@ public final class LogTableModel extends AbstractTableModel {
     private final List<LogEntry>         allEntries = new ArrayList<>();
     /** Ordinals of the entries that pass the active filter, ascending. */
     private       IntList                rows       = new IntList();
+    /** Counts replacements of {@link #rows}; with its own change count, see {@link #rowsVersion()}. */
+    private       int                    rowsGeneration = 0;
     private final Map<Integer, Color>    highlights = new HashMap<>();
     private EntryFilter                  activeFilter = EntryFilter.ALL;
     private int                          maxEntries = AppPrefs.getMaxEntriesPerTab();
@@ -201,6 +203,72 @@ public final class LogTableModel extends AbstractTableModel {
         return n + allEntries.size() + (b != null ? b.count() : 0);
     }
 
+    /**
+     * Changes whenever the rows do (a filter result, an append, a trim, a re-merge), but not
+     * on a repaint (highlights, timezone). Lets a row sorter keep an order it worked out
+     * when an "all rows changed" event leaves the rows as they were. EDT only.
+     */
+    long rowsVersion() {
+        return ((long) rowsGeneration << 32) | (rows.mods & 0xFFFF_FFFFL);
+    }
+
+    /**
+     * A model row's timestamp in epoch milliseconds, or {@link com.droidenx.clouseau.core.EntryIndex#NO_TIMESTAMP}
+     * for a continuation line or a missing row. From the index or the entries held in memory:
+     * never reads the file. EDT only.
+     */
+    long timestampAt(int modelRow) {
+        int ord = ordinalAt(modelRow);
+        if (ord < 0) return com.droidenx.clouseau.core.EntryIndex.NO_TIMESTAMP;
+        return timestampOf(indexed, indexedCount, ord, ord - listBase() >= 0 && ord - listBase() < allEntries.size()
+                ? allEntries.get(ord - listBase()) : null);
+    }
+
+    private static long timestampOf(EntryRows idx, int idxCount, int ord, LogEntry inMemory) {
+        if (idx != null && ord < idxCount) return idx.timestamp(ord);
+        return inMemory != null && inMemory.timestamp() != null
+                ? inMemory.timestamp().toEpochMilli() : com.droidenx.clouseau.core.EntryIndex.NO_TIMESTAMP;
+    }
+
+    /**
+     * What a sort by time needs, taken on the EDT and worked out on any thread: the rows'
+     * ordinals now, the index, and the timestamps of the entries held in memory (at most the
+     * entry limit). {@link TimeKeys#compute} reads only index columns, so it does no I/O.
+     */
+    TimeKeys timeKeys() {
+        int base = listBase();
+        long[] memory = new long[allEntries.size()];
+        for (int i = 0; i < memory.length; i++) memory[i] = timestampOf(null, 0, 0, allEntries.get(i));
+        return new TimeKeys(rows.toArray(), indexed, indexedCount, base, memory, rowsVersion());
+    }
+
+    /** A snapshot for sorting by time; see {@link #timeKeys()}. */
+    record TimeKeys(int[] ordinals, EntryRows indexed, int indexedCount, int memoryBase, long[] memory, long version) {
+        /**
+         * Each row's time, in model order. A continuation line (no time of its own) takes the
+         * time of the row before it, so it stays under its entry; rows before any timed row
+         * get {@code Long.MIN_VALUE} and sort first. Null if {@code cancelled} turned true.
+         */
+        long[] compute(java.util.function.BooleanSupplier cancelled) {
+            long[] keys = new long[ordinals.length];
+            long last = Long.MIN_VALUE;
+            for (int i = 0; i < ordinals.length; i++) {
+                if ((i & 0xFFFF) == 0 && cancelled.getAsBoolean()) return null;
+                int ord = ordinals[i];
+                long ts;
+                if (indexed != null && ord < indexedCount) {
+                    ts = indexed.timestamp(ord);
+                } else {
+                    int m = ord - memoryBase;
+                    ts = m >= 0 && m < memory.length ? memory[m] : com.droidenx.clouseau.core.EntryIndex.NO_TIMESTAMP;
+                }
+                if (ts != com.droidenx.clouseau.core.EntryIndex.NO_TIMESTAMP) last = ts;
+                keys[i] = last;
+            }
+            return keys;
+        }
+    }
+
     /** The model row showing the entry with this ordinal, or -1 if it's filtered out or gone. */
     public int rowOfOrdinal(int ordinal) {
         return rows.binarySearch(ordinal);
@@ -319,6 +387,7 @@ public final class LogTableModel extends AbstractTableModel {
             knownFieldKeys.clear();
             customFields = List.of();
             rows = new IntList();
+            rowsGeneration++;
             fireTableStructureChanged();
         };
         if (SwingUtilities.isEventDispatchThread()) doClear.run();
@@ -568,6 +637,7 @@ public final class LogTableModel extends AbstractTableModel {
                 }
                 newRows.removeRange(0, newRows.countBelow(hiddenBefore));   // cleared from the table
                 rows = newRows;
+                rowsGeneration++;
                 fireTableDataChanged();
                 List<Runnable> waiting = List.copyOf(afterFilter);
                 afterFilter.clear();
@@ -881,6 +951,8 @@ public final class LogTableModel extends AbstractTableModel {
         private int[] data = new int[64];
         private int start = 0;
         private int size = 0;
+        /** Counts changes, for {@link LogTableModel#rowsVersion()}. */
+        int mods = 0;
 
         int size() { return size; }
 
@@ -895,11 +967,13 @@ public final class LogTableModel extends AbstractTableModel {
                 start = 0;
             }
             data[start + size++] = value;
+            mods++;
         }
 
         void clear() {
             start = 0;
             size = 0;
+            mods++;
         }
 
         IntList copy() {
@@ -914,6 +988,7 @@ public final class LogTableModel extends AbstractTableModel {
         void removeFirst(int n) {
             start += n;
             size  -= n;
+            mods++;
         }
 
         /** Removes the values at positions {@code from} (inclusive) to {@code to} (exclusive). */
@@ -925,11 +1000,13 @@ public final class LogTableModel extends AbstractTableModel {
             }
             System.arraycopy(data, start + to, data, start + from, size - to);
             size -= to - from;
+            mods++;
         }
 
         /** Sorts the values from position {@code from} on (they came in several ascending runs). */
         void sortFrom(int from) {
             Arrays.sort(data, start + from, start + size);
+            mods++;
         }
 
         /** How many leading values are below {@code value}. */

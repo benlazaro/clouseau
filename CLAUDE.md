@@ -142,6 +142,7 @@ tags.
   sources) on its own daemon thread. Never `execute()` one: that pool has 10 threads for the whole JVM.
 - `LogTableView`, `RowMenu` (ui) — a tab's table (renderer, header menu, column sizing,
   visibility and saved layouts) and its rows' right-click menu (highlights, notes, merged-file items).
+  `LogRowSorter` (ui) sorts by # or Timestamp without reading entries (time order worked out off the EDT).
   `MergedFileSettings` (ui) holds a merged tab's per-file offsets, timezones and parsers, with their dialogs.
   `TabStatusBar` (ui) is a tab's path, timezone badge and row counts; `RestoredTab` (ui) its session message card,
   deferred load and "filters restored" strip (D-19).

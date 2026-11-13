@@ -140,6 +140,9 @@ public final class IndexedEntries implements EntryRows {
     public boolean isContinuation(int row) { return index.isContinuation(row); }
 
     @Override
+    public long timestamp(int row) { return index.timestamp(row); }
+
+    @Override
     public boolean testIndex(EntryFilter filter, int row) { return filter.testIndex(index, row); }
 
     @Override

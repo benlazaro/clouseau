@@ -26,6 +26,10 @@ class EntryRowsRunsTest {
     private record TwoRuns(List<LogEntry> entries) implements EntryRows {
         @Override public LogEntry get(int ordinal) { return entries.get(ordinal); }
         @Override public boolean isContinuation(int ordinal) { return cont(entries.get(ordinal)); }
+        @Override public long timestamp(int ordinal) {
+            var ts = entries.get(ordinal).timestamp();
+            return ts != null ? ts.toEpochMilli() : com.droidenx.clouseau.core.EntryIndex.NO_TIMESTAMP;
+        }
         @Override public boolean testIndex(EntryFilter filter, int ordinal) { return true; }
         @Override public boolean needsText(EntryFilter filter) { return true; }
         @Override public void close() {}

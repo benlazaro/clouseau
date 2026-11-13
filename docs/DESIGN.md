@@ -996,9 +996,20 @@ orders them by the view.
 
 The generation counter and cancellation in section 6.1 are unchanged.
 
-**Not covered yet:** sorting by a column header reads every row on the EDT, which on an
-indexed file means reading the whole file. That predates the index (sorting a large
-in-memory tab is also slow), but the index makes it much slower.
+**Sorting.** Only # and Timestamp sort, either way. `LogRowSorter` (ui) replaces Swing's
+`TableRowSorter`, which compared cell values on the EDT and so read the whole file (and,
+in a merged view, froze the window for as long). It never reads an entry: # ascending is
+the model's order and descending its reverse, with no arrays. For Timestamp, the rows'
+times are taken from the index (`EntryRows.timestamp`, offsets included; entries held in
+memory are copied on the EDT, at most the entry limit) and checked on one shared daemon
+thread, `clouseau-sort`. In order (always in a merged view) the result is the same as #;
+otherwise a stable natural merge sort of the row numbers gives the order, and the table shows
+# order until it arrives. A continuation line takes the time of the row above, so it stays
+under its entry. Followed rows that come at or after the latest time are placed on the EDT
+without a sort; others start one. Trimmed rows are dropped from the order on the EDT.
+`LogTableModel.rowsVersion()` tells a repaint ("all rows changed" with the same rows) from
+a real change, so a highlight or timezone change keeps the order, and a background result
+for rows that have since changed is dropped.
 
 **Continuation lines.** They are rows with level `UNKNOWN`, as today. The detail panel and
 find read the rows that follow an entry until the next row with a timestamp.
@@ -1212,8 +1223,7 @@ A parser the reviewer doesn't have falls back to the tab's choice (auto-detectio
 the open dialog chose one); the timezone and
 offset come from the bundle, so the timeline matches.
 
-**Not covered:** sorting by a column header (D-16) is no slower here than on one big
-file; merging sources from different machines over SSH; saving a merged view's file set
+**Not covered:** merging sources from different machines over SSH; saving a merged view's file set
 as a reusable "workspace".
 
 **Order of work** (each step ships and is tested on its own):

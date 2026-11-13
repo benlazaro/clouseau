@@ -135,9 +135,11 @@ final class LogTableView {
         // Only # and Timestamp sort: their use is reversing the order (newest first), and in a
         // merged view the two can differ. Sorting by level, thread, logger or message would
         // scramble the timeline; the filters answer those questions without losing the order.
-        logTable.setRowSorter(new javax.swing.table.TableRowSorter<>(logTableModel) {
-            @Override public boolean isSortable(int modelColumn) { return modelColumn == 0 || modelColumn == 1; }
-        });
+        // LogRowSorter never reads an entry, so a sort doesn't stall the window on a big tab.
+        LogRowSorter sorter = new LogRowSorter(logTableModel);
+        sorter.setBusyListener(busy -> logTable.setCursor(busy
+                ? java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.WAIT_CURSOR) : null));
+        logTable.setRowSorter(sorter);
         logTable.getColumnModel().getColumn(0).setPreferredWidth(50);
         logTable.getColumnModel().getColumn(1).setPreferredWidth(180);
         logTable.getColumnModel().getColumn(2).setPreferredWidth(60);
@@ -836,7 +838,7 @@ final class LogTableView {
      * at paint time, so a live theme switch updates it.
      */
     private boolean isSortableViewColumn(int viewColumn) {
-        return logTable.getRowSorter() instanceof DefaultRowSorter<?, ?> sorter
+        return logTable.getRowSorter() instanceof LogRowSorter sorter
                 && sorter.isSortable(logTable.convertColumnIndexToModel(viewColumn));
     }
 

@@ -126,6 +126,14 @@ public final class MergedEntries implements EntryRows {
         return index(o.source(ordinal)).isContinuation(o.row(ordinal));
     }
 
+    @Override
+    public long timestamp(int ordinal) {
+        Layout l = layout;
+        int s = l.order().source(ordinal);
+        long ts = index(s).timestamp(l.order().row(ordinal));
+        return ts == EntryIndex.NO_TIMESTAMP ? ts : ts + l.offsets()[s];
+    }
+
     @Override public int sourceCount() { return sources.size(); }
 
     @Override public int sourceOf(int ordinal) { return layout.order().source(ordinal); }

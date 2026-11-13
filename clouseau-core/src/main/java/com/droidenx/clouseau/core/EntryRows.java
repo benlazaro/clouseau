@@ -21,6 +21,12 @@ public interface EntryRows extends Closeable {
     /** True if the entry at {@code ordinal} continues the one before it in its file. */
     boolean isContinuation(int ordinal);
 
+    /**
+     * The entry's timestamp in epoch milliseconds as the table shows it (a merged file's time
+     * offset included), or {@link EntryIndex#NO_TIMESTAMP}. From the index: no I/O, any thread.
+     */
+    long timestamp(int ordinal);
+
     /** How many files these entries come from. */
     default int sourceCount() { return 1; }
 
