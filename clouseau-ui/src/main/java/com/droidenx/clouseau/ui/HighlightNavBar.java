@@ -26,7 +26,7 @@ final class HighlightNavBar extends JPanel {
     private Color navColor = null;
 
     HighlightNavBar(JTable table, LogTableModel model) {
-        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][]10[]8[grow][]", "[center]"));
+        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][]10[]8[]12[][grow]", "[center]"));
         this.table = table;
         this.model = model;
         setBorder(new FindBar.BarSeparator());
@@ -63,7 +63,9 @@ final class HighlightNavBar extends JPanel {
         add(arrows, "aligny center");
         add(position, "aligny center");
 
-        // Clear All at the far right, away from the chips and arrows clicked all the time.
+        // Clear All right after the count, with the controls it acts on: at the far right it sat
+        // under Clear All Filters and read as a filter, though it deletes saved work. It asks
+        // first (Settings), which guards it better than distance did.
         clearAllBtn.setFont(clearAllBtn.getFont().deriveFont(12f));
         clearAllBtn.setMargin(new Insets(1, 6, 1, 6));
         clearAllBtn.setToolTipText(Messages.get("highlight.nav.clear.all.tooltip"));
@@ -73,6 +75,17 @@ final class HighlightNavBar extends JPanel {
 
     private final JButton clearAllBtn = new JButton(Messages.get("highlight.nav.clear.all"));
     private Runnable onClearAll;
+    private java.util.function.IntConsumer onClearColor;
+
+    /** What a chip's Clear item does: the tab removes that color (a palette slot), asking first. */
+    void setOnClearColor(java.util.function.IntConsumer onClearColor) {
+        this.onClearColor = onClearColor;
+    }
+
+    /** "Clear All…" while clearing asks first, "Clear All" when the user turned that off. */
+    private static String clearLabel(String key) {
+        return Messages.get(key) + (AppPrefs.isHighlightClearAllConfirm() ? "\u2026" : "");
+    }
 
     /** What Clear All does: the tab removes every highlight, asking first. */
     void setOnClearAll(Runnable onClearAll) {
@@ -101,6 +114,7 @@ final class HighlightNavBar extends JPanel {
         }
         // If the selected color was removed, fall back to "All"
         if (navColor != null && !counts.containsKey(navColor)) navColor = null;
+        clearAllBtn.setText(clearLabel("highlight.nav.clear.all"));
         if (!isVisible()) {
             setVisible(true);
             repaintBarAbove();
@@ -178,6 +192,17 @@ final class HighlightNavBar extends JPanel {
             swatch.setFocusPainted(false);
             swatch.setToolTipText(chipTip(slot, n[0], n[1]));
             swatch.addActionListener(e -> { navColor = c; refresh(); });
+            final int chipSlot = slot;
+            swatch.setComponentPopupMenu(new JPopupMenu() {
+                @Override public void show(Component invoker, int x, int y) {
+                    removeAll();
+                    JMenuItem clear = new JMenuItem(clearLabel("highlight.nav.chip.clear")
+                            .replace("{0}", Messages.get("highlight.color." + chipSlot)));
+                    clear.addActionListener(e -> { if (onClearColor != null) onClearColor.accept(chipSlot); });
+                    add(clear);
+                    super.show(invoker, x, y);
+                }
+            });
             swatches.add(swatch, "w 16!, h 16!");
         }
 

@@ -693,14 +693,9 @@ public final class MainFrame extends JFrame {
         dialog.setVisible(true);
     }
 
+    /** A section title as Settings draws one (dim, regular weight, hairline to the edge); its rows indent under it. */
     private static void addDialogSection(JPanel grid, String title, String gapConstraint) {
-        JLabel label = new JLabel(title);
-        label.setFont(label.getFont().deriveFont(Font.BOLD));
-        label.setForeground(ClouseauColors.accentBlue());
-        grid.add(label, "span 2, " + gapConstraint + ", gapbottom 2");
-        JSeparator sep = new JSeparator();
-        sep.setForeground(ClouseauColors.separatorColor());
-        grid.add(sep, "span 2, growx, gapbottom 4");
+        grid.add(SettingsDialog.sectionLabel(title), "span 2, growx, " + gapConstraint + ", gapbottom 2");
     }
 
     private void openAbout() {
@@ -1685,7 +1680,7 @@ public final class MainFrame extends JFrame {
      * rounded key badge; the {@code "+"} separators are plain (unboxed) labels.
      */
     private static void addShortcutRow(JPanel grid, String description, String shortcut) {
-        grid.add(new JLabel(description));
+        grid.add(new JLabel(description), SettingsDialog.INDENT);
 
         JPanel badgeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         badgeRow.setOpaque(false);

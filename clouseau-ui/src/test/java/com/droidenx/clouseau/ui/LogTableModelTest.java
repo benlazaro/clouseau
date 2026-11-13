@@ -145,6 +145,25 @@ class LogTableModelTest {
     }
 
     @Test
+    void clearingOneColorLeavesTheOthersAndReachesHiddenRows() throws Exception {
+        model.appendBatch(entries(10));
+        model.setHighlight(2, java.awt.Color.RED);
+        model.setHighlight(5, java.awt.Color.RED);
+        model.setHighlight(7, java.awt.Color.BLUE);
+        model.applyFilter(e -> e.message().endsWith("5"));
+        for (int i = 0; i < 50 && model.getRowCount() != 1; i++) {
+            Thread.sleep(20);
+            drainEdt();
+        }
+
+        assertThat(model.highlightOrdinals(java.awt.Color.RED)).containsExactlyInAnyOrder(2, 5);
+        model.clearHighlights(java.awt.Color.RED);   // row 2 is hidden by the filter, and goes too
+
+        assertThat(model.highlightCounts()).containsOnlyKeys(java.awt.Color.BLUE);
+        assertThat(model.highlightOrdinals(java.awt.Color.RED)).isEmpty();
+    }
+
+    @Test
     void highlightCountsKeepTheRowsTheFiltersHide() throws Exception {
         model.appendBatch(entries(10));
         model.setHighlight(2, java.awt.Color.RED);

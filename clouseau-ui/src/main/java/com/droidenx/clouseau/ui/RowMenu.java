@@ -246,6 +246,32 @@ final class RowMenu {
     }
 
     /**
+     * Removes one highlight color from the tab, the rows the filters hide and the entries not
+     * held in memory included, after asking as Clear All does, and saves. The highlight bar's
+     * chip menu.
+     */
+    void clearHighlightColor(int slot) {
+        Color color = ClouseauColors.highlightColors()[slot];
+        Map<Integer, String> ordinals = new java.util.LinkedHashMap<>();
+        host.notes().highlights().forEach((ord, s) -> { if (s == slot) ordinals.put(ord, ""); });
+        for (int ord : logTableModel.highlightOrdinals(color)) ordinals.put(ord, "");
+        if (ordinals.isEmpty()) return;
+        if (AppPrefs.isHighlightClearAllConfirm()) {
+            int confirm = JOptionPane.showConfirmDialog(
+                    SwingUtilities.getWindowAncestor(logTable),
+                    java.text.MessageFormat.format(Messages.get("highlight.clear.color.confirm.message"),
+                            Messages.get("highlight.color." + slot), ordinals.size()),
+                    Messages.get("highlight.clear.color.confirm.title"),
+                    JOptionPane.YES_NO_OPTION);
+            if (confirm != JOptionPane.YES_OPTION) return;
+        }
+        logTableModel.clearHighlights(color);
+        // A null slot clears: the raw lines aren't read.
+        host.notesSaved(host.notes().setHighlights(ordinals, null));
+        host.highlightsChanged();
+    }
+
+    /**
      * A 22×22 highlight color button, ringed in white when every row it would color already
      * has that color. Shared with the Find bar's Highlight popup.
      */
