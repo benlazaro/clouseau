@@ -72,6 +72,7 @@ public final class ScreenshotTool {
             mergedView(frame);
             openDialog(frame);
             parserEditor(frame);
+            lightTheme(frame);
         } finally {
             System.exit(0);
         }
@@ -179,6 +180,31 @@ public final class ScreenshotTool {
         settle(800);
         capture(dialog, "parser-editor.png");
         onEdt(() -> { dialog.dispose(); return null; });
+    }
+
+    /**
+     * The README's main view again in the Light theme, switched live as View → Theme does:
+     * {@code main-view-light.png}.
+     */
+    private static void lightTheme(MainFrame frame) throws Exception {
+        onEdt(() -> {
+            com.droidenx.clouseau.ui.theme.ThemeManager.applyTheme("Light");
+            com.droidenx.clouseau.ui.theme.ThemeManager.updateUI();
+            return null;
+        });
+        settle(1000);
+        selectTab(frame, 0);
+        settle(500);
+        // Undo the logger filter set for logger-filter.png, so the scene matches main-view.png.
+        TabPanel tab = onEdt(() -> tabAt(frame, 0));
+        onEdt(() -> {
+            find(tab, JButton.class, b -> Messages.get("filter.clear").equals(b.getText())).doClick();
+            return null;
+        });
+        settle(800);
+        selectRow(waitForRows(frame, 0), "Payment gateway response");
+        settle(800);
+        capture(frame, "main-view-light.png");
     }
 
     // ── Setup ─────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ has_children: true
 
 Everything Clouseau does, one topic per page. New to Clouseau? Start with
 [Opening files](opening-files.md), then [Reading and filtering](reading-and-filtering.md).
+Used OtrosLogViewer? See [Coming from OtrosLogViewer](from-otroslogviewer.md).
 
 | Page | What it covers |
 |---|---|
@@ -18,5 +19,6 @@ Everything Clouseau does, one topic per page. New to Clouseau? Start with
 | [Following live logs](following.md) | Follow mode, log rotation, SSH and source plugins |
 | [Parsers](parsers.md) | The built-in formats, the parser editor, and `parsers.json` |
 | [Themes and settings](settings.md) | Themes, every setting, keyboard shortcuts, memory and the data folder |
+| [Coming from OtrosLogViewer](from-otroslogviewer.md) | Where things moved, converting `.pattern` files, and what isn't here yet |
 
 Writing a plugin or building Clouseau yourself? See [For developers](developers.md).

@@ -1,6 +1,8 @@
 # Clouseau Log Viewer
 
-A log viewer for software engineers, born from a love of OtrosLogViewer and a desire to bring its core functionality into a cleaner, more modern interface. Open logs of any size, merge the logs of several services into one timeline, filter in milliseconds, and hand your annotated findings to a colleague in one file.
+**A fast, modern desktop log viewer for engineers who investigate logs for a living.**
+
+Open logs of any size, merge the logs of several services into one timeline, filter in milliseconds, and hand your annotated findings to a colleague in one file. Free and open source, for Windows, macOS and Linux.
 
 [![Latest release](https://img.shields.io/github/v/release/benlazaro/clouseau?include_prereleases&sort=semver&label=release)](https://github.com/benlazaro/clouseau/releases)
 [![Downloads](https://img.shields.io/github/downloads/benlazaro/clouseau/total?label=downloads)](https://github.com/benlazaro/clouseau/releases)
@@ -11,17 +13,30 @@ A log viewer for software engineers, born from a love of OtrosLogViewer and a de
 ![Gradle 8.8](https://img.shields.io/badge/Gradle-8.8-02303A)
 [![License MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**[Download](#download)** · **[User Guide](https://benlazaro.github.io/clouseau/guide/)** · **[For developers](https://benlazaro.github.io/clouseau/guide/developers.html)**
-
----
+**[⬇ Download](#download)** · **[User Guide](https://benlazaro.github.io/clouseau/guide/)** · **[Coming from OtrosLogViewer?](https://benlazaro.github.io/clouseau/guide/from-otroslogviewer.html)** · **[For developers](https://benlazaro.github.io/clouseau/guide/developers.html)**
 
 ![Main view](docs/screenshots/main-view.png)
 
 *Level colors, row highlights with the bar for jumping between them, and the detail panel pretty-printing a JSON payload.*
 
+### Why Clouseau
+
+- **Big files are fine.** A million-line, 125 MB log opens in under 50 MB of memory, and level, logger and time filters answer in milliseconds.
+- **One timeline across services.** Merge the logs of several services or servers, in different formats and timezones, and follow a request from one to the next.
+- **Findings you can hand over.** Note lines as you investigate, then send the log and your notes to a colleague as one file.
+- **Live logs, local or remote.** Follow a file like `tail -f`, or a server's log over SSH, without losing lines when it rotates.
+
+---
+
+## Screenshots
+
 ![Merged view](docs/screenshots/merged-view.png)
 
 *Three services' logs, in two formats, interleaved into one timeline. The **Source** column shows which file each line came from.*
+
+![Main view in the Light theme](docs/screenshots/main-view-light.png)
+
+*The Light theme. Switch any time with **View → Theme**.*
 
 ---
 
