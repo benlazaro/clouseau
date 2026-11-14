@@ -798,6 +798,7 @@ final class DetailPanel extends JPanel {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(color);
             g2.fillRoundRect(x, y, width, height, 4, 4);
+            ClouseauColors.paintHighlightEdge(g2, color, x, y, width, height, 4);
             g2.dispose();
         }
 

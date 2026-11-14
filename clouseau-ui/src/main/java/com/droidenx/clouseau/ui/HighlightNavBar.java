@@ -178,6 +178,7 @@ final class HighlightNavBar extends JPanel {
                     if (allHidden) g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f));
                     g2.setColor(c);
                     g2.fillRoundRect(0, 0, getWidth(), getHeight(), 5, 5);
+                    if (!selected) ClouseauColors.paintHighlightEdge(g2, c, 0, 0, getWidth(), getHeight(), 5);
                     if (selected) {
                         g2.setColor(Color.WHITE);
                         g2.setStroke(new BasicStroke(1.5f));

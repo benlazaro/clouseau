@@ -295,6 +295,8 @@ final class RowMenu {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(color);
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+                // Its own hue, lighter, so it shows on the menu; the white ring replaces it when marked.
+                if (!marked) ClouseauColors.paintHighlightEdge(g2, color, 0, 0, getWidth(), getHeight(), 6);
                 if (marked) {
                     g2.setColor(Color.WHITE);
                     g2.setStroke(new BasicStroke(2f));

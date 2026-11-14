@@ -232,6 +232,46 @@ public final class ClouseauColors {
         return result;
     }
 
+    private static final Color[] FB_HIGHLIGHT_EDGES = {
+        new Color(0x904D49), new Color(0x865824), new Color(0x6B661F), new Color(0x397247),
+        new Color(0x00726F), new Color(0x386695), new Color(0x6B578F), new Color(0x874D6F),
+    };
+
+    /**
+     * The 1px edge drawn just inside a highlight swatch (row menu, find bar, highlight bar,
+     * detail pane): the fill's own hue a step lighter in Dark (OKLCH L 0.50) or darker in
+     * Light (L 0.76), so a dark fill on a dark menu, or a pastel on white, still shows (about
+     * 2:1 on the menu) without the edge outshining the fill.
+     * White stays for the ring that marks the current color. A theme without
+     * {@code Clouseau.highlightEdge.<slot>} gets the fill blended halfway to the foreground.
+     */
+    public static Color highlightEdge(Color fill) {
+        Color[] palette = highlightColors();
+        for (int i = 0; i < palette.length; i++) {
+            if (palette[i].equals(fill)) {
+                Color c = UIManager.getColor("Clouseau.highlightEdge." + i);
+                if (c != null) return c;
+                if (UIManager.getColor("Clouseau.highlight." + i) == null) return FB_HIGHLIGHT_EDGES[i];
+                break;
+            }
+        }
+        Color fg = foreground();
+        return new Color((fill.getRed() + fg.getRed()) / 2, (fill.getGreen() + fg.getGreen()) / 2,
+                         (fill.getBlue() + fg.getBlue()) / 2);
+    }
+
+    /** Strokes {@link #highlightEdge} 1px inside the rounded rectangle a swatch fills. */
+    public static void paintHighlightEdge(Graphics2D g2, Color fill, float x, float y, float w, float h, float arc) {
+        Graphics2D g = (Graphics2D) g2.create();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        g.setColor(highlightEdge(fill));
+        g.setStroke(new BasicStroke(1f));
+        g.draw(new java.awt.geom.RoundRectangle2D.Float(x + 0.5f, y + 0.5f, w - 1f, h - 1f,
+                Math.max(0f, arc - 1f), Math.max(0f, arc - 1f)));
+        g.dispose();
+    }
+
     // ── Highlight navigation bar ──────────────────────────────────────────────
 
     /** Fill for the "All" button when it is the active filter. */
