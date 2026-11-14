@@ -308,7 +308,7 @@ final class FileChooserDialog extends JDialog {
      * format. On every folder change the look and feel throws the list's columns away and builds
      * new ones at the shell's default widths and order, so when it swaps in a new column model the
      * old layout is copied onto it by column title, and each renderer is wrapped so a date shows
-     * as yyyy-MM-dd HH:mm and rows are striped like the log table's (Settings → Table).
+     * as yyyy-MM-dd HH:mm and rows are never striped.
      */
     private static void keepColumns(Container c) {
         SwingUtilities.invokeLater(() -> {
@@ -349,9 +349,9 @@ final class FileChooserDialog extends JDialog {
 
     /**
      * Wraps each column's renderer so a date value shows as yyyy-MM-dd HH:mm, not the system's
-     * short format, and every other row takes the stripe color when stripes are on. The look and
-     * feel would otherwise paint odd rows in {@code Table.alternateRowColor} over the list's own
-     * background: striped in Dark, whatever the setting, and never in Light, where both are white.
+     * short format, and every row is plain, like the dialog's other lists (stripes are for the log
+     * table). The look and feel would otherwise paint odd rows in {@code Table.alternateRowColor}
+     * over the list's own background: striped in Dark, where the two differ, and not in Light.
      */
     private static void useAppDates(JTable table) {
         for (int i = 0; i < table.getColumnCount(); i++) {
@@ -367,8 +367,7 @@ final class FileChooserDialog extends JDialog {
     private record AppDates(javax.swing.table.TableCellRenderer base) implements javax.swing.table.TableCellRenderer {
         @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean s, boolean f, int r, int c) {
             Component comp = base.getTableCellRendererComponent(t, v, s, f, r, c);
-            if (!s) comp.setBackground(r % 2 == 1 && AppPrefs.isTableStripes()
-                    ? ClouseauColors.stripeBackground() : t.getBackground());
+            if (!s) comp.setBackground(t.getBackground());
             java.util.Date d = v instanceof java.util.Date date ? date
                     : v instanceof Long ms && t.getColumnName(c).toLowerCase(Locale.ROOT).contains("modif") ? new java.util.Date(ms) : null;
             if (d != null && comp instanceof JLabel l) l.setText(LIST_DATE.format(d.toInstant().atZone(ZoneId.systemDefault())));
