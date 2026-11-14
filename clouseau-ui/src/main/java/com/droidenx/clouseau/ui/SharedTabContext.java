@@ -80,6 +80,8 @@ final class SharedTabContext {
     /** True once this tab has told the user its annotations couldn't be saved. */
     private boolean annotationSaveWarned;
     private JDialog annotationsDialog;
+    /** The key {@link AppPrefs#getWindowSize} keeps the Notes window's last size under. */
+    private static final String NOTES_SIZE_KEY = "notes";
     private AnnotationsPanel annotationsPanel;
     /** True once a followed file was truncated in place, so older rows lost their text (D-16). */
     private boolean textLost;
@@ -542,8 +544,28 @@ final class SharedTabContext {
                     Dialog.ModalityType.MODELESS);
             annotationsDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
             annotationsDialog.add(annotationsPanel);
-            annotationsDialog.setSize(880, 360);
-            annotationsDialog.setMinimumSize(new Dimension(420, 220));
+            // Esc closes it, as the panel's Close does (an edit in the table takes Esc first).
+            JDialog dialog = annotationsDialog;
+            dialog.getRootPane().registerKeyboardAction(e -> dialog.setVisible(false),
+                    KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
+                    JComponent.WHEN_IN_FOCUSED_WINDOW);
+            // Opens at the size it was left at, hidden or closed.
+            dialog.addComponentListener(new java.awt.event.ComponentAdapter() {
+                @Override public void componentHidden(java.awt.event.ComponentEvent e) {
+                    AppPrefs.setWindowSize(NOTES_SIZE_KEY, dialog.getSize());
+                }
+            });
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosing(java.awt.event.WindowEvent e) {
+                    AppPrefs.setWindowSize(NOTES_SIZE_KEY, dialog.getSize());
+                }
+            });
+            Dimension min = new Dimension(420, 220);
+            Dimension saved = AppPrefs.getWindowSize(NOTES_SIZE_KEY);
+            annotationsDialog.setSize(saved != null
+                    ? new Dimension(Math.max(saved.width, min.width), Math.max(saved.height, min.height))
+                    : new Dimension(880, 360));
+            annotationsDialog.setMinimumSize(min);
             annotationsDialog.setLocationRelativeTo(owner);
         } else {
             annotationsPanel.refresh();

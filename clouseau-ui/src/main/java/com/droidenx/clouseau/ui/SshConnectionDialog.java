@@ -174,7 +174,7 @@ public class SshConnectionDialog extends JDialog {
                 e -> requestClose(),
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
-        // Ctrl+S saves what the form holds without connecting: a connection, or a log.
+        // Ctrl+S saves what the form holds without connecting: a connection, a log, or a new one.
         getRootPane().registerKeyboardAction(
                 e -> saveWithoutConnecting(),
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, java.awt.event.InputEvent.CTRL_DOWN_MASK),
@@ -241,7 +241,7 @@ public class SshConnectionDialog extends JDialog {
     private JPanel buildContent() {
         // Two columns, labels and fields, with the Settings window's padding, section spacing
         // and indent. Fields fill their column; the dialog sizes to its widest row.
-        content = new JPanel(new MigLayout("insets 24 28 20 28, gapy 10, hidemode 3",
+        content = new JPanel(new MigLayout("insets 20, gapy 10, hidemode 3",
                 "[]24[grow, fill, 320::]"));
 
         // ── Connection ───────────────────────────────────────────────────
@@ -911,7 +911,7 @@ public class SshConnectionDialog extends JDialog {
             node = (DefaultMutableTreeNode) value;
             SshSaved.Connection c = (SshSaved.Connection) node.getUserObject();
             connKey = c.key();
-            error.setFont(tree.getFont().deriveFont(tree.getFont().getSize2D() * 0.92f));
+            error.setFont(tree.getFont().deriveFont(12f));   // the type scale's small size
             error.setForeground(ClouseauColors.statusError());
             field.setText(c.name() != null ? c.name() : "");
             field.putClientProperty("JTextField.placeholderText", c.address());
@@ -1425,7 +1425,55 @@ public class SshConnectionDialog extends JDialog {
             saveLog();
             validateForm();
             hintLabel.show(Messages.format("ssh.dialog.saved.ok", fileName(editingLog.remotePath())), NoticeLabel.Kind.OK);
+        } else if (mode == Mode.NEW) {
+            saveNew();
         }
+    }
+
+    /**
+     * Ctrl+S on a new connection: saves it, with its log when Remote path has one, without
+     * connecting, and picks it in the list. Needs a host and user (and a valid port); the notice
+     * line already says what's missing. The same name on another connection is refused; the same
+     * user, host and port is that connection again (see {@link #keepNew}).
+     */
+    private void saveNew() {
+        HostSpec spec = parseHostSpec(hostField.getText().trim());
+        boolean hasHost = spec != null || !hostField.getText().isBlank();
+        boolean hasUser = !userField.getText().isBlank() || (spec != null && spec.user() != null);
+        boolean portOk  = portField.getText().isBlank() || validPort(portField.getText());
+        if (!hasHost || !hasUser || !portOk || testRemote != null) return;
+        selfChange = true;
+        try {
+            applyHostSpec();
+        } finally {
+            selfChange = false;
+        }
+        SshSaved.Connection typed = formConnection();
+        SshSaved.Connection existing = SshSaved.find(connections, typed.key());
+        SshSaved.Connection named = SshSaved.named(connections, typed.name(),
+                existing != null ? existing.key() : typed.key());
+        if (named != null) {
+            showClash(Messages.format("ssh.dialog.clash.name", named.name()), nameField);
+            return;
+        }
+        SshSaved.Log log = remotePathField.getText().isBlank() ? null : formLog();
+        keepNew(typed, log);
+        SshSaved.Connection saved = SshSaved.find(connections, typed.key());
+        if (saved == null) return;
+        editingKey = saved.key();
+        editingLog = log;
+        if (log != null) {
+            fillConnection(saved);
+            showMode(Mode.LOG);
+            fillLog(log);
+        } else {
+            showMode(Mode.CONNECTION);
+            fillConnection(saved);
+        }
+        rebuildSavedTree();
+        validateForm();
+        hintLabel.show(Messages.format("ssh.dialog.saved.ok",
+                log != null ? fileName(log.remotePath()) : saved.label()), NoticeLabel.Kind.OK);
     }
 
     /**
@@ -1594,7 +1642,7 @@ public class SshConnectionDialog extends JDialog {
     private void keepNew(SshSaved.Connection typed, SshSaved.Log log) {
         SshSaved.Connection existing = SshSaved.find(connections, typed.key());
         if (existing == null) {
-            connections.add(typed.withLogs(List.of(log)));
+            connections.add(typed.withLogs(log != null ? List.of(log) : List.of()));
         } else {
             SshSaved.Connection merged = existing;
             if (!existing.sameSignIn(typed)) {
@@ -1607,7 +1655,7 @@ public class SshConnectionDialog extends JDialog {
                 if (answer == 0) merged = existing.withSignIn(typed);
             }
             if (merged.name() == null && typed.name() != null) merged = merged.withName(typed.name());
-            SshSaved.Connection done = merged.withLogs(SshSaved.withLog(merged.logs(), log));
+            SshSaved.Connection done = log != null ? merged.withLogs(SshSaved.withLog(merged.logs(), log)) : merged;
             replace(existing.key(), x -> done);
         }
         AppPrefs.saveSshConnections(connections);

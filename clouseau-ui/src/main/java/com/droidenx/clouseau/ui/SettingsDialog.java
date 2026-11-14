@@ -25,6 +25,8 @@ final class SettingsDialog extends JDialog {
     private static final int MIN_WIDTH = 760;
     /** ...and at most this fraction of its width tall. */
     private static final float ASPECT = 0.72f;
+    /** The key {@link AppPrefs#getWindowSize} keeps the dialog's last size under. */
+    private static final String SIZE_KEY = "settings";
 
     private final TabPanel tabPanel;
     private final Runnable onApply;
@@ -101,9 +103,9 @@ final class SettingsDialog extends JDialog {
         // widest control (the timezone combo), so a wide window doesn't stretch the combos;
         // section titles and checkboxes span all three, so the title rules reach the right edge.
         // Spinners keep one fixed width, left-aligned in the field column; combos fill it.
-        // Padding follows IntelliJ's settings: generous around the settings, tighter around
-        // the buttons, with a divider between them.
-        JPanel content = new ScrollablePanel(new MigLayout("insets 24 28 24 28, gapy 10", "[]24[][grow]"));
+        // Padding follows the design system's dialogs: 20 around the settings, the footer's
+        // tighter 8 around the buttons, with a divider between them.
+        JPanel content = new ScrollablePanel(new MigLayout("insets 20, gapy 10", "[]24[][grow]"));
 
         // ── Table section ────────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.table")), "span 3, growx, wrap, gaptop 0, gapbottom 8");
@@ -160,15 +162,8 @@ final class SettingsDialog extends JDialog {
         // ── Buttons ──────────────────────────────────────────────────────
         JButton ok     = new JButton(Messages.get("settings.button.ok"));
         JButton cancel = new JButton(Messages.get("settings.button.cancel"));
-        ok.addActionListener(e -> { applySettings(); dispose(); });
-        cancel.addActionListener(e -> {
-            String cur = (String) themeCombo.getSelectedItem();
-            if (!originalThemeName.equals(cur)) {
-                ThemeManager.applyTheme(originalThemeName);
-                ThemeManager.updateUI();
-            }
-            dispose();
-        });
+        ok.addActionListener(e -> { applySettings(); close(); });
+        cancel.addActionListener(e -> cancel());
 
         JScrollPane scroll = new JScrollPane(content);
         scroll.setBorder(BorderFactory.createEmptyBorder());
@@ -177,7 +172,12 @@ final class SettingsDialog extends JDialog {
             @Override public void windowOpened(java.awt.event.WindowEvent e) {
                 SwingUtilities.invokeLater(() -> scroll.getViewport().setViewPosition(new Point(0, 0)));
             }
+            // The close box is Cancel: it puts back a theme previewed from the combo.
+            @Override public void windowClosing(java.awt.event.WindowEvent e) {
+                cancel();
+            }
         });
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 
         JPanel footer = DialogFooter.of(cancel, ok);
 
@@ -187,13 +187,29 @@ final class SettingsDialog extends JDialog {
         setContentPane(root);
         getRootPane().setDefaultButton(ok);
         getRootPane().registerKeyboardAction(
-                e -> dispose(),
+                e -> cancel(),
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         pack();
         sizeLandscape();
         setLocationRelativeTo(owner);
+    }
+
+    /** Cancel, Esc and the close box: puts back a theme previewed from the combo, saves nothing else. */
+    private void cancel() {
+        String cur = (String) themeCombo.getSelectedItem();
+        if (!originalThemeName.equals(cur)) {
+            ThemeManager.applyTheme(originalThemeName);
+            ThemeManager.updateUI();
+        }
+        close();
+    }
+
+    /** Closes the dialog, remembering its size for the next time. */
+    private void close() {
+        AppPrefs.setWindowSize(SIZE_KEY, getSize());
+        dispose();
     }
 
     /**
@@ -210,8 +226,14 @@ final class SettingsDialog extends JDialog {
         Dimension packed = getSize();
         int w = Math.min(Math.max(packed.width, MIN_WIDTH), maxW);
         int h = Math.min(Math.min(packed.height, Math.round(w * ASPECT)), maxH);
-        setSize(w, h);
         setMinimumSize(new Dimension(Math.min(w, 420), Math.min(h, 280)));
+        // After the first time, the size it was left at, within the screen.
+        Dimension saved = AppPrefs.getWindowSize(SIZE_KEY);
+        if (saved != null) {
+            w = Math.min(Math.max(saved.width, getMinimumSize().width), maxW);
+            h = Math.min(Math.max(saved.height, getMinimumSize().height), maxH);
+        }
+        setSize(w, h);
         setResizable(true);
     }
 

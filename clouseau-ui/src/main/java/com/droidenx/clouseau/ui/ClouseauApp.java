@@ -88,14 +88,14 @@ public final class ClouseauApp {
                 ? Path.of(pluginsDirProp)
                 : AppDirs.dataDir().resolve("plugins");
 
-        if (splash != null) splash.setStatus("Loading plugins...");
+        if (splash != null) splash.setStatus(Messages.get("splash.loading.plugins"));
         ClouseauPluginManager pluginManager = new ClouseauPluginManager(pluginsDir);
         pluginManager.loadAll();
         log.info("Plugin manager loaded");
 
         Runtime.getRuntime().addShutdownHook(new Thread(pluginManager::stopAll, "plugin-shutdown"));
 
-        if (splash != null) splash.setStatus("Starting...");
+        if (splash != null) splash.setStatus(Messages.get("splash.starting"));
 
         // Only the running instance may do this: copies in use belong to its open tabs. An
         // instance started without the port can't know whether another one owns them.

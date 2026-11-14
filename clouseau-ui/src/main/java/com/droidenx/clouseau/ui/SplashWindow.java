@@ -52,14 +52,14 @@ public final class SplashWindow extends JWindow {
                 : new JLabel().getFont().deriveFont(Font.PLAIN, 11f);
         Color statusColor = ClouseauColors.mutedForeground();
 
-        statusLabel = new JLabel("Initializing application...", SwingConstants.LEFT);
+        statusLabel = new JLabel(Messages.get("splash.initializing"), SwingConstants.LEFT);
         statusLabel.setForeground(statusColor);
         statusLabel.setFont(statusFont);
         statusLabel.setOpaque(false);
         statusLabel.setBounds(PAD, statusY, winW / 2, STATUS_H);
         panel.add(statusLabel);
 
-        JLabel versionLabel = new JLabel("v" + AppPrefs.getAppVersion(), SwingConstants.RIGHT);
+        JLabel versionLabel = new JLabel(Messages.format("splash.version", AppPrefs.getAppVersion()), SwingConstants.RIGHT);
         versionLabel.setForeground(statusColor);
         versionLabel.setFont(statusFont);
         versionLabel.setOpaque(false);
