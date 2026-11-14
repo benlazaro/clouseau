@@ -577,6 +577,40 @@ initial value. Choose the default for what the user most likely wants next: a me
 that only informs (a development build can't check for updates) defaults to Close, with
 the optional action (Open Releases Page) beside it.
 
+### 6.13 Sidebar lists
+
+A dialog's sidebar list (the Open dialog's Favorites, the SSH Connections dialog's saved
+connections) follows the same rules, so the two read as one design:
+
+- **On the sidebar, not in a box.** The list, its scroll pane and viewport are not opaque;
+  only the selected row is filled, with the theme's list selection. A section title
+  (`SettingsDialog.sectionLabel`) or a filter field sits above it.
+- **Never scrolls sideways.** The list tracks the viewport's width
+  (`getScrollableTracksViewportWidth` returns true) and the scroll pane has
+  `HORIZONTAL_SCROLLBAR_NEVER`. Text too long for its row ends in **…**: the renderer's
+  labels get `wmin 0` in MigLayout so they shrink instead of pushing the row wider.
+- **The secondary text gives way first.** A row has a primary text (a name, in the list's
+  font, bold for a group such as a connection) and optional secondary text, dimmed
+  (`ClouseauColors.dimForeground`): beside it (a connection's address) or on a second,
+  11px line (a favorite's full path). When both share a line, the secondary column has the
+  higher MigLayout `shrinkprio`, so it's cut to nothing before the name is cut. Something
+  missing (a favorite whose folder is gone) is `mutedForeground`.
+- **The full text in a tooltip,** since any row may be cut short.
+- **A gutter for the row's tools.** Each tool takes a 24px hit area (`TOOL`) at the row's
+  right edge, and **every row keeps that gutter free, hovered or not**, so text never runs
+  under a tool and nothing shifts when the mouse moves. The tools are painted only on the
+  row under the mouse: dim, the text color while the mouse is on one, and the trash can in
+  the error color. Each has a tooltip; pressing one acts at once and doesn't select the row.
+- **The same actions elsewhere.** A right-click menu offers the row's actions (Remove, Copy
+  Path, Rename…), and Delete removes the selected row.
+- **Empty:** a short italic hint in `mutedForeground` saying how to add the first entry.
+
+A `JTree` sizes its rows from the renderer's preferred size and caches them, so a tree
+(the SSH list) works the width out itself: the renderer's preferred width is the viewport's
+width less the row's indent (`totalChildIndent` per level), and a resize of the viewport
+drops the cached sizes (`BasicTreeUI.setLeftChildIndent` with its current value). A
+`JList` (Favorites) gets this from tracking the viewport width alone.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:
