@@ -44,7 +44,7 @@ import java.util.regex.Pattern;
  *   <li><b>A log</b> picked (or New Log… on a connection): its Log section only, the connection
  *       shown read-only as its first line, and the default button is <b>Connect</b>, which saves
  *       the log, then connects.</li>
- *   <li><b>New connection</b> (the + beside the filter, Ctrl+N): both sections, with "Save this
+ *   <li><b>New connection</b> (New, on the footer's left, or Ctrl+N): both sections, with "Save this
  *       connection", and <b>Connect</b>.</li>
  * </ul>
  * Connect signs in and checks the file first, and closes only when that works. Laid out like the
@@ -332,14 +332,19 @@ public class SshConnectionDialog extends JDialog {
         // fields fill in.
         content.add(hintLabel, "span 2, gaptop 10, growx 0");
 
-        // ── Footer, under the form only: Cancel · Save or Connect ────────
+        // ── Footer, the window's width: New on the left · Cancel · Save or Connect ─
+        // New starts a new connection, saved or a one-off as the user chooses, so it isn't a
+        // + on the saved list.
+        JButton newBtn = new JButton(Messages.get("ssh.dialog.new"));
+        newBtn.setToolTipText(Messages.get("ssh.dialog.new.tooltip"));
+        newBtn.addActionListener(e -> newConnection());
         actionBtn.addActionListener(e -> {
             if (mode == Mode.CONNECTION) saveConnection();
             else onConnect();
         });
         JButton cancelBtn = new JButton(Messages.get("ssh.dialog.cancel"));
         cancelBtn.addActionListener(e -> requestClose());
-        JPanel footer = DialogFooter.of(cancelBtn, actionBtn);
+        JPanel footer = DialogFooter.of(new JComponent[]{newBtn}, cancelBtn, actionBtn);
 
         // Live validation. Any change also stops a check Connect is running, and drops its result.
         DocumentListener validator = new DocumentListener() {
@@ -354,16 +359,14 @@ public class SshConnectionDialog extends JDialog {
         authCombo.addActionListener(e -> formChanged());
         parserCombo.addActionListener(e -> formChanged());
 
-        JPanel formPane = new JPanel(new BorderLayout());
-        formPane.add(content, BorderLayout.CENTER);
-        formPane.add(footer, BorderLayout.SOUTH);
         // Drag the divider to widen the saved connections; the form takes the rest.
-        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSavedSidebar(), formPane);
+        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSavedSidebar(), content);
         split.setBorder(null);
         split.setResizeWeight(0);
         split.setContinuousLayout(true);
         JPanel root = new JPanel(new BorderLayout());
         root.add(split, BorderLayout.CENTER);
+        root.add(footer, BorderLayout.SOUTH);
         return root;
     }
 
@@ -509,7 +512,7 @@ public class SshConnectionDialog extends JDialog {
     // ── Saved connections ─────────────────────────────────────────────────────
 
     /**
-     * The sidebar: a filter field with + (New connection) beside it, and the saved connections as
+     * The sidebar: a filter field, and the saved connections as
      * a tree, connection › folder › log (connections A–Z by what their row shows, folders and
      * logs A–Z), each connection and folder folding. A right-click offers what applies: Rename
      * and New Log… on a connection, Duplicate on a log, Forget on all three. With nothing saved,
@@ -525,9 +528,6 @@ public class SshConnectionDialog extends JDialog {
             public void removeUpdate(DocumentEvent e)  { rebuildSavedTree(); }
             public void changedUpdate(DocumentEvent e) { rebuildSavedTree(); }
         });
-        JButton newBtn = new JButton("+");
-        newBtn.setToolTipText(Messages.get("ssh.dialog.new.tooltip"));
-        newBtn.addActionListener(e -> newConnection());
 
         savedTree.setRootVisible(false);
         savedTree.setShowsRootHandles(true);
@@ -583,10 +583,9 @@ public class SshConnectionDialog extends JDialog {
         savedBody.add(treeScroll, "list");
         savedBody.add(empty, "empty");
 
-        JPanel side = new JPanel(new MigLayout("insets 24 16 16 16, fill, gapy 10", "[grow, fill][]", "[][grow, fill]"));
-        side.add(savedFilter, "growx");
-        side.add(newBtn, "wrap");
-        side.add(savedBody, "span 2, h 120:100%:");
+        JPanel side = new JPanel(new MigLayout("insets 24 16 16 16, fill, gapy 10", "[grow, fill]", "[][grow, fill]"));
+        side.add(savedFilter, "wrap");
+        side.add(savedBody, "h 120:100%:");
         side.setPreferredSize(new Dimension(SIDEBAR_WIDTH, 10));
         side.setMinimumSize(new Dimension(SIDEBAR_MIN, 10));
         // A hairline divides the sidebar from the form, as panels are divided elsewhere.
@@ -1175,7 +1174,7 @@ public class SshConnectionDialog extends JDialog {
         putSelectionBack(null);
     }
 
-    /** + or Ctrl+N: an empty form for a new connection, after asking about unsaved changes. */
+    /** New or Ctrl+N: an empty form for a new connection, after asking about unsaved changes. */
     private void newConnection() {
         if (!confirmLeave()) return;
         clearForm();
@@ -1347,7 +1346,7 @@ public class SshConnectionDialog extends JDialog {
     }
 
     /**
-     * Before the form drops unsaved changes to a saved connection or log (another row picked, +,
+     * Before the form drops unsaved changes to a saved connection or log (another row picked, New,
      * Cancel, Esc, the close box): asks Cancel · Don't Save · Save. Returns whether to go on. Save
      * is offered only when the form could be saved.
      */

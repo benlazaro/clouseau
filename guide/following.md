@@ -53,7 +53,8 @@ to a machine (a user, a host and a port, and a password or key), with an optiona
 the logs you've saved on it. Two accounts on the same machine, such as `deploy` and `root`,
 are two connections.
 
-**To follow a log on a new connection**, click **+** above the list (or press `Ctrl+N`):
+**To follow a log on a new connection**, click **New** at the bottom left of the window (or
+press `Ctrl+N`):
 
 1. Under **Connection**, enter the **Host**, **Port** and **Username**, and a **Name** if you
    like, such as *Payments prod*. You can also type or paste `user@host` or

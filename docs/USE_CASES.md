@@ -220,8 +220,8 @@ closes. **Saved connections** (D-24) are sign-ins (user, host, port, and a passw
 key, with an optional name) with the logs saved on each, listed as a tree, connection ›
 folder › log. Picking a connection shows only its details, with **Save**; picking a log
 shows only the log (its connection read-only), with **Connect**, which saves the log first;
-**+** (Ctrl+N) starts a new connection, kept only if **Save this connection** is ticked, once
-its check passes. Two connections can't share user, host and port, or a name: Save says
+**New** (bottom left, Ctrl+N) starts a new connection, kept only if **Save this connection**
+is ticked, once its check passes. Two connections can't share user, host and port, or a name: Save says
 which connection has them, and a new connection matching a saved one adds its log there and
 offers to update the saved sign-in. With unsaved changes, picking something else, Cancel,
 Esc or the close box asks Cancel · Don't Save · Save. **Browse…**
