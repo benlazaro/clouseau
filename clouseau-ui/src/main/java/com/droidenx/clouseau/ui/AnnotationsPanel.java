@@ -99,16 +99,36 @@ public final class AnnotationsPanel extends JPanel {
         t.setShowGrid(false);                                   // like the log table: no lines between rows
         t.setIntercellSpacing(new Dimension(0, 0));
         t.setFillsViewportHeight(true);
+        t.addFocusListener(new java.awt.event.FocusAdapter() {   // the ring dims without focus
+            @Override public void focusGained(java.awt.event.FocusEvent e) { t.repaint(); }
+            @Override public void focusLost(java.awt.event.FocusEvent e)   { t.repaint(); }
+        });
         ClouseauColors.themedBackground(t, ClouseauColors::tableBackground);
 
         DefaultTableCellRenderer cells = new DefaultTableCellRenderer() {
             @Override public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean sel, boolean focus, int row, int col) {
                 super.getTableCellRendererComponent(table, value, sel, false, row, col);
-                setBorder(BorderFactory.createEmptyBorder(0, 8, 0, col == COL_DATE ? TRASH : 8));
+                javax.swing.border.Border pad =
+                        BorderFactory.createEmptyBorder(0, 8, 0, col == COL_DATE ? TRASH : 8);
                 int model = table.convertColumnIndexToModel(col);
                 setHorizontalAlignment(model == COL_LINE ? SwingConstants.RIGHT : SwingConstants.LEFT);
-                if (!sel) setForeground(model == COL_NOTE ? table.getForeground() : ClouseauColors.dimForeground());
+                // Selected like a log table row: the blue selection, bold text, and a 2px ring
+                // that dims while the list doesn't have focus.
+                setFont(table.getFont().deriveFont(sel ? Font.BOLD : Font.PLAIN));
+                if (sel) {
+                    setBackground(ClouseauColors.selectionBackground());
+                    setForeground(ClouseauColors.selectionForeground());
+                    Color ring = table.hasFocus() ? ClouseauColors.selectionRing()
+                            : ClouseauColors.selectionRingInactive();
+                    int last = table.getColumnCount() - 1;
+                    setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(
+                            2, col == 0 ? 2 : 0, 2, col == last ? 2 : 0, ring), pad));
+                } else {
+                    setBackground(table.getBackground());
+                    setForeground(model == COL_NOTE ? table.getForeground() : ClouseauColors.dimForeground());
+                    setBorder(pad);
+                }
                 return this;
             }
         };
@@ -154,7 +174,7 @@ public final class AnnotationsPanel extends JPanel {
         body.add(buildEmptyState(), CARD_EMPTY);
 
         JPanel center = new JPanel(new BorderLayout());
-        center.setBorder(BorderFactory.createEmptyBorder(12, 12, 8, 12));
+        center.setBorder(BorderFactory.createEmptyBorder(16, 16, 8, 16));
         center.add(body, BorderLayout.CENTER);
         add(center, BorderLayout.CENTER);
 
@@ -380,7 +400,7 @@ public final class AnnotationsPanel extends JPanel {
             Rectangle v = getVisibleRect();
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            Color base = isRowSelected(hoverRow) ? getSelectionForeground() : ClouseauColors.dimForeground();
+            Color base = isRowSelected(hoverRow) ? ClouseauColors.selectionForeground() : ClouseauColors.dimForeground();
             ToolIcons.paintTrash(g2, v.x + v.width - TRASH + 9, r.y + (r.height - 14) / 2,
                     overTrash ? ClouseauColors.levelColor(LogEntry.LogLevel.ERROR) : base);
             g2.dispose();

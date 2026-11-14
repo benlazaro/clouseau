@@ -81,7 +81,7 @@ final class FindBar extends JPanel {
     private final JButton highlightBtn = new JButton(Messages.get("find.highlight"));
 
     FindBar(JTable table, Search searcher) {
-        super(new MigLayout("insets 3 8 3 8, gap 4", "[][grow][][][]8[][]", "[center]"));
+        super(new MigLayout("insets 3 8 3 8, gap 6", "[][grow][][][]8[][]", "[center]"));
         this.table = table;
         this.searcher = searcher;
         setBorder(new BarSeparator());
@@ -89,7 +89,7 @@ final class FindBar extends JPanel {
 
         JLabel label = new JLabel(Messages.get("find.label"));
         ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
-        label.setFont(label.getFont().deriveFont(12f));
+        label.setFont(label.getFont().deriveFont(11f));
 
         field.putClientProperty("JTextField.placeholderText", Messages.get("find.placeholder"));
 
@@ -145,7 +145,7 @@ final class FindBar extends JPanel {
         add(counter);
         // Highlight ⌄: color every match at once, with the row menu's swatches.
         FilterBar.pickerArrow(highlightBtn);
-        highlightBtn.setFont(highlightBtn.getFont().deriveFont(12f));
+        highlightBtn.setFont(highlightBtn.getFont().deriveFont(11f));
         highlightBtn.setMargin(new Insets(1, 6, 1, 6));
         highlightBtn.setEnabled(false);
         highlightBtn.addActionListener(e -> showHighlightPopup());

@@ -99,7 +99,7 @@ final class FilterBar extends JPanel {
     private boolean referenceDateSet = false;
 
     FilterBar(Runnable onChanged) {
-        super(new MigLayout("insets 2 8 2 8, gap 4", "", "[center]"));
+        super(new MigLayout("insets 2 8 2 8, gap 6", "", "[center]"));
         this.onChanged = onChanged;
 
         // ── Level toggle buttons ───────────────────────────────────────────────
@@ -114,7 +114,7 @@ final class FilterBar extends JPanel {
             java.util.function.Supplier<Color> fg = () -> btn.isSelected()
                     ? ClouseauColors.levelColor(level) : ClouseauColors.offColor();
             ClouseauColors.themedForeground(btn, fg);
-            btn.setToolTipText("Click to toggle · Alt+click to solo / restore all");
+            btn.setToolTipText(Messages.get("filter.level.tooltip"));
             btn.addItemListener(e -> {
                 btn.setForeground(fg.get());
                 onChanged.run();

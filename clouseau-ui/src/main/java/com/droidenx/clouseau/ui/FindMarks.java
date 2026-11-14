@@ -61,7 +61,7 @@ final class FindMarks {
      */
     static void paintGutterTick(Graphics2D g, int gutterWidth, int y, int rowHeight) {
         g.setColor(ClouseauColors.findMarkBorder());
-        g.fillRoundRect(gutterWidth - 4, y + 5, 3, rowHeight - 10, 3, 3);
+        g.fillRoundRect(gutterWidth - 3, y + 5, 3, rowHeight - 10, 3, 3);   // at the gutter's edge
     }
 
     private static int commonPrefix(String a, String b) {

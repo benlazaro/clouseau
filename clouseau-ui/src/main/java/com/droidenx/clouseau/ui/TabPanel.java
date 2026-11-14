@@ -100,6 +100,8 @@ public final class TabPanel extends JPanel {
             }
             @Override public boolean canReload() { return content instanceof FileContent; }
             @Override public void reload() { TabPanel.this.reload(); }
+            @Override public boolean canReconnect() { return TabPanel.this.canReconnect(); }
+            @Override public void reconnect() { TabPanel.this.reconnect(); }
         }, parsers, formatters, syntaxHighlighters);
         restored = new RestoredTab(this, shared.filterBar(), shared::showMessageCard);
         shared.addMessageCard(restored.messagePanel());

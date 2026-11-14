@@ -170,7 +170,10 @@ final class DetailPanel extends JPanel {
         // The pane's own background and a hairline below, so the header reads as the top of the
         // pane; the window-gray divider above stays the only boundary between table and pane.
         ClouseauColors.themedBackground(bar, ClouseauColors::detailBackground);
-        bar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
+        Runnable bottomLine = () -> bar.setBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
+        bottomLine.run();
+        ClouseauColors.onThemeChange(bar, bottomLine);
 
         // Styled like the table's column headers (12px, dim): a label for what's below, so the
         // bright text stays the data's.
@@ -247,7 +250,7 @@ final class DetailPanel extends JPanel {
      * miss it and it would open in the old theme's colors.
      */
     private JButton buildTextSizeButton() {
-        JButton aa = new JButton("Aa");
+        JButton aa = new JButton(Messages.get("detail.font.size.button"));
         aa.setToolTipText(Messages.get("detail.font.size.tooltip"));
         long[] closedAt = {0};
         aa.addActionListener(e -> {
@@ -276,7 +279,7 @@ final class DetailPanel extends JPanel {
         fontSizeLabel.setHorizontalAlignment(SwingConstants.CENTER);
         body.add(fontSizeLabel, "w 24!");
         body.add(stepButton("+", Messages.get("detail.font.bigger"), +1), "wrap");
-        resetFontBtn = new JButton(Messages.get("detail.font.reset"));
+        resetFontBtn = new JButton(java.text.MessageFormat.format(Messages.get("detail.font.reset"), DEFAULT_FONT));
         resetFontBtn.addActionListener(e -> setTextSize(DEFAULT_FONT));
         body.add(resetFontBtn, "span, right, gaptop 6");
         popup.add(body);

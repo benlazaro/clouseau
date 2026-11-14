@@ -50,6 +50,9 @@ final class SharedTabContext {
         /** Whether the row menu offers Reload: the tab shows a file. */
         boolean canReload();
         void reload();
+        /** Whether the row menu offers Reconnect: the tab shows a live source. */
+        boolean canReconnect();
+        void reconnect();
     }
 
     private static final String CARD_ROWS = "content";
@@ -148,6 +151,8 @@ final class SharedTabContext {
             @Override public void showAnnotationsDialog() { SharedTabContext.this.showAnnotationsDialog(); }
             @Override public boolean canReload() { return host.canReload(); }
             @Override public void reload() { host.reload(); }
+            @Override public boolean canReconnect() { return host.canReconnect(); }
+            @Override public void reconnect() { host.reconnect(); }
             @Override public void clearTable() { SharedTabContext.this.clearTable(); }
             @Override public boolean canClearTable() { return SharedTabContext.this.canClearTable(); }
             @Override public FilterBar filterBar() { return filterBar; }

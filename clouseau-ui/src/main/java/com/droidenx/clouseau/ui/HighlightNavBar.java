@@ -34,12 +34,12 @@ final class HighlightNavBar extends JPanel {
 
         JLabel label = new JLabel(Messages.get("highlight.nav.label"));
         ClouseauColors.themedForeground(label, ClouseauColors::dimForeground);
-        label.setFont(label.getFont().deriveFont(12f));
+        label.setFont(label.getFont().deriveFont(11f));
 
         swatches.setOpaque(false);
 
         ClouseauColors.themedForeground(position, ClouseauColors::dimForeground);
-        position.setFont(position.getFont().deriveFont(12f));
+        position.setFont(position.getFont().deriveFont(11f));
 
         prevBtn = FindBar.arrowButton("\u25b2");
         nextBtn = FindBar.arrowButton("\u25bc");
@@ -66,7 +66,7 @@ final class HighlightNavBar extends JPanel {
         // Clear All right after the count, with the controls it acts on: at the far right it sat
         // under Clear All Filters and read as a filter, though it deletes saved work. It asks
         // first (Settings), which guards it better than distance did.
-        clearAllBtn.setFont(clearAllBtn.getFont().deriveFont(12f));
+        clearAllBtn.setFont(clearAllBtn.getFont().deriveFont(11f));
         clearAllBtn.setMargin(new Insets(1, 6, 1, 6));
         clearAllBtn.setToolTipText(Messages.get("highlight.nav.clear.all.tooltip"));
         clearAllBtn.addActionListener(e -> { if (onClearAll != null) onClearAll.run(); });

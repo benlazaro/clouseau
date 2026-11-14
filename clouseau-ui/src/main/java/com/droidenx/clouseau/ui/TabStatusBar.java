@@ -23,7 +23,10 @@ final class TabStatusBar extends JPanel {
     /** {@code onTimezoneClick} runs when the user clicks the timezone badge. */
     TabStatusBar(Runnable onTimezoneClick) {
         super(new BorderLayout(16, 0));   // a gap between a shortened path and the badge
-        setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, ClouseauColors.separatorColor()));
+        Runnable topLine = () -> setBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, ClouseauColors.separatorColor()));
+        topLine.run();
+        ClouseauColors.onThemeChange(this, topLine);
         pathLabel.setText(" ");
         countsLabel.setText(" ");
         countsLabel.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -121,7 +124,7 @@ final class TabStatusBar extends JPanel {
     private static JLabel label(Insets pad) {
         JLabel l = new JLabel();
         ClouseauColors.themedForeground(l, () -> UIManager.getColor("Button.foreground"));
-        l.setFont(l.getFont().deriveFont(12f));
+        l.setFont(l.getFont().deriveFont(11f));   // ui-caption, like the other small chrome
         l.setBorder(BorderFactory.createEmptyBorder(pad.top, pad.left, pad.bottom, pad.right));
         return l;
     }

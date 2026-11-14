@@ -119,7 +119,7 @@ final class LogTableView {
                 };
             }
         };
-        logTable.setBackground(ClouseauColors.tableBackground());
+        ClouseauColors.themedBackground(logTable, ClouseauColors::tableBackground);
         logTable.setFont(ClouseauFonts.mono(Font.PLAIN, 13));
         logTable.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                 .put(KeyStroke.getKeyStroke(KeyEvent.VK_HOME, InputEvent.CTRL_DOWN_MASK), "scrollToTop");
@@ -175,7 +175,7 @@ final class LogTableView {
                 int searchedCol = t.convertColumnIndexToModel(c);
                 markQuery = searchedCol >= 2 && host.isFindMatch(rowModel) ? host.findQuery() : null;
                 if (hl != null) {
-                    setBackground(sel ? blend(hl, t.getSelectionBackground(), 0.55f) : hl);
+                    setBackground(sel ? blend(hl, ClouseauColors.selectionBackground(), 0.55f) : hl);
                 } else if (sel) {
                     setBackground(ClouseauColors.selectionBackground());
                 } else {
@@ -186,8 +186,8 @@ final class LogTableView {
                 if (sel) {
                     // A bright ring while the table has keyboard focus; a dim one otherwise, so
                     // you can tell whether the arrow keys will move the selection.
-                    Color ring = !t.hasFocus() ? ClouseauColors.selectionRingInactive()
-                            : hl != null ? hl.brighter().brighter() : ClouseauColors.selectionRing();
+                    Color ring = t.hasFocus() ? ClouseauColors.selectionRing()
+                            : ClouseauColors.selectionRingInactive();
                     int lastCol = t.getColumnCount() - 1;
                     setBorder(BorderFactory.createCompoundBorder(
                             BorderFactory.createMatteBorder(2, c == 0 ? 2 : 0, 2, c == lastCol ? 2 : 0, ring),
@@ -198,9 +198,9 @@ final class LogTableView {
 
                 // Foreground + font
                 int modelCol = t.convertColumnIndexToModel(c);
-                if (sel && hl == null) {
+                if (sel) {
                     setForeground(ClouseauColors.selectionForeground());
-                } else if (!sel) {
+                } else {
                     if (modelCol == 2 || modelCol == 5) {                  // Level + Message columns
                         LogEntry.LogLevel level = entry != null ? entry.level() : null;
                         setForeground(ClouseauColors.levelColor(level));

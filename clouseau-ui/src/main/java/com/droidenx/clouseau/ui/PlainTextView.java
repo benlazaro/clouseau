@@ -87,7 +87,10 @@ final class PlainTextView extends JPanel {
 
         JPanel banner = new JPanel(new MigLayout("insets 6 10 6 10, gap 10", "[grow][][]", "[center]"));
         ClouseauColors.themedBackground(banner, ClouseauColors::loadingBackground);
-        banner.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
+        Runnable bannerLine = () -> banner.setBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ClouseauColors.separatorColor()));
+        bannerLine.run();
+        ClouseauColors.onThemeChange(banner, bannerLine);
         bannerText.setIcon(UIManager.getIcon("OptionPane.informationIcon") instanceof Icon i
                 ? new ScaledIcon(i, 18) : null);
         JButton create = new JButton(Messages.get("plain.create.parser"));
@@ -115,7 +118,12 @@ final class PlainTextView extends JPanel {
         table.setFillsViewportHeight(true);
         Font mono = ClouseauFonts.mono(Font.PLAIN, table.getFont().getSize());
         table.setFont(mono);
-        table.setRowHeight(table.getFontMetrics(mono).getHeight() + 2);
+        // Room for the selected line's 2px ring above and below the text.
+        table.setRowHeight(table.getFontMetrics(mono).getHeight() + 6);
+        table.addFocusListener(new java.awt.event.FocusListener() {
+            @Override public void focusGained(java.awt.event.FocusEvent e) { table.repaint(); }
+            @Override public void focusLost(java.awt.event.FocusEvent e)   { table.repaint(); }
+        });
         table.setTransferHandler(new TransferHandler() {
             @Override public int getSourceActions(JComponent c) { return COPY; }
             @Override protected Transferable createTransferable(JComponent c) {
@@ -140,20 +148,27 @@ final class PlainTextView extends JPanel {
                                                            int row, int col) {
                 super.getTableCellRendererComponent(t, value, sel, false, row, col);
                 markQuery = col != 0 && findBar.isMatch(row) ? findBar.markQuery() : null;
-                setFont(mono);
-                if (col == 0) {
-                    setHorizontalAlignment(RIGHT);
-                    setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 10));
-                    if (!sel) setForeground(ClouseauColors.dimForeground());
-                    if (!sel) setBackground(t.getBackground());
+                // The selected line reads as in the log table: the blue reading selection, bold
+                // on-selection text, and a 2px ring that dims while focus is elsewhere.
+                setFont(sel ? mono.deriveFont(Font.BOLD) : mono);
+                setHorizontalAlignment(col == 0 ? RIGHT : LEFT);
+                javax.swing.border.Border pad = col == 0
+                        ? BorderFactory.createEmptyBorder(0, 8, 0, 10)
+                        : BorderFactory.createEmptyBorder(0, 8, 0, 8);
+                // setForeground/setBackground stick on this renderer: set both for every cell.
+                if (sel) {
+                    setForeground(ClouseauColors.selectionForeground());
+                    setBackground(ClouseauColors.selectionBackground());
+                    Color ring = t.hasFocus() ? ClouseauColors.selectionRing()
+                            : ClouseauColors.selectionRingInactive();
+                    int last = t.getColumnCount() - 1;
+                    setBorder(BorderFactory.createCompoundBorder(
+                            BorderFactory.createMatteBorder(2, col == 0 ? 2 : 0, 2, col == last ? 2 : 0, ring),
+                            pad));
                 } else {
-                    setHorizontalAlignment(LEFT);
-                    setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-                    // setForeground/setBackground stick on this renderer: set both for every cell.
-                    if (!sel) {
-                        setForeground(t.getForeground());
-                        setBackground(t.getBackground());   // Find marks the text, not the line
-                    }
+                    setForeground(col == 0 ? ClouseauColors.dimForeground() : t.getForeground());
+                    setBackground(t.getBackground());   // Find marks the text, not the line
+                    setBorder(pad);
                 }
                 return this;
             }

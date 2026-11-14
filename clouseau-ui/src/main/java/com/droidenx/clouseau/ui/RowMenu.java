@@ -57,6 +57,11 @@ final class RowMenu {
 
         void reload();
 
+        /** True if Reconnect applies (a live source that can connect again). */
+        boolean canReconnect();
+
+        void reconnect();
+
         void clearTable();
 
         /** The filter bar, which the logger items change (Hide, Show Only, Show All). */
@@ -110,16 +115,16 @@ final class RowMenu {
                     host.highlightsChanged();
                 });
             } else {
-                clearItem.putClientProperty("FlatLaf.style", "disabledForeground: " + colorToHex(ClouseauColors.borderColor()));
                 clearItem.setEnabled(false);
             }
             menu.add(clearItem);
 
-            JMenuItem clearAllItem = new JMenuItem(Messages.get("highlight.clear.all"));
+            // "…" while clearing asks first, as on the highlight bar's Clear All.
+            JMenuItem clearAllItem = new JMenuItem(Messages.get("highlight.clear.all")
+                    + (AppPrefs.isHighlightClearAllConfirm() ? "…" : ""));
             if (hasHL) {
                 clearAllItem.addActionListener(e -> clearAllHighlights());
             } else {
-                clearAllItem.putClientProperty("FlatLaf.style", "disabledForeground: " + colorToHex(ClouseauColors.borderColor()));
                 clearAllItem.setEnabled(false);
             }
             menu.add(clearAllItem);
@@ -212,10 +217,18 @@ final class RowMenu {
 
         menu.addSeparator();
 
-        JMenuItem reloadFileItem = new JMenuItem(Messages.get("table.context.reload.file"));
-        reloadFileItem.setEnabled(host.canReload());
-        reloadFileItem.addActionListener(e -> host.reload());
-        menu.add(reloadFileItem);
+        // What applies to this tab, named as in the File menu: Reconnect on a live source,
+        // Reload File on a file.
+        if (host.canReconnect()) {
+            JMenuItem reconnectItem = new JMenuItem(Messages.get("menu.file.reconnect"));
+            reconnectItem.addActionListener(e -> host.reconnect());
+            menu.add(reconnectItem);
+        } else {
+            JMenuItem reloadFileItem = new JMenuItem(Messages.get("table.context.reload.file"));
+            reloadFileItem.setEnabled(host.canReload());
+            reloadFileItem.addActionListener(e -> host.reload());
+            menu.add(reloadFileItem);
+        }
 
         JMenuItem clearTableItem = new JMenuItem(Messages.get("table.clear"));
         clearTableItem.setEnabled(host.canClearTable());
@@ -394,9 +407,5 @@ final class RowMenu {
                     java.time.Instant.now().toString())));
         }
         host.notesChanged();
-    }
-
-    private static String colorToHex(Color c) {
-        return String.format("#%06X", c.getRGB() & 0xFFFFFF);
     }
 }
