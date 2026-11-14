@@ -1010,7 +1010,7 @@ final class FileChooserDialog extends JDialog {
             Rectangle r = getCellBounds(hoverRow, hoverRow);
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            Color base = isSelectedIndex(hoverRow) ? UIManager.getColor("List.selectionForeground") : ClouseauColors.dimForeground();
+            Color base = ToolIcons.idleColor(isSelectedIndex(hoverRow), "List");
             ToolIcons.paintTrash(g2, getWidth() - TOOL + 5, r.y + (r.height - 14) / 2,
                     overTrash ? ClouseauColors.levelColor(LogEntry.LogLevel.ERROR) : base);
             g2.dispose();

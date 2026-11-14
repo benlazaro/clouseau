@@ -5,6 +5,9 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
+import javax.swing.UIManager;
+
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 
 /**
  * Small outline icons drawn on a row under the mouse (saved SSH connections, installed
@@ -13,6 +16,32 @@ import java.awt.geom.RoundRectangle2D;
 final class ToolIcons {
 
     private ToolIcons() {}
+
+    /**
+     * An idle tool's color on a row: {@code dimForeground}, or on a selected row the selection
+     * foreground pulled toward the selection background, so the tool under the mouse
+     * ({@link #litColor}) still stands out from it (DESIGN.md 6.13).
+     *
+     * @param ui the component's {@code UIManager} prefix, {@code "List"} or {@code "Tree"}
+     */
+    static Color idleColor(boolean selected, String ui) {
+        if (!selected) return ClouseauColors.dimForeground();
+        return blend(UIManager.getColor(ui + ".selectionForeground"),
+                     UIManager.getColor(ui + ".selectionBackground"), 0.6f);
+    }
+
+    /** The color of the tool under the mouse: {@code foreground}, or the selection foreground on a selected row. */
+    static Color litColor(boolean selected, String ui) {
+        return selected ? UIManager.getColor(ui + ".selectionForeground") : ClouseauColors.foreground();
+    }
+
+    /** {@code t} of {@code a} and the rest of {@code b}. */
+    static Color blend(Color a, Color b, float t) {
+        return new Color(
+                Math.round(a.getRed()   * t + b.getRed()   * (1 - t)),
+                Math.round(a.getGreen() * t + b.getGreen() * (1 - t)),
+                Math.round(a.getBlue()  * t + b.getBlue()  * (1 - t)));
+    }
 
     /**
      * The row tools' line: 1.2px where the screen is scaled (150% and up), where it renders

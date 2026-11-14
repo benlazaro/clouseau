@@ -1176,12 +1176,13 @@ public final class ParserEditorDialog extends JDialog {
                     && listModel.get(hoverRow) instanceof ParserDef hovered) {
                 Rectangle r = getCellBounds(hoverRow, hoverRow);
                 boolean builtin = hovered.builtin();
-                Color base = isSelectedIndex(hoverRow) ? UIManager.getColor("List.selectionForeground") : ClouseauColors.dimForeground();
+                boolean selected = isSelectedIndex(hoverRow);
+                Color base = ToolIcons.idleColor(selected, "List");
                 int y = r.y + (r.height - 14) / 2;
                 if (!builtin) ToolIcons.paintTrash(g2, getWidth() - TOOL + 5, y, overTool == Tool.TRASH
                         ? ClouseauColors.levelColor(LogEntry.LogLevel.ERROR) : base);
                 ToolIcons.paintDuplicate(g2, getWidth() - (builtin ? 1 : 2) * TOOL + 5, y,
-                        overTool == Tool.DUPLICATE ? ClouseauColors.foreground() : base);
+                        overTool == Tool.DUPLICATE ? ToolIcons.litColor(selected, "List") : base);
             }
             if (dragging != null && dropRow >= 0) {
                 // Where the dragged parser would land: a line between two of yours.

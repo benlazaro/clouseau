@@ -1080,17 +1080,9 @@ public class SshConnectionDialog extends JDialog {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             if (hoverRow >= 0 && hoverRow < getRowCount()) {
                 Rectangle r = getRowBounds(hoverRow);
-                // On a selected row the text is already the selection foreground, so the idle
-                // icons are that color pulled toward the selection background, and the one under
-                // the mouse is the full selection foreground; otherwise dim, then foreground.
-                Color base, lit;
-                if (isRowSelected(hoverRow)) {
-                    lit = UIManager.getColor("Tree.selectionForeground");
-                    base = blend(lit, UIManager.getColor("Tree.selectionBackground"), 0.6f);
-                } else {
-                    lit = ClouseauColors.foreground();
-                    base = ClouseauColors.dimForeground();
-                }
+                boolean selected = isRowSelected(hoverRow);
+                Color base = ToolIcons.idleColor(selected, "Tree");
+                Color lit = ToolIcons.litColor(selected, "Tree");
                 int y = r.y + (r.height - 14) / 2;
                 ToolIcons.paintTrash(g2, toolsEdge() - TOOL + 5, y, overTool == Tool.TRASH
                         ? ClouseauColors.levelColor(com.droidenx.clouseau.api.LogEntry.LogLevel.ERROR) : base);
@@ -1103,14 +1095,6 @@ public class SshConnectionDialog extends JDialog {
                 }
             }
             g2.dispose();
-        }
-
-        /** {@code t} of {@code a} and the rest of {@code b}. */
-        private static Color blend(Color a, Color b, float t) {
-            return new Color(
-                    Math.round(a.getRed()   * t + b.getRed()   * (1 - t)),
-                    Math.round(a.getGreen() * t + b.getGreen() * (1 - t)),
-                    Math.round(a.getBlue()  * t + b.getBlue()  * (1 - t)));
         }
     }
 

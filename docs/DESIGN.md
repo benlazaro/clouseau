@@ -664,8 +664,25 @@ connections, the parser editor's parsers) follows the same rules, so they read a
 - **A gutter for the row's tools.** Each tool takes a 24px hit area (`TOOL`) at the row's
   right edge, and **every row keeps that gutter free, hovered or not**, so text never runs
   under a tool and nothing shifts when the mouse moves. The tools are painted only on the
-  row under the mouse: dim, the text color while the mouse is on one, and the trash can in
-  the error color. Each has a tooltip; pressing one acts at once and doesn't select the row.
+  row under the mouse; each has a tooltip, and pressing one acts at once and doesn't select
+  the row. The trash can is always rightmost, with the other tool beside it:
+  - **SSH saved connections:** a server or folder has **New Log** (add a log under it) and
+    the trash can (forget the server, or every log in the folder); a log has **Duplicate**
+    and the trash can (remove it). Icons are painted by `ToolIcons`.
+  - **Parser editor:** your parsers have Duplicate and the trash can; built-in parsers have
+    Duplicate only. **New Parser** is a button below the list, not a row tool.
+  - **Favorites:** the trash can only.
+- **Tool colors light up on hover, selected or not.** The tool under the mouse must always
+  look different from the idle ones:
+  - *Unselected row:* idle tools are `dimForeground`, the hovered one `foreground`.
+  - *Selected row:* the row's text is already the selection foreground, so `foreground`
+    would barely differ from it. Idle tools are the selection foreground blended 60% with
+    the selection background (dimmed toward the fill), and the hovered one is the full
+    selection foreground.
+  - *The trash can* under the mouse is the error color (`levelColor(ERROR)`) on any row.
+
+  `ToolIcons.idleColor` and `ToolIcons.litColor` give these colors (pass `"List"` or
+  `"Tree"` for the component's selection colors); every sidebar list uses them.
 - **The same actions elsewhere.** A right-click menu offers the row's actions (Remove, Copy
   Path, Rename…), and Delete removes the selected row.
 - **Empty:** a short italic hint in `mutedForeground` saying how to add the first entry.
