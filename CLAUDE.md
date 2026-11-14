@@ -159,6 +159,9 @@ when there's no file.
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.
+- `DialogFooter`, `NoticeLabel`, `PromptDialog`, `ManagerDialogs` (ui) — the dialog building blocks
+  (DESIGN.md 6.12): the footer with its hairline, the "Still needed: …" / result notice line, a small
+  modal form (never a form inside a `JOptionPane`), and the managers' shared list, actions and sizes.
 - `SshRemote` (core), `SshConnectionDialog`, `RemoteFileDialog` (ui) — the SSH Connections window: Connect
   checks first (sign in and check the file) and Browse… picks the file over SFTP; `SshRemote` also holds the
   sign-in `SshLogSource` uses. `SshSaved` (core) is its saved connections (D-24): sign-ins (user, host, port,

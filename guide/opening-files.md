@@ -194,6 +194,7 @@ changed since you saved it, Clouseau asks first whether to **Save** them to it (
 resizing windows doesn't count as a change). Quitting Clouseau (**File → Exit**, or
 closing the last window) asks the same; **Don't Save** leaves the session as you saved it,
 and that is what opens next time.
-**File → Sessions → Manage Sessions…** opens, renames and deletes saved sessions;
-deleting one never touches the log files themselves. The session in use is remembered
+**File → Sessions → Manage Sessions…** opens, renames and deletes saved sessions. To
+rename one, select it and press `F2` (or click **Rename**), type the name and press `Enter`;
+`Esc` cancels. Deleting one asks first and never touches the log files themselves. The session in use is remembered
 when you quit, so its name is back in the titles next time.

@@ -495,6 +495,23 @@ The selected-row text and ring come from `Clouseau.selectionForeground` and
 `Clouseau.selectionRing`; a theme that doesn't set them gets black text and a brighter
 selection color, as before.
 
+**Two kinds of selection.** The built-in themes don't set `Table.selectionBackground`, so
+every `JTable` in a dialog (Choose a Log, the zip picker, Browse Plugins, the Open dialog's
+details view) takes FlatLaf's list selection, derived from the neutral `@accentColor`, like
+lists and trees. Only the reading views paint the blue `Clouseau.selectionBackground`
+themselves, in their renderers: the log table, the plain-text view and the Notes window,
+each with bold `Clouseau.selectionForeground` text and a 2px `Clouseau.selectionRing` that
+switches to `Clouseau.selectionRingInactive` while the table doesn't have focus (each table
+repaints on focus changes). A selected highlighted row blends the highlight 55% toward the
+selection color and keeps the same ring.
+
+**No shadows.** Both themes set `Popup.dropShadowPainted = false`: menus, popups and
+tooltips are edged by their `PopupMenu.borderColor` hairline, as the design system asks.
+
+**Corner radii.** FlatLaf's `arc` values are diameters. The design system's radius tokens
+name what is drawn: tabs 5px (`TabbedPane.tabArc = 10`), fields, buttons and drop-downs 4px
+(arc 8), key badges 4px, row-menu swatches 3px, highlight-bar chips 2.5px and find marks 2px.
+
 ### 6.9 Tab switching shortcuts (UC-15)
 
 `TabShortcuts` is a `KeyEventDispatcher` registered with the `KeyboardFocusManager` by
@@ -575,7 +592,18 @@ In both, the default button is on the right, with Cancel, No or Close before it.
 reverse, so **the default is listed first** in the options array and passed as the
 initial value. Choose the default for what the user most likely wants next: a message box
 that only informs (a development build can't check for updates) defaults to Close, with
-the optional action (Open Releases Page) beside it.
+the optional action (Open Releases Page) beside it. **Help → Check for Updates…** answers
+every outcome this way, including an available update (Download · Close); only the daily
+check uses the modeless notice.
+
+A message box holds a sentence, never a form. A small form (a file's time offset, a merged
+file's timezone or parser) is a `PromptDialog`: a modal dialog with `DialogFooter`
+(Cancel · OK, OK default, Esc cancels), whose problems show in place rather than in a box
+after OK. The managers (plugins, plugin repositories, sessions, column layouts, themes)
+share `ManagerDialogs`: a section title over the list, the list's actions on the footer's
+left, Delete (asking first), a plain Close and a remembered size. Resizable windows set a
+minimum size and remember their size with `AppPrefs.getWindowSize`/`setWindowSize`, by a
+short key per window (`settings`, `notes`, `remote.browse`, `zip.picker`, the managers' ids).
 
 ### 6.13 Sidebar lists
 

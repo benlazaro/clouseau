@@ -43,9 +43,11 @@ The process ID and application name become **pid** and **app** columns.
 ## The parser editor
 
 **Tools → Parser Editor…** lists the parsers in a sidebar: **Yours** first, then the
-**Built-in** ones. When Clouseau opens a file it tries yours from the top, then the built-in
-ones, and uses the first that reads the line, so put the more specific parsers higher: drag
-one up or down, or select it and press `Alt`+`↑` / `Alt`+`↓`.
+**Built-in** ones. Type in **Filter parsers…** above the list to find one by name, and drag
+the divider to make the sidebar wider; the editor remembers its size and the divider. When
+Clouseau opens a file it tries yours from the top, then the built-in ones, and uses the
+first that reads the line, so put the more specific parsers higher: drag one up or down, or
+select it and press `Alt`+`↑` / `Alt`+`↓`.
 
 Click **New Parser** to add one. On the row under the mouse, the duplicate icon (`Ctrl`+`D`)
 copies a parser and the trash can (`Delete`) removes one of yours. Built-in parsers can't be
@@ -65,7 +67,8 @@ Each parser has a **Name**, which no other parser may use, and is **Made from** 
 For a template or a pattern, **Regex made from it** shows what Clouseau will match; **Copy
 Regex** copies it, for example to start a Regex parser. A problem shows in red under the
 field it's about, such as `Timestamp format: Unknown pattern letter: b.`, and the parser
-gets a red dot in the sidebar.
+gets a red dot in the sidebar. **OK** saves everything at once; if a parser still has a
+problem, OK selects it and shows the problem on its field instead.
 
 Under **Test**, a **Sample line** shows whether it matches and what it becomes, as the
 detail pane would show it: the time in your display time zone, the level in its color, and

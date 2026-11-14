@@ -692,8 +692,9 @@ replacing a different session of the same name; the saved sessions are listed wi
 one in use ticked. When nothing is open, a session opens without asking. Adding a session
 skips files that are already open, and a window left with nothing to add isn't opened.
 A restored filter strip names the session (*"Filters restored from session "Payments":
-…"*). Manage Sessions… opens, renames and deletes (after asking) sessions, and marks the
-one in use; renaming or deleting it updates the window titles. Design: DESIGN.md D-19.
+…"*). Manage Sessions… opens, renames (in place: `F2`, `Enter` saves, `Esc` cancels, a taken
+name is refused under the field) and deletes (after asking) sessions, and marks the one in
+use; renaming or deleting it updates the window titles. Design: DESIGN.md D-19.
 
 ### UC-18 · Hear about new versions ✅
 
@@ -708,8 +709,9 @@ being told if they'd rather not be.
    **Skip This Version** closes it and doesn't mention that version again.
 3. User can untick **Tell me about new versions** on the notice, or in Settings →
    **Updates**, to stop the notices.
-4. **Help → Check for Updates…** checks at once, whatever the setting, and says so when
-   they already have the latest version.
+4. **Help → Check for Updates…** checks at once, whatever the setting, and answers every
+   outcome in a message box: already the latest version, could not check, or a newer
+   version with **Download** · **Close**.
 
 **Success:** Users hear about a release on the day it's published, and nobody who turned
 the notices off sees one.

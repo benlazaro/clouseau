@@ -78,8 +78,8 @@ Clouseau checks at most once a day, and again each day it stays open. If it can'
 GitHub (no network, a proxy), it says nothing. The check only asks GitHub for the list of
 releases; nothing about you or your logs is sent.
 
-**Help → Check for Updates…** checks at once, and tells you when you already have the
-latest version.
+**Help → Check for Updates…** checks at once and answers in a message: that you already have
+the latest version, or that a new one is available, with **Download** to open its page.
 
 To stop the notices, untick **Tell me about new versions** on the notice, or **Tell me when
 a new version is available** in **File → Settings… → Updates**. Check for Updates… still
