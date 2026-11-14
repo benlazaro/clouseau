@@ -64,15 +64,16 @@ final class ToolIcons {
     }
 
     /**
-     * A new log: a plus in an 11×11 rounded square, on a connection's or folder's row, beside the
-     * trash can. Its bottom is the trash can's (y + 14) and its top the lid's (y + 3), so the two
-     * sit on one line.
+     * A new log: a plus in a 10×10 rounded square, on a connection's or folder's row, beside the
+     * trash can, its bottom on the trash can's (y + 14). Every line is on whole pixels, as the
+     * trash can's are, and the plus is centered (x + 6, y + 9) with arms of 3, so both strokes
+     * render alike at any scale.
      */
     static void paintNewLog(Graphics2D g, int x, int y, Color c) {
         g.setColor(c);
         g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g.draw(new RoundRectangle2D.Float(x + 0.5f, y + 3f, 11f, 11f, 2.5f, 2.5f));
-        g.draw(new java.awt.geom.Line2D.Float(x + 6f, y + 6f, x + 6f, y + 11f));
-        g.draw(new java.awt.geom.Line2D.Float(x + 3.5f, y + 8.5f, x + 8.5f, y + 8.5f));
+        g.draw(new RoundRectangle2D.Float(x + 1, y + 4, 10, 10, 3, 3));
+        g.drawLine(x + 6, y + 6, x + 6, y + 12);
+        g.drawLine(x + 3, y + 9, x + 9, y + 9);
     }
 }
