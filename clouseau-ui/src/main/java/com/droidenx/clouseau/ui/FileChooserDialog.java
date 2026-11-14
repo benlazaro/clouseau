@@ -193,7 +193,7 @@ final class FileChooserDialog extends JDialog {
         if (lastDir != null) chooser.setCurrentDirectory(lastDir);
         Action detailsView = chooser.getActionMap().get("viewTypeDetails");
         if (detailsView != null) detailsView.actionPerformed(new ActionEvent(chooser, ActionEvent.ACTION_PERFORMED, null));
-        useAppDates(chooser);
+        keepColumns(chooser);
         starBtn = new JButton(new StarIcon());
         starBtn.addActionListener(e -> toggleFavorite());
         installStar();
@@ -208,7 +208,6 @@ final class FileChooserDialog extends JDialog {
         chooser.addPropertyChangeListener(JFileChooser.DIRECTORY_CHANGED_PROPERTY, e -> {
             chooser.setSelectedFile(null);
             if (chooser.getUI() instanceof BasicFileChooserUI basicUI) basicUI.setFileName("");
-            useAppDates(chooser);
             debounce.restart();
             rebuildPlaces();
         });
@@ -332,23 +331,54 @@ final class FileChooserDialog extends JDialog {
     }
 
     /**
-     * The file list's dates in the app's format, not the system's short one: each column's
-     * renderer is wrapped so a date value shows as yyyy-MM-dd HH:mm. The list rebuilds its
-     * columns now and then, so this runs again on a folder change.
+     * The file list keeps the column widths the user set, and shows dates in the app's format.
+     * On every folder change the look and feel throws the list's columns away and builds new
+     * ones at the shell's default widths, so when it swaps in a new column model each column
+     * takes the width of the old column with the same title, and its renderer is wrapped so a
+     * date shows as yyyy-MM-dd HH:mm.
      */
-    private static void useAppDates(Container c) {
+    private static void keepColumns(Container c) {
         SwingUtilities.invokeLater(() -> {
             JTable table = find(c, JTable.class);
             if (table == null) return;
-            for (int i = 0; i < table.getColumnCount(); i++) {
-                javax.swing.table.TableColumn col = table.getColumnModel().getColumn(i);
-                javax.swing.table.TableCellRenderer base = col.getCellRenderer() != null
-                        ? col.getCellRenderer() : table.getDefaultRenderer(Object.class);
-                if (base instanceof AppDates) continue;
-                col.setCellRenderer(new AppDates(base));
-            }
-            table.repaint();
+            useAppDates(table);
+            table.addPropertyChangeListener("columnModel", e -> {
+                if (e.getOldValue() instanceof javax.swing.table.TableColumnModel old
+                        && e.getNewValue() instanceof javax.swing.table.TableColumnModel now) {
+                    copyWidths(old, now);
+                }
+                useAppDates(table);
+            });
         });
+    }
+
+    /** Gives each column of {@code to} the width of the column with the same title in {@code from}. */
+    private static void copyWidths(javax.swing.table.TableColumnModel from, javax.swing.table.TableColumnModel to) {
+        java.util.Map<Object, Integer> widths = new java.util.HashMap<>();
+        for (int i = 0; i < from.getColumnCount(); i++) {
+            javax.swing.table.TableColumn col = from.getColumn(i);
+            widths.put(col.getHeaderValue(), col.getWidth());
+        }
+        for (int i = 0; i < to.getColumnCount(); i++) {
+            javax.swing.table.TableColumn col = to.getColumn(i);
+            Integer w = widths.get(col.getHeaderValue());
+            if (w != null && w > 0) {
+                col.setPreferredWidth(w);
+                col.setWidth(w);
+            }
+        }
+    }
+
+    /** Wraps each column's renderer so a date value shows as yyyy-MM-dd HH:mm, not the system's short format. */
+    private static void useAppDates(JTable table) {
+        for (int i = 0; i < table.getColumnCount(); i++) {
+            javax.swing.table.TableColumn col = table.getColumnModel().getColumn(i);
+            javax.swing.table.TableCellRenderer base = col.getCellRenderer() != null
+                    ? col.getCellRenderer() : table.getDefaultRenderer(Object.class);
+            if (base instanceof AppDates) continue;
+            col.setCellRenderer(new AppDates(base));
+        }
+        table.repaint();
     }
 
     private record AppDates(javax.swing.table.TableCellRenderer base) implements javax.swing.table.TableCellRenderer {
