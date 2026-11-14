@@ -178,6 +178,13 @@ public final class ClouseauColors {
      */
     public static final String NO_FOCUS_FRAME = "focusedBorderColor: $Component.borderColor; innerFocusWidth: 0";
 
+    /**
+     * The {@code FlatLaf.style} of a sidebar list (DESIGN.md 6.13): it sits on the sidebar, not
+     * in a box, so its selection fills the row's width instead of the 4px inset lists in a box
+     * take from the theme. The 4px corners stay.
+     */
+    public static final String SIDEBAR_LIST = "selectionInsets: 0,0,0,0";
+
     /** {@link #NO_FOCUS_FRAME} on {@code scroll}, for a list, tree or table; returns it. */
     public static JScrollPane noFocusFrame(JScrollPane scroll) {
         scroll.putClientProperty("FlatLaf.style", NO_FOCUS_FRAME);

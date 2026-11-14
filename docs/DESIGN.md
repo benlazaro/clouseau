@@ -505,6 +505,32 @@ switches to `Clouseau.selectionRingInactive` while the table doesn't have focus 
 repaints on focus changes). A selected highlighted row blends the highlight 55% toward the
 selection color and keeps the same ring.
 
+**Selected rows: rounded in lists, square in tables.** A list or tree row is picked like a
+menu item, so its selection is drawn like one; a table row is part of a grid, so it isn't.
+
+| Where | Corners | Highlight's sides | Row text |
+|---|---|---|---|
+| Menu items (for reference) | 4px | 4px in from the popup's sides | the menu's own margins |
+| A list in a box (manager dialogs, Plugins, the Open dialog's Files) | 4px | 4px in from the box's sides | 6px inside the highlight (10px from the box) |
+| A drop-down's list | 4px | 4px in from the popup's sides: the popup is padded 4px all round, as a menu is, and the highlight fills the row inside that | 6px inside the highlight, as in the field |
+| A sidebar list (Favorites, parsers; 6.13) | 4px | the row's full width | the list's own padding |
+| A tree (SSH saved connections, Loggers, Fields) | 4px | the row's full width, from the left edge | indented by level |
+| A table (the log views, Choose a Log, the zip picker, Browse Plugins, the Open dialog's details view) | square | the row's full width | the column's padding |
+
+Several adjacent selected rows in a list join into one block with rounded outer corners.
+Both themes set this, from the menus' values, so it changes with them: `List.selectionArc`,
+`Tree.selectionArc` and `ComboBox.selectionArc` are `$MenuItem.selectionArc`;
+`List.selectionInsets` is `$MenuItem.selectionInsets`, and `List.cellMargins = 1,10,1,10`
+moves a standard row's text in with the highlight. A drop-down keeps its row text at the
+field's padding, which an inset highlight would crowd, so it is padded instead
+(`ComboBox.popupInsets = 4,4,4,4`) with a full-width highlight inside. A sidebar
+list puts back a full-width selection with `ClouseauColors.SIDEBAR_LIST` as its
+`FlatLaf.style`. FlatLaf rounds a list's selection by itself only for a
+`DefaultListCellRenderer`; a renderer built from a panel extends `ListRowPanel`, which stays
+transparent and fills the selection through `FlatListUI.paintCellSelection`, and pads its own
+text 4px more on the inset side. FlatLaf rounds a tree's selection whatever the renderer, and
+never a table's.
+
 **No painted shadows; popups use the OS's.** Structure comes from hairlines: menus, popups and
 tooltips are edged by their `PopupMenu.borderColor` hairline. Popups are the one exception to
 "no shadows": FlatLaf only rounds a popup's corners through the OS, and that path always comes
@@ -517,9 +543,9 @@ and FlatLaf or the window manager adds its shadow.
 name what is drawn: tabs 5px (`TabbedPane.tabArc = 10`), fields, buttons and drop-downs 4px
 (arc 8), menus 4px (the menu bar's highlight, `MenuBar.selectionArc = 8`; a popup's
 highlighted item, `MenuItem.selectionArc = 8`, inset 4px from the popup's sides; popup corners,
-`PopupMenu.borderCornerRadius = 4`, where the OS draws them), the selected row of a dialog's
-sidebar list 4px (6.13), key badges 4px, row-menu swatches
-3px, highlight-bar chips 2.5px and find marks 2px.
+`PopupMenu.borderCornerRadius = 4`, where the OS draws them), the selected row of a list,
+tree or drop-down 4px (arc 8, from the menus; see Selected rows above), key badges 4px,
+row-menu swatches 3px, highlight-bar chips 2.5px and find marks 2px. Table rows are square.
 
 ### 6.9 Tab switching shortcuts (UC-15)
 
@@ -617,15 +643,12 @@ short key per window (`settings`, `notes`, `remote.browse`, `zip.picker`, the ma
 ### 6.13 Sidebar lists
 
 A dialog's sidebar list (the Open dialog's Favorites, the SSH Connections dialog's saved
-connections) follows the same rules, so the two read as one design:
+connections, the parser editor's parsers) follows the same rules, so they read as one design:
 
 - **On the sidebar, not in a box.** The list, its scroll pane and viewport are not opaque;
-  only the selected row is filled, with the theme's list selection and the menus' 4px corners
-  (the list's or tree's `FlatLaf.style` is `selectionArc: $MenuItem.selectionArc`, so it follows
-  the menus; other lists and trees keep square rows). A tree's UI rounds its wide selection
-  whatever the renderer, but a list's UI rounds it only for FlatLaf's own renderers, so a
-  custom list renderer stays transparent and fills the selection itself with
-  `FlatListUI.paintCellSelection`. A section title
+  only the selected row is filled, with the theme's list selection and 4px corners across
+  the row's full width: unlike a list in a box, nothing to inset it from (6.8, Selected rows;
+  a list sets `ClouseauColors.SIDEBAR_LIST`, a tree is full width already). A section title
   (`SettingsDialog.sectionLabel`) or a filter field sits above it.
 - **Never scrolls sideways.** The list tracks the viewport's width
   (`getScrollableTracksViewportWidth` returns true) and the scroll pane has

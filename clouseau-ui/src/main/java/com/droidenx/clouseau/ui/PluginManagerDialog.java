@@ -355,7 +355,7 @@ public final class PluginManagerDialog extends JDialog {
      * dimmed after it, and what it adds on the right; its description (or why it failed) below.
      * A plugin that's off reads dimmed.
      */
-    private static final class PluginRenderer extends JPanel implements ListCellRenderer<PluginInfo> {
+    private static final class PluginRenderer extends ListRowPanel implements ListCellRenderer<PluginInfo> {
         private final JCheckBox box = new JCheckBox();
         private final JLabel failedMark = new JLabel("!", SwingConstants.CENTER);
         private final JLabel name = new JLabel();
@@ -364,7 +364,8 @@ public final class PluginManagerDialog extends JDialog {
         private final JLabel description = new JLabel();
 
         PluginRenderer() {
-            super(new MigLayout("insets 7 8 7 " + TRASH + ", gapx 8, gapy 2, hidemode 3",
+            // 12px on the left: 8px inside the selection, which is inset 4px (List.selectionInsets).
+            super(new MigLayout("insets 7 12 7 " + TRASH + ", gapx 8, gapy 2, hidemode 3",
                     "[" + (BOX - 16) + "!][][grow][]", "[][]"));
             box.setOpaque(false);
             box.setContentAreaFilled(false);
@@ -384,8 +385,7 @@ public final class PluginManagerDialog extends JDialog {
             Color fg = selected ? list.getSelectionForeground() : list.getForeground();
             Color dim = selected ? list.getSelectionForeground() : ClouseauColors.dimForeground();
             Color error = ClouseauColors.levelColor(LogEntry.LogLevel.ERROR);
-            setBackground(selected ? list.getSelectionBackground() : list.getBackground());
-            setOpaque(true);
+            prepare(list, index, selected ? list.getSelectionBackground() : null);
 
             box.setVisible(!p.failed());
             box.setSelected(p.enabled());

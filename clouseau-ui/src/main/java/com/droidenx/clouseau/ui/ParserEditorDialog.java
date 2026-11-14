@@ -234,6 +234,7 @@ public final class ParserEditorDialog extends JDialog {
         parserList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         parserList.setCellRenderer(new ParserRenderer());
         parserList.setOpaque(false);
+        parserList.putClientProperty("FlatLaf.style", ClouseauColors.SIDEBAR_LIST);
         ToolTipManager.sharedInstance().registerComponent(parserList);
         JScrollPane scroll = new JScrollPane(parserList);
         scroll.setBorder(BorderFactory.createEmptyBorder());

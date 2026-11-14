@@ -799,12 +799,13 @@ final class FileChooserDialog extends JDialog {
      * A file in the list: its name, and under it what it opens as, in its status color. Two
      * plain labels, so a long name or verdict is cut short with … (the full text is the tooltip).
      */
-    private static final class VerdictRenderer extends JPanel implements ListCellRenderer<Object> {
+    private static final class VerdictRenderer extends ListRowPanel implements ListCellRenderer<Object> {
         private final JLabel name = new JLabel();
         private final JLabel what = new JLabel();
 
         VerdictRenderer() {
-            super(new MigLayout("insets 2 6 2 6, gap 0, wrap 1", "[grow, fill, 0::]"));
+            // 10px at the sides: 6px inside the selection, which is inset 4px (List.selectionInsets).
+            super(new MigLayout("insets 2 10 2 10, gap 0, wrap 1", "[grow, fill, 0::]"));
             add(name, "wmin 0");
             add(what, "wmin 0");
         }
@@ -819,8 +820,7 @@ final class FileChooserDialog extends JDialog {
             what.setFont(UIManager.getFont("Label.font").deriveFont(11f));
             name.setForeground(sel ? l.getSelectionForeground() : l.getForeground());
             what.setForeground(c);
-            setBackground(sel ? l.getSelectionBackground() : l.getBackground());
-            setOpaque(true);
+            prepare(l, i, sel ? l.getSelectionBackground() : null);
             setToolTipText(p.getFileName() + ": " + text);
             return this;
         }
@@ -839,8 +839,7 @@ final class FileChooserDialog extends JDialog {
     private JComponent buildPlaces() {
         placesList.setCellRenderer(new PlaceRenderer());
         placesList.setOpaque(false);
-        // The selection has the menus' 4px corners (DESIGN.md 6.13).
-        placesList.putClientProperty("FlatLaf.style", "selectionArc: $MenuItem.selectionArc");
+        placesList.putClientProperty("FlatLaf.style", ClouseauColors.SIDEBAR_LIST);
         placesList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         ToolTipManager.sharedInstance().registerComponent(placesList);
         placesList.addListSelectionListener(e -> {
@@ -933,7 +932,7 @@ final class FileChooserDialog extends JDialog {
      * A favorite on two lines: its name, and its full path under it, small and dim. Room on the
      * right is kept for the trash can, so it never covers the text. Only the selection is filled.
      */
-    private static final class PlaceRenderer extends JPanel implements ListCellRenderer<Favorite> {
+    private static final class PlaceRenderer extends ListRowPanel implements ListCellRenderer<Favorite> {
         private final JLabel name = new JLabel();
         private final JLabel path = new JLabel();
 
@@ -954,28 +953,10 @@ final class FileChooserDialog extends JDialog {
             Color fg = sel ? UIManager.getColor("List.selectionForeground") : l.getForeground();
             name.setForeground(missing && !sel ? ClouseauColors.mutedForeground() : fg);
             path.setForeground(sel ? fg : missing ? ClouseauColors.mutedForeground() : ClouseauColors.dimForeground());
-            this.list = l;
-            this.row = i;
-            this.selected = sel;
-            setOpaque(false);                     // rows sit on the sidebar; only the selection is filled
+            // Rows sit on the sidebar; only the selection is filled.
+            prepare(l, i, sel ? UIManager.getColor("List.selectionBackground") : null);
             setToolTipText(p.toString());
             return this;
-        }
-
-        private JList<?> list;
-        private int row;
-        private boolean selected;
-
-        /**
-         * The selection, filled by the list's UI so it has the list's {@code selectionArc}: FlatLaf
-         * rounds it by itself only for its own renderers.
-         */
-        @Override protected void paintComponent(Graphics g) {
-            if (selected && list != null) {
-                g.setColor(UIManager.getColor("List.selectionBackground"));
-                com.formdev.flatlaf.ui.FlatListUI.paintCellSelection(list, g, row, 0, 0, getWidth(), getHeight());
-            }
-            super.paintComponent(g);
         }
     }
 
