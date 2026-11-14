@@ -554,8 +554,9 @@ public class SshConnectionDialog extends JDialog {
             Object picked = selectedObject();
             if (!open(picked)) putSelectionBack(e.getOldLeadSelectionPath());
         });
-        // Selection is the theme's standard list highlight, as in menus and the Loggers tree;
-        // only the log views use the blue reading selection.
+        // Selection is the theme's standard list highlight, as in menus and the Loggers tree, with
+        // the menus' 4px corners (DESIGN.md 6.13); only the log views use the blue reading selection.
+        savedTree.putClientProperty("FlatLaf.style", "selectionArc: $MenuItem.selectionArc");
         savedTree.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override public void mouseClicked(java.awt.event.MouseEvent e) {
                 if (e.getClickCount() == 2 && selectedObject() instanceof LogNode && actionBtn.isEnabled()) onConnect();

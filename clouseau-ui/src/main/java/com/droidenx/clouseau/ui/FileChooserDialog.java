@@ -839,6 +839,8 @@ final class FileChooserDialog extends JDialog {
     private JComponent buildPlaces() {
         placesList.setCellRenderer(new PlaceRenderer());
         placesList.setOpaque(false);
+        // The selection has the menus' 4px corners (DESIGN.md 6.13).
+        placesList.putClientProperty("FlatLaf.style", "selectionArc: $MenuItem.selectionArc");
         placesList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         ToolTipManager.sharedInstance().registerComponent(placesList);
         placesList.addListSelectionListener(e -> {
@@ -952,10 +954,28 @@ final class FileChooserDialog extends JDialog {
             Color fg = sel ? UIManager.getColor("List.selectionForeground") : l.getForeground();
             name.setForeground(missing && !sel ? ClouseauColors.mutedForeground() : fg);
             path.setForeground(sel ? fg : missing ? ClouseauColors.mutedForeground() : ClouseauColors.dimForeground());
-            setBackground(UIManager.getColor("List.selectionBackground"));
-            setOpaque(sel);                       // rows sit on the sidebar; only the selection is filled
+            this.list = l;
+            this.row = i;
+            this.selected = sel;
+            setOpaque(false);                     // rows sit on the sidebar; only the selection is filled
             setToolTipText(p.toString());
             return this;
+        }
+
+        private JList<?> list;
+        private int row;
+        private boolean selected;
+
+        /**
+         * The selection, filled by the list's UI so it has the list's {@code selectionArc}: FlatLaf
+         * rounds it by itself only for its own renderers.
+         */
+        @Override protected void paintComponent(Graphics g) {
+            if (selected && list != null) {
+                g.setColor(UIManager.getColor("List.selectionBackground"));
+                com.formdev.flatlaf.ui.FlatListUI.paintCellSelection(list, g, row, 0, 0, getWidth(), getHeight());
+            }
+            super.paintComponent(g);
         }
     }
 

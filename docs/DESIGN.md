@@ -517,7 +517,8 @@ and FlatLaf or the window manager adds its shadow.
 name what is drawn: tabs 5px (`TabbedPane.tabArc = 10`), fields, buttons and drop-downs 4px
 (arc 8), menus 4px (the menu bar's highlight, `MenuBar.selectionArc = 8`; a popup's
 highlighted item, `MenuItem.selectionArc = 8`, inset 4px from the popup's sides; popup corners,
-`PopupMenu.borderCornerRadius = 4`, where the OS draws them), key badges 4px, row-menu swatches
+`PopupMenu.borderCornerRadius = 4`, where the OS draws them), the selected row of a dialog's
+sidebar list 4px (6.13), key badges 4px, row-menu swatches
 3px, highlight-bar chips 2.5px and find marks 2px.
 
 ### 6.9 Tab switching shortcuts (UC-15)
@@ -619,7 +620,12 @@ A dialog's sidebar list (the Open dialog's Favorites, the SSH Connections dialog
 connections) follows the same rules, so the two read as one design:
 
 - **On the sidebar, not in a box.** The list, its scroll pane and viewport are not opaque;
-  only the selected row is filled, with the theme's list selection. A section title
+  only the selected row is filled, with the theme's list selection and the menus' 4px corners
+  (the list's or tree's `FlatLaf.style` is `selectionArc: $MenuItem.selectionArc`, so it follows
+  the menus; other lists and trees keep square rows). A tree's UI rounds its wide selection
+  whatever the renderer, but a list's UI rounds it only for FlatLaf's own renderers, so a
+  custom list renderer stays transparent and fills the selection itself with
+  `FlatListUI.paintCellSelection`. A section title
   (`SettingsDialog.sectionLabel`) or a filter field sits above it.
 - **Never scrolls sideways.** The list tracks the viewport's width
   (`getScrollableTracksViewportWidth` returns true) and the scroll pane has
