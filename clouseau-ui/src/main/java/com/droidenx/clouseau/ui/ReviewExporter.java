@@ -110,7 +110,7 @@ final class ReviewExporter {
         for (int n = 2; suggested.equals(file.toAbsolutePath()); n++) {
             suggested = folder.resolve(suggestedName(logName).replace(".zip", "-" + n + ".zip"));
         }
-        JFileChooser chooser = new JFileChooser(folder.toFile());
+        JFileChooser chooser = new RoundedFileChooser(folder.toFile());
         chooser.setDialogTitle(Messages.get("export.review.title"));
         chooser.setFileFilter(new FileNameExtensionFilter(Messages.get("export.review.filter"), "zip"));
         chooser.setSelectedFile(suggested.toFile());

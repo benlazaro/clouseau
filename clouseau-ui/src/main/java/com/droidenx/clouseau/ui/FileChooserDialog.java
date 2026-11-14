@@ -65,9 +65,10 @@ final class FileChooserDialog extends JDialog {
      * Without the look and feel's places bar (Recent Items, Desktop, …): the favorites on the
      * left take its place. FlatLaf reads the flag when it installs the UI, which a theme switch
      * does again, so it's set around each install, for this chooser only. Each install also
-     * builds a new toolbar and Look In combo, so the star and the combo's corners are redone.
+     * builds a new toolbar, so the star is redone; {@link RoundedFileChooser} redoes the Look In
+     * combo's corners.
      */
-    private final JFileChooser chooser = new JFileChooser() {
+    private final JFileChooser chooser = new RoundedFileChooser() {
         @Override public void updateUI() {
             Object old = UIManager.get("FileChooser.noPlacesBar");
             UIManager.put("FileChooser.noPlacesBar", Boolean.TRUE);
@@ -76,7 +77,6 @@ final class FileChooserDialog extends JDialog {
             } finally {
                 UIManager.put("FileChooser.noPlacesBar", old);
             }
-            SwingUtilities.invokeLater(() -> roundLookIn(this));   // after a theme switch reaches the children
             if (starBtn != null) installStar();          // null while JFileChooser's constructor runs
         }
     };
@@ -304,38 +304,11 @@ final class FileChooserDialog extends JDialog {
     }
 
     /**
-     * The Look In combo with the same 4px corners as the dialog's other drop-downs. Swing's
-     * file chooser marks it {@code JComboBox.isTableCellEditor} (so the arrow keys move through
-     * the list without opening each folder), and FlatLaf takes that flag to mean a table cell,
-     * which it draws square and without a focus ring. The flag stays, for the keys; the combo
-     * gets a border that doesn't treat it as a cell.
-     * <p>
-     * FlatLaf's borders are UI resources, so the combo's own {@code updateUI()} puts the theme's
-     * border back. A theme switch updates the chooser first and its children after, so the
-     * border is set once that's done ({@code invokeLater} from the chooser's {@code updateUI}).
-     */
-    private static void roundLookIn(Container c) {
-        for (Component child : c.getComponents()) {
-            if (child instanceof JComboBox<?> combo
-                    && Boolean.TRUE.equals(combo.getClientProperty("JComboBox.isTableCellEditor"))) {
-                if (!(combo.getBorder() instanceof LookInBorder)) combo.setBorder(new LookInBorder());
-            } else if (child instanceof Container sub) {
-                roundLookIn(sub);
-            }
-        }
-    }
-
-    /** The theme's combo border, except that it never takes the combo for a table cell. */
-    private static final class LookInBorder extends com.formdev.flatlaf.ui.FlatRoundBorder {
-        @Override protected boolean isCellEditor(Component c) { return false; }
-    }
-
-    /**
      * The file list keeps the column widths and order the user set, and shows dates in the app's
      * format. On every folder change the look and feel throws the list's columns away and builds
      * new ones at the shell's default widths and order, so when it swaps in a new column model the
      * old layout is copied onto it by column title, and each renderer is wrapped so a date shows
-     * as yyyy-MM-dd HH:mm.
+     * as yyyy-MM-dd HH:mm and rows are striped like the log table's (Settings → Table).
      */
     private static void keepColumns(Container c) {
         SwingUtilities.invokeLater(() -> {
@@ -374,7 +347,12 @@ final class FileChooserDialog extends JDialog {
         }
     }
 
-    /** Wraps each column's renderer so a date value shows as yyyy-MM-dd HH:mm, not the system's short format. */
+    /**
+     * Wraps each column's renderer so a date value shows as yyyy-MM-dd HH:mm, not the system's
+     * short format, and every other row takes the stripe color when stripes are on. The look and
+     * feel would otherwise paint odd rows in {@code Table.alternateRowColor} over the list's own
+     * background: striped in Dark, whatever the setting, and never in Light, where both are white.
+     */
     private static void useAppDates(JTable table) {
         for (int i = 0; i < table.getColumnCount(); i++) {
             javax.swing.table.TableColumn col = table.getColumnModel().getColumn(i);
@@ -389,6 +367,8 @@ final class FileChooserDialog extends JDialog {
     private record AppDates(javax.swing.table.TableCellRenderer base) implements javax.swing.table.TableCellRenderer {
         @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean s, boolean f, int r, int c) {
             Component comp = base.getTableCellRendererComponent(t, v, s, f, r, c);
+            if (!s) comp.setBackground(r % 2 == 1 && AppPrefs.isTableStripes()
+                    ? ClouseauColors.stripeBackground() : t.getBackground());
             java.util.Date d = v instanceof java.util.Date date ? date
                     : v instanceof Long ms && t.getColumnName(c).toLowerCase(Locale.ROOT).contains("modif") ? new java.util.Date(ms) : null;
             if (d != null && comp instanceof JLabel l) l.setText(LIST_DATE.format(d.toInstant().atZone(ZoneId.systemDefault())));

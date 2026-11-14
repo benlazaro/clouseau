@@ -3,6 +3,7 @@ package com.droidenx.clouseau.ui.theme;
 import com.droidenx.clouseau.ui.AppPrefs;
 import com.droidenx.clouseau.ui.ManagerDialogs;
 import com.droidenx.clouseau.ui.Messages;
+import com.droidenx.clouseau.ui.RoundedFileChooser;
 
 import net.miginfocom.swing.MigLayout;
 
@@ -112,7 +113,7 @@ public final class ThemeManagerDialog extends JDialog {
     }
 
     private void installTheme() {
-        JFileChooser fc = new JFileChooser();
+        JFileChooser fc = new RoundedFileChooser();
         fc.setDialogTitle(Messages.get("themes.install.chooser.title"));
         fc.setFileFilter(new FileNameExtensionFilter(
                 Messages.get("themes.install.chooser.filter"), "properties"));

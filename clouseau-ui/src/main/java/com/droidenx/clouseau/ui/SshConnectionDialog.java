@@ -1520,7 +1520,7 @@ public class SshConnectionDialog extends JDialog {
     }
 
     private void browseKeyFile() {
-        JFileChooser fc = new JFileChooser(System.getProperty("user.home") + "/.ssh");
+        JFileChooser fc = new RoundedFileChooser(System.getProperty("user.home") + "/.ssh");
         fc.setDialogTitle(Messages.get("ssh.dialog.key.file"));
         if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File f = fc.getSelectedFile();

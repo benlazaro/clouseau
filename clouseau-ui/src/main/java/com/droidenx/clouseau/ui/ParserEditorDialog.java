@@ -812,7 +812,7 @@ public final class ParserEditorDialog extends JDialog {
     }
 
     private void testWithFile() {
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new RoundedFileChooser();
         chooser.setDialogTitle(Messages.get("parsereditor.test.file.title"));
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
         List<String> lines = new ArrayList<>();
