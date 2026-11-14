@@ -14,10 +14,22 @@ final class ToolIcons {
 
     private ToolIcons() {}
 
+    /**
+     * The row tools' line: 1.2px where the screen is scaled (150% and up), where it renders
+     * evenly; exactly 1px at 100%, where a 1.2px line can't sit on the pixel grid and smears
+     * across two pixels. Java2D's stroke normalization then puts a 1px line on whole pixels,
+     * so the small icons are crisp there too.
+     */
+    private static BasicStroke rowToolStroke(Graphics2D g) {
+        double scale = g.getTransform().getScaleX();
+        return new BasicStroke(scale < 1.25 ? 1f : 1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+    }
+
+
     /** A 12×14 outline trash can: lid with a handle, body with two ribs. */
     static void paintTrash(Graphics2D g, int x, int y, Color c) {
         g.setColor(c);
-        g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setStroke(rowToolStroke(g));
         g.drawLine(x, y + 3, x + 12, y + 3);                       // lid
         g.drawLine(x + 4, y + 3, x + 4, y + 1);                    // handle
         g.drawLine(x + 4, y + 1, x + 8, y + 1);
@@ -53,7 +65,7 @@ final class ToolIcons {
     /** Two overlapping 9×10 rounded sheets, the back one offset up and left. */
     static void paintDuplicate(Graphics2D g, int x, int y, Color c) {
         g.setColor(c);
-        g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setStroke(rowToolStroke(g));
         g.draw(new RoundRectangle2D.Float(x + 3.5f, y + 4f, 8.5f, 9.5f, 2.5f, 2.5f));
         Path2D.Float back = new Path2D.Float();
         back.moveTo(x + 1f, y + 10.5f);
@@ -71,7 +83,7 @@ final class ToolIcons {
      */
     static void paintNewLog(Graphics2D g, int x, int y, Color c) {
         g.setColor(c);
-        g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setStroke(rowToolStroke(g));
         g.draw(new RoundRectangle2D.Float(x + 1, y + 4, 10, 10, 3, 3));
         g.drawLine(x + 6, y + 6, x + 6, y + 12);
         g.drawLine(x + 3, y + 9, x + 9, y + 9);
