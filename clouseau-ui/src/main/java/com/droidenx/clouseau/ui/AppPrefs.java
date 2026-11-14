@@ -308,6 +308,11 @@ public final class AppPrefs {
         putString("window." + key + ".size", size.width + "," + size.height);
     }
 
+    /** A manager dialog's size, by its id: {@link #getWindowSize}, for {@link ManagerDialogs#rememberSize}. */
+    public static java.awt.Dimension getDialogSize(String id) { return getWindowSize(id); }
+
+    public static void setDialogSize(String id, java.awt.Dimension size) { setWindowSize(id, size); }
+
     /** The Parser Editor's size and its divider (parser list | form); null before the first time. */
     public static int[] getParserEditorLayout() {
         String v = getString("parser.editor.layout", null);

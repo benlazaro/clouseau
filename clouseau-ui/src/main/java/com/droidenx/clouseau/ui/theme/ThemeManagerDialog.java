@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui.theme;
 
 import com.droidenx.clouseau.ui.AppPrefs;
+import com.droidenx.clouseau.ui.ManagerDialogs;
 import com.droidenx.clouseau.ui.Messages;
 
 import net.miginfocom.swing.MigLayout;
@@ -20,6 +21,11 @@ public final class ThemeManagerDialog extends JDialog {
 
     private final DefaultListModel<String> listModel = new DefaultListModel<>();
     private final JList<String> themeList            = new JList<>(listModel);
+    private static final String CARD_LIST  = "list";
+    private static final String CARD_EMPTY = "empty";
+
+    private final CardLayout listCards = new CardLayout();
+    private final JPanel listHolder    = new JPanel(listCards);
     private final JButton uninstallBtn;
     private List<ThemeManager.ThemeEntry> userThemes;
 
@@ -46,16 +52,21 @@ public final class ThemeManagerDialog extends JDialog {
         uninstallBtn.addActionListener(e -> uninstallSelected());
         closeBtn.addActionListener(e -> dispose());
 
-        JPanel content = new JPanel(new MigLayout("insets 16, wrap 1, gapy 8", "[400px, fill]"));
-        content.add(new JLabel(Messages.get("themes.manage.installed.label")));
+        ManagerDialogs.onDeleteKey(themeList, this::uninstallSelected);
+
+        JPanel content = new JPanel(new MigLayout("fill, insets 16, wrap 1, gapy 8", "[grow, fill]", "[][grow, fill][]"));
+        content.add(ManagerDialogs.sectionTitle(Messages.get("themes.manage.installed.label")), "growx");
 
         JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(themeList));
         scroll.setPreferredSize(new Dimension(400, 150));
-        content.add(scroll, "grow, h 150!");
+        listHolder.add(scroll, CARD_LIST);
+        listHolder.add(buildEmptyState(), CARD_EMPTY);
+        content.add(listHolder, "grow");
+        showListOrEmpty();
 
-        JLabel hint = new JLabel("<html><small>" + ThemeManager.userThemesDir() + "</small></html>");
-        hint.setForeground(UIManager.getColor("Label.disabledForeground"));
-        content.add(hint);
+        // Where user themes live: 11px in text-dim.
+        JLabel hint = ManagerDialogs.hint(ThemeManager.userThemesDir().toString());
+        content.add(hint, "wmin 0");
 
         // The list's actions on the left, Close on the right, as in the Plugin Manager.
         JPanel root = new JPanel(new java.awt.BorderLayout());
@@ -70,8 +81,26 @@ public final class ThemeManagerDialog extends JDialog {
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
         pack();
-        setResizable(false);
+        ManagerDialogs.rememberSize(this, "themes", getSize(), new Dimension(420, 280));
         setLocationRelativeTo(owner);
+    }
+
+    /** With no user themes: what goes here, and how to add one. */
+    private JComponent buildEmptyState() {
+        JPanel empty = new JPanel(new MigLayout("fill, insets 16", "[center]", "push[]6[]push"));
+        ClouseauColors.themedBackground(empty, () -> UIManager.getColor("List.background"));
+        JLabel title = new JLabel(Messages.get("themes.manage.empty.title"));
+        ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
+        JLabel hint = ManagerDialogs.hint(Messages.get("themes.manage.empty.hint"));
+        ClouseauColors.themedForeground(hint, ClouseauColors::mutedForeground);
+        empty.add(title, "wrap");
+        empty.add(hint);
+        empty.setBorder(UIManager.getBorder("ScrollPane.border"));
+        return empty;
+    }
+
+    private void showListOrEmpty() {
+        listCards.show(listHolder, userThemes.isEmpty() ? CARD_EMPTY : CARD_LIST);
     }
 
     private void rebuildList() {
@@ -79,6 +108,7 @@ public final class ThemeManagerDialog extends JDialog {
         listModel.clear();
         userThemes.forEach(t -> listModel.addElement(t.name()));
         if (sel >= 0 && sel < userThemes.size()) themeList.setSelectedIndex(sel);
+        showListOrEmpty();
     }
 
     private void installTheme() {
@@ -111,14 +141,14 @@ public final class ThemeManagerDialog extends JDialog {
         int idx = themeList.getSelectedIndex();
         if (idx < 0) return;
         ThemeManager.ThemeEntry theme = userThemes.get(idx);
-        if (theme.name().equals(AppPrefs.getTheme())) {
-            int result = JOptionPane.showConfirmDialog(this,
-                    Messages.get("themes.uninstall.active.message"),
-                    Messages.get("themes.uninstall.active.title"),
-                    JOptionPane.YES_NO_OPTION);
-            if (result != JOptionPane.YES_OPTION) return;
-            AppPrefs.setTheme(ThemeManager.DEFAULT_THEME);
-        }
+        boolean active = theme.name().equals(AppPrefs.getTheme());
+        // Always ask first (the button and the Delete key both come here).
+        if (!ManagerDialogs.confirm(this,
+                Messages.get(active ? "themes.uninstall.active.title" : "themes.uninstall.title"),
+                active ? Messages.get("themes.uninstall.active.message")
+                       : Messages.format("themes.uninstall.message", theme.name()),
+                Messages.get("themes.uninstall"))) return;
+        if (active) AppPrefs.setTheme(ThemeManager.DEFAULT_THEME);
         try {
             ThemeManager.uninstallTheme(theme);
             userThemes = new ArrayList<>(ThemeManager.getUserThemes());
