@@ -16,8 +16,9 @@ import java.util.List;
 
 /**
  * A timezone drop-down you can type in to search: "chic" lists America/Chicago. This
- * computer's zone and UTC come first, then the zones used recently, then every other zone
- * by name, each with its offset from UTC ("America/Chicago (UTC−6)").
+ * computer's zone and UTC come first, then the zones used recently, then every other zone Java
+ * knows by name (GMT, EST, Etc/* and SystemV/* too), each with its offset from UTC
+ * ("America/Chicago (UTC−6)").
  * <p>
  * Read the choice with {@link #selectedZone()}; action listeners hear only a zone chosen
  * (from the list, or Enter on what was typed), never the typing itself. Leaving the field
@@ -201,7 +202,6 @@ final class ZoneCombo extends JComboBox<TimezoneEntry> {
         Set<String> firstIds = new HashSet<>();
         first.forEach(z -> firstIds.add(z.getId()));
         ZoneId.getAvailableZoneIds().stream()
-                .filter(id -> id.contains("/") && !id.startsWith("Etc/") && !id.startsWith("SystemV/"))
                 .filter(id -> !firstIds.contains(id))
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .forEach(id -> list.add(entry(ZoneId.of(id), false)));

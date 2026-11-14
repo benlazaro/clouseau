@@ -158,6 +158,14 @@ final class FileChooserDialog extends JDialog {
         // The file chooser makes its own (hidden) approve button the default when it joins the
         // window; Open is the default, so it's amber and Enter outside the list opens.
         SwingUtilities.invokeLater(() -> getRootPane().setDefaultButton(openBtn));
+        // Focus starts in the first thing to fill: the file name field, else the file list.
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                JComponent first = nameField != null ? nameField : find(chooser, JTable.class);
+                if (first == null) first = find(chooser, JList.class);
+                if (first != null) first.requestFocusInWindow();
+            }
+        });
     }
 
     /** Shows the dialog modally and returns the result, or empty if cancelled. */
@@ -433,14 +441,7 @@ final class FileChooserDialog extends JDialog {
 
     private void doApprove() {
         List<Path> chosen = currentFiles();
-        if (chosen.isEmpty()) {
-            if (fromPattern) {
-                JOptionPane.showMessageDialog(this,
-                        MessageFormat.format(Messages.get("filechooser.pattern.none"), typedPattern().getName()),
-                        getTitle(), JOptionPane.INFORMATION_MESSAGE);
-            }
-            return;
-        }
+        if (chosen.isEmpty()) return;      // a pattern with no matches is answered by the summary line
         Optional<LogParser> parser = selectedParserIndex == 0
                 ? Optional.empty() : Optional.of(parsers.get(selectedParserIndex - 1));
         AppPrefs.MultiOpen how = logCount(chosen) >= 2
@@ -480,7 +481,9 @@ final class FileChooserDialog extends JDialog {
         updateReadNote();
 
         if (files.isEmpty()) {
-            setSummary(Messages.get(fromPattern ? "filechooser.pattern.nomatch" : "filechooser.summary.none"),
+            setSummary(fromPattern
+                            ? MessageFormat.format(Messages.get("filechooser.pattern.none"), typedPattern().getName())
+                            : Messages.get("filechooser.summary.none"),
                     fromPattern ? ClouseauColors.statusWarn() : ClouseauColors.dimForeground());
             showPreview(null);
             revalidate();
@@ -709,15 +712,15 @@ final class FileChooserDialog extends JDialog {
         });
 
         preview.setEditable(false);
-        preview.setFont(ClouseauFonts.mono(Font.PLAIN, 11));
+        // As the destination draws it: the log table's font and size (mono-log, JetBrains Mono 13).
+        preview.setFont(ClouseauFonts.mono(Font.PLAIN, 13));
         preview.setBackground(ClouseauColors.tableBackground());
         preview.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
         // No wrapping: lines keep their shape and scroll sideways, as in the table.
         JPanel noWrap = new JPanel(new BorderLayout());
         noWrap.add(preview);
-        JScrollPane previewScroll = new JScrollPane(noWrap);
+        JScrollPane previewScroll = ClouseauColors.noFocusFrame(new JScrollPane(noWrap));
         previewScroll.getVerticalScrollBar().setUnitIncrement(16);
-        previewScroll.setBorder(UIManager.getBorder("ScrollPane.border"));
 
         JPanel p = new JPanel(new MigLayout("insets 12 16 12 16, wrap 1, fillx, hidemode 3, gapy 4",
                 "[grow, fill, 0::]"));
@@ -757,23 +760,34 @@ final class FileChooserDialog extends JDialog {
         return row;
     }
 
-    /** A file in the list: its name, and under it what it opens as, in its status color. */
-    private static final class VerdictRenderer extends DefaultListCellRenderer {
-        @Override public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean foc) {
-            super.getListCellRendererComponent(l, v, i, sel, false);
-            Path p = v instanceof Verdict verdict ? verdict.file() : (Path) v;
-            String what = v instanceof Verdict verdict ? verdict.text() : Messages.get("filechooser.summary.checking");
-            Color c = v instanceof Verdict verdict ? verdict.color() : ClouseauColors.dimForeground();
-            String hex = String.format("#%06x", c.getRGB() & 0xFFFFFF);
-            setText("<html>" + esc(p.getFileName().toString()) + "<br><font color='" + hex + "' size='-1'>"
-                    + esc(what) + "</font></html>");
-            setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
-            setToolTipText(p.getFileName() + ": " + what);
-            return this;
+    /**
+     * A file in the list: its name, and under it what it opens as, in its status color. Two
+     * plain labels, so a long name or verdict is cut short with … (the full text is the tooltip).
+     */
+    private static final class VerdictRenderer extends JPanel implements ListCellRenderer<Object> {
+        private final JLabel name = new JLabel();
+        private final JLabel what = new JLabel();
+
+        VerdictRenderer() {
+            super(new MigLayout("insets 2 6 2 6, gap 0, wrap 1", "[grow, fill, 0::]"));
+            add(name, "wmin 0");
+            add(what, "wmin 0");
         }
 
-        private static String esc(String s) {
-            return s.replace("&", "&amp;").replace("<", "&lt;");
+        @Override public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean foc) {
+            Path p = v instanceof Verdict verdict ? verdict.file() : (Path) v;
+            String text = v instanceof Verdict verdict ? verdict.text() : Messages.get("filechooser.summary.checking");
+            Color c = v instanceof Verdict verdict ? verdict.color() : ClouseauColors.dimForeground();
+            name.setText(p.getFileName().toString());
+            what.setText(text);
+            name.setFont(l.getFont());
+            what.setFont(UIManager.getFont("Label.font").deriveFont(11f));
+            name.setForeground(sel ? l.getSelectionForeground() : l.getForeground());
+            what.setForeground(c);
+            setBackground(sel ? l.getSelectionBackground() : l.getBackground());
+            setOpaque(true);
+            setToolTipText(p.getFileName() + ": " + text);
+            return this;
         }
     }
 
@@ -1013,7 +1027,7 @@ final class FileChooserDialog extends JDialog {
         t.setFocusable(false);
         t.setOpaque(false);
         t.setBorder(null);
-        t.setFont(UIManager.getFont("Label.font").deriveFont(note ? 11.5f : UIManager.getFont("Label.font").getSize2D()));
+        t.setFont(UIManager.getFont("Label.font").deriveFont(note ? 11f : UIManager.getFont("Label.font").getSize2D()));
         if (note) ClouseauColors.themedForeground(t, ClouseauColors::dimForeground);
         return t;
     }
