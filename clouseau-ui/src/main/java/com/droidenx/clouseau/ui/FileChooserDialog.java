@@ -1026,8 +1026,7 @@ final class FileChooserDialog extends JDialog {
         openBtn.setEnabled(false);
         openBtn.addActionListener(e -> doApprove());
         getRootPane().setDefaultButton(openBtn);
-        getRootPane().registerKeyboardAction(e -> dispose(),
-                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        DialogFooter.closeOnEscape(getRootPane(), this::dispose);
         return DialogFooter.of(cancelBtn, openBtn);
     }
 

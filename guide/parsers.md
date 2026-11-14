@@ -50,9 +50,11 @@ Clouseau checks the file's first lines against your parsers from the top, then t
 ones, and uses the first that matches, so put the more specific parsers higher: drag one up or down, or
 select it and press `Alt`+`↑` / `Alt`+`↓`.
 
-Click **New Parser** to add one. On the row under the mouse, the duplicate icon (`Ctrl`+`D`)
-copies a parser and the trash can (`Delete`) removes one of yours. Built-in parsers can't be
-changed: duplicate one to make your own from it.
+Click **New Parser**, at the bottom left of the editor, to add one, or **Duplicate** beside it
+(`Ctrl`+`D`) to copy the selected parser. The row under the mouse has the same duplicate icon
+and a trash can (`Delete`) that removes one of yours, and right-clicking a row offers
+Duplicate, Move Up, Move Down and Delete. Built-in parsers can't be changed: duplicate one to
+make your own from it.
 
 ![Parser editor](../docs/screenshots/parser-editor.png)
 

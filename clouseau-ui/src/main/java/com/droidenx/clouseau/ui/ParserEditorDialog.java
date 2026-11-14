@@ -79,7 +79,9 @@ public final class ParserEditorDialog extends JDialog {
             Messages.get("parsereditor.type.template"),
             Messages.get("parsereditor.type.pattern"),
             Messages.get("parsereditor.type.regex") });
-    private final JPanel            builtinNote = new JPanel(new MigLayout("insets 0, gap 12", "[grow, fill, 0::][]", "[center]"));
+    private final JTextArea         builtinNote = wrapText(Messages.get("parsereditor.builtin.note"));
+    /** The footer's Duplicate: the selected parser, yours or built in. */
+    private final JButton           duplicateBtn = new JButton(Messages.get("parsereditor.duplicate"));
 
     private final JLabel    sourceTitle  = new JLabel();
     private final JComponent sourceSection;
@@ -228,7 +230,7 @@ public final class ParserEditorDialog extends JDialog {
     /**
      * The parsers, as the SSH dialog lists saved connections: yours first, in the order
      * auto-detection tries them (drag, or Alt+↑ / Alt+↓, to reorder), then the built-in ones.
-     * Duplicate and the trash can are on the row under the mouse; New Parser is below.
+     * Duplicate and the trash can are on the row under the mouse; New Parser is on the footer's left.
      */
     private JComponent buildSidebar() {
         parserList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -241,9 +243,6 @@ public final class ParserEditorDialog extends JDialog {
         scroll.setOpaque(false);
         scroll.getViewport().setOpaque(false);
 
-        JButton newBtn = new JButton(Messages.get("parsereditor.new"));
-        newBtn.addActionListener(e -> addParser());
-
         JTextArea order = wrapText(Messages.get("parsereditor.order.hint"));
 
         filterField.putClientProperty("JTextField.placeholderText", Messages.get("parsereditor.filter"));
@@ -253,11 +252,10 @@ public final class ParserEditorDialog extends JDialog {
         filterField.registerKeyboardAction(e -> parserList.requestFocusInWindow(),
                 KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), JComponent.WHEN_FOCUSED);
 
-        JPanel side = new JPanel(new MigLayout("insets 16 16 12 12, fill, gapy 8", "[grow, fill]", "[][grow, fill][][]"));
+        JPanel side = new JPanel(new MigLayout("insets 16 16 12 12, fill, gapy 8", "[grow, fill]", "[][grow, fill][]"));
         side.add(filterField, "wrap, wmin 0");
         side.add(scroll, "wrap, h 100:100%:");
-        side.add(order, "wrap, wmin 0");
-        side.add(newBtn, "growx 0, left");
+        side.add(order, "wmin 0");
         side.setPreferredSize(new Dimension(SIDEBAR_WIDTH, 10));
         side.setMinimumSize(new Dimension(SIDEBAR_MIN, 10));
         side.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, UIManager.getColor("Separator.foreground")));
@@ -374,12 +372,7 @@ public final class ParserEditorDialog extends JDialog {
         form.add(nameError, "skip 1");
         form.add(new JLabel(Messages.get("parsereditor.field.type")), SettingsDialog.INDENT);
         form.add(typeCombo, "growx 0");
-        JTextArea noteText = wrapText(Messages.get("parsereditor.builtin.note"));
-        JButton dupBuiltin = new JButton(Messages.get("parsereditor.duplicate"));
-        dupBuiltin.addActionListener(e -> duplicate(shown));
-        builtinNote.add(noteText, "growx, wmin 0");
-        builtinNote.add(dupBuiltin);
-        form.add(builtinNote, "span 2, gapleft 28, gaptop 4, growx");
+        form.add(builtinNote, "span 2, gapleft 28, gaptop 4, growx, wmin 0");
 
         // ── Template / Pattern: the source, and the regex made from it
         form.add(sourceSection, "span 2, growx, gaptop 16");
@@ -509,6 +502,7 @@ public final class ParserEditorDialog extends JDialog {
         patternArea.setEditable(editable && TYPE_REGEX.equals(type));
         for (Component c : keywordRow.getComponents()) c.setEnabled(editable);
         builtinNote.setVisible(has && def.builtin());
+        duplicateBtn.setEnabled(has);
         sampleField.setEnabled(has);
         fileBtn.setEnabled(has);
         updatingForm = false;
@@ -976,9 +970,13 @@ public final class ParserEditorDialog extends JDialog {
         saveBtn.addActionListener(e -> save());
         cancelBtn.addActionListener(e -> cancel());
         getRootPane().setDefaultButton(saveBtn);     // amber, like OK in every dialog
-        getRootPane().registerKeyboardAction(e -> cancel(),
-                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
-        return DialogFooter.of(cancelBtn, saveBtn);  // Cancel before the default button
+        DialogFooter.closeOnEscape(getRootPane(), this::cancel);
+        // New Parser and Duplicate are the list's actions, so they go on the footer's left (DESIGN.md 6.12).
+        JButton newBtn = new JButton(Messages.get("parsereditor.new"));
+        newBtn.addActionListener(e -> addParser());
+        duplicateBtn.setToolTipText(Messages.get("parsereditor.duplicate.tooltip"));
+        duplicateBtn.addActionListener(e -> duplicate(shown));
+        return DialogFooter.of(new JComponent[]{newBtn, duplicateBtn}, cancelBtn, saveBtn);  // Cancel before the default button
     }
 
     /** Cancel, Esc or the window's close box: asks before dropping changes. */
@@ -1068,7 +1066,9 @@ public final class ParserEditorDialog extends JDialog {
             MouseAdapter mouse = new MouseAdapter() {
                 @Override public void mouseMoved(MouseEvent e)  { track(e.getPoint()); }
                 @Override public void mouseExited(MouseEvent e) { hoverRow = -1; overTool = Tool.NONE; repaint(); }
+                @Override public void mousePressed(MouseEvent e) { if (e.isPopupTrigger()) showRowMenu(e); }
                 @Override public void mouseReleased(MouseEvent e) {
+                    if (e.isPopupTrigger()) { showRowMenu(e); return; }
                     ParserDef moved = dragging;
                     int to = dropRow;
                     dragging = null;
@@ -1083,6 +1083,43 @@ public final class ParserEditorDialog extends JDialog {
             };
             addMouseListener(mouse);
             addMouseMotionListener(mouse);
+        }
+
+        /**
+         * The row's right-click menu (DESIGN.md 6.13): Duplicate on any parser; Move Up, Move Down
+         * and Delete… on yours. The row is selected first, as in any list.
+         */
+        private void showRowMenu(MouseEvent e) {
+            int row = locationToIndex(e.getPoint());
+            Rectangle r = row >= 0 ? getCellBounds(row, row) : null;
+            if (r == null || !r.contains(e.getPoint()) || !(listModel.get(row) instanceof ParserDef def)) return;
+            setSelectedIndex(row);
+            JPopupMenu menu = new JPopupMenu();
+            menu.add(menuItem("parsereditor.menu.duplicate",
+                    KeyStroke.getKeyStroke(KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK), true,
+                    () -> duplicate(def)));
+            int at = indexInMine(def);
+            if (at >= 0) {
+                menu.addSeparator();
+                menu.add(menuItem("parsereditor.menu.up",
+                        KeyStroke.getKeyStroke(KeyEvent.VK_UP, java.awt.event.InputEvent.ALT_DOWN_MASK),
+                        !filtering() && at > 0, () -> moveTo(def, at - 1)));
+                menu.add(menuItem("parsereditor.menu.down",
+                        KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, java.awt.event.InputEvent.ALT_DOWN_MASK),
+                        !filtering() && at < mine.size() - 1, () -> moveTo(def, at + 1)));
+                menu.addSeparator();
+                menu.add(menuItem("parsereditor.menu.delete", KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), true,
+                        () -> delete(def)));
+            }
+            menu.show(this, e.getX(), e.getY());
+        }
+
+        private JMenuItem menuItem(String key, KeyStroke accelerator, boolean enabled, Runnable action) {
+            JMenuItem item = new JMenuItem(Messages.get(key));
+            item.setAccelerator(accelerator);
+            item.setEnabled(enabled);
+            item.addActionListener(a -> action.run());
+            return item;
         }
 
         private void track(Point p) {

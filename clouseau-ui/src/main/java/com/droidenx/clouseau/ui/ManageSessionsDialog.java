@@ -95,8 +95,7 @@ final class ManageSessionsDialog extends JDialog {
         setContentPane(root);
         // No default button: the actions apply at once, and Close shouldn't be the amber one.
         // Escape closes (while renaming, it cancels the rename instead: the field takes it first).
-        getRootPane().registerKeyboardAction(e -> dispose(),
-                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        DialogFooter.closeOnEscape(getRootPane(), this::dispose);
 
         reload(null);
         pack();

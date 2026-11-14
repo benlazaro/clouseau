@@ -622,7 +622,10 @@ Two kinds of dialog, each with its own button row:
   quick question look like a form. IntelliJ's message dialogs and macOS alerts don't draw
   one either.
 
-In both, the default button is on the right, with Cancel, No or Close before it.
+In both, the default button is on the right, with Cancel, No or Close before it. A dialog
+with a footer binds Esc to its Cancel or Close through `DialogFooter.closeOnEscape`, which
+closes an open right-click menu first: a window-wide Esc binding sees the key before the
+menu does, so a plain one would close the whole dialog from a row's menu.
 `ClouseauApp` sets `OptionPane.isYesLast`, which lays a message box's options out in
 reverse, so **the default is listed first** in the options array and passed as the
 initial value. Choose the default for what the user most likely wants next: a message box
@@ -670,7 +673,8 @@ connections, the parser editor's parsers) follows the same rules, so they read a
     the trash can (forget the server, or every log in the folder); a log has **Duplicate**
     and the trash can (remove it). Icons are painted by `ToolIcons`.
   - **Parser editor:** your parsers have Duplicate and the trash can; built-in parsers have
-    Duplicate only. **New Parser** is a button below the list, not a row tool.
+    Duplicate only. **New Parser** and **Duplicate** (the selected parser) are on the footer's left (6.12),
+    not in the form; the right-click menu has Duplicate, then Move Up, Move Down and Delete… on yours.
   - **Favorites:** the trash can only.
 - **Tool colors light up on hover, selected or not.** The tool under the mouse must always
   look different from the idle ones:

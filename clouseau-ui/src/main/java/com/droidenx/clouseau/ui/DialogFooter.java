@@ -23,6 +23,20 @@ public final class DialogFooter {
 
     private DialogFooter() {}
 
+    /**
+     * Esc runs {@code close} (the dialog's Cancel or Close), but closes an open right-click
+     * menu first. A window-wide Esc binding sees the key before the menu does, so without
+     * the check Esc on a row's menu would close the whole dialog.
+     */
+    public static void closeOnEscape(JRootPane root, Runnable close) {
+        root.registerKeyboardAction(e -> {
+                    MenuSelectionManager menus = MenuSelectionManager.defaultManager();
+                    if (menus.getSelectedPath().length > 0) menus.clearSelectedPath();
+                    else close.run();
+                },
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
+    }
+
     /** A footer with only closing buttons, on the right. */
     public static JPanel of(JComponent... right) {
         return of(new JComponent[0], right);
