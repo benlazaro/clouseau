@@ -37,9 +37,11 @@ just starts with **One merged view** chosen.
 
 ![Open file dialog](../docs/screenshots/open-dialog.png)
 
-- **Favorites** and **Recent folders** on the left: click one to go there. **Add This
-  Folder** adds the folder shown to Favorites; the trash can on a favorite under the mouse
-  (or `Delete`) removes it. Recent folders are the folders of your recent files.
+- **Favorites** on the left, each with its full path under its name: click one to go there.
+  The ★ in the toolbar, after New Folder, adds the folder you're in; it's filled when that
+  folder is already a favorite, and clicking it then removes it. The trash can on a favorite
+  under the mouse, `Delete`, or right-click → **Remove from Favorites** removes one;
+  right-click → **Copy Path** copies its full path.
 - **Files** on the right says what the selection will become. For one file, which parser
   reads it, or that no parser does and it will open as
   [plain text](#files-no-parser-recognizes). For several, each file with its own verdict,

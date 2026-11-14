@@ -76,6 +76,26 @@ final class ToolIcons {
     }
 
     /**
+     * A five-pointed star in a 16×16 box, like the file chooser's toolbar icons: filled when
+     * {@code filled}, else an outline. Drawn, not the ★ character, so it matches the toolbar.
+     */
+    static void paintStar(Graphics2D g, int x, int y, Color c, boolean filled) {
+        double cx = x + 8, cy = y + 8.5, outer = 7, inner = 2.9;
+        Path2D.Double star = new Path2D.Double();
+        for (int i = 0; i < 10; i++) {
+            double r = i % 2 == 0 ? outer : inner;
+            double a = -Math.PI / 2 + i * Math.PI / 5;
+            double px = cx + r * Math.cos(a), py = cy + r * Math.sin(a);
+            if (i == 0) star.moveTo(px, py); else star.lineTo(px, py);
+        }
+        star.closePath();
+        g.setColor(c);
+        g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        if (filled) g.fill(star);
+        g.draw(star);
+    }
+
+    /**
      * A new log: a plus in a 10×10 rounded square, on a connection's or folder's row, beside the
      * trash can, its bottom on the trash can's (y + 14). Every line is on whole pixels, as the
      * trash can's are, and the plus is centered (x + 6, y + 9) with arms of 3, so both strokes

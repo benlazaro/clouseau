@@ -30,16 +30,14 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * File → Open…. Favorites and recent folders on the
- * left, the files in the middle, and on the right what the selection will become: each
+ * File → Open…. Favorites on the left (the star in the chooser's toolbar adds the folder
+ * shown), the files in the middle, and on the right what the selection will become: each
  * file's verdict (which parser reads it, or why it opens as plain text), how several open
  * (one merged view or separate tabs), what reads them (parser, source time zone) and a
  * preview of a file as the table will show it.
@@ -64,9 +62,10 @@ final class FileChooserDialog extends JDialog {
 
     private final List<LogParser> parsers;
     /**
-     * Without the look and feel's places bar (Recent Items, Desktop, …): the favorites and
-     * recent folders on the left take its place. FlatLaf reads the flag when it installs the
-     * UI, which a theme switch does again, so it's set around each install, for this chooser only.
+     * Without the look and feel's places bar (Recent Items, Desktop, …): the favorites on the
+     * left take its place. FlatLaf reads the flag when it installs the UI, which a theme switch
+     * does again, so it's set around each install, for this chooser only. Each install also
+     * builds a new toolbar and Look In combo, so the star and the combo's corners are redone.
      */
     private final JFileChooser chooser = new JFileChooser() {
         @Override public void updateUI() {
@@ -77,8 +76,12 @@ final class FileChooserDialog extends JDialog {
             } finally {
                 UIManager.put("FileChooser.noPlacesBar", old);
             }
+            SwingUtilities.invokeLater(() -> roundLookIn(this));   // after a theme switch reaches the children
+            if (starBtn != null) installStar();          // null while JFileChooser's constructor runs
         }
     };
+    /** In the chooser's toolbar, after New Folder: adds the folder shown to Favorites, or removes it. */
+    private JButton starBtn;
     private int selectedParserIndex;
     private ZoneId selectedSourceTimezone = ZoneId.systemDefault();
     /** The user picked a zone for this selection, so moving to another file keeps it. */
@@ -110,8 +113,10 @@ final class FileChooserDialog extends JDialog {
     private final JTextPane preview = new JTextPane();
 
     // Left panel
-    private final DefaultListModel<Object> places = new DefaultListModel<>();
+    private final DefaultListModel<Favorite> places = new DefaultListModel<>();
     private final PlacesList placesList = new PlacesList();
+    private JScrollPane placesScroll;
+    private JTextArea noFavorites;
 
     private JSplitPane leftSplit, mainSplit;
     private SwingWorker<List<Verdict>, Verdict> checker;
@@ -181,6 +186,9 @@ final class FileChooserDialog extends JDialog {
         Action detailsView = chooser.getActionMap().get("viewTypeDetails");
         if (detailsView != null) detailsView.actionPerformed(new ActionEvent(chooser, ActionEvent.ACTION_PERFORMED, null));
         useAppDates(chooser);
+        starBtn = new JButton(new StarIcon());
+        starBtn.addActionListener(e -> toggleFavorite());
+        installStar();
 
         // Approve/cancel fired by double-click, Enter, or our own buttons
         chooser.addActionListener(e -> {
@@ -197,6 +205,122 @@ final class FileChooserDialog extends JDialog {
             rebuildPlaces();
         });
         hookPatternTyping();
+    }
+
+    /**
+     * The star goes in the chooser's own toolbar, right after New Folder, with a separator on
+     * each side. FlatLaf makes the toolbar's buttons toolbar buttons when it installs the UI,
+     * before the star is here, so the star is given the same look itself.
+     */
+    private void installStar() {
+        AbstractButton newFolder = findButton(chooser, UIManager.getIcon("FileChooser.newFolderIcon"));
+        if (newFolder == null || newFolder.getParent() == null) {
+            log.warn("No New Folder button in the file chooser's toolbar; the favorites star is left out");
+            return;
+        }
+        Container bar = newFolder.getParent();
+        int after = Arrays.asList(bar.getComponents()).indexOf(newFolder);
+        starBtn.putClientProperty(com.formdev.flatlaf.FlatClientProperties.BUTTON_TYPE,
+                com.formdev.flatlaf.FlatClientProperties.BUTTON_TYPE_TOOLBAR_BUTTON);
+        starBtn.setMargin(UIManager.getInsets("Button.margin"));
+        starBtn.setFocusable(false);
+        bar.add(toolbarSeparator(), after + 1);
+        bar.add(starBtn, after + 2);
+        bar.add(toolbarSeparator(), after + 3);
+        updateStar();
+    }
+
+    private static AbstractButton findButton(Container c, Icon icon) {
+        for (Component child : c.getComponents()) {
+            if (child instanceof AbstractButton b && b.getIcon() == icon) return b;
+            if (child instanceof Container sub) {
+                AbstractButton b = findButton(sub, icon);
+                if (b != null) return b;
+            }
+        }
+        return null;
+    }
+
+    /** A thin vertical line between toolbar buttons, with room on both sides, centered on their height. */
+    private static JComponent toolbarSeparator() {
+        JSeparator line = new JSeparator(SwingConstants.VERTICAL);
+        Dimension size = new Dimension(9, 18);       // FlatLaf draws the line in the middle of its width
+        line.setPreferredSize(size);
+        line.setMinimumSize(size);
+        line.setMaximumSize(size);
+        line.setAlignmentY(Component.CENTER_ALIGNMENT);
+        return line;
+    }
+
+    /** The folder the chooser shows, as favorites are saved. */
+    private Path shownFolder() {
+        File dir = chooser.getCurrentDirectory();
+        return dir != null ? dir.toPath().toAbsolutePath() : null;
+    }
+
+    private boolean shownIsFavorite() {
+        Path p = shownFolder();
+        return p != null && AppPrefs.getFavorites().contains(p);
+    }
+
+    private void toggleFavorite() {
+        Path p = shownFolder();
+        if (p == null) return;
+        List<Path> favs = new ArrayList<>(AppPrefs.getFavorites());
+        if (!favs.remove(p)) favs.add(p);
+        saveFavorites(favs);
+    }
+
+    /** The star filled and "Remove from Favorites" when the folder shown is a favorite. */
+    private void updateStar() {
+        if (starBtn == null) return;
+        boolean fav = shownIsFavorite();
+        starBtn.putClientProperty(StarIcon.FILLED, fav);
+        starBtn.setToolTipText(Messages.get(fav ? "filechooser.favorites.remove" : "filechooser.favorites.add"));
+        starBtn.repaint();
+    }
+
+    /** Toolbar icon: filled in the star color for a favorite, else outlined in the text color. */
+    private static final class StarIcon implements Icon {
+        static final String FILLED = "Clouseau.starFilled";
+
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            boolean filled = c instanceof JComponent jc && Boolean.TRUE.equals(jc.getClientProperty(FILLED));
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            ToolIcons.paintStar(g2, x, y, filled ? ClouseauColors.starColor() : UIManager.getColor("Label.foreground"), filled);
+            g2.dispose();
+        }
+        @Override public int getIconWidth()  { return 16; }
+        @Override public int getIconHeight() { return 16; }
+    }
+
+    /**
+     * The Look In combo with the same 4px corners as the dialog's other drop-downs. Swing's
+     * file chooser marks it {@code JComboBox.isTableCellEditor} (so the arrow keys move through
+     * the list without opening each folder), and FlatLaf takes that flag to mean a table cell,
+     * which it draws square and without a focus ring. The flag stays, for the keys; the combo
+     * gets a border that doesn't treat it as a cell.
+     * <p>
+     * FlatLaf's borders are UI resources, so the combo's own {@code updateUI()} puts the theme's
+     * border back. A theme switch updates the chooser first and its children after, so the
+     * border is set once that's done ({@code invokeLater} from the chooser's {@code updateUI}).
+     */
+    private static void roundLookIn(Container c) {
+        for (Component child : c.getComponents()) {
+            if (child instanceof JComboBox<?> combo
+                    && Boolean.TRUE.equals(combo.getClientProperty("JComboBox.isTableCellEditor"))) {
+                if (!(combo.getBorder() instanceof LookInBorder)) combo.setBorder(new LookInBorder());
+            } else if (child instanceof Container sub) {
+                roundLookIn(sub);
+            }
+        }
+    }
+
+    /** The theme's combo border, except that it never takes the combo for a table cell. */
+    private static final class LookInBorder extends com.formdev.flatlaf.ui.FlatRoundBorder {
+        @Override protected boolean isCellEditor(Component c) { return false; }
     }
 
     /**
@@ -653,16 +777,15 @@ final class FileChooserDialog extends JDialog {
         }
     }
 
-    // ── Places: favorites and recent folders ─────────────────────────────────
+    // ── Favorites ────────────────────────────────────────────────────────────
 
     /** A favorite folder or file. */
     private record Favorite(Path path) {}
-    /** A folder recent files came from. */
-    private record Recent(Path path) {}
 
     /**
-     * Favorites, then folders of recent files: a click opens the folder (or selects the file).
-     * A favorite has a trash can on the row under the mouse; Add This Folder is below.
+     * Favorites, under a section title like the details pane's: a click opens the folder (or
+     * selects the file). The favorite under the mouse has a trash can, and a right-click offers
+     * Remove from Favorites and Copy Path. With none, a hint points to the toolbar's star.
      */
     private JComponent buildPlaces() {
         placesList.setCellRenderer(new PlaceRenderer());
@@ -671,9 +794,9 @@ final class FileChooserDialog extends JDialog {
         ToolTipManager.sharedInstance().registerComponent(placesList);
         placesList.addListSelectionListener(e -> {
             if (e.getValueIsAdjusting()) return;
-            Object v = placesList.getSelectedValue();
-            Path p = v instanceof Favorite f ? f.path() : v instanceof Recent r ? r.path() : null;
-            if (p == null) return;
+            Favorite f = placesList.getSelectedValue();
+            if (f == null) return;
+            Path p = f.path();
             if (Files.isDirectory(p)) chooser.setCurrentDirectory(p.toFile());
             else if (p.getParent() != null && Files.isDirectory(p.getParent())) {
                 chooser.setCurrentDirectory(p.getParent().toFile());
@@ -681,104 +804,115 @@ final class FileChooserDialog extends JDialog {
             }
         });
         placesList.registerKeyboardAction(e -> {
-                    if (placesList.getSelectedValue() instanceof Favorite f) removeFavorite(f.path());
+                    Favorite f = placesList.getSelectedValue();
+                    if (f != null) removeFavorite(f.path());
                 },
                 KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), JComponent.WHEN_FOCUSED);
+
+        placesScroll = new JScrollPane(placesList);
+        placesScroll.setBorder(BorderFactory.createEmptyBorder());
+        placesScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        placesScroll.setOpaque(false);
+        placesScroll.getViewport().setOpaque(false);
+
+        noFavorites = wrapText(Messages.get("filechooser.favorites.empty"), false);
+        noFavorites.setFont(UIManager.getFont("Label.font").deriveFont(Font.ITALIC, 11f));
+        ClouseauColors.themedForeground(noFavorites, ClouseauColors::mutedForeground);
         rebuildPlaces();
 
-        JScrollPane scroll = new JScrollPane(placesList);
-        scroll.setBorder(BorderFactory.createEmptyBorder());
-        scroll.setOpaque(false);
-        scroll.getViewport().setOpaque(false);
-
-        JButton add = new JButton(Messages.get("filechooser.favorites.add"));
-        add.setToolTipText(Messages.get("filechooser.favorites.add.tooltip"));
-        add.addActionListener(e -> {
-            File dir = chooser.getCurrentDirectory();
-            if (dir == null) return;
-            Path p = dir.toPath().toAbsolutePath();
-            List<Path> favs = new ArrayList<>(AppPrefs.getFavorites());
-            if (!favs.contains(p)) {
-                favs.add(p);
-                AppPrefs.saveFavorites(favs);
-                rebuildPlaces();
-            }
-        });
-
-        JPanel side = new JPanel(new MigLayout("insets 12 12 12 8, fill, gapy 8", "[grow, fill, 0::]", "[grow, fill][]"));
-        side.add(scroll, "wrap");
-        side.add(add, "growx 0, left");
+        String in = SettingsDialog.INDENT_NARROW;
+        JPanel side = new JPanel(new MigLayout("insets 12 12 12 8, fill, wrap 1, gapy 4, hidemode 3",
+                "[grow, fill, 0::]", "[][][grow, fill]"));
+        side.add(SettingsDialog.sectionLabel(Messages.get("filechooser.favorites.label")), "growx");
+        side.add(noFavorites, "wmin 0, " + in);
+        side.add(placesScroll, "wmin 0, " + in);
         side.setMinimumSize(new Dimension(120, 0));
         return side;
     }
 
+    /** Lists the favorites, selects the folder the chooser shows if it's one, and updates the star. */
     private void rebuildPlaces() {
-        Object sel = placesList.getSelectedValue();
         places.clear();
-        places.addElement(Messages.get("filechooser.favorites.label"));
         List<Path> favs = AppPrefs.getFavorites();
         favs.forEach(p -> places.addElement(new Favorite(p)));
-        if (favs.isEmpty()) places.addElement(Messages.get("filechooser.favorites.empty"));
-        Set<Path> folders = new LinkedHashSet<>();
-        for (Path f : AppPrefs.getRecentFiles()) {
-            Path dir = f.toAbsolutePath().getParent();
-            if (dir != null && Files.isDirectory(dir) && !favs.contains(dir)) folders.add(dir);
-            if (folders.size() == 6) break;
-        }
-        if (!folders.isEmpty()) {
-            places.addElement(Messages.get("filechooser.recent.label"));
-            folders.forEach(p -> places.addElement(new Recent(p)));
-        }
         placesList.setModel(places);
-        // Show where the chooser is: its folder, if it's in the list.
-        File cur = chooser.getCurrentDirectory();
+        if (noFavorites != null && noFavorites.isVisible() != favs.isEmpty()) {
+            noFavorites.setVisible(favs.isEmpty());
+            placesScroll.setVisible(!favs.isEmpty());
+            if (placesScroll.getParent() != null) placesScroll.getParent().revalidate();
+        }
+        updateStar();
+        Path cur = shownFolder();
         for (int i = 0; i < places.size(); i++) {
-            Object v = places.get(i);
-            Path p = v instanceof Favorite f ? f.path() : v instanceof Recent r ? r.path() : null;
-            if (p != null && cur != null && p.equals(cur.toPath().toAbsolutePath())) {
+            if (places.get(i).path().equals(cur)) {
                 placesList.getSelectionModel().setValueIsAdjusting(true);
                 placesList.setSelectedIndex(i);
                 placesList.getSelectionModel().setValueIsAdjusting(false);
                 return;
             }
         }
-        if (sel == null) placesList.clearSelection();
+        placesList.clearSelection();
+    }
+
+    /** Saves the favorites, then shows them: the list and the star. Every change comes through here. */
+    private void saveFavorites(List<Path> favs) {
+        AppPrefs.saveFavorites(favs);
+        rebuildPlaces();
     }
 
     private void removeFavorite(Path p) {
         List<Path> favs = new ArrayList<>(AppPrefs.getFavorites());
-        if (favs.remove(p)) {
-            AppPrefs.saveFavorites(favs);
-            rebuildPlaces();
-        }
+        if (favs.remove(p)) saveFavorites(favs);
     }
 
-    /** Group titles small and dim, an empty favorites list's hint italic, places by name. */
-    private static final class PlaceRenderer extends DefaultListCellRenderer {
-        @Override public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean foc) {
-            if (v instanceof String s) {
-                boolean title = !s.equals(Messages.get("filechooser.favorites.empty"));
-                super.getListCellRendererComponent(l, title ? s.toUpperCase(Locale.ROOT) : s, i, false, false);
-                setForeground(title ? ClouseauColors.dimForeground() : ClouseauColors.mutedForeground());
-                setFont(getFont().deriveFont(title ? Font.PLAIN : Font.ITALIC, title ? 11f : getFont().getSize2D()));
-                setBorder(BorderFactory.createEmptyBorder(i == 0 || !title ? 2 : 12, title ? 4 : 12, 4, 4));
-                setToolTipText(null);
-                setOpaque(false);
-                return this;
-            }
-            Path p = v instanceof Favorite f ? f.path() : ((Recent) v).path();
-            super.getListCellRendererComponent(l, p.getFileName() != null ? p.getFileName().toString() : p.toString(), i, sel, false);
-            setToolTipText(p.toString());
-            setBorder(BorderFactory.createEmptyBorder(3, 12, 3, v instanceof Favorite ? 28 : 6));
-            if (!Files.exists(p) && !sel) setForeground(ClouseauColors.mutedForeground());
+    /** Remove from Favorites and Copy Path, for the favorite right-clicked. */
+    private void showFavoriteMenu(Favorite f, Point at) {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem remove = new JMenuItem(Messages.get("filechooser.favorites.remove"));
+        remove.addActionListener(e -> removeFavorite(f.path()));
+        JMenuItem copy = new JMenuItem(Messages.get("filechooser.favorites.copy"));
+        copy.addActionListener(e -> Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new java.awt.datatransfer.StringSelection(f.path().toString()), null));
+        menu.add(remove);
+        menu.add(copy);
+        menu.show(placesList, at.x, at.y);
+    }
+
+    /**
+     * A favorite on two lines: its name, and its full path under it, small and dim. Room on the
+     * right is kept for the trash can, so it never covers the text. Only the selection is filled.
+     */
+    private static final class PlaceRenderer extends JPanel implements ListCellRenderer<Favorite> {
+        private final JLabel name = new JLabel();
+        private final JLabel path = new JLabel();
+
+        PlaceRenderer() {
+            super(new MigLayout("insets 4 6 4 " + PlacesList.TOOL + ", gap 0, wrap 1", "[grow, fill, 0::]"));
+            add(name, "wmin 0");
+            add(path, "wmin 0");
+        }
+
+        @Override public Component getListCellRendererComponent(JList<? extends Favorite> l, Favorite f, int i,
+                                                                boolean sel, boolean foc) {
+            Path p = f.path();
+            name.setText(p.getFileName() != null ? p.getFileName().toString() : p.toString());
+            path.setText(p.toString());
+            name.setFont(l.getFont());
+            path.setFont(UIManager.getFont("Label.font").deriveFont(11f));
+            boolean missing = !Files.exists(p);
+            Color fg = sel ? UIManager.getColor("List.selectionForeground") : l.getForeground();
+            name.setForeground(missing && !sel ? ClouseauColors.mutedForeground() : fg);
+            path.setForeground(sel ? fg : missing ? ClouseauColors.mutedForeground() : ClouseauColors.dimForeground());
+            setBackground(UIManager.getColor("List.selectionBackground"));
             setOpaque(sel);                       // rows sit on the sidebar; only the selection is filled
+            setToolTipText(p.toString());
             return this;
         }
     }
 
-    /** The places list, with a trash can on the favorite under the mouse. */
-    private final class PlacesList extends JList<Object> {
-        private static final int TOOL = 24;
+    /** The favorites list, with a trash can on the favorite under the mouse and a right-click menu. */
+    private final class PlacesList extends JList<Favorite> {
+        static final int TOOL = 24;
         private int hoverRow = -1;
         private boolean overTrash;
 
@@ -791,10 +925,17 @@ final class FileChooserDialog extends JDialog {
             addMouseMotionListener(hover);
         }
 
-        private void track(Point p) {
+        /** As wide as the sidebar: long names and paths are cut short with …, never scrolled sideways. */
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+
+        private int rowAt(Point p) {
             int row = locationToIndex(p);
             Rectangle r = row >= 0 ? getCellBounds(row, row) : null;
-            int newRow = r != null && r.contains(p) && places.get(row) instanceof Favorite ? row : -1;
+            return r != null && r.contains(p) ? row : -1;
+        }
+
+        private void track(Point p) {
+            int newRow = rowAt(p);
             boolean trash = newRow >= 0 && p.x >= getWidth() - TOOL;
             if (newRow != hoverRow || trash != overTrash) {
                 hoverRow = newRow;
@@ -806,18 +947,26 @@ final class FileChooserDialog extends JDialog {
         @Override protected void processMouseEvent(MouseEvent e) {
             if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e)) {
                 track(e.getPoint());
-                if (overTrash && hoverRow >= 0 && places.get(hoverRow) instanceof Favorite f) {
+                if (overTrash && hoverRow >= 0) {
+                    Favorite f = places.get(hoverRow);
                     e.consume();
                     SwingUtilities.invokeLater(() -> removeFavorite(f.path()));
                     return;
                 }
-                int row = locationToIndex(e.getPoint());
-                if (row >= 0 && !(places.get(row) instanceof Favorite || places.get(row) instanceof Recent)) {
-                    e.consume();                 // a title or the hint isn't a place
+                if (rowAt(e.getPoint()) < 0) {   // below the last row: not a place
+                    e.consume();
                     return;
                 }
             }
-            if (e.getID() == MouseEvent.MOUSE_CLICKED && overTrash) return;
+            if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isRightMouseButton(e)) {
+                // The menu acts on the row clicked; selecting it would open its folder.
+                int row = rowAt(e.getPoint());
+                e.consume();
+                if (row >= 0) showFavoriteMenu(places.get(row), e.getPoint());
+                return;
+            }
+            if ((e.getID() == MouseEvent.MOUSE_CLICKED || e.getID() == MouseEvent.MOUSE_RELEASED)
+                    && (overTrash || SwingUtilities.isRightMouseButton(e))) return;
             super.processMouseEvent(e);
         }
 
