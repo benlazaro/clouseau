@@ -52,7 +52,8 @@ final class SourceSettingsDialog extends JDialog {
     private final Map<String, JComponent> fields = new LinkedHashMap<>();
     private final List<LogParser> parsers;
     private final JComboBox<String> parserCombo;
-    private final JLabel errorLabel = new JLabel(" ");
+    private final NoticeLabel notice = new NoticeLabel();
+    private final JButton openBtn = new JButton(Messages.get("source.dialog.open"));
     private Result result;
 
     /** @param pluginName the plugin the source comes from, named when it fails; null if unknown */
@@ -97,26 +98,33 @@ final class SourceSettingsDialog extends JDialog {
 
     // ── Layout ───────────────────────────────────────────────────────────────
 
-    /** Laid out like Settings: labels left-aligned, then a footer below a divider, Cancel before Open. */
+    /**
+     * Laid out like Settings: the required settings under a section title, the optional ones
+     * and the parser under another, labels indented; then the notice saying what Open waits
+     * for, and a footer below a divider, Cancel before Open.
+     */
     private JPanel buildContent() {
         JPanel panel = new JPanel(new MigLayout("insets 20 20 12 20, wrap 2, gapy 8, gapx 16", "[][grow, fill]"));
         Map<String, String> saved = AppPrefs.getSourceSettings(providerId(), secretKeys());
 
         for (SourceSetting s : settings) {
-            String initial = saved.getOrDefault(s.key(), s.defaultValue());
-            JComponent field = buildField(s, initial);
-            fields.put(s.key(), field);
-            panel.add(new JLabel(s.label() + (s.required() ? " *" : "") + ":"));
-            panel.add(field);
+            fields.put(s.key(), buildField(s, saved.getOrDefault(s.key(), s.defaultValue())));
         }
-        panel.add(new JLabel(Messages.get("ssh.dialog.parser")));
+        List<SourceSetting> required = settings.stream().filter(SourceSetting::required).toList();
+        List<SourceSetting> optional = settings.stream().filter(s -> !s.required()).toList();
+        if (!required.isEmpty()) {
+            panel.add(SettingsDialog.sectionLabel(Messages.get("source.dialog.section.required")), "span 2, growx, gapbottom 4");
+            required.forEach(s -> addRow(panel, s));
+        }
+        panel.add(SettingsDialog.sectionLabel(Messages.get("source.dialog.section.optional")),
+                "span 2, growx, gapbottom 4" + (required.isEmpty() ? "" : ", gaptop 16"));
+        optional.forEach(s -> addRow(panel, s));
+        panel.add(new JLabel(Messages.get("ssh.dialog.parser")), SettingsDialog.INDENT);
         panel.add(parserCombo);
 
-        errorLabel.setForeground(UIManager.getColor("Component.error.focusedBorderColor") != null
-                ? UIManager.getColor("Component.error.focusedBorderColor") : Color.RED);
-        panel.add(errorLabel, "span 2, growx, gaptop 4");
+        // What Open waits for, or why it failed. Keeps its height when empty.
+        panel.add(notice, "span 2, growx, wmin 0, gaptop 12");
 
-        JButton openBtn = new JButton(Messages.get("source.dialog.open"));
         openBtn.addActionListener(e -> onOpen());
         JButton cancelBtn = new JButton(Messages.get("ssh.dialog.cancel"));
         cancelBtn.addActionListener(e -> dispose());
@@ -126,7 +134,48 @@ final class SourceSettingsDialog extends JDialog {
         JPanel root = new JPanel(new BorderLayout());
         root.add(panel, BorderLayout.CENTER);
         root.add(footer, BorderLayout.SOUTH);
+        updateOpen();
         return root;
+    }
+
+    private void addRow(JPanel panel, SourceSetting s) {
+        JComponent field = fields.get(s.key());
+        panel.add(new JLabel(s.label() + ":"), SettingsDialog.INDENT);
+        panel.add(field);
+        // Typing clears the outline an earlier Open left, and says what's still needed.
+        Runnable edited = () -> {
+            field.putClientProperty("JComponent.outline", null);
+            notice.setText(" ");
+            updateOpen();
+        };
+        if (field instanceof JTextComponent tc) {
+            tc.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+                public void insertUpdate(javax.swing.event.DocumentEvent e)  { edited.run(); }
+                public void removeUpdate(javax.swing.event.DocumentEvent e)  { edited.run(); }
+                public void changedUpdate(javax.swing.event.DocumentEvent e) { edited.run(); }
+            });
+        } else if (field instanceof JComboBox<?> cb) {
+            cb.addActionListener(e -> edited.run());
+        }
+    }
+
+    /**
+     * Open is enabled once every required setting has a value; until then the notice says
+     * which are still needed.
+     */
+    private void updateOpen() {
+        List<String> missing = SourceSettings.check(settings, enteredValues()).issues().stream()
+                .filter(i -> i.problem() == SourceSettings.Problem.MISSING)
+                .map(SourceSettings.Issue::label)
+                .toList();
+        openBtn.setEnabled(missing.isEmpty());
+        if (!missing.isEmpty()) {
+            notice.setText(MessageFormat.format(Messages.get("source.dialog.missing"), String.join(", ", missing)));
+            notice.setToolTipText(null);
+        } else if (notice.kind() == NoticeLabel.Kind.NOTE) {
+            notice.setToolTipText(null);
+            notice.setText(" ");
+        }
     }
 
     private static JComponent buildField(SourceSetting s, String initial) {
@@ -167,7 +216,12 @@ final class SourceSettingsDialog extends JDialog {
     private void onOpen() {
         SourceSettings.Result checked = SourceSettings.check(settings, enteredValues());
         if (!checked.ok()) {
-            showError(checked.issues().stream().map(SourceSettingsDialog::describe).collect(Collectors.joining("<br>")));
+            // Each offending field outlined, the problems in the notice, the first field focused.
+            checked.issues().forEach(i -> {
+                JComponent f = fields.get(i.key());
+                if (f != null) f.putClientProperty("JComponent.outline", "error");
+            });
+            showError(checked.issues().stream().map(SourceSettingsDialog::describe).collect(Collectors.joining(" ")));
             JComponent first = fields.get(checked.issues().get(0).key());
             if (first != null) first.requestFocusInWindow();
             return;
@@ -178,11 +232,12 @@ final class SourceSettingsDialog extends JDialog {
             source = provider.create(checked.values());
             if (source == null) throw new IllegalStateException("create() returned null");
         } catch (IllegalArgumentException e) {
-            showError(escape(e.getMessage() != null ? e.getMessage() : e.toString()));
+            // The plugin's own words about the values: they're meant for the user.
+            showError(e.getMessage() != null ? e.getMessage() : e.toString());
             return;
         } catch (Exception | LinkageError e) {
             log.error("Source plugin '{}' failed to create a source", provider.getName(), e);
-            showError(failed(pluginName, escape(e.getMessage() != null ? e.getMessage() : e.toString())));
+            showError(failed(pluginName, e.getMessage() != null ? e.getMessage() : e.toString()));
             return;
         }
 
@@ -201,15 +256,16 @@ final class SourceSettingsDialog extends JDialog {
             case NOT_A_NUMBER -> "source.dialog.error.number";
             case NOT_A_CHOICE -> "source.dialog.error.choice";
         };
-        return MessageFormat.format(Messages.get(key), escape(issue.label()));
+        return MessageFormat.format(Messages.get(key), issue.label());
     }
 
-    private void showError(String htmlSafeText) {
-        errorLabel.setText("<html>" + htmlSafeText + "</html>");
-        pack();
-    }
-
-    private static String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    /**
+     * Shows why Open failed in the notice, on one line (the whole of it in the tooltip). The
+     * notice keeps its place, so the dialog doesn't change size.
+     */
+    private void showError(String text) {
+        String line = text.replaceAll("\\s*\\R\\s*", " ").strip();
+        notice.show(line, NoticeLabel.Kind.ERROR);
+        notice.setToolTipText(line);
     }
 }
