@@ -63,7 +63,22 @@ final class FileChooserDialog extends JDialog {
     private static final DateTimeFormatter LIST_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final List<LogParser> parsers;
-    private final JFileChooser chooser = new JFileChooser();
+    /**
+     * Without the look and feel's places bar (Recent Items, Desktop, …): the favorites and
+     * recent folders on the left take its place. FlatLaf reads the flag when it installs the
+     * UI, which a theme switch does again, so it's set around each install, for this chooser only.
+     */
+    private final JFileChooser chooser = new JFileChooser() {
+        @Override public void updateUI() {
+            Object old = UIManager.get("FileChooser.noPlacesBar");
+            UIManager.put("FileChooser.noPlacesBar", Boolean.TRUE);
+            try {
+                super.updateUI();
+            } finally {
+                UIManager.put("FileChooser.noPlacesBar", old);
+            }
+        }
+    };
     private int selectedParserIndex;
     private ZoneId selectedSourceTimezone = ZoneId.systemDefault();
     /** The user picked a zone for this selection, so moving to another file keeps it. */
