@@ -505,12 +505,20 @@ switches to `Clouseau.selectionRingInactive` while the table doesn't have focus 
 repaints on focus changes). A selected highlighted row blends the highlight 55% toward the
 selection color and keeps the same ring.
 
-**No shadows.** Both themes set `Popup.dropShadowPainted = false`: menus, popups and
-tooltips are edged by their `PopupMenu.borderColor` hairline, as the design system asks.
+**No painted shadows; popups use the OS's.** Structure comes from hairlines: menus, popups and
+tooltips are edged by their `PopupMenu.borderColor` hairline. Popups are the one exception to
+"no shadows": FlatLaf only rounds a popup's corners through the OS, and that path always comes
+with the OS's own shadow, so both themes leave `Popup.dropShadowPainted` on. On Windows 11
+(with FlatLaf's native library) and macOS a popup is a native window with 4px corners, the
+hairline as its border, and the OS's soft shadow. On Windows 10 and Linux popups stay square,
+and FlatLaf or the window manager adds its shadow.
 
 **Corner radii.** FlatLaf's `arc` values are diameters. The design system's radius tokens
 name what is drawn: tabs 5px (`TabbedPane.tabArc = 10`), fields, buttons and drop-downs 4px
-(arc 8), key badges 4px, row-menu swatches 3px, highlight-bar chips 2.5px and find marks 2px.
+(arc 8), menus 4px (the menu bar's highlight, `MenuBar.selectionArc = 8`; a popup's
+highlighted item, `MenuItem.selectionArc = 8`, inset 4px from the popup's sides; popup corners,
+`PopupMenu.borderCornerRadius = 4`, where the OS draws them), key badges 4px, row-menu swatches
+3px, highlight-bar chips 2.5px and find marks 2px.
 
 ### 6.9 Tab switching shortcuts (UC-15)
 
