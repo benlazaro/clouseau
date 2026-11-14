@@ -331,11 +331,11 @@ final class FileChooserDialog extends JDialog {
     }
 
     /**
-     * The file list keeps the column widths the user set, and shows dates in the app's format.
-     * On every folder change the look and feel throws the list's columns away and builds new
-     * ones at the shell's default widths, so when it swaps in a new column model each column
-     * takes the width of the old column with the same title, and its renderer is wrapped so a
-     * date shows as yyyy-MM-dd HH:mm.
+     * The file list keeps the column widths and order the user set, and shows dates in the app's
+     * format. On every folder change the look and feel throws the list's columns away and builds
+     * new ones at the shell's default widths and order, so when it swaps in a new column model the
+     * old layout is copied onto it by column title, and each renderer is wrapped so a date shows
+     * as yyyy-MM-dd HH:mm.
      */
     private static void keepColumns(Container c) {
         SwingUtilities.invokeLater(() -> {
@@ -345,26 +345,31 @@ final class FileChooserDialog extends JDialog {
             table.addPropertyChangeListener("columnModel", e -> {
                 if (e.getOldValue() instanceof javax.swing.table.TableColumnModel old
                         && e.getNewValue() instanceof javax.swing.table.TableColumnModel now) {
-                    copyWidths(old, now);
+                    copyLayout(old, now);
                 }
                 useAppDates(table);
             });
         });
     }
 
-    /** Gives each column of {@code to} the width of the column with the same title in {@code from}. */
-    private static void copyWidths(javax.swing.table.TableColumnModel from, javax.swing.table.TableColumnModel to) {
-        java.util.Map<Object, Integer> widths = new java.util.HashMap<>();
+    /**
+     * Lays out {@code to} like {@code from}, matching columns by title: each takes the old one's
+     * width, and they're put in the old order. Columns the old list didn't have go after them.
+     */
+    private static void copyLayout(javax.swing.table.TableColumnModel from, javax.swing.table.TableColumnModel to) {
+        int next = 0;
         for (int i = 0; i < from.getColumnCount(); i++) {
-            javax.swing.table.TableColumn col = from.getColumn(i);
-            widths.put(col.getHeaderValue(), col.getWidth());
-        }
-        for (int i = 0; i < to.getColumnCount(); i++) {
-            javax.swing.table.TableColumn col = to.getColumn(i);
-            Integer w = widths.get(col.getHeaderValue());
-            if (w != null && w > 0) {
-                col.setPreferredWidth(w);
-                col.setWidth(w);
+            javax.swing.table.TableColumn old = from.getColumn(i);
+            for (int j = next; j < to.getColumnCount(); j++) {
+                javax.swing.table.TableColumn col = to.getColumn(j);
+                if (!java.util.Objects.equals(col.getHeaderValue(), old.getHeaderValue())) continue;
+                if (old.getWidth() > 0) {
+                    col.setPreferredWidth(old.getWidth());
+                    col.setWidth(old.getWidth());
+                }
+                if (j != next) to.moveColumn(j, next);
+                next++;
+                break;
             }
         }
     }
