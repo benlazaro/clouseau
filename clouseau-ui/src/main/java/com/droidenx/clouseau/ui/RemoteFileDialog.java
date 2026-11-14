@@ -38,6 +38,9 @@ final class RemoteFileDialog extends JDialog {
     private static final DateTimeFormatter MODIFIED =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
+    /** Its size, remembered in AppPrefs. */
+    private static final String SIZE_KEY = "remote.browse";
+
     private final SshConfig config;
     private final String authType;
     private final SshRemote remote;
@@ -72,7 +75,9 @@ final class RemoteFileDialog extends JDialog {
                 KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
         setBusy(true);
         pack();
-        setSize(Math.max(getWidth(), 640), Math.max(getHeight(), 460));
+        setMinimumSize(new Dimension(480, 340));
+        Dimension saved = AppPrefs.getWindowSize(SIZE_KEY);     // where it was left last time
+        setSize(saved != null ? saved : new Dimension(Math.max(getWidth(), 640), Math.max(getHeight(), 460)));
         setLocationRelativeTo(owner);
         signIn();
     }
@@ -84,6 +89,7 @@ final class RemoteFileDialog extends JDialog {
     }
 
     @Override public void dispose() {
+        if (isDisplayable()) AppPrefs.setWindowSize(SIZE_KEY, getSize());
         request++;
         worker.shutdownNow();
         SshConnectionDialog.closeQuietly(remote);
@@ -93,7 +99,7 @@ final class RemoteFileDialog extends JDialog {
     private JPanel buildContent() {
         JPanel p = new JPanel(new MigLayout("insets 16 16 12 16, fill, gapy 10", "[grow, fill]", "[][grow, fill][]"));
 
-        pathField.putClientProperty("JTextField.placeholderText", "/var/log");
+        pathField.putClientProperty("JTextField.placeholderText", Messages.get("ssh.browse.path.placeholder"));
         pathField.setFont(ClouseauFonts.mono(Font.PLAIN, pathField.getFont().getSize()));
         pathField.addActionListener(e -> {
             String typed = pathField.getText().strip();

@@ -23,6 +23,9 @@ import java.util.Locale;
  */
 final class ZipPickerDialog extends JDialog {
 
+    /** Its size, remembered in AppPrefs. */
+    private static final String SIZE_KEY = "zip.picker";
+
     private final List<ZipLogs.Entry> entries;
     private final boolean[] ticked;
     private final EntryModel model;
@@ -52,7 +55,10 @@ final class ZipPickerDialog extends JDialog {
         getRootPane().setDefaultButton(openButton);
         updateState();
         pack();
-        setSize(Math.max(getWidth(), 640), Math.min(Math.max(getHeight(), 360), 600));
+        setMinimumSize(new Dimension(480, 300));
+        Dimension saved = AppPrefs.getWindowSize(SIZE_KEY);     // where it was left last time
+        setSize(saved != null ? saved
+                : new Dimension(Math.max(getWidth(), 640), Math.min(Math.max(getHeight(), 360), 600)));
         setLocationRelativeTo(owner);
     }
 
@@ -62,13 +68,18 @@ final class ZipPickerDialog extends JDialog {
         return result;
     }
 
+    @Override public void dispose() {
+        if (isDisplayable()) AppPrefs.setWindowSize(SIZE_KEY, getSize());
+        super.dispose();
+    }
+
     /** True if the chosen files (two or more) are to open in one merged view. */
     boolean merge() {
         return merge;
     }
 
     private JPanel buildContent() {
-        JPanel p = new JPanel(new MigLayout("insets 12, fill", "[grow]", "[][][grow]"));
+        JPanel p = new JPanel(new MigLayout("insets 16, fill", "[grow]", "[][][grow]"));
         p.add(new JLabel(MessageFormat.format(Messages.get("zip.picker.message"), entries.size())), "wrap");
 
         filterField.putClientProperty("JTextField.placeholderText", Messages.get("zip.picker.filter"));
