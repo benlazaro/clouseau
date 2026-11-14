@@ -368,6 +368,14 @@ public class SshConnectionDialog extends JDialog {
     }
 
     private JComponent logHeading;
+
+    private void relayout() {
+        if (content == null) return;
+        hintLabel.invalidate();
+        content.invalidate();
+        content.revalidate();
+        content.repaint();
+    }
     /** The form, whose rows {@link #showMode} shows and hides. */
     private JPanel content;
     private final List<JComponent> logRows = new ArrayList<>();
@@ -396,11 +404,10 @@ public class SshConnectionDialog extends JDialog {
         hintLabel.setText(" ");
         hintLabel.setToolTipText(null);
         // Rows that come back need the form laid out again, or MigLayout keeps them at no height.
-        if (content != null) {
-            content.invalidate();
-            content.revalidate();
-            content.repaint();
-        }
+        // Once more after this event, too: the notice's text is set after the switch, and MigLayout
+        // would otherwise keep the width it measured for the empty notice.
+        relayout();
+        SwingUtilities.invokeLater(this::relayout);
     }
 
     private void switchAuth(String authType) {
