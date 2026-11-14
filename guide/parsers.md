@@ -45,8 +45,9 @@ The process ID and application name become **pid** and **app** columns.
 **Tools → Parser Editor…** lists the parsers in a sidebar: **Yours** first, then the
 **Built-in** ones. Type in **Filter parsers…** above the list to find one by name, and drag
 the divider to make the sidebar wider; the editor remembers its size and the divider. When
-Clouseau opens a file it tries yours from the top, then the built-in ones, and uses the
-first that reads the line, so put the more specific parsers higher: drag one up or down, or
+you open a file with the parser set to **Auto-detect** in the Open dialog,
+Clouseau checks the file's first lines against your parsers from the top, then the built-in
+ones, and uses the first that matches, so put the more specific parsers higher: drag one up or down, or
 select it and press `Alt`+`↑` / `Alt`+`↓`.
 
 Click **New Parser** to add one. On the row under the mouse, the duplicate icon (`Ctrl`+`D`)
