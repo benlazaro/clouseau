@@ -210,13 +210,16 @@ for accounts without a password, common on embedded devices. "None" works with
 servers that let such accounts in by any of the usual methods (none, an empty password,
 or keyboard-interactive).
 
-**Checking the details first (SSH):** The dialog's **Test** button (after Browse… on the
-Remote path line) signs in and checks
-the remote file with `test`, without opening a tab, and reports in the note above the
-buttons that the file is readable, or which step failed and why (unknown host, nothing
-listening on the port, no answer, sign-in turned down, unusable key file, missing file,
-unreadable file, a folder). Each step gives up after 15 seconds, and the connection is
-closed when the test ends, when a field changes, or when the dialog closes. **Browse…**
+**Checking the details first (SSH):** **Connect** signs in and checks the remote file
+with `test` before it opens a tab, and closes the dialog only when that works. Otherwise it
+stays open, says in the note above the buttons which step failed and why (unknown host,
+nothing listening on the port, no answer, sign-in turned down, unusable key file, missing
+file, unreadable file, a folder), and saves nothing. Each step gives up after 15 seconds,
+and the connection is closed when the check ends, when a field changes, or when the dialog
+closes. **Save** keeps a connection, or the changes to a saved one, without connecting;
+Connect also saves changes to the saved log it connects with, and a new connection is kept
+only by Save. With unsaved changes to a saved log, picking another log, Cancel, Esc or the
+close box asks Cancel · Don't Save · Save. **Browse…**
 next to Remote path signs in the same way and lists the server's folders over SFTP,
 starting in the typed path's folder, else `/var/log`, else home. It lists folders, then
 the files the user can read (from the file's owner, group and mode against the user's

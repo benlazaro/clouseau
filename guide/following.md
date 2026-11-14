@@ -59,7 +59,8 @@ Clouseau keeps your rows when the log is rotated:
 3. Under **Log**, enter the **Remote path** of the log, or click **Browse…** to pick it
    from the server's folders. Pick a **Parser** if auto-detection isn't right.
 4. Click **Connect**. While it's grayed out, the note above the buttons says what's still
-   missing.
+   missing. Connect first signs in and checks that the file exists and you can read it, and
+   opens the tab only when that works (see below).
 
 **Browse…** signs in with the details you've entered and lists the server's folders. It
 starts in the folder of the path you typed, or in `/var/log`, or in your home folder.
@@ -70,13 +71,11 @@ under the list says how many were left out. Double-click a file, or select it an
 it, and otherwise lists folders with ordinary shell commands, so it works on servers
 without SFTP too (Dropbear without `sftp-server`, for example).
 
-**Test**, after **Browse…** on the **Remote path** line, checks the connection without
-opening a tab. It signs in and checks that the
-file exists and you can read it, then reports in the note above the buttons: **Signed in ·
-/var/log/app.log is readable**, or which step failed and why, such as a host that can't be
-found, a port that isn't taking connections, a password the server turned down, a key file
-that can't be used, or a file that's missing or that you can't read. Each step gives up
-after 15 seconds. Changing any field clears the result.
+If the check fails, the dialog stays open and the note above the buttons says which step
+failed and why, such as a host that can't be found, a port that isn't taking connections, a
+password the server turned down, a key file that can't be used, or a file that's missing or
+that you can't read. Nothing is saved, so you can fix the details and try again. Each step
+gives up after 15 seconds. Changing any field stops the check and clears the result.
 
 The tab is named after the file and the host, such as `app.log — 10.0.0.5`, so the same
 log followed on two servers gets two distinct tabs; a server you named shows its name
@@ -88,9 +87,10 @@ keeps going when the log is rotated or replaced. If the path is wrong or you can
 the file, Clouseau says so. If the connection drops without closing (a router or VPN
 timing it out), Clouseau notices within about a minute and a quarter and shows an error,
 instead of the tab quietly going still. Closing an SSH tab is immediate, even if the connection has
-dropped. To keep a connection for next time, tick
-**Save this connection** before you click **Connect** (passwords and passphrases are stored
-encrypted). Saved connections are listed on the left of the dialog as a tree: each server
+dropped. To keep a connection for next time, click **Save** (or press `Ctrl+S`) at the
+bottom left of the dialog. It saves without connecting, so you can save a server that's down
+right now, and the dialog stays open (passwords and passphrases are stored encrypted). Saved
+connections are listed on the left of the dialog as a tree: each server
 in bold, the folders of its saved logs under it, and the logs in each folder. Click the
 arrow beside a server or folder (or double-click it, or press Left and Right) to fold it;
 the dialog remembers what you folded. Type in the filter box to narrow the list by host,
@@ -102,21 +102,24 @@ sidebar scrolls sideways. The dialog keeps its size and divider for next time.
 - **To name a server**, right-click it in Saved connections and choose **Rename** (or
   select it and press `F2`), type a name such as *Payments prod*, and press `Enter` (`Esc`
   cancels). The list then shows the name with the host beside it (`Payments prod
-  10.0.3.17`), every log on that server shares it, and the form shows it under **Server**.
+  10.0.3.17`), and every log on that server shares it.
   Clear the name to show the host again. Two servers can't share a name. A server you're
   adding for the first time can be named once it's saved.
 - **To change a saved connection**, click it, edit anything (the host, user and path
-  included), and click **Connect**: it's updated in place.
+  included), and click **Save**: it's updated in place. **Connect** saves your changes too,
+  once its check passes. If you pick another log, click **Cancel** or close the dialog
+  with changes not saved, Clouseau asks whether to save them.
 - **To follow another file on the same server**, point at a saved log and click the
   duplicate icon at the right of its row (or press `Ctrl+D`). The form keeps every detail
-  and selects the file name in **Remote path**; type the new one and click **Connect** to
-  save it as a new entry.
+  and selects the file name in **Remote path**; type the new one and click **Save** to keep
+  it as a new entry.
 - **To forget one**, click the trash can at the right of its row (or select it and press
   `Delete`). The trash can on a folder or a server forgets every log in it, after asking
   when there's more than one. Right-clicking a row offers the same, with **Rename** on a
   server and **Duplicate** on a log.
 
-The **Save this connection** box remembers whether you ticked it last time.
+A new connection you connect to without clicking **Save** isn't kept, so one-off connections
+don't fill the list.
 
 ### Connection dot and Reconnect
 

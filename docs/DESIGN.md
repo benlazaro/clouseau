@@ -308,11 +308,13 @@ starting state.
   key file, missing, unreadable, folder, no SFTP, other); the key file is loaded before the server is
   asked, so a bad key or passphrase reads as `KEY_FILE`, not as a refused sign-in. The
   dialog turns those into its own sentences (`SshConnectionDialog.describe`).
-  **Test** runs `connect` then `check`, which runs `test -e`, `test -d` and `test -r` under
-  `sh -c` with the path quoted as for `tail` (exit 2, 4, 3), on a `SwingWorker`, closing the
-  connection when done. Any edit to the form, or closing the dialog, closes a test still
-  running and drops its result. The hint line (`NoticeLabel`) shows it as `OK` or `ERROR`,
-  next to its usual `NOTE` for missing fields. **Browse…** (`RemoteFileDialog`) keeps one
+  **Connect** first runs `connect` then `check`, which runs `test -e`, `test -d` and
+  `test -r` under `sh -c` with the path quoted as for `tail` (exit 2, 4, 3), on a
+  `SwingWorker`, closing the connection when done, and closes the dialog only when both
+  pass (the tab then signs in again for `tail -F`). Any edit to the form, or closing the
+  dialog, closes a check still running and drops its result. The hint line (`NoticeLabel`)
+  shows a failed check as `ERROR` and **Save**'s result as `OK`, next to its usual `NOTE`
+  for missing fields. **Browse…** (`RemoteFileDialog`) keeps one
   `SshRemote` open while it's shown, with every call on its own single thread and a
   request counter so a reply for a folder already left is dropped. It lists over SFTP
   (`SFTPClient.ls`, with links followed by `stat`), and decides readability from each

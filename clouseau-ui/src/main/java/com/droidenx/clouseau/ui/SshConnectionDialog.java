@@ -61,10 +61,10 @@ public class SshConnectionDialog extends JDialog {
     private final JTextField portField       = new JTextField("22", 5);
     private final JTextField userField       = new JTextField(22);
     /**
-     * The server's name, read-only: it's renamed on its row in Saved connections (right-click,
-     * or F2), since a name belongs to the server, not to one saved log.
+     * The saved log the form holds, which Connect updates in place: the last log picked in the
+     * list. Picking a server or folder row keeps it; Duplicate, or forgetting it, clears it.
      */
-    private final JLabel     nameValue       = new JLabel();
+    private AppPrefs.SshFavorite editing;
     /** Server names by host, as saved. */
     private final java.util.Map<String, String> hostNames = AppPrefs.getSshHostNames();
 
@@ -92,7 +92,6 @@ public class SshConnectionDialog extends JDialog {
     private final SavedTree                    savedTree   = new SavedTree(savedRoot);
     private final CardLayout                   savedCards  = new CardLayout();
     private final JPanel                       savedBody   = new JPanel(savedCards);
-    private final JCheckBox                    saveBox     = new JCheckBox(Messages.get("ssh.dialog.save"));
     private       List<AppPrefs.SshFavorite>   favorites;
     /** Servers and folders the user folded (see {@link #foldKey}), remembered between visits. */
     private final java.util.Set<String>        collapsed   = AppPrefs.getSshCollapsed();
@@ -101,18 +100,27 @@ public class SshConnectionDialog extends JDialog {
 
     // Footer
     private final JButton connectBtn = new JButton(Messages.get("ssh.dialog.connect"));
-    /** Signs in and checks the file, without opening a tab (G-14). */
-    private final JButton testBtn    = new JButton(Messages.get("ssh.dialog.test"));
+    /**
+     * Saves the connection without connecting: a new one, or the changes to the saved log the
+     * form holds. The dialog stays open.
+     */
+    private final JButton saveBtn    = new JButton(Messages.get("ssh.dialog.save.button"));
     /** Lists the server's folders to pick Remote path from (G-13). */
     private final JButton remoteBrowseBtn = new JButton(Messages.get("ssh.dialog.remote.browse"));
     private final NoticeLabel hintLabel = new NoticeLabel();
-    /** The test running now, closed if the form changes or the dialog closes; null if none. */
+    /**
+     * The check Connect runs first (sign in, then the file), closed if the form changes or the
+     * dialog closes; null if none is running (G-14).
+     */
     private SshRemote testRemote;
-    /** Set while a change comes from the dialog itself (a test result), not the user. */
+    /** Set while a change comes from the dialog itself (moving user@host:port apart), not the user. */
     private boolean selfChange;
+    /** Set while the list's selection is put back after the user chose to keep editing. */
+    private boolean revertingSelection;
     /** The saved connections | the form; its divider is remembered. */
     private JSplitPane split;
-    private static final int SIDEBAR_WIDTH = 250, SIDEBAR_MIN = 160;
+    // Wide enough for a typical log row, three levels deep, with its tools' room beside it.
+    private static final int SIDEBAR_WIDTH = 300, SIDEBAR_MIN = 160;
 
     /** Takes the focus when the dialog opens: Host, or the secret a reconnect still needs. */
     private JComponent initialFocus = hostField;
@@ -128,18 +136,26 @@ public class SshConnectionDialog extends JDialog {
         parserCombo = new JComboBox<>(parserNames);
 
         favorites = new ArrayList<>(AppPrefs.getSshFavorites());
-        saveBox.setSelected(AppPrefs.isSshSaveConnection());
 
         setContentPane(buildContent());
         rebuildSavedTree();
         getRootPane().setDefaultButton(connectBtn);
+        // Esc, Cancel and the close box all ask first when a saved log has unsaved changes.
         getRootPane().registerKeyboardAction(
-                e -> dispose(),
+                e -> requestClose(),
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
+        getRootPane().registerKeyboardAction(
+                e -> { if (saveBtn.isEnabled()) onSave(); },
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, java.awt.event.InputEvent.CTRL_DOWN_MASK),
+                JComponent.WHEN_IN_FOCUSED_WINDOW);
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override public void windowOpened(java.awt.event.WindowEvent e) {
                 initialFocus.requestFocusInWindow();
+            }
+            @Override public void windowClosing(java.awt.event.WindowEvent e) {
+                requestClose();
             }
         });
         switchAuth(AUTH_PASSWORD);
@@ -176,7 +192,6 @@ public class SshConnectionDialog extends JDialog {
     void prefill(com.droidenx.clouseau.core.Session.Ssh ssh, String parserName) {
         loadFavorite(new AppPrefs.SshFavorite(null, ssh.host(), ssh.port(), ssh.user(), ssh.auth(),
                 null, ssh.keyFile(), null, ssh.remotePath(), parserName));
-        saveBox.setSelected(false);
         if (AUTH_PASSWORD.equals(ssh.auth())) initialFocus = passwordField;
         else if (AUTH_KEY.equals(ssh.auth()) && ssh.keyPassphrase()) initialFocus = keyPassphraseField;
         validateForm();
@@ -193,8 +208,6 @@ public class SshConnectionDialog extends JDialog {
         // ── Server ───────────────────────────────────────────────────────
         content.add(SettingsDialog.sectionLabel(Messages.get("ssh.dialog.section.server")),
                 "span 2, growx, wrap, gapbottom 4");
-        content.add(new JLabel(Messages.get("ssh.dialog.name")), SettingsDialog.INDENT);
-        content.add(nameValue, "wrap");
         content.add(new JLabel(Messages.get("ssh.dialog.host")), SettingsDialog.INDENT);
         JPanel hostRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][][]"));
         hostRow.setOpaque(false);
@@ -214,13 +227,7 @@ public class SshConnectionDialog extends JDialog {
                 applyHostSpec();
             }
         });
-        // The name shown is the one the host in the field has.
-        hostField.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e)  { showName(); }
-            public void removeUpdate(DocumentEvent e)  { showName(); }
-            public void changedUpdate(DocumentEvent e) { showName(); }
-        });
-        showName();
+
 
         // ── Authentication ───────────────────────────────────────────────
         content.add(SettingsDialog.sectionLabel(Messages.get("ssh.dialog.section.auth")),
@@ -251,13 +258,10 @@ public class SshConnectionDialog extends JDialog {
         content.add(SettingsDialog.sectionLabel(Messages.get("ssh.dialog.section.log")),
                 "span 2, growx, wrap, gaptop 20, gapbottom 4");
         content.add(new JLabel(Messages.get("ssh.dialog.remote.path")), SettingsDialog.INDENT);
-        // Test sits by the path it checks, not in the footer: there, beside the saved
-        // connections, it read as testing whichever server was selected in the list.
-        JPanel remotePathRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][][]"));
+        JPanel remotePathRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][]"));
         remotePathRow.setOpaque(false);
         remotePathRow.add(remotePathField);
         remotePathRow.add(remoteBrowseBtn);
-        remotePathRow.add(testBtn);
         content.add(remotePathRow, "wrap");
         remoteBrowseBtn.setToolTipText(Messages.get("ssh.dialog.remote.browse.tooltip"));
         remoteBrowseBtn.addActionListener(e -> browseRemote());
@@ -265,25 +269,20 @@ public class SshConnectionDialog extends JDialog {
                 Messages.get("ssh.dialog.remote.path.placeholder"));
         content.add(new JLabel(Messages.get("ssh.dialog.parser")), SettingsDialog.INDENT);
         content.add(parserCombo, "wrap");
-        // Saving is part of setting up the connection: the last line of the form, under the
-        // fields and just above Connect, like "Remember me" on a sign-in form.
-        content.add(saveBox, "skip 1, wrap, gaptop 4");
+        // What Connect is waiting for, while it's disabled; then what its check found, or that
+        // Save worked. Always present, so the dialog doesn't change size as the fields fill in.
+        content.add(hintLabel, "span 2, gaptop 10, growx 0");
 
-        // What Connect is waiting for, while it's disabled. Always present, so the dialog
-        // doesn't change size as the fields fill in.
-        content.add(hintLabel, "span 2, gaptop 6, growx 0");
-
-        // ── Footer: Cancel · Connect ─────────────────────────────────────
+        // ── Footer: Save on the left (it doesn't close) · Cancel · Connect ─
         connectBtn.addActionListener(e -> onConnect());
+        connectBtn.setToolTipText(Messages.get("ssh.dialog.connect.tooltip"));
         JButton cancelBtn = new JButton(Messages.get("ssh.dialog.cancel"));
-        cancelBtn.addActionListener(e -> dispose());
-        saveBox.setToolTipText(Messages.get("ssh.dialog.save.tooltip"));
+        cancelBtn.addActionListener(e -> requestClose());
+        saveBtn.setToolTipText(Messages.get("ssh.dialog.save.button.tooltip"));
+        saveBtn.addActionListener(e -> onSave());
+        JPanel footer = DialogFooter.of(new JComponent[]{saveBtn}, cancelBtn, connectBtn);
 
-        testBtn.setToolTipText(Messages.get("ssh.dialog.test.tooltip"));
-        testBtn.addActionListener(e -> onTest());
-        JPanel footer = DialogFooter.of(cancelBtn, connectBtn);
-
-        // Live validation. Any change to what a test checked also drops its result.
+        // Live validation. Any change also stops a check Connect is running, and drops its result.
         DocumentListener validator = new DocumentListener() {
             public void insertUpdate(DocumentEvent e)  { formChanged(); }
             public void removeUpdate(DocumentEvent e)  { formChanged(); }
@@ -297,15 +296,18 @@ public class SshConnectionDialog extends JDialog {
         keyFileField.getDocument().addDocumentListener(validator);
         keyPassphraseField.getDocument().addDocumentListener(validator);
         authCombo.addActionListener(e -> formChanged());
+        parserCombo.addActionListener(e -> formChanged());
 
         // Drag the divider to widen the saved connections; the form takes the rest.
-        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSavedSidebar(), content);
+        JPanel formPane = new JPanel(new BorderLayout());
+        formPane.add(content, BorderLayout.CENTER);
+        formPane.add(footer, BorderLayout.SOUTH);
+        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSavedSidebar(), formPane);
         split.setBorder(null);
         split.setResizeWeight(0);
         split.setContinuousLayout(true);
         JPanel root = new JPanel(new BorderLayout());
         root.add(split, BorderLayout.CENTER);
-        root.add(footer, BorderLayout.SOUTH);
         return root;
     }
 
@@ -342,10 +344,12 @@ public class SshConnectionDialog extends JDialog {
         if (!hasPath) missing.add(Messages.get("ssh.dialog.missing.path"));
         if (!portOk)  missing.add(Messages.get("ssh.dialog.missing.port"));
 
-        connectBtn.setEnabled(missing.isEmpty());
-        testBtn.setEnabled(missing.isEmpty() && testRemote == null);
+        boolean checking = testRemote != null;
+        connectBtn.setEnabled(missing.isEmpty() && !checking);
+        // Something to save: a new connection, or changes to the saved log the form holds.
+        saveBtn.setEnabled(missing.isEmpty() && !checking && (editing == null || isEdited()));
         // Browsing needs a server to sign in to, not a path.
-        remoteBrowseBtn.setEnabled(hasHost && hasUser && portOk);
+        remoteBrowseBtn.setEnabled(hasHost && hasUser && portOk && !checking);
         hintLabel.setText(missing.isEmpty() ? " "
                 : java.text.MessageFormat.format(Messages.get("ssh.dialog.missing"), String.join(", ", missing)));
         portField.putClientProperty("JComponent.outline", portOk ? null : "error");
@@ -429,8 +433,26 @@ public class SshConnectionDialog extends JDialog {
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK),
                 JComponent.WHEN_FOCUSED);
         savedTree.addTreeSelectionListener(e -> {
+            // A rebuild (filtering, renaming) only puts the selection back: the form keeps what
+            // it shows, unsaved changes included.
+            if (rebuilding || revertingSelection) return;
             AppPrefs.SshFavorite f = selectedFavorite();
-            if (f != null) loadFavorite(f);
+            if (f != null && (editing == null || !f.name().equals(editing.name()))) {
+                if (!confirmLeave()) {
+                    // Keep editing: the selection goes back to the log the form holds.
+                    revertingSelection = true;
+                    try {
+                        savedTree.setSelectionPath(e.getOldLeadSelectionPath());
+                    } finally {
+                        revertingSelection = false;
+                    }
+                    return;
+                }
+                selectSaved(f);   // Save, in the question, picked the log it saved
+                editing = f;
+                loadFavorite(f);
+            }
+            validateForm();
         });
         // Selection is the theme's standard list highlight, as in menus and the Loggers tree;
         // only the log views use the blue reading selection.
@@ -461,8 +483,10 @@ public class SshConnectionDialog extends JDialog {
         savedBody.add(treeScroll, "list");
         savedBody.add(empty, "empty");
 
-        JPanel side = new JPanel(new MigLayout("insets 16 16 16 16, fill, gapy 10", "[grow, fill]", "[][][grow, fill]"));
-        side.add(new JLabel(Messages.get("ssh.dialog.saved")), "wrap");
+        // The sidebar's title looks like the form's (New connection, or the saved log it holds):
+        // bold, a size up from the labels, on the same line, so the two panes read as a pair.
+        JPanel side = new JPanel(new MigLayout("insets 24 16 16 16, fill, gapy 10", "[grow, fill]", "[][grow, fill]"));
+
         side.add(savedFilter, "wrap");
         side.add(savedBody, "h 120:100%:");
         side.setPreferredSize(new Dimension(SIDEBAR_WIDTH, 10));
@@ -616,8 +640,8 @@ public class SshConnectionDialog extends JDialog {
         }
         if (collapsed.retainAll(live)) AppPrefs.setSshCollapsed(collapsed);
         if (selected != null && names.contains(selected.name())) savedTree.clearSelection();
+        if (editing != null && names.contains(editing.name())) editing = null;
         rebuildSavedTree();
-        showName();
     }
 
     /** The problem with naming {@code host} {@code name}: another server has that name; else null. */
@@ -639,7 +663,6 @@ public class SshConnectionDialog extends JDialog {
         if (n.isEmpty()) hostNames.remove(host);
         else hostNames.put(host, n);
         AppPrefs.setSshHostName(host, n);
-        showName();
         // After the editor has closed: the server may move, since servers sort by name.
         SwingUtilities.invokeLater(this::rebuildSavedTree);
     }
@@ -883,8 +906,8 @@ public class SshConnectionDialog extends JDialog {
 
     /**
      * Three kinds of row. A server: its name in bold with the host dimmed beside it (or just the
-     * host, in bold, if it has no name), with more room above and below. A folder: its path. A
-     * log: its file name. Each row keeps room on its right for the row's tools (trash can, and
+     * host, in bold, if it has no name), with more room above and below. A folder: its path,
+     * dimmed. A log: its file name. Each row keeps room on its right for the row's tools (trash can, and
      * duplicate on a log), and the tree is never narrower than its widest row, so the tools,
      * drawn at the tree's right edge, never cover a name; a sidebar too narrow for a row
      * scrolls sideways.
@@ -923,7 +946,9 @@ public class SshConnectionDialog extends JDialog {
                 setToolTipText(f.user() + "@" + f.host() + (f.port() != 22 ? ":" + f.port() : "")
                         + "  " + f.remotePath());
             } else if (o instanceof SavedFolder sf) {
+                // Dim, so the eye goes from the server to the logs, which are what you pick.
                 name.setText(folderLabel(sf.path()));
+                name.setForeground(selected ? fg : ClouseauColors.dimForeground());
             } else {
                 String h = o == null ? "" : o.toString();
                 String named = hostNames.get(h);
@@ -936,23 +961,6 @@ public class SshConnectionDialog extends JDialog {
             int pad = server ? 6 : 3;
             setBorder(BorderFactory.createEmptyBorder(pad, 0, pad, o instanceof AppPrefs.SshFavorite ? LOG_TOOLS : GROUP_TOOLS));
             return this;
-        }
-    }
-
-    /**
-     * Shows the name of the server in Host, or a dim note saying where it's named: on its row
-     * in Saved connections (right-click, Rename), once it's saved there.
-     */
-    private void showName() {
-        String host = hostField.getText().trim();
-        String name = hostNames.get(host);
-        if (name != null) {
-            nameValue.setText(name);
-            nameValue.setForeground(ClouseauColors.foreground());
-        } else {
-            boolean saved = favorites != null && favorites.stream().anyMatch(f -> f.host().equals(host));
-            nameValue.setText(Messages.get(saved ? "ssh.dialog.name.none" : "ssh.dialog.name.none.unsaved"));
-            nameValue.setForeground(ClouseauColors.dimForeground());
         }
     }
 
@@ -979,8 +987,6 @@ public class SshConnectionDialog extends JDialog {
                 }
             }
         }
-        // A loaded connection stays saved: connecting updates it with any changes.
-        saveBox.setSelected(true);
     }
 
     private int indexOf(String name) {
@@ -989,14 +995,15 @@ public class SshConnectionDialog extends JDialog {
     }
 
     /**
-     * Starts a new connection from a saved one: the form gets all its details, but no saved entry
-     * is picked, so Connect saves a new one. The file name in Remote path is selected, ready to
+     * Starts a new connection from a saved one: the form gets all its details, but holds no saved
+     * entry, so Save keeps it as a new one. The file name in Remote path is selected, ready to
      * type another file on the same server.
      */
     private void duplicate(AppPrefs.SshFavorite f) {
         savedTree.clearSelection();
         loadFavorite(f);
-        saveBox.setSelected(true);
+        editing = null;                      // a copy: Save keeps it as a new entry
+        validateForm();
         String path = remotePathField.getText();
         int slash = path.lastIndexOf('/');
         remotePathField.requestFocusInWindow();
@@ -1007,9 +1014,21 @@ public class SshConnectionDialog extends JDialog {
      * Saves the connection. With a saved log picked in the sidebar, it replaces that entry in
      * place, whatever changed (host, user and path included), instead of adding a second one.
      */
-    private void saveFavorite(SshConfig c, String authType, String parserName, AppPrefs.SshFavorite replacing) {
+    private AppPrefs.SshFavorite saveFavorite(SshConfig c, String authType, String parserName,
+            AppPrefs.SshFavorite replacing) {
+        AppPrefs.SshFavorite fav = favorite(c, authType, parserName);
+        String name = fav.name();
+        int at = replacing == null ? -1 : indexOf(replacing.name());
+        favorites.removeIf(f -> f.name().equals(name) || (replacing != null && f.name().equals(replacing.name())));
+        favorites.add(at >= 0 ? Math.min(at, favorites.size()) : 0, fav);
+        AppPrefs.saveSshFavorites(favorites);
+        return fav;
+    }
+
+    /** A saved log with these details, named user@host:path as every saved log is. */
+    private static AppPrefs.SshFavorite favorite(SshConfig c, String authType, String parserName) {
         String name = c.user() + "@" + c.host() + ":" + c.remotePath();
-        AppPrefs.SshFavorite fav = switch (authType) {
+        return switch (authType) {
             case AUTH_KEY  -> new AppPrefs.SshFavorite(name, c.host(), c.port(), c.user(), AUTH_KEY,
                     null, c.keyFilePath(), c.keyPassphrase(), c.remotePath(), parserName);
             case AUTH_NONE -> new AppPrefs.SshFavorite(name, c.host(), c.port(), c.user(), AUTH_NONE,
@@ -1017,10 +1036,109 @@ public class SshConnectionDialog extends JDialog {
             default        -> new AppPrefs.SshFavorite(name, c.host(), c.port(), c.user(), AUTH_PASSWORD,
                     c.password(), null, null, c.remotePath(), parserName);
         };
-        int at = replacing == null ? -1 : indexOf(replacing.name());
-        favorites.removeIf(f -> f.name().equals(name) || (replacing != null && f.name().equals(replacing.name())));
-        favorites.add(at >= 0 ? Math.min(at, favorites.size()) : 0, fav);
-        AppPrefs.saveSshFavorites(favorites);
+    }
+
+    /** The parser chosen in the form, or none for Auto-detect. */
+    private Optional<LogParser> chosenParser() {
+        int i = parserCombo.getSelectedIndex();
+        return i > 0 ? Optional.of(parsers.get(i - 1)) : Optional.empty();
+    }
+
+    /**
+     * The saved log the form describes right now, read without touching the fields (a
+     * {@code user@host:port} still in Host counts as split), for telling whether it changed.
+     */
+    private AppPrefs.SshFavorite formFavorite() {
+        String typed = hostField.getText().trim();
+        HostSpec spec = parseHostSpec(typed);
+        String host = spec != null ? spec.host() : typed;
+        String user = spec != null && spec.user() != null ? spec.user() : userField.getText().trim();
+        int port = spec != null && spec.port() != null ? spec.port()
+                 : validPort(portField.getText()) ? port() : portField.getText().isBlank() ? 22 : -1;
+        String path = remotePathField.getText().trim();
+        String authType = AUTH_TYPES[authCombo.getSelectedIndex()];
+        SshConfig c = switch (authType) {
+            case AUTH_KEY  -> new SshConfig(host, port, user, null,
+                    keyFileField.getText().trim(), new String(keyPassphraseField.getPassword()), path);
+            case AUTH_NONE -> new SshConfig(host, port, user, null, null, null, path);
+            default        -> new SshConfig(host, port, user, new String(passwordField.getPassword()), null, null, path);
+        };
+        return favorite(c, authType, chosenParser().map(LogParser::getName).orElse(null));
+    }
+
+    /** Whether the form differs from the saved log it holds (none held: nothing to compare). */
+    private boolean isEdited() {
+        if (editing == null) return false;
+        AppPrefs.SshFavorite f = formFavorite();
+        return !(f.host().equals(editing.host()) && f.port() == editing.port() && f.user().equals(editing.user())
+                && f.authType().equals(editing.authType()) && f.remotePath().equals(editing.remotePath())
+                && same(f.password(), editing.password()) && same(f.keyFilePath(), editing.keyFilePath())
+                && same(f.keyPassphrase(), editing.keyPassphrase()) && same(f.parserName(), editing.parserName()));
+    }
+
+    /** Equal, with null and empty the same (an empty password field is no password). */
+    private static boolean same(String a, String b) {
+        return (a == null ? "" : a).equals(b == null ? "" : b);
+    }
+
+    /**
+     * Saves without connecting: a new connection, or the changes to the saved log the form holds,
+     * in place. The dialog stays open, the saved log is picked in the list, and the notice says
+     * it's saved. Needs no network, so a server that's down can be saved for later.
+     */
+    private void onSave() {
+        SshConfig config = formConfig();
+        String authType = AUTH_TYPES[authCombo.getSelectedIndex()];
+        AppPrefs.SshFavorite saved = saveFavorite(config, authType,
+                chosenParser().map(LogParser::getName).orElse(null), editing);
+        editing = saved;
+        rebuildSavedTree();
+        selectSaved(saved);
+        validateForm();
+        hintLabel.show(Messages.format("ssh.dialog.saved.ok", fileName(saved.remotePath())), NoticeLabel.Kind.OK);
+    }
+
+    /** Picks a saved log's row (opening its server and folder) without loading it again. */
+    private void selectSaved(AppPrefs.SshFavorite f) {
+        for (var e = savedRoot.depthFirstEnumeration(); e.hasMoreElements(); ) {
+            DefaultMutableTreeNode n = (DefaultMutableTreeNode) e.nextElement();
+            if (n.getUserObject() instanceof AppPrefs.SshFavorite x && x.name().equals(f.name())) {
+                rebuilding = true;
+                try {
+                    javax.swing.tree.TreePath path = new javax.swing.tree.TreePath(n.getPath());
+                    savedTree.setSelectionPath(path);
+                    savedTree.scrollPathToVisible(path);
+                } finally {
+                    rebuilding = false;
+                }
+                return;
+            }
+        }
+    }
+
+    /**
+     * Before the form drops a saved log's unsaved changes (another log picked, Cancel, Esc, the
+     * close box): asks Cancel · Don't Save · Save. Returns whether to go on. Save is offered only
+     * when the form could be saved.
+     */
+    private boolean confirmLeave() {
+        if (!isEdited()) return true;
+        boolean canSave = saveBtn.isEnabled();
+        Object[] options = canSave
+                ? new Object[]{ Messages.get("ssh.dialog.unsaved.save"), Messages.get("ssh.dialog.unsaved.discard"),
+                                Messages.get("ssh.dialog.unsaved.keep") }
+                : new Object[]{ Messages.get("ssh.dialog.unsaved.discard"), Messages.get("ssh.dialog.unsaved.keep") };
+        int answer = JOptionPane.showOptionDialog(this,
+                Messages.format("ssh.dialog.unsaved.message", fileName(editing.remotePath())),
+                Messages.get("ssh.dialog.title"), JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+                null, options, options[0]);
+        if (canSave && answer == 0) { onSave(); return true; }
+        return answer == (canSave ? 1 : 0);
+    }
+
+    /** Cancel, Esc or the close box: closes, after asking about unsaved changes. */
+    private void requestClose() {
+        if (confirmLeave()) dispose();
     }
 
     // ── Key file ──────────────────────────────────────────────────────────────
@@ -1067,16 +1185,17 @@ public class SshConnectionDialog extends JDialog {
         };
     }
 
-    // ── Test (G-14) ───────────────────────────────────────────────────────────
+    // ── Checking before connecting (G-14) ─────────────────────────────────────
 
-    /** A field changed: a test of the old details no longer says anything, so it stops and its result goes. */
+    /** A field changed: a check of the old details no longer says anything, so it stops and its result goes. */
     private void formChanged() {
         if (selfChange) return;
         cancelTest();
+        hintLabel.setToolTipText(null);
         validateForm();
     }
 
-    /** Stops the running test, if any; its result is then ignored. */
+    /** Stops the running check, if any; its result is then ignored. */
     private void cancelTest() {
         SshRemote r = testRemote;
         if (r == null) return;
@@ -1089,53 +1208,6 @@ public class SshConnectionDialog extends JDialog {
         Thread t = new Thread(r::close, "ssh-remote-close");
         t.setDaemon(true);
         t.start();
-    }
-
-    /**
-     * Signs in and checks the file with {@code test} on the server, reporting in the hint line
-     * which step failed and why, or that the file is readable. Opens no tab, and closes the
-     * connection when done. Each step waits at most {@link SshRemote#TIMEOUT_SECONDS}.
-     */
-    private void onTest() {
-        cancelTest();
-        SshConfig config = formConfig();
-        String authType = AUTH_TYPES[authCombo.getSelectedIndex()];
-        SshRemote remote = new SshRemote(config);
-        testRemote = remote;
-        testBtn.setEnabled(false);
-        hintLabel.setText(java.text.MessageFormat.format(Messages.get("ssh.test.running"), config.host()));
-        new SwingWorker<Void, Void>() {
-            @Override protected Void doInBackground() throws Exception {
-                try {
-                    remote.connect();
-                    remote.check(config.remotePath());
-                    return null;
-                } finally {
-                    remote.close();
-                }
-            }
-
-            @Override protected void done() {
-                if (testRemote != remote) return;   // cancelled: the form changed or the dialog closed
-                testRemote = null;
-                validateForm();
-                try {
-                    get();
-                    hintLabel.show(java.text.MessageFormat.format(Messages.get("ssh.test.ok"),
-                            config.remotePath()), NoticeLabel.Kind.OK);
-                    hintLabel.setToolTipText(null);
-                } catch (java.util.concurrent.ExecutionException ex) {
-                    Throwable cause = ex.getCause();
-                    String text = cause instanceof SshRemote.Failure f
-                            ? describe(f, config, authType)
-                            : String.valueOf(cause.getMessage());
-                    hintLabel.show(text, NoticeLabel.Kind.ERROR);
-                    hintLabel.setToolTipText(cause.getMessage());
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }.execute();
     }
 
     /** What went wrong, for the user: the step that failed and the likely fix. */
@@ -1176,23 +1248,56 @@ public class SshConnectionDialog extends JDialog {
                 });
     }
 
+    /**
+     * Connects, after checking: signs in and checks the file with {@code test} on the server (each
+     * step waits at most {@link SshRemote#TIMEOUT_SECONDS}), and closes only when that works. If
+     * it doesn't, the dialog stays open with the step that failed and why, and nothing is saved.
+     * Changes to the saved log the form holds are saved too: they just proved to work. A new
+     * connection is kept only by Save.
+     */
     private void onConnect() {
+        cancelTest();
         SshConfig config = formConfig();
-        String host     = config.host();
         String authType = AUTH_TYPES[authCombo.getSelectedIndex()];
+        Optional<LogParser> parser = chosenParser();
+        SshRemote remote = new SshRemote(config);
+        testRemote = remote;
+        validateForm();
+        hintLabel.setText(Messages.format("ssh.connect.checking", config.host()));
+        new SwingWorker<Void, Void>() {
+            @Override protected Void doInBackground() throws Exception {
+                try {
+                    remote.connect();
+                    remote.check(config.remotePath());
+                    return null;
+                } finally {
+                    remote.close();
+                }
+            }
 
-        int parserIdx = parserCombo.getSelectedIndex();
-        Optional<LogParser> parser = parserIdx > 0
-                ? Optional.of(parsers.get(parserIdx - 1))
-                : Optional.empty();
-
-        if (saveBox.isSelected()) {
-            saveFavorite(config, authType, parser.map(LogParser::getName).orElse(null), selectedFavorite());
-        }
-        AppPrefs.setSshSaveConnection(saveBox.isSelected());
-
-        result = new Result(config, parser);
-        dispose();
+            @Override protected void done() {
+                if (testRemote != remote) return;   // stopped: the form changed or the dialog closed
+                testRemote = null;
+                try {
+                    get();
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    validateForm();
+                    Throwable cause = ex.getCause();
+                    String text = cause instanceof SshRemote.Failure f
+                            ? describe(f, config, authType)
+                            : String.valueOf(cause.getMessage());
+                    hintLabel.show(text, NoticeLabel.Kind.ERROR);
+                    hintLabel.setToolTipText(cause.getMessage());
+                    return;
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (isEdited()) saveFavorite(config, authType, parser.map(LogParser::getName).orElse(null), editing);
+                result = new Result(config, parser);
+                dispose();
+            }
+        }.execute();
     }
 
     /** Lets only digits into a field, up to {@code max} of them. */
