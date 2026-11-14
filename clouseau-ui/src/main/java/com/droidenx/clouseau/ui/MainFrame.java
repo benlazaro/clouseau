@@ -1694,8 +1694,9 @@ public final class MainFrame extends JFrame {
 
     /**
      * Adds one shortcut row to {@code grid}.
-     * The shortcut string is split on {@code "+"} so each token gets its own
-     * rounded key badge; the {@code "+"} separators are plain (unboxed) labels.
+     * Alternatives are separated by {@code " / "} ("Shift+F3 / Shift+Enter"); within one, the
+     * keys are split on {@code "+"} so each gets its own rounded key badge. The {@code "+"} and
+     * {@code "/"} separators are plain (unboxed) labels.
      */
     private static void addShortcutRow(JPanel grid, String description, String shortcut) {
         grid.add(new JLabel(description), SettingsDialog.INDENT);
@@ -1703,16 +1704,22 @@ public final class MainFrame extends JFrame {
         JPanel badgeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         badgeRow.setOpaque(false);
 
-        String[] parts = shortcut.split("\\+", -1);
-        for (int i = 0; i < parts.length; i++) {
-            if (i > 0) {
-                JLabel plus = new JLabel("+");
-                plus.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
-                badgeRow.add(plus);
+        String[] alternatives = shortcut.split(" / ");
+        for (int a = 0; a < alternatives.length; a++) {
+            if (a > 0) badgeRow.add(separator("/"));
+            String[] keys = alternatives[a].split("\\+", -1);
+            for (int i = 0; i < keys.length; i++) {
+                if (i > 0) badgeRow.add(separator("+"));
+                badgeRow.add(keyBadge(keys[i].trim()));
             }
-            badgeRow.add(keyBadge(parts[i]));
         }
         grid.add(badgeRow);
+    }
+
+    private static JLabel separator(String text) {
+        JLabel l = new JLabel(text);
+        l.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
+        return l;
     }
 
     /** A rounded key-chip label, styled like a keyboard key. */
