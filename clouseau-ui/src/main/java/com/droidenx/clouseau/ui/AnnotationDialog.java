@@ -59,7 +59,12 @@ public final class AnnotationDialog extends JDialog {
         pack();
         setMinimumSize(new Dimension(420, 280));
         setLocationRelativeTo(owner);
-        noteArea.requestFocusInWindow();
+        // Once it's shown: asked for before then, the focus goes nowhere (the dialog isn't up yet).
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                noteArea.requestFocusInWindow();
+            }
+        });
     }
 
     public boolean isConfirmed() { return confirmed; }

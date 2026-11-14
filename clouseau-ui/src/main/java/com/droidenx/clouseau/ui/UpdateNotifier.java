@@ -19,7 +19,8 @@ import java.time.Duration;
  * releases ({@link UpdateCheck}) and, if one is newer, shows a notice that doesn't block the
  * window: Download (opens the release page), Skip This Version, or Later. Settings → Updates,
  * or the check box on the notice, turns this off. Help → Check for Updates… checks at once,
- * whatever the setting, and says so when there's nothing new.
+ * whatever the setting, and answers every outcome in a message box (a new version, none, a
+ * development build, or a failed check).
  * <p>
  * Development builds ({@code -SNAPSHOT}) never check by themselves.
  */
@@ -69,10 +70,22 @@ final class UpdateNotifier {
         if (checking) return;
         run(current, result -> {
             switch (result) {
-                case Result.Available a -> showNotice(a.release(), current);
-                case Result.UpToDate u -> JOptionPane.showMessageDialog(owner,
+                case Result.Available a -> {
+                    // Asked for, so answered in a message box like the other outcomes; Close is
+                    // the default and Download the option. The daily check uses the notice.
+                    if (notice != null) notice.dispose();
+                    Release release = a.release();
+                    Object[] options = { Messages.get("update.button.close"), Messages.get("update.button.download") };
+                    int choice = JOptionPane.showOptionDialog(owner,
+                            new Object[] { headline(release), release.name(),
+                                           MessageFormat.format(Messages.get("update.available.detail"), current) },
+                            Messages.get("update.title"), JOptionPane.DEFAULT_OPTION,
+                            JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+                    if (choice == 1) browse(release.url());
+                }
+                case Result.UpToDate u -> tell(owner,
                         MessageFormat.format(Messages.get("update.uptodate.message"), current),
-                        Messages.get("update.title"), JOptionPane.INFORMATION_MESSAGE);
+                        JOptionPane.INFORMATION_MESSAGE);
                 case Result.DevelopmentBuild d -> {
                     // Mostly information, so Close is the default and the releases page the option.
                     // The default first: OptionPane.isYesLast lays it out last, on the right.
@@ -83,11 +96,25 @@ final class UpdateNotifier {
                             JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
                     if (choice == 1) browse(UpdateCheck.RELEASES_PAGE);
                 }
-                case Result.Failed f -> JOptionPane.showMessageDialog(owner,
+                case Result.Failed f -> tell(owner,
                         MessageFormat.format(Messages.get("update.failed.message"), f.reason()),
-                        Messages.get("update.title"), JOptionPane.WARNING_MESSAGE);
+                        JOptionPane.WARNING_MESSAGE);
             }
         });
+    }
+
+    /** A message box whose only button is Close: it tells, and there's nothing to accept. */
+    private static void tell(Window owner, String message, int type) {
+        Object[] options = { Messages.get("update.button.close") };
+        JOptionPane.showOptionDialog(owner, message, Messages.get("update.title"),
+                JOptionPane.DEFAULT_OPTION, type, null, options, options[0]);
+    }
+
+    /** "Clouseau x.y is available", in the type scale's heading (14px bold). */
+    private static JLabel headline(Release release) {
+        JLabel headline = new JLabel(MessageFormat.format(Messages.get("update.available.headline"), release.version()));
+        headline.setFont(headline.getFont().deriveFont(Font.BOLD, 14f));
+        return headline;
     }
 
     /** Runs the check off the EDT and hands its result to {@code done} on the EDT. */
@@ -122,8 +149,7 @@ final class UpdateNotifier {
         JDialog dialog = new JDialog(owner, Messages.get("update.title"), Dialog.ModalityType.MODELESS);
         notice = dialog;
 
-        JLabel headline = new JLabel(MessageFormat.format(Messages.get("update.available.headline"), release.version()));
-        headline.setFont(headline.getFont().deriveFont(Font.BOLD, headline.getFont().getSize2D() + 2f));
+        JLabel headline = headline(release);
         JLabel detail = new JLabel(MessageFormat.format(Messages.get("update.available.detail"), current));
         JLabel name = new JLabel(release.name());
 

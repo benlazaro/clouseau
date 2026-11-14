@@ -655,7 +655,7 @@ public final class MainFrame extends JFrame {
         // Single unified grid — all rows share the same two columns so descriptions
         // and badges stay perfectly aligned across every section.
         JPanel grid = new JPanel(new MigLayout(
-                "insets 24, wrap 2, gapy 10, gapx 40",
+                "insets 20, wrap 2, gapy 10, gapx 40",
                 "[grow, fill][right]"));
 
         addDialogSection(grid, Messages.get("shortcuts.section.file"),  "gaptop 0");
@@ -682,15 +682,21 @@ public final class MainFrame extends JFrame {
         addDialogSection(grid, Messages.get("shortcuts.section.table"), "gaptop 20");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.first.row"),  "Ctrl+Home");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.last.row"),   "Ctrl+End");
-        addShortcutRow(grid, Messages.get("shortcuts.shortcut.solo.level"), "Alt+Click");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.solo.level"), Messages.get("shortcuts.key.alt.click"));
 
         addDialogSection(grid, Messages.get("shortcuts.section.find"),  "gaptop 20");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.find"),       "Ctrl+F");
-        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.next"),  "F3 / Enter");
-        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.prev"),  "Shift+F3 / Shift+Enter");
-        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.close"), "Esc");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.next"),  Messages.get("shortcuts.key.find.next"));
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.prev"),  Messages.get("shortcuts.key.find.prev"));
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.close"), Messages.get("shortcuts.key.esc"));
 
-        dialog.setContentPane(grid);
+        // Close is plain, not the default: the window applies nothing.
+        JButton close = new JButton(Messages.get("shortcuts.button.close"));
+        close.addActionListener(e -> dialog.dispose());
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(grid, BorderLayout.CENTER);
+        root.add(DialogFooter.of(close), BorderLayout.SOUTH);
+        dialog.setContentPane(root);
         dialog.getRootPane().registerKeyboardAction(
                 e -> dialog.dispose(),
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
@@ -709,10 +715,13 @@ public final class MainFrame extends JFrame {
 
     private void openAbout() {
         BufferedImage icon64 = loadIconImage("about-64.png");
+        // The version in the theme's dim text color, read now (the box is modal, so no theme switch while it shows).
+        Color dim = ClouseauColors.dimForeground();
+        String dimHex = dim != null ? String.format("#%06x", dim.getRGB() & 0xFFFFFF) : "gray";
         JOptionPane.showMessageDialog(
                 this,
                 "<html><b>" + Messages.get("about.version") + "</b>"
-                        + "<br><font color='gray'>" + AppPrefs.getAppVersion() + "</font>"
+                        + "<br><font color='" + dimHex + "'>" + AppPrefs.getAppVersion() + "</font>"
                         + "<br><br>" + Messages.get("about.description") + "</html>",
                 Messages.get("about.title"),
                 JOptionPane.INFORMATION_MESSAGE,
@@ -1491,7 +1500,6 @@ public final class MainFrame extends JFrame {
         close.setFocusable(false);
         close.setBorderPainted(false);
         close.setContentAreaFilled(false);
-        close.setFont(close.getFont().deriveFont(Font.BOLD));
         close.addActionListener(e -> closeTab(tabbedPane.indexOfTabComponent(header)));
 
         // Connection dot for live-source tabs (issue #3); hidden on file tabs.
