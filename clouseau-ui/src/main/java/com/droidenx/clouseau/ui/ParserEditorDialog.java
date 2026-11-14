@@ -289,6 +289,7 @@ public final class ParserEditorDialog extends JDialog {
         builtinShown.forEach(listModel::addElement);
         if (builtinShown.isEmpty()) listModel.addElement(new EmptyMine(true));
         parserList.setModel(listModel);
+        parserList.retrack();
         updatingForm = false;
         int row = select != null ? rowOf(select) : -1;
         if (row >= 0) {
@@ -334,6 +335,7 @@ public final class ParserEditorDialog extends JDialog {
             listModel.addElement(new EmptyMine(true));
             listModel.addElement(Messages.get("parsereditor.group.builtin"));
             listModel.addElement(new EmptyMine(true));
+            parserList.retrack();
             parserList.clearSelection();
             updatingForm = false;
             return;
@@ -1100,6 +1102,16 @@ public final class ParserEditorDialog extends JDialog {
             }
         }
 
+        /**
+         * The rows changed (a delete, a move, the filter): the row under the mouse is worked out
+         * again, so the tools aren't painted on, or read from, a row that's now something else.
+         */
+        void retrack() {
+            Point p = getMousePosition();
+            if (p != null) track(p);
+            else { hoverRow = -1; overTool = Tool.NONE; }
+        }
+
         @Override protected void processMouseEvent(MouseEvent e) {
             if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e)) {
                 track(e.getPoint());
@@ -1160,9 +1172,10 @@ public final class ParserEditorDialog extends JDialog {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            if (hoverRow >= 0 && hoverRow < listModel.size() && dragging == null) {
+            if (hoverRow >= 0 && hoverRow < listModel.size() && dragging == null
+                    && listModel.get(hoverRow) instanceof ParserDef hovered) {
                 Rectangle r = getCellBounds(hoverRow, hoverRow);
-                boolean builtin = ((ParserDef) listModel.get(hoverRow)).builtin();
+                boolean builtin = hovered.builtin();
                 Color base = isSelectedIndex(hoverRow) ? UIManager.getColor("List.selectionForeground") : ClouseauColors.dimForeground();
                 int y = r.y + (r.height - 14) / 2;
                 if (!builtin) ToolIcons.paintTrash(g2, getWidth() - TOOL + 5, y, overTool == Tool.TRASH
