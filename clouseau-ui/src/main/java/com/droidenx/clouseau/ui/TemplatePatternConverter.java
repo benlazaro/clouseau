@@ -2,6 +2,7 @@ package com.droidenx.clouseau.ui;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Converts a template pattern into a Java regex with named capture groups
@@ -18,6 +19,8 @@ import java.util.regex.Pattern;
  * </pre>
  *
  * <p>Everything between keywords is treated as a literal and escaped for use in a regex.
+ * A template that can't be converted throws a {@link PatternConversionException}, whose
+ * message names the Template field.
  *
  * <p>Example:
  * <pre>
@@ -36,7 +39,7 @@ public final class TemplatePatternConverter {
 
     public static Result convert(String pattern) {
         if (pattern == null || pattern.isBlank())
-            throw new IllegalArgumentException("Pattern must not be empty.");
+            throw new PatternConversionException("parsereditor.error.template.empty");
 
         StringBuilder sb = new StringBuilder("^");
         String timestampFormat = null;
@@ -50,6 +53,9 @@ public final class TemplatePatternConverter {
             String customField = m.group(3); // only populated for {field_name}
 
             if (customField != null) {
+                // Java's group names take letters and digits only.
+                if (!customField.chars().allMatch(Character::isLetterOrDigit))
+                    throw new PatternConversionException("parsereditor.error.template.field.name", customField);
                 // Allow empty values and spaces (e.g. [] brackets with no content)
                 sb.append("(?<").append(customField).append(">[^\\]]*)");
             } else if (keyword.startsWith("TIMESTAMP")) {
@@ -74,8 +80,8 @@ public final class TemplatePatternConverter {
 
         try {
             Pattern.compile(sb.toString());
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Generated regex is invalid: " + e.getMessage(), e);
+        } catch (PatternSyntaxException e) {
+            throw PatternConversionException.invalidRegex("template", e);
         }
 
         return new Result(sb.toString(), timestampFormat);

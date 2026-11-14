@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Converts a Logback / Log4j2 pattern string into a Java regex with named
@@ -19,7 +20,8 @@ import java.util.regex.Pattern;
  * </pre>
  *
  * <p>Format modifiers (padding, truncation: {@code %-5.15}) are accepted and ignored.
- * Unknown conversion words cause an {@link IllegalArgumentException}.
+ * Unknown conversion words cause a {@link PatternConversionException}, whose message names
+ * the Pattern field.
  */
 public final class LogbackPatternConverter {
 
@@ -34,8 +36,8 @@ public final class LogbackPatternConverter {
         // Validate the generated regex
         try {
             Pattern.compile(regex);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Generated regex is invalid: " + e.getMessage(), e);
+        } catch (PatternSyntaxException e) {
+            throw PatternConversionException.invalidRegex("pattern", e);
         }
         return new Result(regex, p.timestampFormat);
     }
@@ -148,9 +150,8 @@ public final class LogbackPatternConverter {
 
                 // ── Unknown ───────────────────────────────────────────────────
                 default -> {
-                    if (!word.isEmpty()) throw new IllegalArgumentException(
-                            "Unknown conversion word: %" + word
-                            + "\nRemove it or replace it with a literal before importing.");
+                    if (!word.isEmpty()) throw new PatternConversionException(
+                            "parsereditor.error.pattern.unknown", word);
                 }
             }
         }

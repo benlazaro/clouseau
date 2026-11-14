@@ -6,6 +6,7 @@ import com.droidenx.clouseau.core.MergeLoad;
 import com.droidenx.clouseau.core.MergeOrder;
 import com.droidenx.clouseau.core.MergedEntries;
 import lombok.extern.slf4j.Slf4j;
+import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
 import java.awt.*;
@@ -169,13 +170,14 @@ final class MergedFileSettings {
         if (files == null || source < 0 || source >= files.size()) return;
         MergeLoad.File f = files.get(source);
         ZoneCombo combo = SettingsDialog.buildTimezoneCombo(zoneOf(f));
-        JLabel note = new JLabel(Messages.get("source.timezone.dialog.reload.note"));
-        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
         String title = MessageFormat.format(Messages.get("merge.timezone.title"), sourceName(source));
-        Object[] message = { new JLabel(Messages.get("source.timezone.dialog.label")), combo, note, titleSpacer(title) };
-        int res = JOptionPane.showConfirmDialog(parent, message, title,
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (res != JOptionPane.OK_OPTION) return;
+        JPanel form = new JPanel(new MigLayout("insets 0, wrap 1, gapy 6", "[grow, fill]"));
+        form.add(new JLabel(Messages.get("source.timezone.dialog.label")));
+        form.add(combo);
+        form.add(PromptDialog.hint(Messages.get("source.timezone.dialog.reload.note")));
+        PromptDialog dialog = new PromptDialog(parent, title, form);
+        focusOnOpen(dialog, combo);
+        if (!dialog.ask()) return;
         ZoneId zone = combo.selectedZone();
         if (zones.containsKey(f)) zones.put(f, zone);   // from a bundle: this tab only
         else AppPrefs.setSourceTimezone(f.path(), zone);
@@ -209,34 +211,73 @@ final class MergedFileSettings {
         });
         LogParser own = parsers.get(f);
         combo.setSelectedItem(own != null ? own : same);
-        JLabel note = new JLabel(Messages.get("merge.parser.note"));
-        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
         String title = MessageFormat.format(Messages.get("merge.parser.title"), name);
-        Object[] message = { new JLabel(Messages.get("merge.parser.label")), combo, note, titleSpacer(title) };
-        int res = JOptionPane.showConfirmDialog(parent, message, title,
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (res != JOptionPane.OK_OPTION) return;
-        LogParser chosen = combo.getSelectedItem() instanceof LogParser p ? p : null;
-        if (chosen == own) return;
-        if (chosen != null) {
-            boolean recognized;
-            try {
-                recognized = LogSniffer.detect(LogSniffer.read(f.path(), f.entry()).lines(),
-                        Optional.of(chosen), choices).isPresent();
-            } catch (IOException e) {
-                log.warn("Can't read the first lines of {}", f, e);
-                recognized = false;
-            }
-            if (!recognized) {
-                JOptionPane.showMessageDialog(parent, MessageFormat.format(
-                                Messages.get("merge.parser.unrecognized"), chosen.getName(), name),
-                        title, JOptionPane.WARNING_MESSAGE);
+        // A parser that doesn't fit the file is said under the list, with the list outlined,
+        // and OK waits for one that does: the file would be left out of the view otherwise.
+        NoticeLabel notice = new NoticeLabel();
+        JPanel form = new JPanel(new MigLayout("insets 0, wrap 1, gapy 6", "[grow, fill]"));
+        form.add(new JLabel(Messages.get("merge.parser.label")));
+        form.add(combo);
+        form.add(PromptDialog.hint(Messages.get("merge.parser.note")));
+        form.add(notice, "wmin 0, gaptop 6");
+        PromptDialog dialog = new PromptDialog(parent, title, form);
+        focusOnOpen(dialog, combo);
+
+        SwingWorker<?, ?>[] checking = { null };
+        Runnable check = () -> {
+            if (checking[0] != null) checking[0].cancel(true);
+            checking[0] = null;
+            combo.putClientProperty("JComponent.outline", null);
+            notice.setText(" ");
+            notice.setToolTipText(null);
+            LogParser chosen = combo.getSelectedItem() instanceof LogParser p ? p : null;
+            if (chosen == null || chosen == own) {
+                dialog.okButton().setEnabled(true);
                 return;
             }
-            parsers.put(f, chosen);
-        } else {
-            parsers.remove(f);
+            dialog.okButton().setEnabled(false);       // until the file's first lines are read
+            SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
+                @Override protected Boolean doInBackground() {
+                    try {
+                        return LogSniffer.detect(LogSniffer.read(f.path(), f.entry()).lines(),
+                                Optional.of(chosen), choices).isPresent();
+                    } catch (IOException e) {
+                        log.warn("Can't read the first lines of {}", f, e);
+                        return false;
+                    }
+                }
+
+                @Override protected void done() {
+                    if (isCancelled() || checking[0] != this) return;
+                    checking[0] = null;
+                    boolean recognized;
+                    try {
+                        recognized = get();
+                    } catch (Exception e) {
+                        recognized = false;
+                    }
+                    dialog.okButton().setEnabled(recognized);
+                    if (!recognized) {
+                        combo.putClientProperty("JComponent.outline", "error");
+                        String text = MessageFormat.format(Messages.get("merge.parser.unrecognized"), chosen.getName(), name);
+                        notice.show(text, NoticeLabel.Kind.ERROR);
+                        notice.setToolTipText(text);
+                    }
+                    combo.repaint();
+                }
+            };
+            checking[0] = worker;
+            worker.execute();
+        };
+        combo.addActionListener(e -> check.run());
+        if (!dialog.ask()) {
+            if (checking[0] != null) checking[0].cancel(true);
+            return;
         }
+        LogParser chosen = combo.getSelectedItem() instanceof LogParser p ? p : null;
+        if (chosen == own) return;
+        if (chosen != null) parsers.put(f, chosen);
+        else parsers.remove(f);
         host.reload();
     }
 
@@ -247,13 +288,10 @@ final class MergedFileSettings {
         return host.files().get(source).path().getFileName().toString();
     }
 
-    /**
-     * An invisible strut that keeps a small dialog wide enough to show its whole title, which
-     * names a file and can be long. The extra room is for the window's icon and close button.
-     */
-    private static Component titleSpacer(String title) {
-        Font font = UIManager.getFont("TitlePane.font");
-        if (font == null) font = UIManager.getFont("Label.font");
-        return Box.createHorizontalStrut(new JLabel().getFontMetrics(font).stringWidth(title) + 80);
+    /** The field takes the focus once the dialog shows; asked for earlier, it's lost. */
+    private static void focusOnOpen(Window dialog, JComponent field) {
+        dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowOpened(java.awt.event.WindowEvent e) { field.requestFocusInWindow(); }
+        });
     }
 }

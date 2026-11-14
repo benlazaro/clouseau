@@ -286,6 +286,22 @@ public final class AppPrefs {
         putString("ssh.dialog.layout", width + "," + height + "," + divider);
     }
 
+    /** The Parser Editor's size and its divider (parser list | form); null before the first time. */
+    public static int[] getParserEditorLayout() {
+        String v = getString("parser.editor.layout", null);
+        if (v == null) return null;
+        try {
+            int[] r = java.util.Arrays.stream(v.split(",")).mapToInt(s -> Integer.parseInt(s.trim())).toArray();
+            return r.length == 3 ? r : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    public static void setParserEditorLayout(int width, int height, int divider) {
+        putString("parser.editor.layout", width + "," + height + "," + divider);
+    }
+
     public static int getMaxEntriesPerTab() {
         return getInt(KEY_MAX_ENTRIES_PER_TAB, 200_000);
     }

@@ -24,24 +24,29 @@ final class TimeOffsetDialog {
         JSpinner seconds = spinner(a / 1_000 % 60, 59);
         JSpinner millis = spinner(a % 1_000, 999);
 
-        JPanel panel = new JPanel(new MigLayout("insets 0", "[][]8[]8[]8[]", "[]4[]8[]"));
+        JPanel panel = new JPanel(new MigLayout("insets 0", "[][]8[]8[]8[]", "[]6[]6[]"));
         panel.add(new JLabel(Messages.get("merge.offset.dialog.label")), "span, wrap");
         panel.add(sign);
         panel.add(labeled(hours, "merge.offset.dialog.hours"));
         panel.add(labeled(minutes, "merge.offset.dialog.minutes"));
         panel.add(labeled(seconds, "merge.offset.dialog.seconds"));
         panel.add(labeled(millis, "merge.offset.dialog.millis"), "wrap");
-        JLabel note = new JLabel(Messages.get("merge.offset.dialog.note"));
-        note.setFont(note.getFont().deriveFont(Font.ITALIC, 11f));
-        panel.add(note, "span");
+        panel.add(PromptDialog.hint(Messages.get("merge.offset.dialog.note")), "span");
 
+        // No Offset sets the fields to zero; OK applies them.
+        JButton reset = new JButton(Messages.get("merge.offset.dialog.reset"));
+        reset.addActionListener(e -> {
+            sign.setSelectedIndex(0);
+            for (JSpinner s : new JSpinner[]{ hours, minutes, seconds, millis }) s.setValue(0);
+        });
         String title = MessageFormat.format(Messages.get("merge.offset.dialog.title"), fileName);
-        Object[] options = { Messages.get("merge.offset.dialog.ok"), Messages.get("merge.offset.dialog.reset"),
-                Messages.get("merge.offset.dialog.cancel") };
-        int choice = JOptionPane.showOptionDialog(owner, panel, title, JOptionPane.DEFAULT_OPTION,
-                JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-        if (choice == 1) return 0L;
-        if (choice != 0) return null;
+        PromptDialog dialog = new PromptDialog(owner, title, panel, reset);
+        dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                ((JSpinner.DefaultEditor) hours.getEditor()).getTextField().requestFocusInWindow();
+            }
+        });
+        if (!dialog.ask()) return null;
         long value = ((Number) hours.getValue()).longValue() * 3_600_000
                 + ((Number) minutes.getValue()).longValue() * 60_000
                 + ((Number) seconds.getValue()).longValue() * 1_000

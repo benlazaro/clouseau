@@ -64,6 +64,10 @@ public final class ParserEditorDialog extends JDialog {
     /** The sidebar rows: a group title (String) or a parser. */
     private final DefaultListModel<Object> listModel = new DefaultListModel<>();
     private final ParserList parserList = new ParserList();
+    /** Filters the sidebar by name, both groups. */
+    private final JTextField filterField = new JTextField();
+    private JSplitPane split;
+    private static final int SIDEBAR_WIDTH = 240, SIDEBAR_MIN = 160;
     /** The parser the form shows: an index into {@link #mine}, or -1 for a built-in or none. */
     private int editing = -1;
     private ParserDef shown;
@@ -109,6 +113,11 @@ public final class ParserEditorDialog extends JDialog {
 
     // ── State ────────────────────────────────────────────────────────────────
     private boolean updatingForm = false;
+    /**
+     * OK was pressed: from then on a parser not written yet (no template, no regex) is
+     * flagged too, not only one with a mistake in it.
+     */
+    private boolean submitted = false;
 
     public ParserEditorDialog(Frame owner, Runnable onSave) {
         super(owner, Messages.get("parsereditor.title"), true);
@@ -117,25 +126,52 @@ public final class ParserEditorDialog extends JDialog {
         loaded = List.copyOf(mine);
         sourceSection = SettingsDialog.sectionLabel("");
 
-        JPanel root = new JPanel(new BorderLayout());
-        root.add(buildSidebar(), BorderLayout.WEST);
         JScrollPane formScroll = new JScrollPane(buildForm());
         formScroll.setBorder(BorderFactory.createEmptyBorder());
         formScroll.getVerticalScrollBar().setUnitIncrement(16);
-        root.add(formScroll, BorderLayout.CENTER);
+        // Drag the divider to widen the parser list; the form takes the rest.
+        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSidebar(), formScroll);
+        split.setBorder(null);
+        split.setResizeWeight(0);
+        split.setContinuousLayout(true);
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(split, BorderLayout.CENTER);
         root.add(buildButtonBar(), BorderLayout.SOUTH);
         setContentPane(root);
 
-        setSize(980, 760);
+        // Resizable, and as it was left last time.
         setMinimumSize(new Dimension(760, 560));
+        int[] layout = AppPrefs.getParserEditorLayout();
+        if (layout != null) {
+            setSize(Math.max(layout[0], 760), Math.max(layout[1], 560));
+            split.setDividerLocation(Math.max(SIDEBAR_MIN, layout[2]));
+        } else {
+            setSize(980, 760);
+        }
         setLocationRelativeTo(owner);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override public void windowClosing(java.awt.event.WindowEvent e) { cancel(); }
+            /** The first field takes the focus once the window shows; asked for earlier, it's lost. */
+            @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                if (editing >= 0) {
+                    nameField.requestFocusInWindow();
+                    nameField.selectAll();
+                } else {
+                    filterField.requestFocusInWindow();
+                }
+            }
         });
 
         wireListeners();
         rebuildList(mine.isEmpty() ? (builtins.isEmpty() ? null : builtins.get(0)) : mine.get(0));
+    }
+
+    @Override public void dispose() {
+        if (split != null && isDisplayable()) {
+            AppPrefs.setParserEditorLayout(getWidth(), getHeight(), split.getDividerLocation());
+        }
+        super.dispose();
     }
 
     /**
@@ -209,11 +245,20 @@ public final class ParserEditorDialog extends JDialog {
 
         JTextArea order = wrapText(Messages.get("parsereditor.order.hint"));
 
-        JPanel side = new JPanel(new MigLayout("insets 16 16 12 12, fill, gapy 8", "[grow, fill]", "[grow, fill][][]"));
+        filterField.putClientProperty("JTextField.placeholderText", Messages.get("parsereditor.filter"));
+        filterField.putClientProperty("JTextField.leadingIcon", new com.formdev.flatlaf.icons.FlatSearchIcon());
+        filterField.putClientProperty("JTextField.showClearButton", true);
+        filterField.getDocument().addDocumentListener(docListener(() -> { if (!updatingForm) filterChanged(); }));
+        filterField.registerKeyboardAction(e -> parserList.requestFocusInWindow(),
+                KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), JComponent.WHEN_FOCUSED);
+
+        JPanel side = new JPanel(new MigLayout("insets 16 16 12 12, fill, gapy 8", "[grow, fill]", "[][grow, fill][][]"));
+        side.add(filterField, "wrap, wmin 0");
         side.add(scroll, "wrap, h 100:100%:");
         side.add(order, "wrap, wmin 0");
         side.add(newBtn, "growx 0, left");
-        side.setPreferredSize(new Dimension(240, 10));
+        side.setPreferredSize(new Dimension(SIDEBAR_WIDTH, 10));
+        side.setMinimumSize(new Dimension(SIDEBAR_MIN, 10));
         side.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, UIManager.getColor("Separator.foreground")));
 
         parserList.registerKeyboardAction(e -> deleteSelected(),
@@ -227,15 +272,21 @@ public final class ParserEditorDialog extends JDialog {
         return side;
     }
 
-    /** Refills the sidebar from {@link #mine} and the built-ins, selecting {@code select}. */
+    /**
+     * Refills the sidebar from {@link #mine} and the built-ins, those the filter lets
+     * through, selecting {@code select}.
+     */
     private void rebuildList(ParserDef select) {
         updatingForm = true;
         listModel.clear();
         listModel.addElement(Messages.get("parsereditor.group.mine"));
-        mine.forEach(listModel::addElement);
-        if (mine.isEmpty()) listModel.addElement(new EmptyMine());
+        List<ParserDef> mineShown = mine.stream().filter(this::passesFilter).toList();
+        mineShown.forEach(listModel::addElement);
+        if (mineShown.isEmpty()) listModel.addElement(new EmptyMine(!mine.isEmpty() || filtering()));
         listModel.addElement(Messages.get("parsereditor.group.builtin"));
-        builtins.forEach(listModel::addElement);
+        List<ParserDef> builtinShown = builtins.stream().filter(this::passesFilter).toList();
+        builtinShown.forEach(listModel::addElement);
+        if (builtinShown.isEmpty()) listModel.addElement(new EmptyMine(true));
         parserList.setModel(listModel);
         updatingForm = false;
         int row = select != null ? rowOf(select) : -1;
@@ -248,8 +299,54 @@ public final class ParserEditorDialog extends JDialog {
         }
     }
 
-    /** The row "None yet" under Yours: not a parser, not selectable. */
-    private record EmptyMine() {}
+    /**
+     * The row under a group with nothing to show: "None yet" under Yours, or "No parser
+     * matches" when the filter hides them all. Not a parser, not selectable.
+     */
+    private record EmptyMine(boolean filtered) {}
+
+    private boolean filtering() {
+        return !filterField.getText().isBlank();
+    }
+
+    /** Whether a parser's name (as typed, for the one shown) contains the filter's text. */
+    private boolean passesFilter(ParserDef def) {
+        if (!filtering()) return true;
+        String name = def == shown && !def.builtin() ? nameField.getText() : def.name();
+        return name.toLowerCase(Locale.ROOT).contains(filterField.getText().strip().toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * The filter changed: the list shows the matches, keeping the parser shown if it's one,
+     * else the first match. With none, the form keeps what it shows.
+     */
+    private void filterChanged() {
+        ParserDef keep = shown != null && passesFilter(shown) ? shown : null;
+        if (keep == null) {
+            keep = mine.stream().filter(this::passesFilter).findFirst()
+                    .orElse(builtins.stream().filter(this::passesFilter).findFirst().orElse(null));
+        }
+        if (keep == null) {
+            updatingForm = true;
+            listModel.clear();
+            listModel.addElement(Messages.get("parsereditor.group.mine"));
+            listModel.addElement(new EmptyMine(true));
+            listModel.addElement(Messages.get("parsereditor.group.builtin"));
+            listModel.addElement(new EmptyMine(true));
+            parserList.clearSelection();
+            updatingForm = false;
+            return;
+        }
+        rebuildList(keep);
+    }
+
+    /** Shows every parser again, so one that's about to be selected isn't hidden. */
+    private void clearFilter() {
+        if (!filtering()) return;
+        updatingForm = true;
+        filterField.setText("");
+        updatingForm = false;
+    }
 
     private int rowOf(ParserDef def) {
         for (int i = 0; i < listModel.size(); i++) if (listModel.get(i) == def) return i;
@@ -312,7 +409,6 @@ public final class ParserEditorDialog extends JDialog {
         form.add(new JLabel(Messages.get("parsereditor.test.sample")), SettingsDialog.INDENT);
         sampleField.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
         form.add(sampleField);
-        matchLabel.setFont(matchLabel.getFont().deriveFont(Font.BOLD));
         form.add(matchLabel, "skip 1");
         fieldsPanel.setOpaque(false);
         form.add(fieldsPanel, "skip 1, growx");
@@ -346,7 +442,7 @@ public final class ParserEditorDialog extends JDialog {
         for (String[] k : keywords) {
             String insert = k[0];
             JButton b = new JButton(insert.startsWith("TIMESTAMP") ? "TIMESTAMP{…}" : insert);
-            b.setFont(ClouseauFonts.mono(Font.PLAIN, 11));
+            b.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
             b.setMargin(new Insets(1, 6, 1, 6));
             b.setFocusable(false);                       // the cursor stays in the template
             b.setToolTipText(Messages.get(k[1]));
@@ -554,8 +650,12 @@ public final class ParserEditorDialog extends JDialog {
                     else LogbackPatternConverter.convert(def.source());
                     if (def.timestampFormat().isBlank()) source = Messages.get(TYPE_SIMPLIFIED.equals(def.type())
                             ? "parsereditor.error.template.no.time" : "parsereditor.error.pattern.no.time");
-                } catch (IllegalArgumentException e) {
-                    source = e.getMessage();
+                } catch (PatternConversionException e) {
+                    source = Messages.format(e.key(), e.args());
+                } catch (RuntimeException e) {
+                    log.debug("Converting '{}' failed", def.source(), e);
+                    source = Messages.get(TYPE_SIMPLIFIED.equals(def.type())
+                            ? "parsereditor.error.template.invalid" : "parsereditor.error.pattern.invalid");
                 }
             }
         } else {
@@ -575,8 +675,10 @@ public final class ParserEditorDialog extends JDialog {
                 try {
                     DateTimeFormatter.ofPattern(f.replace(',', '.'));
                 } catch (IllegalArgumentException e) {
-                    String msg = MessageFormat.format(Messages.get("parsereditor.error.format"), e.getMessage());
-                    if (regex) format = msg; else source = msg;
+                    String detail = formatProblem(e);
+                    if (regex) format = Messages.format("parsereditor.error.format", detail);
+                    else source = Messages.format(TYPE_SIMPLIFIED.equals(def.type())
+                            ? "parsereditor.error.template.format" : "parsereditor.error.pattern.format", detail);
                 }
             }
         } else if (regex && def.timestampFormat().isBlank()) {
@@ -585,13 +687,29 @@ public final class ParserEditorDialog extends JDialog {
         return new Problems(name, source, pattern, format);
     }
 
+    private static final Pattern FORMAT_LETTER = Pattern.compile("^Unknown pattern letter: (.)");
+    private static final Pattern FORMAT_COUNT  = Pattern.compile("^Too many pattern letters: (.)");
+
     /**
-     * The problems worth showing while editing: an empty template or regex is a parser not
-     * written yet, not a mistake, so it waits until OK.
+     * What's wrong with a timestamp format, in our words: Java's {@code DateTimeFormatter}
+     * says it in its own, which aren't shown.
+     */
+    private static String formatProblem(IllegalArgumentException e) {
+        String m = e.getMessage() != null ? e.getMessage() : "";
+        var letter = FORMAT_LETTER.matcher(m);
+        if (letter.find()) return Messages.format("parsereditor.error.format.letter", letter.group(1));
+        var count = FORMAT_COUNT.matcher(m);
+        if (count.find()) return Messages.format("parsereditor.error.format.count", count.group(1));
+        return Messages.get("parsereditor.error.format.invalid");
+    }
+
+    /**
+     * The problems worth showing: while editing, an empty template or regex is a parser not
+     * written yet, not a mistake, so it waits until OK is pressed; from then on it shows too.
      */
     private Problems visibleProblems(ParserDef def) {
         Problems p = problems(def);
-        if (def == null) return p;
+        if (def == null || submitted) return p;
         boolean regex = TYPE_REGEX.equals(def.type());
         boolean unwritten = regex ? def.pattern().isBlank() : def.source().isBlank();
         return unwritten ? new Problems(p.name(), null, null, null) : p;
@@ -686,7 +804,7 @@ public final class ParserEditorDialog extends JDialog {
         k.setForeground(ClouseauColors.detailKeyColor());
         k.setFont(ClouseauFonts.mono(Font.BOLD, 12));
         JLabel v = new JLabel(value != null && !value.isEmpty() ? value : "–");
-        v.setFont(ClouseauFonts.mono(color != null && color != ClouseauColors.statusError() ? Font.BOLD : Font.PLAIN, 12));
+        v.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
         if (color != null) v.setForeground(color);
         fieldsPanel.add(k);
         fieldsPanel.add(v, "wmin 0");
@@ -783,6 +901,7 @@ public final class ParserEditorDialog extends JDialog {
         ParserDef def = new ParserDef(uniqueName(Messages.get("parsereditor.new.name")),
                 TYPE_SIMPLIFIED, "", "", "", false);
         mine.add(def);
+        clearFilter();
         rebuildList(def);
         nameField.requestFocusInWindow();
         nameField.selectAll();
@@ -795,6 +914,7 @@ public final class ParserEditorDialog extends JDialog {
                 src.type(), src.source(), src.pattern(), src.timestampFormat(), false);
         int at = src.builtin() ? mine.size() : indexInMine(src) + 1;
         mine.add(at, copy);
+        clearFilter();
         rebuildList(copy);
         nameField.requestFocusInWindow();
         nameField.selectAll();
@@ -831,13 +951,13 @@ public final class ParserEditorDialog extends JDialog {
     private void move(int by) {
         ParserDef def = selectedDef();
         int from = def != null ? indexInMine(def) : -1;
-        if (from < 0) return;
+        if (from < 0 || filtering()) return;
         moveTo(def, from + by);
     }
 
     private void moveTo(ParserDef def, int to) {
         int from = indexInMine(def);
-        if (from < 0) return;
+        if (from < 0 || filtering()) return;
         to = Math.max(0, Math.min(to, mine.size() - 1));
         if (to == from) return;
         mine.remove(from);
@@ -873,16 +993,27 @@ public final class ParserEditorDialog extends JDialog {
     /**
      * Saves your parsers, in order, and closes. A parser with a problem (no name, a name
      * already used, a template or regex that doesn't work) would be skipped when parsers
-     * load, so it's shown instead, with its problem, and nothing is saved.
+     * load, so it's shown instead: selected, its field outlined with the problem under it,
+     * every parser with one marked in the list, and nothing is saved.
      */
     private void save() {
+        submitted = true;
         for (ParserDef def : mine) {
             Problems p = problems(def);
             if (p.any()) {
-                parserList.setSelectedValue(def, true);
-                JOptionPane.showMessageDialog(this,
-                        MessageFormat.format(Messages.get("parsereditor.save.problem"), def.name().isBlank() ? "–" : def.name(), p.first()),
-                        Messages.get("parsereditor.title"), JOptionPane.WARNING_MESSAGE);
+                if (!passesFilter(def)) {
+                    clearFilter();
+                    rebuildList(def);
+                } else if (def != shown) {
+                    parserList.setSelectedValue(def, true);
+                }
+                validateForm();
+                parserList.ensureIndexIsVisible(rowOf(shown));
+                JComponent field = p.name() != null ? nameField
+                        : p.source() != null ? sourceArea
+                        : p.pattern() != null ? patternArea : formatField;
+                field.requestFocusInWindow();
+                field.scrollRectToVisible(new Rectangle(field.getSize()));
                 return;
             }
         }
@@ -979,7 +1110,7 @@ public final class ParserEditorDialog extends JDialog {
                     return;
                 }
                 int row = locationToIndex(e.getPoint());
-                pressed = row >= 0 && listModel.get(row) instanceof ParserDef d && !d.builtin() ? d : null;
+                pressed = !filtering() && row >= 0 && listModel.get(row) instanceof ParserDef d && !d.builtin() ? d : null;
                 pressedAt = e.getPoint();
             }
             if (e.getID() == MouseEvent.MOUSE_CLICKED && overTool != Tool.NONE) return;
@@ -1019,7 +1150,7 @@ public final class ParserEditorDialog extends JDialog {
             if (row >= 0 && listModel.get(row) instanceof ParserDef d) {
                 Problems p = visibleProblems(d);
                 if (p.any()) return p.first();
-                if (!d.builtin()) return Messages.get("parsereditor.drag.tooltip");
+                if (!d.builtin() && !filtering()) return Messages.get("parsereditor.drag.tooltip");
             }
             return null;
         }
@@ -1062,8 +1193,9 @@ public final class ParserEditorDialog extends JDialog {
                 setOpaque(false);
                 return this;
             }
-            if (v instanceof EmptyMine) {
-                super.getListCellRendererComponent(l, Messages.get("parsereditor.group.mine.empty"), i, false, false);
+            if (v instanceof EmptyMine empty) {
+                super.getListCellRendererComponent(l, Messages.get(empty.filtered()
+                        ? "parsereditor.filter.none" : "parsereditor.group.mine.empty"), i, false, false);
                 setForeground(ClouseauColors.mutedForeground());
                 setFont(getFont().deriveFont(Font.ITALIC));
                 setBorder(BorderFactory.createEmptyBorder(3, 12, 3, 4));
@@ -1113,7 +1245,7 @@ public final class ParserEditorDialog extends JDialog {
         t.setFocusable(false);
         t.setOpaque(false);
         t.setBorder(null);
-        t.setFont(UIManager.getFont("Label.font").deriveFont(11.5f));
+        t.setFont(UIManager.getFont("Label.font").deriveFont(12f));
         ClouseauColors.themedForeground(t, ClouseauColors::dimForeground);
         return t;
     }
