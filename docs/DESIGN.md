@@ -592,6 +592,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `plugins/` | Installed plugin JARs |
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
+| `settings.json` → `ssh.connections` | Saved SSH connections (D-24): each a sign-in (`name`, `host`, `port`, `user`, `authType`, encrypted `password` / `keyPassphrase`, `keyFilePath`) with its `logs` (`remotePath`, `parserName`). `ssh.favorites` and `ssh.hostNames` are the earlier format, read once to convert and then left alone. |
 | `settings.json` → `update.*` | The new-version check (D-23): `update.check` (on/off), `update.skipped` (a version the user skipped), `update.last.check` (epoch milliseconds). |
 | `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |
 | `sessions/` | Named sessions (D-19), one `<name>.json` each, in the `session.json` format. |
@@ -2017,6 +2018,38 @@ Release workflow, so that list is the source of truth and nothing else needs pub
 SSH and plugin sources, socket reads inside libraries that may hold monitors and pin a
 carrier thread; there are few enough follow loops that platform threads cost nothing worth
 saving. A bounded pool was rejected: any bound brings the hang back one file later.
+
+### D-24 · Saved SSH connections are sign-ins with logs under them · Adopted
+
+The SSH dialog used to save one entry per log, each carrying the whole sign-in (host, port,
+user, method, password), with names kept per host. Changing a password meant changing every
+log on the server, two accounts on one machine couldn't be told apart in the list, and the
+form mixed a server's details with one log's.
+
+**The decision.**
+- `SshSaved` (core) is the model: a `Connection` is one sign-in (user, host, port, how to
+  authenticate) with an optional name and its `Log`s (path, parser). A connection is
+  identified by user + host (any case) + port (`key()`); the method is a setting of it.
+  Names, when given, are unique. `toString` leaves secrets out.
+- `AppPrefs` stores them under `ssh.connections`, logs nested in their connection, secrets
+  encrypted by `CredentialStore`. The first read with no `ssh.connections` converts
+  `ssh.favorites` and `ssh.hostNames` (`SshSaved.fromFavorites`): logs with the same user,
+  host and port become one connection, signing in as the first did; a host's name goes to
+  its first connection, and any other on that host gets "name (user)". The old keys are left
+  as they were, so an older build still finds its own entries.
+- The dialog (`SshConnectionDialog`) has three modes: a connection (its fields, **Save**), a
+  log (its connection read-only, its fields, **Connect**, which saves the log first) and a
+  new connection (both, **Save this connection**, **Connect**). Saving a connection into the
+  user, host and port, or the name, of another is refused with the reason. A new connection
+  whose user, host and port are saved already is that connection: its log is added, and a
+  different sign-in is offered as an update.
+- Folds are remembered by connection key (`ssh.savedCollapsed`: `c:<key>`, `f:<key>\n<folder>`).
+
+**Rejected:**
+- *A server as the host alone*, with user and credentials per log: the server form couldn't
+  hold the sign-in, which is what you'd want to change in one place.
+- *Offering to replace another connection on a clash*: it would delete that connection and
+  its logs as a side effect of editing a username.
 
 ## 10. Planned features
 

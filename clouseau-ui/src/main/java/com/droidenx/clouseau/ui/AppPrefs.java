@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.core.SshSaved;
 import com.droidenx.clouseau.ui.theme.ThemeManager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -44,7 +45,8 @@ public final class AppPrefs {
     private static final String KEY_RECENT_FILES       = "recent.files";
     private static final String KEY_RECENT_MAX         = "recent.max";
     private static final String KEY_FAVORITES          = "favorites";
-    private static final String KEY_SSH_FAVORITES      = "ssh.favorites";
+    private static final String KEY_SSH_FAVORITES      = "ssh.favorites";      // before 0.12: one entry per log
+    private static final String KEY_SSH_CONNECTIONS    = "ssh.connections";
     private static final String KEY_PLUGIN_REPOS         = "plugin.repos";
     private static final String KEY_MAX_ENTRIES_PER_TAB  = "max.entries.per.tab";
     private static final String KEY_COLUMN_LAYOUTS        = "column.layouts";
@@ -81,23 +83,6 @@ public final class AppPrefs {
             }
         }
     }
-
-    /**
-     * A saved SSH connection. Passwords and passphrases are encrypted at rest
-     * via {@link CredentialStore}.
-     */
-    public record SshFavorite(
-            String name,
-            String host,
-            int    port,
-            String user,
-            String authType,      // "password" or "key"
-            String password,      // null when using key auth
-            String keyFilePath,   // null when using password auth
-            String keyPassphrase, // may be blank
-            String remotePath,
-            String parserName     // null = auto-detect
-    ) {}
 
     private static final JsonObject ROOT = load();
 
@@ -273,32 +258,9 @@ public final class AppPrefs {
     }
 
     /**
-     * The names given to SSH servers in the SSH dialog, by host (an IP address, say): shown on
-     * the server's row in Saved connections, with the host beside it.
-     */
-    public static java.util.Map<String, String> getSshHostNames() {
-        java.util.Map<String, String> names = new java.util.HashMap<>();
-        if (!ROOT.has("ssh.hostNames")) return names;
-        JsonObject o = ROOT.getAsJsonObject("ssh.hostNames");
-        for (String host : o.keySet()) {
-            String name = jsonString(o, host, null);
-            if (name != null && !name.isBlank()) names.put(host, name);
-        }
-        return names;
-    }
-
-    /** Names {@code host}, or forgets its name when {@code name} is null or blank. */
-    public static void setSshHostName(String host, String name) {
-        JsonObject o = ROOT.has("ssh.hostNames") ? ROOT.getAsJsonObject("ssh.hostNames") : new JsonObject();
-        if (name == null || name.isBlank()) o.remove(host);
-        else o.addProperty(host, name.strip());
-        ROOT.add("ssh.hostNames", o);
-        save();
-    }
-
-    /**
      * The servers and folders folded in the SSH dialog's Saved connections, as keys the dialog
-     * makes ("h:" + host, "f:" + host + "\n" + folder), so they stay folded the next time.
+     * makes ("c:" + connection key, "f:" + connection key + "\n" + folder), so they stay folded
+     * the next time.
      */
     public static java.util.Set<String> getSshCollapsed() {
         return new java.util.HashSet<>(getStringList("ssh.savedCollapsed"));
@@ -598,14 +560,75 @@ public final class AppPrefs {
         putStringList(KEY_FAVORITES, favorites.stream().map(Path::toString).toList());
     }
 
-    public static List<SshFavorite> getSshFavorites() {
-        if (!ROOT.has(KEY_SSH_FAVORITES)) return new ArrayList<>();
-        JsonArray arr = ROOT.get(KEY_SSH_FAVORITES).getAsJsonArray();
-        List<SshFavorite> list = new ArrayList<>(arr.size());
-        for (JsonElement el : arr) {
+    /**
+     * The SSH dialog's saved connections, each with the logs saved on it. Passwords and
+     * passphrases are encrypted at rest via {@link CredentialStore}. The first time, connections
+     * saved by earlier versions (one entry per log, names per host) are turned into these and
+     * written back; the old entries are left as they were, unread from then on.
+     */
+    public static List<SshSaved.Connection> getSshConnections() {
+        if (!ROOT.has(KEY_SSH_CONNECTIONS)) {
+            if (!ROOT.has(KEY_SSH_FAVORITES)) return new ArrayList<>();
+            List<SshSaved.Connection> converted = SshSaved.fromFavorites(oldSshFavorites(), oldSshHostNames());
+            saveSshConnections(converted);
+            return new ArrayList<>(converted);
+        }
+        List<SshSaved.Connection> list = new ArrayList<>();
+        for (JsonElement el : ROOT.get(KEY_SSH_CONNECTIONS).getAsJsonArray()) {
             JsonObject o = el.getAsJsonObject();
-            list.add(new SshFavorite(
-                    jsonString(o, "name", ""),
+            List<SshSaved.Log> logs = new ArrayList<>();
+            if (o.has("logs")) {
+                for (JsonElement le : o.getAsJsonArray("logs")) {
+                    JsonObject l = le.getAsJsonObject();
+                    logs.add(new SshSaved.Log(jsonString(l, "remotePath", ""), jsonString(l, "parserName", null)));
+                }
+            }
+            list.add(new SshSaved.Connection(
+                    jsonString(o, "name", null),
+                    jsonString(o, "host", ""),
+                    jsonInt(o,    "port", 22),
+                    jsonString(o, "user", ""),
+                    jsonString(o, "authType", "password"),
+                    CredentialStore.decrypt(jsonString(o, "password",      null)),
+                    jsonString(o, "keyFilePath", null),
+                    CredentialStore.decrypt(jsonString(o, "keyPassphrase", null)),
+                    logs));
+        }
+        return list;
+    }
+
+    public static void saveSshConnections(List<SshSaved.Connection> connections) {
+        JsonArray arr = new JsonArray();
+        for (SshSaved.Connection c : connections) {
+            JsonObject o = new JsonObject();
+            if (c.name() != null) o.addProperty("name", c.name());
+            o.addProperty("host",     c.host());
+            o.addProperty("port",     c.port());
+            o.addProperty("user",     c.user());
+            o.addProperty("authType", c.authType());
+            if (c.password()      != null) o.addProperty("password",      CredentialStore.encrypt(c.password()));
+            if (c.keyFile()       != null) o.addProperty("keyFilePath",   c.keyFile());
+            if (c.keyPassphrase() != null) o.addProperty("keyPassphrase", CredentialStore.encrypt(c.keyPassphrase()));
+            JsonArray logs = new JsonArray();
+            for (SshSaved.Log l : c.logs()) {
+                JsonObject lo = new JsonObject();
+                lo.addProperty("remotePath", l.remotePath());
+                if (l.parserName() != null) lo.addProperty("parserName", l.parserName());
+                logs.add(lo);
+            }
+            o.add("logs", logs);
+            arr.add(o);
+        }
+        ROOT.add(KEY_SSH_CONNECTIONS, arr);
+        save();
+    }
+
+    /** Saved logs as versions before 0.12 kept them: one entry each, with the whole sign-in. */
+    private static List<SshSaved.OldFavorite> oldSshFavorites() {
+        List<SshSaved.OldFavorite> list = new ArrayList<>();
+        for (JsonElement el : ROOT.get(KEY_SSH_FAVORITES).getAsJsonArray()) {
+            JsonObject o = el.getAsJsonObject();
+            list.add(new SshSaved.OldFavorite(
                     jsonString(o, "host", ""),
                     jsonInt(o,    "port", 22),
                     jsonString(o, "user", ""),
@@ -614,30 +637,21 @@ public final class AppPrefs {
                     jsonString(o, "keyFilePath", null),
                     CredentialStore.decrypt(jsonString(o, "keyPassphrase", null)),
                     jsonString(o, "remotePath", ""),
-                    jsonString(o, "parserName", null)
-            ));
+                    jsonString(o, "parserName", null)));
         }
         return list;
     }
 
-    public static void saveSshFavorites(List<SshFavorite> favorites) {
-        JsonArray arr = new JsonArray();
-        for (SshFavorite f : favorites) {
-            JsonObject o = new JsonObject();
-            o.addProperty("name",       f.name());
-            o.addProperty("host",       f.host());
-            o.addProperty("port",       f.port());
-            o.addProperty("user",       f.user());
-            o.addProperty("authType",   f.authType());
-            if (f.password()      != null) o.addProperty("password",      CredentialStore.encrypt(f.password()));
-            if (f.keyFilePath()   != null) o.addProperty("keyFilePath",   f.keyFilePath());
-            if (f.keyPassphrase() != null) o.addProperty("keyPassphrase", CredentialStore.encrypt(f.keyPassphrase()));
-            o.addProperty("remotePath", f.remotePath());
-            if (f.parserName()    != null) o.addProperty("parserName",    f.parserName());
-            arr.add(o);
+    /** Server names as versions before 0.12 kept them, by host. */
+    private static java.util.Map<String, String> oldSshHostNames() {
+        java.util.Map<String, String> names = new java.util.HashMap<>();
+        if (!ROOT.has("ssh.hostNames")) return names;
+        JsonObject o = ROOT.getAsJsonObject("ssh.hostNames");
+        for (String host : o.keySet()) {
+            String name = jsonString(o, host, null);
+            if (name != null && !name.isBlank()) names.put(host, name);
         }
-        ROOT.add(KEY_SSH_FAVORITES, arr);
-        save();
+        return names;
     }
 
     public static List<PluginRepo> getPluginRepos() {

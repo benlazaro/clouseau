@@ -45,7 +45,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
                     MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
-                    UpdateCheck
+                    UpdateCheck, SshSaved
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -159,8 +159,10 @@ when there's no file.
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.
-- `SshRemote` (core), `SshConnectionDialog`, `RemoteFileDialog` (ui) — the SSH dialog's Test (sign in and
-  check the file) and Browse… (pick the file over SFTP); `SshRemote` also holds the sign-in `SshLogSource` uses.
+- `SshRemote` (core), `SshConnectionDialog`, `RemoteFileDialog` (ui) — the SSH Connections window: Connect
+  checks first (sign in and check the file) and Browse… picks the file over SFTP; `SshRemote` also holds the
+  sign-in `SshLogSource` uses. `SshSaved` (core) is its saved connections (D-24): sign-ins (user, host, port,
+  auth, optional name) with their logs, stored by `AppPrefs` under `ssh.connections`.
 - `LogSniffer`, `TextLines` (core), `PlainTextView` (ui) — UC-13: a file no parser recognizes
   opens as plain text. `LogSniffer` samples the first lines (parser match, binary check),
   `TextLines` keeps every line's offset and reads text back from disk, `PlainTextView` shows it.

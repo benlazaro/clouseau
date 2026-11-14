@@ -10,6 +10,7 @@ import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.Session;
 import com.droidenx.clouseau.core.SessionStore;
 import com.droidenx.clouseau.core.SshConfig;
+import com.droidenx.clouseau.core.SshSaved;
 import com.droidenx.clouseau.core.SshLogSource;
 import com.droidenx.clouseau.core.ZipLogs;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
@@ -1166,7 +1167,7 @@ public final class MainFrame extends JFrame {
                 () -> reconnectSsh(panel, t));
     }
 
-    /** The connection with the secret it needs, if it needs none or a saved favorite has it. */
+    /** The connection with the secret it needs, if it needs none or a saved connection has it. */
     static Optional<SshConfig> sshCredentials(Session.Ssh s) {
         if ("none".equals(s.auth())) {
             return Optional.of(new SshConfig(s.host(), s.port(), s.user(), null, null, null, s.remotePath()));
@@ -1174,16 +1175,15 @@ public final class MainFrame extends JFrame {
         if ("key".equals(s.auth()) && !s.keyPassphrase()) {
             return Optional.of(new SshConfig(s.host(), s.port(), s.user(), null, s.keyFile(), null, s.remotePath()));
         }
-        for (AppPrefs.SshFavorite f : AppPrefs.getSshFavorites()) {
-            if (!s.host().equalsIgnoreCase(f.host()) || s.port() != f.port() || !Objects.equals(s.user(), f.user())) continue;
-            if ("key".equals(s.auth()) && "key".equals(f.authType()) && Objects.equals(s.keyFile(), f.keyFilePath())
-                    && f.keyPassphrase() != null && !f.keyPassphrase().isEmpty()) {
-                return Optional.of(new SshConfig(s.host(), s.port(), s.user(), null, s.keyFile(), f.keyPassphrase(), s.remotePath()));
-            }
-            if ("password".equals(s.auth()) && !"key".equals(f.authType()) && !"none".equals(f.authType())
-                    && f.password() != null && !f.password().isEmpty()) {
-                return Optional.of(new SshConfig(s.host(), s.port(), s.user(), f.password(), null, null, s.remotePath()));
-            }
+        SshSaved.Connection f = SshSaved.find(AppPrefs.getSshConnections(), SshSaved.key(s.user(), s.host(), s.port()));
+        if (f == null) return Optional.empty();
+        if ("key".equals(s.auth()) && "key".equals(f.authType()) && Objects.equals(s.keyFile(), f.keyFile())
+                && f.keyPassphrase() != null && !f.keyPassphrase().isEmpty()) {
+            return Optional.of(new SshConfig(s.host(), s.port(), s.user(), null, s.keyFile(), f.keyPassphrase(), s.remotePath()));
+        }
+        if ("password".equals(s.auth()) && "password".equals(f.authType())
+                && f.password() != null && !f.password().isEmpty()) {
+            return Optional.of(new SshConfig(s.host(), s.port(), s.user(), f.password(), null, null, s.remotePath()));
         }
         return Optional.empty();
     }
@@ -1359,11 +1359,13 @@ public final class MainFrame extends JFrame {
 
     /**
      * An SSH tab's title: the remote file's name and the server, e.g. "app.log — 10.0.0.5", or
-     * "app.log — Payments prod" when the server was given a name in the SSH dialog (the
-     * tooltip still shows the host).
+     * "app.log — Payments prod" when its connection (user, host and port) was given a name in
+     * the SSH dialog (the tooltip still shows the host).
      */
     static String sshTabTitle(SshConfig config) {
-        String name = AppPrefs.getSshHostNames().get(config.host());
+        SshSaved.Connection saved = SshSaved.find(AppPrefs.getSshConnections(),
+                SshSaved.key(config.user(), config.host(), config.port()));
+        String name = saved != null ? saved.name() : null;
         return MessageFormat.format(Messages.get("ssh.tab.title"),
                 config.fileName(), name != null ? name : config.host());
     }

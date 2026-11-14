@@ -216,10 +216,15 @@ stays open, says in the note above the buttons which step failed and why (unknow
 nothing listening on the port, no answer, sign-in turned down, unusable key file, missing
 file, unreadable file, a folder), and saves nothing. Each step gives up after 15 seconds,
 and the connection is closed when the check ends, when a field changes, or when the dialog
-closes. **Save** keeps a connection, or the changes to a saved one, without connecting;
-Connect also saves changes to the saved log it connects with, and a new connection is kept
-only by Save. With unsaved changes to a saved log, picking another log, Cancel, Esc or the
-close box asks Cancel · Don't Save · Save. **Browse…**
+closes. **Saved connections** (D-24) are sign-ins (user, host, port, and a password or
+key, with an optional name) with the logs saved on each, listed as a tree, connection ›
+folder › log. Picking a connection shows only its details, with **Save**; picking a log
+shows only the log (its connection read-only), with **Connect**, which saves the log first;
+**+** (Ctrl+N) starts a new connection, kept only if **Save this connection** is ticked, once
+its check passes. Two connections can't share user, host and port, or a name: Save says
+which connection has them, and a new connection matching a saved one adds its log there and
+offers to update the saved sign-in. With unsaved changes, picking something else, Cancel,
+Esc or the close box asks Cancel · Don't Save · Save. **Browse…**
 next to Remote path signs in the same way and lists the server's folders over SFTP,
 starting in the typed path's folder, else `/var/log`, else home. It lists folders, then
 the files the user can read (from the file's owner, group and mode against the user's
