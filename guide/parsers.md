@@ -44,7 +44,8 @@ The process ID and application name become **pid** and **app** columns.
 
 **Tools → Parser Editor…** lists the parsers in a sidebar: **Yours** first, then the
 **Built-in** ones. Type in **Filter parsers…** above the list to find one by name, and drag
-the divider to make the sidebar wider; the editor remembers its size and the divider. When
+the divider to make the sidebar wider; the editor remembers its size and the divider. It
+opens with nothing selected: pick a parser to see its pattern and test it. When
 you open a file with the parser set to **Auto-detect** in the Open dialog,
 Clouseau checks the file's first lines against your parsers from the top, then the built-in
 ones, and uses the first that matches, so put the more specific parsers higher: drag one up or down, or
@@ -58,7 +59,8 @@ make your own from it.
 
 ![Parser editor](../docs/screenshots/parser-editor.png)
 
-Each parser has a **Name**, which no other parser may use, and is **Made from** one of:
+Each parser has a **Name**, which no other parser may use. **Write it as** picks how you
+describe the line:
 
 - **Template** (the easiest): write the line with keywords where the values go. Click a
   keyword under the field to add it where the cursor is.
@@ -67,7 +69,7 @@ Each parser has a **Name**, which no other parser may use, and is **Made from** 
 - **Regex**: a Java regular expression with named groups, and the **Timestamp format**,
   for formats the other two can't describe.
 
-For a template or a pattern, **Regex made from it** shows what Clouseau will match; **Copy
+For a template or a pattern, **Generated regex** shows what Clouseau will match; **Copy
 Regex** copies it, for example to start a Regex parser. A problem shows in red under the
 field it's about, such as `Timestamp format: Unknown pattern letter: b.`, and the parser
 gets a red dot in the sidebar. **OK** saves everything at once; if a parser still has a
@@ -75,9 +77,9 @@ problem, OK selects it and shows the problem on its field instead.
 
 Under **Test**, a **Sample line** shows whether it matches and what it becomes, as the
 detail pane would show it: the time in your display time zone, the level in its color, and
-any extra fields. **Test with File…** tries the parser on the first 500 lines of a log and
-says how many matched, counting stack-trace lines apart since they continue the entry
-above. The first line that should have matched and didn't is shown, and **Use as Sample**
+any extra fields. **Sample file**'s **Browse…** tries the parser on the first 500 lines of a
+log and says, after the file's name, how many matched, counting stack-trace lines apart
+since they continue the entry above. The result updates as you edit the parser. The first line that should have matched and didn't is shown, and **Use as Sample**
 makes it the sample so you can fix the parser for it.
 
 **OK** saves every parser at once; a parser with a problem is shown instead, and nothing is

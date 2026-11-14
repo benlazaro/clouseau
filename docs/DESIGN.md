@@ -690,6 +690,10 @@ connections, the parser editor's parsers) follows the same rules, so they read a
 - **The same actions elsewhere.** A right-click menu offers the row's actions (Remove, Copy
   Path, Rename…), and Delete removes the selected row.
 - **Empty:** a short italic hint in `mutedForeground` saying how to add the first entry.
+- **Nothing selected:** the pane beside the list shows an empty state, as the detail pane
+  does: what to do in `dimForeground`, then what you'll get in smaller `mutedForeground`
+  text, centered. The parser editor opens this way (except from **Create a Parser…**,
+  which opens on the new parser), so it never picks a parser for you.
 
 A `JTree` sizes its rows from the renderer's preferred size and caches them, so a tree
 (the SSH list) works the width out itself: the renderer's preferred width is the viewport's

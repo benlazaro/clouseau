@@ -79,12 +79,15 @@ public final class ParserEditorDialog extends JDialog {
             Messages.get("parsereditor.type.template"),
             Messages.get("parsereditor.type.pattern"),
             Messages.get("parsereditor.type.regex") });
+    private static final String     CARD_FORM = "form", CARD_EMPTY = "empty";
+    private final CardLayout        formCardLayout = new CardLayout();
+    /** The form when a parser is selected, the empty state when none is. */
+    private final JPanel            formCards = new JPanel(formCardLayout);
     private final JTextArea         builtinNote = wrapText(Messages.get("parsereditor.builtin.note"));
     /** The footer's Duplicate: the selected parser, yours or built in. */
     private final JButton           duplicateBtn = new JButton(Messages.get("parsereditor.duplicate"));
 
     private final JLabel    sourceTitle  = new JLabel();
-    private final JComponent sourceSection;
     private final JTextArea sourceArea   = new JTextArea(3, 1);
     private final JScrollPane sourceScroll = new JScrollPane(sourceArea);
     private final JTextArea sourceHint   = wrapText("");
@@ -111,6 +114,8 @@ public final class ParserEditorDialog extends JDialog {
     private final JButton    useAsSample   = new JButton(Messages.get("parsereditor.test.use.sample"));
     /** Lines of the log the editor was opened for (Create a Parser…), tested without asking. */
     private List<String> openedLog = List.of();
+    /** The sample file's name, shown before its result; null for lines given with the editor (Create a Parser…). */
+    private String openedLogName;
     private String firstUnmatched;
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -126,13 +131,15 @@ public final class ParserEditorDialog extends JDialog {
         this.onSave = onSave;
         loadDefs();
         loaded = List.copyOf(mine);
-        sourceSection = SettingsDialog.sectionLabel("");
 
         JScrollPane formScroll = new JScrollPane(buildForm());
         formScroll.setBorder(BorderFactory.createEmptyBorder());
         formScroll.getVerticalScrollBar().setUnitIncrement(16);
+        // The form, or what to do when no parser is selected (as the detail pane does).
+        formCards.add(formScroll, CARD_FORM);
+        formCards.add(buildEmptyState(), CARD_EMPTY);
         // Drag the divider to widen the parser list; the form takes the rest.
-        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSidebar(), formScroll);
+        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSidebar(), formCards);
         split.setBorder(null);
         split.setResizeWeight(0);
         split.setContinuousLayout(true);
@@ -166,7 +173,23 @@ public final class ParserEditorDialog extends JDialog {
         });
 
         wireListeners();
-        rebuildList(mine.isEmpty() ? (builtins.isEmpty() ? null : builtins.get(0)) : mine.get(0));
+        rebuildList(null);   // nothing selected: the empty state says what to do
+    }
+
+    /**
+     * The form's place with no parser selected, centered like the detail pane's empty state:
+     * what to do, then what you'll get, in the dim text of hints.
+     */
+    private JComponent buildEmptyState() {
+        JPanel empty = new JPanel(new MigLayout("fill, insets 16", "[center]", "push[]6[]push"));
+        JLabel title = new JLabel(Messages.get("parsereditor.empty.title"));
+        ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
+        JLabel hint = new JLabel(Messages.get("parsereditor.empty.hint"));
+        ClouseauColors.themedForeground(hint, ClouseauColors::mutedForeground);
+        hint.setFont(hint.getFont().deriveFont(hint.getFont().getSize2D() - 1f));
+        empty.add(title, "wrap");
+        empty.add(hint);
+        return empty;
     }
 
     @Override public void dispose() {
@@ -249,7 +272,15 @@ public final class ParserEditorDialog extends JDialog {
         filterField.putClientProperty("JTextField.leadingIcon", new com.formdev.flatlaf.icons.FlatSearchIcon());
         filterField.putClientProperty("JTextField.showClearButton", true);
         filterField.getDocument().addDocumentListener(docListener(() -> { if (!updatingForm) filterChanged(); }));
-        filterField.registerKeyboardAction(e -> parserList.requestFocusInWindow(),
+        // ↓ goes to the list, selecting its first parser when none is selected yet.
+        filterField.registerKeyboardAction(e -> {
+                    if (selectedDef() == null) {
+                        for (int i = 0; i < listModel.size(); i++) {
+                            if (listModel.get(i) instanceof ParserDef) { parserList.setSelectedIndex(i); break; }
+                        }
+                    }
+                    parserList.requestFocusInWindow();
+                },
                 KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), JComponent.WHEN_FOCUSED);
 
         JPanel side = new JPanel(new MigLayout("insets 16 16 12 12, fill, gapy 8", "[grow, fill]", "[][grow, fill][]"));
@@ -360,7 +391,10 @@ public final class ParserEditorDialog extends JDialog {
 
     // ── Form ─────────────────────────────────────────────────────────────────
 
-    /** Parser, then Template / Pattern / Regex, then Test, as Settings lays out sections. */
+    /**
+     * Two sections, as Settings lays them out: Parser (name, Write it as, and the template,
+     * pattern or regex it's made from) and Test.
+     */
     private JComponent buildForm() {
         JPanel form = new WidthTrackingPanel(new MigLayout("insets 16 20 16 20, wrap 2, fillx, hidemode 3",
                 "[150!][grow, fill, 0::]"));
@@ -374,12 +408,12 @@ public final class ParserEditorDialog extends JDialog {
         form.add(typeCombo, "growx 0");
         form.add(builtinNote, "span 2, gapleft 28, gaptop 4, growx, wmin 0");
 
-        // ── Template / Pattern: the source, and the regex made from it
-        form.add(sourceSection, "span 2, growx, gaptop 16");
+        // Then what it's made from, still in the Parser section: Write it as and the field's own
+        // label already say what it is, so it has no heading of its own.
         sourceArea.setLineWrap(true);
         sourceArea.setFont(ClouseauFonts.mono(Font.PLAIN, 12));
-        form.add(sourceTitle, SettingsDialog.INDENT + ", top");
-        form.add(sourceScroll, "hmin 64");
+        form.add(sourceTitle, SettingsDialog.INDENT + ", top, gaptop 8");
+        form.add(sourceScroll, "hmin 64, gaptop 8");
         form.add(sourceError, "skip 1");
         keywordRow.setOpaque(false);
         buildKeywords();
@@ -503,12 +537,14 @@ public final class ParserEditorDialog extends JDialog {
         for (Component c : keywordRow.getComponents()) c.setEnabled(editable);
         builtinNote.setVisible(has && def.builtin());
         duplicateBtn.setEnabled(has);
+        formCardLayout.show(formCards, has ? CARD_FORM : CARD_EMPTY);
         sampleField.setEnabled(has);
         fileBtn.setEnabled(has);
         updatingForm = false;
         validateForm();
         runTest();
         fileTestLabel.setText(" ");
+        fileTestLabel.setToolTipText(null);
         showUnmatched(null);
         if (has && !openedLog.isEmpty()) runFileTest();
     }
@@ -552,14 +588,12 @@ public final class ParserEditorDialog extends JDialog {
     }
 
     /**
-     * Template and Pattern show their source, and the regex made from it read-only (with
+     * Template and Pattern show their source, and the generated regex read-only (with
      * Copy, to start a Regex parser from it); Regex shows the regex and the timestamp format
      * to edit.
      */
     private void updateTypeUI(String type) {
         boolean regex = TYPE_REGEX.equals(type), template = TYPE_SIMPLIFIED.equals(type);
-        ((JLabel) ((JPanel) sourceSection).getComponent(0)).setText(Messages.get(
-                regex ? "parsereditor.section.regex" : template ? "parsereditor.section.template" : "parsereditor.section.pattern"));
         sourceTitle.setText(Messages.get(template ? "parsereditor.field.template" : "parsereditor.field.source"));
         sourceTitle.setVisible(!regex);
         sourceScroll.setVisible(!regex);
@@ -760,6 +794,7 @@ public final class ParserEditorDialog extends JDialog {
     private void runTest() {
         fieldsPanel.removeAll();
         matchLabel.setText(" ");
+        matchLabel.setToolTipText(null);
         String line = sampleField.getText().strip();
         if (shown != null && !line.isBlank()) {
             RegexLogParser parser = previewParser();
@@ -824,12 +859,19 @@ public final class ParserEditorDialog extends JDialog {
             return;
         }
         openedLog = lines;
+        openedLogName = chooser.getSelectedFile().getName();
         runFileTest();
     }
 
+    /** A sample-file result with the file's name before it ("app.log · …"), when there is one. */
+    private String named(String result) {
+        return openedLogName == null ? result
+                : MessageFormat.format(Messages.get("parsereditor.test.file.named"), openedLogName, result);
+    }
+
     /**
-     * Tests the parser on the lines of the log (opened with the editor, or picked with "Test
-     * with file…"). Lines that continue an entry (stack traces, wrapped messages) aren't
+     * Tests the parser on the lines of the log (opened with the editor, or picked with the
+     * Sample file's Browse…). Lines that continue an entry (stack traces, wrapped messages) aren't
      * expected to match, and are counted apart. Shows the first line that should have matched and didn't,
      * which one click makes the sample.
      */
@@ -850,14 +892,14 @@ public final class ParserEditorDialog extends JDialog {
             else if (unmatched == null) unmatched = line;
         }
         if (entries == 0) {
-            status(fileTestLabel, Messages.get("parsereditor.test.file.empty"), ClouseauColors.statusWarn());
+            status(fileTestLabel, named(Messages.get("parsereditor.test.file.empty")), ClouseauColors.statusWarn());
             showUnmatched(null);
             return;
         }
         int pct = matched * 100 / entries;
         String text = MessageFormat.format(Messages.get("parsereditor.test.file.result"), matched, entries, pct)
                 + (indented > 0 ? MessageFormat.format(Messages.get("parsereditor.test.file.indented"), indented) : "");
-        status(fileTestLabel, text, pct == 100 ? ClouseauColors.statusOk()
+        status(fileTestLabel, named(text), pct == 100 ? ClouseauColors.statusOk()
                 : pct >= 80 ? ClouseauColors.statusWarn() : ClouseauColors.statusError());
         showUnmatched(unmatched);
     }
@@ -887,8 +929,10 @@ public final class ParserEditorDialog extends JDialog {
         row.revalidate();
     }
 
+    /** A result line: its text in a tooltip too, since a narrow window cuts it short. */
     private static void status(JLabel label, String text, Color color) {
         label.setText(text);
+        label.setToolTipText(text.isBlank() ? null : text);
         label.setForeground(color);
     }
 
