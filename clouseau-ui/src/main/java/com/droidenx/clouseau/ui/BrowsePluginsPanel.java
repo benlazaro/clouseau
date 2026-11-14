@@ -151,21 +151,27 @@ final class BrowsePluginsPanel extends JPanel {
     // ── Actions ───────────────────────────────────────────────────────────────
 
     private void showSearchHelp() {
-        JLabel label = new JLabel(
-            "<html><body style='font-family:monospace; width:320px'>"
-            + "<b>" + Messages.get("plugins.download.search.help.title") + "</b><br><br>"
-            + "<table cellpadding='4' cellspacing='0' border='0'>"
-            + "<tr><td><b>g:</b></td><td>groupId &mdash; e.g. <tt>g:com.example</tt></td></tr>"
-            + "<tr><td><b>a:</b></td><td>artifactId &mdash; e.g. <tt>a:my-plugin</tt></td></tr>"
-            + "<tr><td><b>v:</b></td><td>version &mdash; e.g. <tt>v:1.0.0</tt></td></tr>"
-            + "<tr><td><b>p:</b></td><td>packaging &mdash; e.g. <tt>p:jar</tt></td></tr>"
-            + "<tr><td><b>c:</b></td><td>classifier</td></tr>"
-            + "<tr><td><b>fc:</b></td><td>fully qualified class name</td></tr>"
-            + "</table><br>"
-            + "<i>" + Messages.get("plugins.download.search.help.note") + "</i>"
-            + "</body></html>"
-        );
-        JOptionPane.showMessageDialog(this, label,
+        // Qualifier · what it matches · an example; the qualifiers and examples are typed, so
+        // they're in the code font.
+        int size = getFont().getSize();
+        Font mono = com.droidenx.clouseau.ui.theme.ClouseauFonts.mono(Font.PLAIN, size);
+        JPanel help = new JPanel(new MigLayout("insets 0, gapx 14, gapy 6", "[][][]"));
+        for (String q : new String[]{ "g", "a", "v", "p", "c", "fc" }) {
+            JLabel qualifier = new JLabel(q + ":");
+            qualifier.setFont(mono);
+            JLabel what = new JLabel(Messages.get("plugins.download.search.help." + q));
+            String ex = Messages.get("plugins.download.search.help." + q + ".example");
+            JLabel example = new JLabel(ex);
+            example.setFont(mono);
+            ClouseauColors.themedForeground(example, ClouseauColors::dimForeground);
+            help.add(qualifier);
+            help.add(what);
+            help.add(example, "wrap");
+        }
+        JLabel note = new JLabel(Messages.get("plugins.download.search.help.note"));
+        ClouseauColors.themedForeground(note, ClouseauColors::dimForeground);
+        help.add(note, "span 3, gaptop 10");
+        JOptionPane.showMessageDialog(this, help,
                 Messages.get("plugins.download.search.help.title"),
                 JOptionPane.INFORMATION_MESSAGE);
     }

@@ -46,13 +46,15 @@ final class ColumnLayoutManagerDialog extends JDialog {
         deleteBtn.addActionListener(e -> deleteSelected());
         closeBtn.addActionListener(e -> dispose());
 
-        JPanel content = new JPanel(new MigLayout("insets 16, wrap 1, gapy 8", "[340px, fill]"));
+        ManagerDialogs.onDeleteKey(layoutList, this::deleteSelected);
 
-        content.add(new JLabel(Messages.get("table.columns.layout.manage.list.label")));
+        JPanel content = new JPanel(new MigLayout("fill, insets 16, wrap 1, gapy 8", "[grow, fill]", "[][grow, fill]"));
+
+        content.add(ManagerDialogs.sectionTitle(Messages.get("table.columns.layout.manage.list.label")), "growx");
 
         JScrollPane scroll = ClouseauColors.noFocusFrame(new JScrollPane(layoutList));
         scroll.setPreferredSize(new Dimension(340, 160));
-        content.add(scroll, "grow, h 160!");
+        content.add(scroll, "grow");
 
         // The list's actions on the left, Close on the right, as in the Plugin Manager.
         JPanel root = new JPanel(new java.awt.BorderLayout());
@@ -67,7 +69,7 @@ final class ColumnLayoutManagerDialog extends JDialog {
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         pack();
-        setResizable(false);
+        ManagerDialogs.rememberSize(this, "column.layouts", getSize(), new Dimension(380, 260));
         setLocationRelativeTo(owner);
     }
 
@@ -109,6 +111,8 @@ final class ColumnLayoutManagerDialog extends JDialog {
         int idx = layoutList.getSelectedIndex();
         if (idx < 0) return;
         String name = layouts.get(idx).name();
+        if (!ManagerDialogs.confirmDelete(this, Messages.get("table.columns.layout.delete.title"),
+                Messages.format("table.columns.layout.delete.message", name))) return;
         if (name.equals(AppPrefs.getDefaultColumnLayout())) AppPrefs.setDefaultColumnLayout(null);
         layouts.remove(idx);
         AppPrefs.saveColumnLayouts(layouts);
@@ -118,5 +122,6 @@ final class ColumnLayoutManagerDialog extends JDialog {
         setDefaultBtn.setEnabled(newSel >= 0);
         deleteBtn.setEnabled(newSel >= 0);
         refreshSetDefaultLabel();
+        layoutList.requestFocusInWindow();
     }
 }

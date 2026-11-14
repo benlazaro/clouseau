@@ -286,6 +286,27 @@ public final class AppPrefs {
         putString("ssh.dialog.layout", width + "," + height + "," + divider);
     }
 
+    /**
+     * A manager dialog's size as last left, by the dialog's own {@code id}; null before the
+     * first time. See {@link ManagerDialogs#rememberSize}.
+     */
+    public static java.awt.Dimension getDialogSize(String id) {
+        String v = getString("dialog.size." + id, null);
+        if (v == null) return null;
+        try {
+            String[] p = v.split(",");
+            if (p.length != 2) return null;
+            int w = Integer.parseInt(p[0].trim()), h = Integer.parseInt(p[1].trim());
+            return w > 0 && h > 0 ? new java.awt.Dimension(w, h) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    public static void setDialogSize(String id, java.awt.Dimension size) {
+        putString("dialog.size." + id, size.width + "," + size.height);
+    }
+
     public static int getMaxEntriesPerTab() {
         return getInt(KEY_MAX_ENTRIES_PER_TAB, 200_000);
     }

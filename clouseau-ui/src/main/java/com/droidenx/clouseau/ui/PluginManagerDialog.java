@@ -64,9 +64,15 @@ public final class PluginManagerDialog extends JDialog {
             @Override public void windowClosed(java.awt.event.WindowEvent e) { folderWatch.stop(); }
         });
 
-        setSize(760, 540);
-        setMinimumSize(new Dimension(600, 420));
+        ManagerDialogs.rememberSize(this, "plugins", new Dimension(760, 540), new Dimension(600, 420));
         setLocationRelativeTo(owner);
+        // The Installed list has the keys (Space, Delete) when the window opens; the Browse tab
+        // moves the focus to its search field itself.
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                if (tabs.getSelectedComponent() != browse) list.requestFocusInWindow();
+            }
+        });
     }
 
     /** Opens on the Browse tab: File → Open Remote → Browse Plugins…. */
