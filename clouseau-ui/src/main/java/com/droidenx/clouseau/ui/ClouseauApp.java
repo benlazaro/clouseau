@@ -161,7 +161,23 @@ public final class ClouseauApp {
         UIManager.put("OptionPane.isYesLast", Boolean.TRUE);
         FlatLaf.registerCustomDefaultsSource("com.droidenx.clouseau.ui.theme");
         ThemeManager.applyTheme(AppPrefs.getTheme());
+        applyTooltipTimings();
     }
+
+    /**
+     * Shows tooltips sooner and keeps them up while the mouse stays on the component, so a
+     * long one (the status bar's row counts, its timezone badge) can be read to the end.
+     * Swing's defaults wait 750 ms and hide every tooltip after 4 s, however long it is.
+     */
+    static void applyTooltipTimings() {
+        ToolTipManager tooltips = ToolTipManager.sharedInstance();
+        tooltips.setInitialDelay(TOOLTIP_INITIAL_DELAY_MS);
+        tooltips.setReshowDelay(TOOLTIP_RESHOW_DELAY_MS);
+        tooltips.setDismissDelay(Integer.MAX_VALUE);
+    }
+
+    static final int TOOLTIP_INITIAL_DELAY_MS = 300;
+    static final int TOOLTIP_RESHOW_DELAY_MS = 250;
 
     /** Tells the user that the running instance couldn't be reached, so the files didn't open. */
     private static void showNotDelivered(List<String> paths) {

@@ -539,6 +539,14 @@ with the OS's own shadow, so both themes leave `Popup.dropShadowPainted` on. On 
 hairline as its border, and the OS's soft shadow. On Windows 10 and Linux popups stay square,
 and FlatLaf or the window manager adds its shadow.
 
+**Tooltip timing.** A tooltip appears 300 ms after the mouse stops on a component (Swing
+restarts the wait on every mouse move, so it feels longer than the number), the next one
+along appears straight away within 250 ms of the last, and it stays up until the mouse leaves the component, clicks or
+types. It never closes on a timer, so a long tooltip (the status bar's row counts or timezone
+badge) can be read to the end. Swing's defaults are 750 ms, 500 ms and a 4 s timeout whatever
+the length. `ClouseauApp.applyTooltipTimings` sets these once at startup on the shared
+`ToolTipManager`, which isn't a UI default, so theme switches leave them alone.
+
 **Corner radii.** FlatLaf's `arc` values are diameters. The design system's radius tokens
 name what is drawn: tabs 5px (`TabbedPane.tabArc = 10`), fields, buttons and drop-downs 4px
 (arc 8), menus 4px (the menu bar's highlight, `MenuBar.selectionArc = 8`; a popup's
