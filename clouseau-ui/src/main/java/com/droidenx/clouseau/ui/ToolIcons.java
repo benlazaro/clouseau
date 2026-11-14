@@ -64,14 +64,15 @@ final class ToolIcons {
     }
 
     /**
-     * A new log: a single sheet (12×14, like the trash can and duplicate) with a plus in it, on a
-     * connection's or folder's row, so it reads as a file to add, not a copy of one.
+     * A new log: a plus in an 11×11 rounded square, on a connection's or folder's row, beside the
+     * trash can. Its bottom is the trash can's (y + 14) and its top the lid's (y + 3), so the two
+     * sit on one line.
      */
     static void paintNewLog(Graphics2D g, int x, int y, Color c) {
         g.setColor(c);
         g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g.draw(new RoundRectangle2D.Float(x + 1.5f, y + 1f, 9f, 12f, 2.5f, 2.5f));
-        g.draw(new java.awt.geom.Line2D.Float(x + 6f, y + 4.5f, x + 6f, y + 9.5f));
-        g.draw(new java.awt.geom.Line2D.Float(x + 3.5f, y + 7f, x + 8.5f, y + 7f));
+        g.draw(new RoundRectangle2D.Float(x + 0.5f, y + 3f, 11f, 11f, 2.5f, 2.5f));
+        g.draw(new java.awt.geom.Line2D.Float(x + 6f, y + 6f, x + 6f, y + 11f));
+        g.draw(new java.awt.geom.Line2D.Float(x + 3.5f, y + 8.5f, x + 8.5f, y + 8.5f));
     }
 }
