@@ -571,6 +571,7 @@ public class SshConnectionDialog extends JDialog {
 
         JScrollPane treeScroll = new JScrollPane(savedTree);
         treeScroll.setBorder(BorderFactory.createEmptyBorder());
+        treeScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         // The list sits on the sidebar itself, not on a box of its own.
         savedTree.setOpaque(false);
         treeScroll.setOpaque(false);
@@ -976,14 +977,9 @@ public class SshConnectionDialog extends JDialog {
             addMouseMotionListener(hover);
         }
 
-        /**
-         * Where the row tools end: the right edge of what's visible, so they stay in reach when
-         * a long row makes the list scroll sideways. (When it fits, that's the tree's own edge,
-         * past the room every row keeps free for them.)
-         */
+        /** Where the row tools end: the tree's right edge, in the gutter every row keeps free for them. */
         private int toolsEdge() {
-            Rectangle v = getVisibleRect();
-            return v.width > 0 ? v.x + v.width : getWidth();
+            return getWidth();
         }
 
         /** Only a connection's row can be edited: renaming it. */
@@ -1017,10 +1013,32 @@ public class SshConnectionDialog extends JDialog {
             }
         }
 
-        /** Fills the sidebar, unless a row is wider: then it keeps its width and scrolls sideways. */
-        @Override public boolean getScrollableTracksViewportWidth() {
-            return getParent() instanceof JViewport v && v.getWidth() >= getPreferredSize().width;
+        /** As wide as the sidebar: long rows are cut short with …, never scrolled sideways. */
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+
+        /**
+         * Rows are as wide as the sidebar (see {@link SavedRenderer}), and the tree keeps each row's
+         * size until told otherwise, so a sidebar of another width (the split moved, the dialog
+         * resized, the vertical scroll bar shown or hidden) has them measured again.
+         * Setting the indent to what it is is the UI's public way to drop its row sizes.
+         */
+        @Override public void addNotify() {
+            super.addNotify();
+            if (getParent() instanceof JViewport v && !Boolean.TRUE.equals(getClientProperty(REFIT))) {
+                putClientProperty(REFIT, true);
+                v.addComponentListener(new java.awt.event.ComponentAdapter() {
+                    private int lastWidth = -1;
+                    @Override public void componentResized(java.awt.event.ComponentEvent e) {
+                        if (v.getWidth() == lastWidth) return;
+                        lastWidth = v.getWidth();
+                        if (getUI() instanceof javax.swing.plaf.basic.BasicTreeUI ui) {
+                            ui.setLeftChildIndent(ui.getLeftChildIndent());
+                        }
+                    }
+                });
+            }
         }
+        private static final String REFIT = "Clouseau.refitRows";
 
         @Override protected void processMouseEvent(java.awt.event.MouseEvent e) {
             if (e.getID() == java.awt.event.MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e)) {
@@ -1096,26 +1114,54 @@ public class SshConnectionDialog extends JDialog {
      * Three kinds of row. A connection: its name in bold with its address dimmed beside it, or
      * its address in bold if it has no name ({@code user@host}, with {@code :port} when it isn't
      * 22), with more room above and below. A folder: its path, dimmed. A log: its file name.
-     * Each row keeps room on its right for the row's two tools (duplicate or new log, and a trash can),
-     * and the tree is never narrower than its widest row, so the tools, drawn at the tree's
-     * right edge, never cover a name; a sidebar too narrow for a row scrolls sideways.
+     * Each row is exactly as wide as the sidebar shows from its indent to the right edge, less a
+     * gutter for the row's two tools (duplicate or new log, and a trash can), so the tools never
+     * cover a name and text too long for the sidebar is cut short with …, never scrolled sideways.
+     * On a connection the address is cut first, then the name.
      */
     private static final class SavedRenderer extends JPanel implements javax.swing.tree.TreeCellRenderer {
-        /** Room kept free on the right for the row's two tools. */
+        /** The gutter kept free on the right for the row's two tools. */
         private static final int TOOLS = 2 * SavedTree.TOOL + 4;
         private final javax.swing.tree.DefaultTreeCellRenderer colors = new javax.swing.tree.DefaultTreeCellRenderer();
         private final JLabel name = new JLabel(), address = new JLabel();
+        /** The width the row gets, from its indent to the sidebar's right edge; 0 before the tree is shown. */
+        private int fit;
 
         SavedRenderer() {
-            super(new BorderLayout(8, 0));
+            // MigLayout shrinks the column with the higher priority to its minimum first: the address.
+            super(new MigLayout("insets 0, gap 0, hidemode 3, novisualpadding",
+                    "[shrinkprio 100, 0::][shrinkprio 200, 0::]"));
             setOpaque(false);
-            add(name, BorderLayout.WEST);
-            add(address, BorderLayout.CENTER);
+            add(name, "wmin 0");
+            add(address, "wmin 0, gapleft 8");
+        }
+
+        /** The tree sizes rows by their preferred size, so this is what fits a row to the sidebar. */
+        @Override public Dimension getPreferredSize() {
+            Dimension d = super.getPreferredSize();
+            return fit > 0 ? new Dimension(fit, d.height) : d;
+        }
+
+        /**
+         * The row's width: the sidebar's, less the tree's insets and the row's indent. The indent is
+         * worked out as the tree's UI places rows ({@code totalChildIndent} per level, the hidden root
+         * and the root handles cancelling out), since asking the tree for the row's bounds would
+         * come back here.
+         */
+        private static int fitWidth(JTree tree, Object value) {
+            if (!(tree.getParent() instanceof JViewport v) || v.getWidth() <= 0
+                    || !(tree.getUI() instanceof javax.swing.plaf.basic.BasicTreeUI ui)
+                    || !(value instanceof DefaultMutableTreeNode node)) return 0;
+            int depth = node.getLevel() + (tree.isRootVisible() ? 0 : -1) + (tree.getShowsRootHandles() ? 1 : 0);
+            int indent = depth * (ui.getLeftChildIndent() + ui.getRightChildIndent());
+            Insets in = tree.getInsets();
+            return Math.max(40, v.getWidth() - in.left - in.right - indent);
         }
 
         @Override public Component getTreeCellRendererComponent(JTree tree, Object value, boolean selected,
                 boolean expanded, boolean leaf, int row, boolean hasFocus) {
             colors.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);
+            fit = fitWidth(tree, value);
             Color fg = colors.getForeground();
             Object o = value instanceof DefaultMutableTreeNode n ? n.getUserObject() : null;
             // A connection is the level above everything under it: bold. Weight, not a fill:
@@ -1134,10 +1180,12 @@ public class SshConnectionDialog extends JDialog {
                 // Dim, so the eye goes from the connection to the logs, which are what you pick.
                 name.setText(folderLabel(sf.path()));
                 name.setForeground(selected ? fg : ClouseauColors.dimForeground());
+                setToolTipText(folderLabel(sf.path()));
             } else if (o instanceof SshSaved.Connection c) {
                 name.setText(c.label());
                 address.setText(c.address());
                 address.setVisible(c.name() != null);
+                setToolTipText(c.name() != null ? c.label() + "  " + c.address() : c.address());
             } else {
                 name.setText(o == null ? "" : o.toString());
             }
