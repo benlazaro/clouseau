@@ -122,9 +122,11 @@ see long names. The dialog keeps its size and divider for next time.
 - **To name a connection**, type it in **Name**, or right-click the connection and choose
   **Rename** (or select it and press `F2`), type the name and press `Enter` (`Esc` cancels).
   Clear the name to show the address again.
-- **To follow another file on a saved connection**, right-click it and choose **New Log…**,
-  or point at one of its logs and click the duplicate icon at the right of the row (or press
-  `Ctrl+D`), which fills in the same folder. Enter the path and click **Connect**.
+- **To follow another file on a saved connection**, point at the connection and click the
+  new-log icon at the right of its row (or right-click it and choose **New Log…**). Do the
+  same on one of its folders to have the folder filled in, so you only type the file name;
+  the duplicate icon on a log (or `Ctrl+D`) does the same from a log. Enter the path and
+  click **Connect**.
 - **To forget something**, click the trash can at the right of its row (or select it and
   press `Delete`). Forgetting a connection forgets its logs too, after asking; a folder's
   trash can forgets every log in it, after asking when there's more than one.

@@ -148,7 +148,7 @@ public class SshConnectionDialog extends JDialog {
     /** The saved connections | the form; its divider is remembered. */
     private JSplitPane split;
     // Wide enough for a typical log row, three levels deep, with its tools' room beside it.
-    private static final int SIDEBAR_WIDTH = 300, SIDEBAR_MIN = 160;
+    private static final int SIDEBAR_WIDTH = 320, SIDEBAR_MIN = 160;
 
     /** Takes the focus when the dialog opens: Host, or the secret a reconnect still needs. */
     private JComponent initialFocus = hostField;
@@ -846,6 +846,11 @@ public class SshConnectionDialog extends JDialog {
             newLog.addActionListener(a -> newLog(c.key(), ""));
             menu.add(newLog);
             menu.addSeparator();
+        } else if (o instanceof SavedFolder sf) {
+            JMenuItem newLog = new JMenuItem(Messages.get("ssh.dialog.saved.menu.newlog"));
+            newLog.addActionListener(a -> newLogAt(sf));
+            menu.add(newLog);
+            menu.addSeparator();
         } else if (o instanceof LogNode ln) {
             JMenuItem dup = new JMenuItem(Messages.get("ssh.dialog.saved.menu.duplicate"));
             dup.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK));
@@ -944,11 +949,12 @@ public class SshConnectionDialog extends JDialog {
     /**
      * The saved-connections tree. It fills the sidebar's width and shows tools at the right of
      * the row under the mouse: on a log, a duplicate icon and a trash can; on a connection or a
-     * folder, a trash can that forgets it. A press on a tool doesn't select the row.
+     * folder, a new-log icon (its folder filled in, on a folder) and a trash can that forgets it. A press on a tool doesn't select the row.
      */
     private final class SavedTree extends JTree {
         static final int TOOL = 24;                // width of each tool's hit area
-        private enum Tool { NONE, DUPLICATE, TRASH }
+        /** The row's second tool: Duplicate on a log, New Log on a connection or folder. */
+        private enum Tool { NONE, DUPLICATE, NEW_LOG, TRASH }
         private int hoverRow = -1;
         private Tool overTool = Tool.NONE;
 
@@ -968,6 +974,16 @@ public class SshConnectionDialog extends JDialog {
             };
             addMouseListener(hover);
             addMouseMotionListener(hover);
+        }
+
+        /**
+         * Where the row tools end: the right edge of what's visible, so they stay in reach when
+         * a long row makes the list scroll sideways. (When it fits, that's the tree's own edge,
+         * past the room every row keeps free for them.)
+         */
+        private int toolsEdge() {
+            Rectangle v = getVisibleRect();
+            return v.width > 0 ? v.x + v.width : getWidth();
         }
 
         /** Only a connection's row can be edited: renaming it. */
@@ -991,8 +1007,9 @@ public class SshConnectionDialog extends JDialog {
             Rectangle r = row >= 0 ? getRowBounds(row) : null;
             int newRow = r != null && p.y >= r.y && p.y < r.y + r.height ? row : -1;
             Tool tool = Tool.NONE;
-            if (newRow >= 0 && p.x >= getWidth() - TOOL - 2) tool = Tool.TRASH;
-            else if (newRow >= 0 && isLog(newRow) && p.x >= getWidth() - 2 * TOOL - 2) tool = Tool.DUPLICATE;
+            int edge = toolsEdge();
+            if (newRow >= 0 && p.x >= edge - TOOL - 2) tool = Tool.TRASH;
+            else if (newRow >= 0 && p.x >= edge - 2 * TOOL - 2) tool = isLog(newRow) ? Tool.DUPLICATE : Tool.NEW_LOG;
             if (newRow != hoverRow || tool != overTool) {
                 hoverRow = newRow;
                 overTool = tool;
@@ -1015,6 +1032,7 @@ public class SshConnectionDialog extends JDialog {
                     SwingUtilities.invokeLater(() -> {
                         if (tool == Tool.TRASH) forget(node);
                         else if (node.getUserObject() instanceof LogNode ln) duplicate(ln);
+                        else newLogAt(node.getUserObject());
                     });
                     return;
                 }
@@ -1026,6 +1044,10 @@ public class SshConnectionDialog extends JDialog {
         @Override public String getToolTipText(java.awt.event.MouseEvent e) {
             track(e.getPoint());
             if (overTool == Tool.DUPLICATE) return Messages.get("ssh.dialog.saved.duplicate.tooltip");
+            if (overTool == Tool.NEW_LOG) {
+                return Messages.get(isFolder(hoverRow) ? "ssh.dialog.saved.newlog.folder.tooltip"
+                                                       : "ssh.dialog.saved.newlog.connection.tooltip");
+            }
             if (overTool == Tool.TRASH) {
                 return isLog(hoverRow)    ? Messages.get("ssh.dialog.saved.remove.tooltip")
                      : isFolder(hoverRow) ? Messages.get("ssh.dialog.saved.forget.folder.tooltip")
@@ -1042,11 +1064,14 @@ public class SshConnectionDialog extends JDialog {
                 Rectangle r = getRowBounds(hoverRow);
                 Color base = isRowSelected(hoverRow) ? UIManager.getColor("Tree.selectionForeground") : ClouseauColors.dimForeground();
                 int y = r.y + (r.height - 14) / 2;
-                ToolIcons.paintTrash(g2, getWidth() - TOOL + 5, y, overTool == Tool.TRASH
+                ToolIcons.paintTrash(g2, toolsEdge() - TOOL + 5, y, overTool == Tool.TRASH
                         ? ClouseauColors.levelColor(com.droidenx.clouseau.api.LogEntry.LogLevel.ERROR) : base);
                 if (isLog(hoverRow)) {
-                    ToolIcons.paintDuplicate(g2, getWidth() - 2 * TOOL + 5, y,
+                    ToolIcons.paintDuplicate(g2, toolsEdge() - 2 * TOOL + 5, y,
                             overTool == Tool.DUPLICATE ? ClouseauColors.foreground() : base);
+                } else {
+                    ToolIcons.paintNewLog(g2, toolsEdge() - 2 * TOOL + 5, y,
+                            overTool == Tool.NEW_LOG ? ClouseauColors.foreground() : base);
                 }
             }
             g2.dispose();
@@ -1071,13 +1096,13 @@ public class SshConnectionDialog extends JDialog {
      * Three kinds of row. A connection: its name in bold with its address dimmed beside it, or
      * its address in bold if it has no name ({@code user@host}, with {@code :port} when it isn't
      * 22), with more room above and below. A folder: its path, dimmed. A log: its file name.
-     * Each row keeps room on its right for the row's tools (trash can, and duplicate on a log),
+     * Each row keeps room on its right for the row's two tools (duplicate or new log, and a trash can),
      * and the tree is never narrower than its widest row, so the tools, drawn at the tree's
      * right edge, never cover a name; a sidebar too narrow for a row scrolls sideways.
      */
     private static final class SavedRenderer extends JPanel implements javax.swing.tree.TreeCellRenderer {
-        /** Room kept free on the right for the tools: two on a log, one on a connection or folder. */
-        private static final int LOG_TOOLS = 2 * SavedTree.TOOL + 4, GROUP_TOOLS = SavedTree.TOOL + 4;
+        /** Room kept free on the right for the row's two tools. */
+        private static final int TOOLS = 2 * SavedTree.TOOL + 4;
         private final javax.swing.tree.DefaultTreeCellRenderer colors = new javax.swing.tree.DefaultTreeCellRenderer();
         private final JLabel name = new JLabel(), address = new JLabel();
 
@@ -1119,7 +1144,7 @@ public class SshConnectionDialog extends JDialog {
             // Connections get more room above and below, so each one starts a block. The room is
             // even on both sides, so a selected connection's fill stays centered on its text.
             int pad = connection ? 6 : 3;
-            setBorder(BorderFactory.createEmptyBorder(pad, 0, pad, o instanceof LogNode ? LOG_TOOLS : GROUP_TOOLS));
+            setBorder(BorderFactory.createEmptyBorder(pad, 0, pad, TOOLS));
             return this;
         }
     }
@@ -1195,8 +1220,18 @@ public class SshConnectionDialog extends JDialog {
         putSelectionBack(null);
         validateForm();
         remotePathField.requestFocusInWindow();
+        // After the focus has arrived: a text field selects all of itself when it gets the focus.
         int slash = path.lastIndexOf('/');
-        remotePathField.select(slash + 1, path.length());
+        SwingUtilities.invokeLater(() -> remotePathField.select(slash + 1, path.length()));
+    }
+
+    /**
+     * The new-log icon on a connection's row (an empty Remote path) or a folder's (its folder
+     * filled in, so only the file name is left to type).
+     */
+    private void newLogAt(Object row) {
+        if (row instanceof SshSaved.Connection c) newLog(c.key(), "");
+        else if (row instanceof SavedFolder f) newLog(f.connKey(), f.path().isEmpty() ? "" : f.path() + "/");
     }
 
     /**

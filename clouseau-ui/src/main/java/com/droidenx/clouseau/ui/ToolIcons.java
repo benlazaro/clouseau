@@ -62,4 +62,16 @@ final class ToolIcons {
         back.lineTo(x + 8.5f, y + 1f);
         g.draw(back);
     }
+
+    /**
+     * A new log: a single sheet (12×14, like the trash can and duplicate) with a plus in it, on a
+     * connection's or folder's row, so it reads as a file to add, not a copy of one.
+     */
+    static void paintNewLog(Graphics2D g, int x, int y, Color c) {
+        g.setColor(c);
+        g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.draw(new RoundRectangle2D.Float(x + 1.5f, y + 1f, 9f, 12f, 2.5f, 2.5f));
+        g.draw(new java.awt.geom.Line2D.Float(x + 6f, y + 4.5f, x + 6f, y + 9.5f));
+        g.draw(new java.awt.geom.Line2D.Float(x + 3.5f, y + 7f, x + 8.5f, y + 7f));
+    }
 }
