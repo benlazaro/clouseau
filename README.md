@@ -1,4 +1,4 @@
-# Clouseau Log Viewer
+# Clouseau
 
 **A fast, modern desktop log viewer for engineers.**
 
