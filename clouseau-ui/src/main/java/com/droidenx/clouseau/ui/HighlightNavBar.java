@@ -180,7 +180,7 @@ final class HighlightNavBar extends JPanel {
                     g2.fillRoundRect(0, 0, getWidth(), getHeight(), 5, 5);
                     if (!selected) ClouseauColors.paintHighlightEdge(g2, c, 0, 0, getWidth(), getHeight(), 5);
                     if (selected) {
-                        g2.setColor(Color.WHITE);
+                        g2.setColor(ClouseauColors.highlightRing());
                         g2.setStroke(new BasicStroke(1.5f));
                         g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 4, 4);
                     }

@@ -56,6 +56,16 @@ class ThemeContrastTest {
         {"Component.focusColor",            "@background",                  NON_TEXT},
         {"TabbedPane.underlineColor",       "@background",                  NON_TEXT},
         {"Clouseau.selectionRing",          "Table.background",             NON_TEXT},
+        // The ring marking "already this color" (DESIGN.md 6.14), on every swatch and the menu
+        {"Clouseau.highlightRing",          "@menuBackground",              NON_TEXT},
+        {"Clouseau.highlightRing",          "Clouseau.highlight.0",         NON_TEXT},
+        {"Clouseau.highlightRing",          "Clouseau.highlight.1",         NON_TEXT},
+        {"Clouseau.highlightRing",          "Clouseau.highlight.2",         NON_TEXT},
+        {"Clouseau.highlightRing",          "Clouseau.highlight.3",         NON_TEXT},
+        {"Clouseau.highlightRing",          "Clouseau.highlight.4",         NON_TEXT},
+        {"Clouseau.highlightRing",          "Clouseau.highlight.5",         NON_TEXT},
+        {"Clouseau.highlightRing",          "Clouseau.highlight.6",         NON_TEXT},
+        {"Clouseau.highlightRing",          "Clouseau.highlight.7",         NON_TEXT},
     };
 
     @ParameterizedTest

@@ -407,11 +407,11 @@ final class RowMenu {
                 Color color = ClouseauColors.highlightColors()[slot];
                 g2.setColor(color);
                 g2.fillRoundRect(x, y, w, h, 6, 6);
-                // Its own hue, a step off the menu; the white ring replaces it when marked.
+                // Its own hue, a step off the menu; the ring replaces it when marked.
                 if (!marked) ClouseauColors.paintHighlightEdge(g2, color, x, y, w, h, 6);
             }
             if (marked) {
-                g2.setColor(Color.WHITE);
+                g2.setColor(ClouseauColors.highlightRing());
                 g2.setStroke(new BasicStroke(2f));
                 g2.drawRoundRect(x + 1, y + 1, w - 3, h - 3, 5, 5);
             }

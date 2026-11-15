@@ -127,7 +127,7 @@ filter reads the text of the remaining rows in the background; the status bar sh
 - The counter shows how many rows match ("Searching n%" while it's still counting).
 - **Highlight ⌄** colors every match at once: pick one of the [highlight](#highlights)
   colors, or **None** (the first swatch) to uncolor them; it asks first when that's
-  two or more rows, unless you turned that off in Settings. A white ring marks what
+  two or more rows, unless you turned that off in Settings. A ring marks what
   they all are already. Only rows the filters show are matched, so only those are colored.
 - `Escape` closes the bar.
 

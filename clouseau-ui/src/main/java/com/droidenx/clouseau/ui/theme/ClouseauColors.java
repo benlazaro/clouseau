@@ -238,11 +238,21 @@ public final class ClouseauColors {
     };
 
     /**
+     * The ring on a swatch or chip that marks "already this color" (DESIGN.md 6.14): the theme's
+     * strongest ink, white in Dark and the text color in Light, where white would vanish on the
+     * pastels and the white menu. White when the theme doesn't set {@code Clouseau.highlightRing}.
+     */
+    public static Color highlightRing() {
+        Color c = UIManager.getColor("Clouseau.highlightRing");
+        return c != null ? c : Color.WHITE;
+    }
+
+    /**
      * The 1px edge drawn just inside a highlight swatch (row menu, find bar, highlight bar,
      * detail pane): the fill's own hue a step lighter in Dark (OKLCH L 0.50) or darker in
      * Light (L 0.76), so a dark fill on a dark menu, or a pastel on white, still shows (about
      * 2:1 on the menu) without the edge outshining the fill.
-     * White stays for the ring that marks the current color. A theme without
+     * {@link #highlightRing()} replaces it on the marked swatch. A theme without
      * {@code Clouseau.highlightEdge.<slot>} gets the fill blended halfway to the foreground.
      */
     public static Color highlightEdge(Color fill) {

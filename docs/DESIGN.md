@@ -731,7 +731,9 @@ File or Reconnect, Clear Table…, All Notes…) are in the File and Edit menus.
 The swatch row comes from `RowMenu.swatchRow(header, marked, pick)`, shared with the
 find bar's Highlight popup so the two can't drift: a header label, then a
 `RowMenu.Swatch` for None (`RowMenu.NONE`, −1) and slots 0–7, the one `markedSlot` returns
-ringed. Each swatch is a 26×26 button around its 22×22 square, the 2px margin holding the
+ringed in `ClouseauColors.highlightRing()` (`Clouseau.highlightRing`: white in Dark, the
+text color in Light, where white vanishes on the pastels; `ThemeContrastTest` keeps it at
+3:1 or more against every highlight and the menu). Each swatch is a 26×26 button around its 22×22 square, the 2px margin holding the
 hover fill, with its color's name as a tooltip (`highlight.color.<slot>`,
 `highlight.color.none`). The row itself is a `MenuElement`: Up and Down reach it as they
 reach a menu item, and the `MenuSelectionManager` hands it Left, Right, Enter and Space,
