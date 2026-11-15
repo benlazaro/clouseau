@@ -21,22 +21,22 @@ public final class ClouseauColors {
 
     private ClouseauColors() {}
 
-    // ── Hardcoded fallback colors (used when UIManager has no entry) ──────────
+    // ── Fallbacks when a theme has no entry: the built-in Dark theme's values ──────
 
-    private static final Color FB_LEVEL_TRACE   = new Color(0x757575);
-    private static final Color FB_LEVEL_DEBUG   = new Color(0x66BB6A);
-    private static final Color FB_LEVEL_INFO    = new Color(0x29B6F6);
-    private static final Color FB_LEVEL_WARN    = new Color(0xFFA726);
-    private static final Color FB_LEVEL_ERROR   = new Color(0xEF5350);
-    private static final Color FB_LEVEL_FATAL   = new Color(0xFF4081);
+    private static final Color FB_LEVEL_TRACE   = new Color(0xA3A8B0);
+    private static final Color FB_LEVEL_DEBUG   = new Color(0x6CC070);
+    private static final Color FB_LEVEL_INFO    = new Color(0x3DBCF5);
+    private static final Color FB_LEVEL_WARN    = new Color(0xFFAD3B);
+    private static final Color FB_LEVEL_ERROR   = new Color(0xFF6E6B);
+    private static final Color FB_LEVEL_FATAL   = new Color(0xFF6BA0);
 
     private static final Color FB_STATUS_OK     = new Color(0x4CAF50);
     private static final Color FB_STATUS_WARN   = new Color(0xFFA726);
     private static final Color FB_STATUS_ERROR  = new Color(0xE57373);
 
     private static final Color[] FB_HIGHLIGHTS = {
-        new Color(0x6B2020), new Color(0x6B4A20), new Color(0x5C5C1A), new Color(0x1A5C1A),
-        new Color(0x1A5C5C), new Color(0x1A2E6B), new Color(0x3D1A6B), new Color(0x6B1A4A),
+        new Color(0x4B1D1B), new Color(0x442600), new Color(0x332F00), new Color(0x0D371A),
+        new Color(0x003836), new Color(0x0D2F4F), new Color(0x33244B), new Color(0x461E36),
     };
 
     private static final Color[] FB_DEPTHS = {
@@ -275,10 +275,10 @@ public final class ClouseauColors {
     // ── Highlight navigation bar ──────────────────────────────────────────────
 
     /** Fill for the "All" button when it is the active filter. */
-    public static Color highlightNavSelected()   { return get("Clouseau.highlightNav.selected",   null, new Color(0x4A4A4A)); }
+    public static Color highlightNavSelected()   { return get("Clouseau.highlightNav.selected",   null, new Color(0x4A4D54)); }
 
     /** Fill for the "All" button when a specific color is the active filter. */
-    public static Color highlightNavUnselected() { return get("Clouseau.highlightNav.unselected", null, new Color(0x2A2A2A)); }
+    public static Color highlightNavUnselected() { return get("Clouseau.highlightNav.unselected", null, new Color(0x2A2C30)); }
 
     // ── Logger-tree depth colors ──────────────────────────────────────────────
 
@@ -299,9 +299,9 @@ public final class ClouseauColors {
 
     // ── Plugin status ─────────────────────────────────────────────────────────
 
-    public static Color pluginEnabled()  { return get("Clouseau.plugin.enabled",  null, FB_LEVEL_DEBUG); }
-    public static Color pluginDisabled() { return get("Clouseau.plugin.disabled", null, FB_LEVEL_WARN); }
-    public static Color pluginFailed()   { return get("Clouseau.plugin.failed",   null, FB_LEVEL_ERROR); }
+    public static Color pluginEnabled()  { return get("Clouseau.plugin.enabled",  null, new Color(0x66BB6A)); }
+    public static Color pluginDisabled() { return get("Clouseau.plugin.disabled", null, new Color(0xFFA726)); }
+    public static Color pluginFailed()   { return get("Clouseau.plugin.failed",   null, new Color(0xEF5350)); }
 
     // ── Loading progress bar ──────────────────────────────────────────────────
 
