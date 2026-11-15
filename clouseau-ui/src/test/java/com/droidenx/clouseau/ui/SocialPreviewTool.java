@@ -27,7 +27,7 @@ public final class SocialPreviewTool {
     static final String NAME = "Clouseau";
     /** The README's pitch, broken where it reads well at this size. */
     static final String[] TAGLINE = {
-            "A fast, modern desktop", "log viewer for engineers", "who investigate logs", "for a living." };
+            "A fast, modern desktop", "log viewer for engineers." };
     static final String FOOTNOTE = "Free & open source  ·  Windows  ·  macOS  ·  Linux";
 
     private static final Color AMBER = new Color(0xE0A243);

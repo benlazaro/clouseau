@@ -169,12 +169,18 @@ public final class ScreenshotTool {
         });
         settle(500);
         onEdt(() -> {
-            // The Test section's sample line: the first empty single-line field.
+            // The Test section's sample line: the first empty single-line field right of the
+            // parser list (the list's own search field is empty too).
+            @SuppressWarnings("unchecked")
+            JList<Object> list = find(dialog, JList.class, l -> true);
+            int formLeft = list.getLocationOnScreen().x + list.getWidth();
             JTextField sample = find(dialog, JTextField.class,
-                    t -> t.isShowing() && t.isEditable() && t.getText().isEmpty());
+                    t -> t.isShowing() && t.isEditable() && t.getText().isEmpty()
+                            && t.getLocationOnScreen().x > formLeft);
             sample.setText("2026-03-27 08:15:02.480 INFO --- [gw-eu-1] [edge-router-7] [io-worker-2] "
                     + "com.example.edge.Forwarder - Forwarded 128 bytes to 10.0.4.22:51234");
             sample.setCaretPosition(0);
+            sample.requestFocusInWindow();
             return null;
         });
         settle(800);

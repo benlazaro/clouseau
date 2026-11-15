@@ -1,6 +1,6 @@
 # Clouseau Log Viewer
 
-**A fast, modern desktop log viewer for engineers who investigate logs for a living.**
+**A fast, modern desktop log viewer for engineers.**
 
 Open logs of any size, merge the logs of several services into one timeline, filter in milliseconds, and hand your annotated findings to a colleague in one file. Free and open source, for Windows, macOS and Linux.
 
