@@ -32,9 +32,10 @@ The status bar shows the file's path, the [source timezone](#timezones), and how
 are shown from how many lines, such as **57 rows · 108 lines**.
 
 - `Ctrl+Home` and `Ctrl+End` jump to the first and last row.
-- Right-click a row for [highlights](#highlights), [notes](annotations-and-review.md),
-  **Reload File** (read the file again from the start, also **File → Reload File**,
-  `Ctrl+R`) and **Clear Table** (also **Edit → Clear Table**).
+- Right-click a row to copy it, [highlight](#highlights) it, filter by its time or
+  logger, or add a [note](annotations-and-review.md).
+- **File → Reload File** (`Ctrl+R`) reads the file again from the start, and
+  **Edit → Clear Table…** (`Ctrl+Shift+K`) empties the table.
 - **Clear Table** empties the table so you see only what's written from now on, for example
   while you reproduce a bug. On a file, the rows are only hidden: new rows keep their line
   numbers in the file, your notes and highlights stay, and **Reload File** brings every row
@@ -125,8 +126,9 @@ filter reads the text of the remaining rows in the background; the status bar sh
   column you've hidden.
 - The counter shows how many rows match ("Searching n%" while it's still counting).
 - **Highlight ⌄** colors every match at once: pick one of the [highlight](#highlights)
-  colors (a white ring marks the color they all have already), or **Clear Highlight** to
-  uncolor them. Only rows the filters show are matched, so only those are colored.
+  colors, or **None** (the first swatch) to uncolor them; it asks first when that's
+  two or more rows, unless you turned that off in Settings. A white ring marks what
+  they all are already. Only rows the filters show are matched, so only those are colored.
 - `Escape` closes the bar.
 
 ## Highlights
@@ -137,8 +139,8 @@ Highlights mark rows you want to come back to.
 2. The **Highlights** bar appears above the table. Click a color to step through only
    that color (or **All**), and use **▲** and **▼** to go to the previous or next
    highlighted row.
-3. **Clear highlight** removes the color from the selected rows. To remove a whole color,
-   right-click its chip in the bar and choose **Clear *color* Highlight**. **Clear all
+3. **None**, the first swatch, removes the color from the selected rows. To remove a
+   whole color, right-click its chip in the bar and choose **Clear *color* Highlight**. **Clear all
    highlights** in the row menu, or **Clear All** after the count in the bar, removes every
    highlight in the tab. Both take the rows the filters hide too, and ask first unless you
    turned that off in Settings.

@@ -1,6 +1,6 @@
 # Clouseau Design
 
-> **Status:** Draft · **Last updated:** 2026-11-06
+> **Status:** Draft · **Last updated:** 2026-11-14
 >
 > This document describes *how* Clouseau works and *why* it is built that way. It
 > complements [`USE_CASES.md`](USE_CASES.md), which describes *what* Clouseau is for.
@@ -564,7 +564,8 @@ name what is drawn: tabs 5px (`TabbedPane.tabArc = 10`), fields, buttons and dro
 highlighted item, `MenuItem.selectionArc = 8`, inset 4px from the popup's sides; popup corners,
 `PopupMenu.borderCornerRadius = 4`, where the OS draws them), the selected row of a list,
 tree or drop-down 4px (arc 8, from the menus; see Selected rows above), key badges 4px,
-row-menu swatches 3px, highlight-bar chips 2.5px and find marks 2px. Table rows are square.
+row-menu swatches 3px (the None swatch too), their hover fill 4px,
+highlight-bar chips 2.5px and find marks 2px. Table rows are square.
 
 ### 6.9 Tab switching shortcuts (UC-15)
 
@@ -719,6 +720,28 @@ A `JTree` sizes its rows from the renderer's preferred size and caches them, so 
 width less the row's indent (`totalChildIndent` per level), and a resize of the viewport
 drops the cached sizes (`BasicTreeUI.setLeftChildIndent` with its current value). A
 `JList` (Favorites) gets this from tracking the viewport width alone.
+
+### 6.14 Row menu
+
+`RowMenu` builds the table's right-click menu each time it opens, for the selected
+rows. Its contents and order are in the design system (Content fundamentals, "The row
+menu"). It holds only what acts on those rows (D-25): actions on the whole tab (Reload
+File or Reconnect, Clear Table…, All Notes…) are in the File and Edit menus.
+
+The swatch row comes from `RowMenu.swatchRow(rows, header)`, shared with the find
+bar's Highlight popup so the two can't drift: a header label, then
+`RowMenu.swatch(slot, marked)` for None (slot −1) and slots 0–7. Each swatch is a
+focusable button with its color's name as a tooltip (`highlight.color.<slot>`,
+`highlight.color.none`). It paints the hover fill itself, since it isn't a menu item.
+Left and Right move focus along the row. Choosing None calls the same path Clear
+Highlight did (`setHighlights(rows, null, null)`), without asking: the user just chose
+the rows. In the find bar it uncolors every match, as its Clear Highlight did, after
+asking when that's 2 or more matches and `AppPrefs.isHighlightClearAllConfirm()` is on
+(the count is of matches that have a highlight, not of all matches).
+
+The Copy items call the same `SharedTabContext` actions as the Edit menu
+(`copyMessage`, `copyRaw`, `copyEntry`) and show the same accelerators. **Edit → Clear
+Table…** gets `Ctrl+Shift+K`, so it keeps a quick path after leaving the row menu.
 
 ## 7. Persistence
 
@@ -2193,6 +2216,17 @@ form mixed a server's details with one log's.
   hold the sign-in, which is what you'd want to change in one place.
 - *Offering to replace another connection on a clash*: it would delete that connection and
   its logs as a side effect of editing a username.
+
+### D-25 · Right-click menus act on what they were opened on · Adopted
+
+A right-click menu offers what acts on the thing under the mouse (rows, a tab, a
+chip, a saved item) and nothing wider. The row menu used to repeat Reload File,
+Clear Table… and All Notes…, which act on the whole tab; they now live only in the
+menu bar, where every action can be found, each with a shortcut (Clear Table… gets
+`Ctrl+Shift+K` for this). Rejected: keeping them for mouse users (the menu bar is one
+click away and shows their shortcuts), and moving them to the filter bar (Clear Table
+would sit beside Clear All Filters and read as a filter, which "a clear sits with what
+it clears" rules out).
 
 ## 10. Planned features
 

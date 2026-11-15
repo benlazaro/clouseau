@@ -234,7 +234,7 @@ its shell instead, with no change in the dialog: the same folders, files, sizes 
 Only if the shell can't list either does a note say the folders couldn't be shown and
 suggest typing the path.
 
-**Clear Table:** Empties the table so only lines written from then on show. On a file the
+**Clear Table** (**Edit → Clear Table…**, `Ctrl+Shift+K`): Empties the table so only lines written from then on show. On a file the
 rows are hidden, not dropped: new rows keep their line in the file, notes and highlights
 stay, and Reload File shows everything again. On an SSH or plugin source the rows so far
 are removed. Not offered on a merged view or a file shown as plain text.

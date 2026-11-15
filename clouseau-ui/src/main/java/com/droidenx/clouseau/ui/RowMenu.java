@@ -12,12 +12,16 @@ import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntConsumer;
+import java.util.function.IntFunction;
+import net.miginfocom.swing.MigLayout;
 
 /**
- * The menu shown when the user right-clicks rows of a tab's table (G-9): highlight colors
- * and clearing them (D-15), the time range from a row, adding, editing and removing a note, the row's file on a merged
- * tab (offset, timezone, parser), the notes panel, reload and clear. {@link TabPanel}
- * builds one and reaches back through {@link Host}. EDT only.
+ * The menu shown when the user right-clicks rows of a tab's table (DESIGN.md 6.14): copying the
+ * selected line, highlight colors (D-15), the time range from a row, the rows' loggers, adding,
+ * editing and removing a note, and the row's file on a merged tab (offset, timezone, parser). It
+ * holds only what acts on those rows (D-25): Reload File, Clear Table… and All Notes… are in the
+ * menu bar. {@link TabPanel} builds one and reaches back through {@link Host}. EDT only.
  */
 final class RowMenu {
 
@@ -50,25 +54,15 @@ final class RowMenu {
 
         void showParserDialog(int source);
 
-        void showAnnotationsDialog();
+        /** Copies the selected line's message, its raw line or the whole entry, as the Edit menu does. */
+        void copyMessage();
 
-        /** True if Reload File applies (a tab showing a file). */
-        boolean canReload();
+        void copyRaw();
 
-        void reload();
-
-        /** True if Reconnect applies (a live source that can connect again). */
-        boolean canReconnect();
-
-        void reconnect();
-
-        void clearTable();
+        void copyEntry();
 
         /** The filter bar, which the logger items change (Hide, Show Only, Show All). */
         FilterBar filterBar();
-
-        /** True if Clear Table applies (a tab streaming a live source). */
-        boolean canClearTable();
     }
 
     private final LogTableModel logTableModel;
@@ -83,41 +77,28 @@ final class RowMenu {
 
     /** Shows the menu for {@code entries} (model rows, possibly none) at a point in the table. */
     void show(List<Integer> entries, int x, int y) {
-        boolean anyHighlighted = entries.stream().anyMatch(r -> logTableModel.getHighlight(r) != null);
-
         JPopupMenu menu = new JPopupMenu();
 
         if (!entries.isEmpty()) {
-            JPanel swatches = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
-            swatches.setOpaque(false);
-            Color[] palette = ClouseauColors.highlightColors();
-            for (int slotIndex = 0; slotIndex < palette.length; slotIndex++) {
-                final Color color = palette[slotIndex];
-                final int slot = slotIndex;
-                boolean allMatch = entries.stream().allMatch(r -> color.equals(logTableModel.getHighlight(r)));
-                JButton swatch = swatch(color, allMatch);
-                swatch.addActionListener(e -> {
-                    setHighlights(entries, color, slot);
-                    menu.setVisible(false);
-                    host.highlightsChanged();
-                });
-                swatches.add(swatch);
-            }
-            menu.add(swatches);
+            // ── Copy, named and keyed as in the Edit menu ─────────────────────────
+            menu.add(copyItem("menu.edit.copy.message",
+                    KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK), host::copyMessage));
+            menu.add(copyItem("menu.edit.copy.raw", DetailPanel.COPY_RAW_KEY, host::copyRaw));
+            menu.add(copyItem("menu.edit.copy.entry", DetailPanel.COPY_ENTRY_KEY, host::copyEntry));
             menu.addSeparator();
 
-            final boolean hasHL = logTableModel.hasHighlights();
+            // ── Highlight: the swatch row (None, then the eight colors) ────────────
+            Color[] palette = ClouseauColors.highlightColors();
+            String header = entries.size() == 1 ? Messages.get("highlight.header")
+                    : java.text.MessageFormat.format(Messages.get("highlight.header.many"), entries.size());
+            menu.add(swatchRow(header, markedSlot(entries, logTableModel::getHighlight), slot -> {
+                // None acts at once: the user just chose these rows (DESIGN.md 6.14).
+                if (slot == NONE) setHighlights(entries, null, null);
+                else setHighlights(entries, palette[slot], slot);
+                host.highlightsChanged();
+            }));
 
-            JMenuItem clearItem = new JMenuItem(Messages.get("highlight.clear"));
-            if (anyHighlighted) {
-                clearItem.addActionListener(e -> {
-                    setHighlights(entries, null, null);
-                    host.highlightsChanged();
-                });
-            } else {
-                clearItem.setEnabled(false);
-            }
-            menu.add(clearItem);
+            final boolean hasHL = logTableModel.hasHighlights();
 
             // "…" while clearing asks first, as on the highlight bar's Clear All.
             JMenuItem clearAllItem = new JMenuItem(Messages.get("highlight.clear.all")
@@ -208,34 +189,19 @@ final class RowMenu {
             }
         }
 
-        JMenuItem viewAllItem = new JMenuItem(Messages.get("annotations.view.all"));
-        viewAllItem.setEnabled(host.notes().size() > 0);
-        viewAllItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,
-                InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
-        viewAllItem.addActionListener(e -> host.showAnnotationsDialog());
-        menu.add(viewAllItem);
-
-        menu.addSeparator();
-
-        // What applies to this tab, named as in the File menu: Reconnect on a live source,
-        // Reload File on a file.
-        if (host.canReconnect()) {
-            JMenuItem reconnectItem = new JMenuItem(Messages.get("menu.file.reconnect"));
-            reconnectItem.addActionListener(e -> host.reconnect());
-            menu.add(reconnectItem);
-        } else {
-            JMenuItem reloadFileItem = new JMenuItem(Messages.get("table.context.reload.file"));
-            reloadFileItem.setEnabled(host.canReload());
-            reloadFileItem.addActionListener(e -> host.reload());
-            menu.add(reloadFileItem);
+        // Each group ends with its own separator; drop the last one.
+        while (menu.getComponentCount() > 0
+                && menu.getComponent(menu.getComponentCount() - 1) instanceof JPopupMenu.Separator) {
+            menu.remove(menu.getComponentCount() - 1);
         }
-
-        JMenuItem clearTableItem = new JMenuItem(Messages.get("table.clear"));
-        clearTableItem.setEnabled(host.canClearTable());
-        clearTableItem.addActionListener(e -> host.clearTable());
-        menu.add(clearTableItem);
-
         menu.show(logTable, x, y);
+    }
+
+    private static JMenuItem copyItem(String key, KeyStroke accelerator, Runnable action) {
+        JMenuItem item = new JMenuItem(Messages.get(key));
+        item.setAccelerator(accelerator);
+        item.addActionListener(e -> action.run());
+        return item;
     }
 
     /** Highlights model rows (null clears them) and saves them with the annotations (D-15). */
@@ -284,32 +250,173 @@ final class RowMenu {
         host.highlightsChanged();
     }
 
+    /** The None swatch's slot: choosing it removes the highlight. */
+    static final int NONE = -1;
+    /** {@link #markedSlot} when the rows differ, so no swatch is ringed. */
+    static final int NO_MARK = -2;
+
     /**
-     * A 22×22 highlight color button, ringed in white when every row it would color already
-     * has that color. Shared with the Find bar's Highlight popup.
+     * What every row in {@code rows} already is: a palette slot, {@link #NONE} when none of them
+     * is highlighted, or {@link #NO_MARK} when they differ. Shared with the find bar.
      */
-    static JButton swatch(Color color, boolean marked) {
-        JButton swatch = new JButton() {
-            @Override protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(color);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
-                // Its own hue, lighter, so it shows on the menu; the white ring replaces it when marked.
-                if (!marked) ClouseauColors.paintHighlightEdge(g2, color, 0, 0, getWidth(), getHeight(), 6);
-                if (marked) {
-                    g2.setColor(Color.WHITE);
-                    g2.setStroke(new BasicStroke(2f));
-                    g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 5, 5);
-                }
-                g2.dispose();
+    static int markedSlot(List<Integer> rows, IntFunction<Color> highlightOf) {
+        if (rows.isEmpty()) return NO_MARK;
+        Color first = highlightOf.apply(rows.get(0));
+        for (int r : rows) if (!java.util.Objects.equals(first, highlightOf.apply(r))) return NO_MARK;
+        if (first == null) return NONE;
+        Color[] palette = ClouseauColors.highlightColors();
+        for (int i = 0; i < palette.length; i++) if (palette[i].equals(first)) return i;
+        return NO_MARK;
+    }
+
+    /**
+     * The swatch row of the row menu and the find bar's Highlight popup (DESIGN.md 6.14): a
+     * header saying what it colors, then None and the eight colors, the one in {@code marked}
+     * ringed in white. {@code pick} gets the chosen slot ({@link #NONE} for None) once the popup
+     * has closed.
+     */
+    static SwatchRow swatchRow(String header, int marked, IntConsumer pick) {
+        return new SwatchRow(header, marked, pick);
+    }
+
+    /**
+     * The swatches as one menu element, so Up and Down reach the row as they reach a menu item,
+     * Left and Right move along it, and Enter or Space applies the current swatch. The current
+     * swatch, under the mouse or reached with the keys, sits on the menu's hover fill, as a menu
+     * item does.
+     */
+    static final class SwatchRow extends JPanel implements MenuElement {
+        private final List<Swatch> swatches = new java.util.ArrayList<>();
+        private final IntConsumer pick;
+        /** Where the keys start: the ringed swatch, else None. */
+        private final int start;
+        private int current = -1;
+
+        private SwatchRow(String header, int marked, IntConsumer pick) {
+            super(new MigLayout("insets 6 8 4 8, gap 0"));
+            this.pick = pick;
+            setOpaque(false);
+            JLabel title = new JLabel(header);
+            ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
+            add(title, "span, wrap, gapleft 2, gapbottom 2");
+            int colors = ClouseauColors.highlightColors().length;
+            for (int slot = NONE; slot < colors; slot++) {
+                Swatch swatch = new Swatch(slot, slot == marked);
+                int index = swatches.size();
+                swatch.addActionListener(e -> choose(index));
+                swatch.addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override public void mouseEntered(java.awt.event.MouseEvent e) { hover(index); }
+                });
+                swatches.add(swatch);
+                add(swatch, "w 26!, h 26!");   // FlatLaf's button minimum width would stretch it
             }
-        };
-        swatch.setPreferredSize(new Dimension(22, 22));
-        swatch.setBorderPainted(false);
-        swatch.setContentAreaFilled(false);
-        swatch.setFocusPainted(false);
-        return swatch;
+            start = marked >= NONE ? marked - NONE : 0;
+        }
+
+        /** The mouse is on swatch {@code index}: it becomes current, and the row the menu's selection. */
+        private void hover(int index) {
+            JPopupMenu popup = (JPopupMenu) SwingUtilities.getAncestorOfClass(JPopupMenu.class, this);
+            if (popup != null) MenuSelectionManager.defaultManager().setSelectedPath(new MenuElement[]{popup, this});
+            setCurrent(index);
+        }
+
+        private void setCurrent(int index) {
+            current = index;
+            for (int i = 0; i < swatches.size(); i++) swatches.get(i).setCurrent(i == index);
+        }
+
+        private void choose(int index) {
+            JPopupMenu popup = (JPopupMenu) SwingUtilities.getAncestorOfClass(JPopupMenu.class, this);
+            MenuSelectionManager.defaultManager().clearSelectedPath();
+            if (popup != null) popup.setVisible(false);
+            pick.accept(swatches.get(index).slot);
+        }
+
+        @Override public void menuSelectionChanged(boolean selected) {
+            if (!selected) setCurrent(-1);
+            else if (current < 0) setCurrent(start);
+        }
+
+        @Override public void processKeyEvent(KeyEvent e, MenuElement[] path, MenuSelectionManager manager) {
+            if (current < 0 || e.getID() != KeyEvent.KEY_PRESSED) return;
+            int n = swatches.size();
+            switch (e.getKeyCode()) {
+                case KeyEvent.VK_LEFT  -> { setCurrent((current + n - 1) % n); e.consume(); }
+                case KeyEvent.VK_RIGHT -> { setCurrent((current + 1) % n); e.consume(); }
+                case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> { e.consume(); choose(current); }
+                default -> { }
+            }
+        }
+
+        @Override public void processMouseEvent(java.awt.event.MouseEvent e, MenuElement[] path,
+                                                MenuSelectionManager manager) { }
+
+        @Override public MenuElement[] getSubElements() { return new MenuElement[0]; }
+
+        @Override public Component getComponent() { return this; }
+
+        /** The swatch that's current, or -1: for tests. */
+        int current() { return current; }
+
+        /** The swatches, None first: for tests. */
+        List<Swatch> swatches() { return swatches; }
+    }
+
+    /** One 22×22 swatch, in a 26×26 button whose 2px margin holds the hover fill. */
+    static final class Swatch extends JButton {
+        final int slot;
+        final boolean marked;
+        private boolean current;
+
+        Swatch(int slot, boolean marked) {
+            this.slot = slot;
+            this.marked = marked;
+            setToolTipText(Messages.get(slot == NONE ? "highlight.color.none" : "highlight.color." + slot));
+            getAccessibleContext().setAccessibleName(getToolTipText());
+            setPreferredSize(new Dimension(26, 26));
+            setBorderPainted(false);
+            setContentAreaFilled(false);
+            setFocusPainted(false);
+            setFocusable(false);   // the row takes the keys, as a menu item does
+        }
+
+        void setCurrent(boolean current) {
+            if (this.current == current) return;
+            this.current = current;
+            repaint();
+        }
+
+        boolean isCurrent() { return current; }
+
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            Color hover = UIManager.getColor("MenuItem.selectionBackground");
+            if (current && hover != null) {
+                g2.setColor(hover);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+            }
+            int x = 2, y = 2, w = getWidth() - 4, h = getHeight() - 4;
+            if (slot == NONE) {
+                // Drawn, not filled: an outline with a stroke through it reads as "no color".
+                g2.setColor(ClouseauColors.mutedForeground());
+                g2.setStroke(new BasicStroke(1f));
+                g2.draw(new java.awt.geom.RoundRectangle2D.Float(x + 0.5f, y + 0.5f, w - 1f, h - 1f, 6, 6));
+                g2.draw(new java.awt.geom.Line2D.Float(x + 5.5f, y + h - 5.5f, x + w - 5.5f, y + 5.5f));
+            } else {
+                Color color = ClouseauColors.highlightColors()[slot];
+                g2.setColor(color);
+                g2.fillRoundRect(x, y, w, h, 6, 6);
+                // Its own hue, a step off the menu; the white ring replaces it when marked.
+                if (!marked) ClouseauColors.paintHighlightEdge(g2, color, x, y, w, h, 6);
+            }
+            if (marked) {
+                g2.setColor(Color.WHITE);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawRoundRect(x + 1, y + 1, w - 3, h - 3, 5, 5);
+            }
+            g2.dispose();
+        }
     }
 
     /**

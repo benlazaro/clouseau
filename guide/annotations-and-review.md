@@ -30,7 +30,7 @@ lines (as in retry loops), and follows that line if lines are added above it.
 
 ## Seeing all notes
 
-**Edit → All Notes…** (`Ctrl+Shift+N`, or **View All Notes…** in the row menu) opens the
+**Edit → All Notes…** (`Ctrl+Shift+N`) opens the
 **Notes** window: every note with its line, the log line, author and date. Click a note to
 jump to its line; double-click it (or press `Enter`) to edit it. The trash can on the row
 under the mouse, or `Delete`, removes it. The list updates as you add or change notes, and

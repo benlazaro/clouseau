@@ -98,7 +98,7 @@ window, and act on that window.
 | `Ctrl+N` | New window |
 | `Ctrl+O` | Open a file |
 | `Ctrl+W` | Close the tab |
-| `Ctrl+R` | Reconnect an SSH or source-plugin tab |
+| `Ctrl+R` | Reload the file, or reconnect an SSH or source-plugin tab |
 | `Ctrl+,` | Settings |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab (also `Ctrl+PageDown` / `Ctrl+PageUp`) |
 | `Ctrl+1` … `Ctrl+8` | Go to tab 1 to 8 |
@@ -109,6 +109,7 @@ window, and act on that window.
 | `Enter` / `Shift+Enter` | Next / previous match |
 | `Escape` | Close the find bar |
 | `Ctrl+Shift+N` | All notes |
+| `Ctrl+Shift+K` | Clear the table |
 
 The shortcuts use `Ctrl` on every platform, including macOS.
 

@@ -151,7 +151,8 @@ when there's no file.
 - `FollowThreads` (ui) — D-22: starts a `SwingWorker` that never ends by itself (follow loops, live
   sources) on its own daemon thread. Never `execute()` one: that pool has 10 threads for the whole JVM.
 - `LogTableView`, `RowMenu` (ui) — a tab's table (renderer, header menu, column sizing,
-  visibility and saved layouts) and its rows' right-click menu (highlights, notes, merged-file items).
+  visibility and saved layouts) and its rows' right-click menu (copy, highlights, time and logger filters, notes, merged-file items;
+  its swatch row is shared with `FindBar`'s Highlight popup).
   `LogRowSorter` (ui) sorts by # or Timestamp without reading entries (time order worked out off the EDT).
   `MergedFileSettings` (ui) holds a merged tab's per-file offsets, timezones and parsers, with their dialogs.
   `TabStatusBar` (ui) is a tab's path, timezone badge and row counts; `RestoredTab` (ui) its session message card,

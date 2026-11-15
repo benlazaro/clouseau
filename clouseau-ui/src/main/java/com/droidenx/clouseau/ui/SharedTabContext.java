@@ -150,13 +150,9 @@ final class SharedTabContext {
             @Override public void showTimeOffsetDialog(int source) { host.showTimeOffsetDialog(source); }
             @Override public void showSourceTimezoneDialog(int source) { host.showSourceTimezoneDialog(source); }
             @Override public void showParserDialog(int source) { host.showParserDialog(source); }
-            @Override public void showAnnotationsDialog() { SharedTabContext.this.showAnnotationsDialog(); }
-            @Override public boolean canReload() { return host.canReload(); }
-            @Override public void reload() { host.reload(); }
-            @Override public boolean canReconnect() { return host.canReconnect(); }
-            @Override public void reconnect() { host.reconnect(); }
-            @Override public void clearTable() { SharedTabContext.this.clearTable(); }
-            @Override public boolean canClearTable() { return SharedTabContext.this.canClearTable(); }
+            @Override public void copyMessage() { SharedTabContext.this.copyMessage(); }
+            @Override public void copyRaw() { SharedTabContext.this.copyRaw(); }
+            @Override public void copyEntry() { SharedTabContext.this.copyEntry(); }
             @Override public FilterBar filterBar() { return filterBar; }
         });
 

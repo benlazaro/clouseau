@@ -166,42 +166,34 @@ final class FindBar extends JPanel {
     }
 
     /**
-     * The swatches, under the button: a click colors every match in that color (a white ring
-     * marks the color they all have already), and Clear Highlight uncolors them.
+     * The swatch row, under the button (DESIGN.md 6.14): a color colors every match, None
+     * uncolors them, asking first when that's two or more rows, as Clear All does.
      */
     private void showHighlightPopup() {
         if (highlighter == null || matches.isEmpty()) return;
         List<Integer> rows = matches;
         JPopupMenu popup = new JPopupMenu();
-        JLabel title = new JLabel(MessageFormat.format(Messages.get("find.highlight.title"), rows.size()));
-        ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
-        JPanel head = new JPanel(new MigLayout("insets 6 8 2 8, gap 0, wrap 1"));
-        head.setOpaque(false);
-        head.add(title, "gapleft 4");
-
-        JPanel swatches = new JPanel(new MigLayout("insets 4, gap 4"));   // not FlowLayout: in a MigLayout it asks for ~600px
-        swatches.setOpaque(false);
-        Color[] palette = ClouseauColors.highlightColors();
-        for (int i = 0; i < palette.length; i++) {
-            Color color = palette[i];
-            int slot = i;
-            boolean all = rows.stream().allMatch(r -> color.equals(highlighter.highlightOf(r)));
-            JButton swatch = RowMenu.swatch(color, all);
-            swatch.addActionListener(e -> {
-                popup.setVisible(false);
-                highlighter.highlight(rows, slot);
-            });
-            swatches.add(swatch, "w 22!, h 22!");   // FlatLaf's button minimum width would stretch it
-        }
-        head.add(swatches);
-        popup.add(head);
-        popup.addSeparator();
-        JMenuItem clear = new JMenuItem(Messages.get("find.highlight.clear"));
-        clear.setEnabled(rows.stream().anyMatch(r -> highlighter.highlightOf(r) != null));
-        clear.addActionListener(e -> highlighter.highlight(rows, null));
-        popup.add(clear);
+        String header = MessageFormat.format(Messages.get("find.highlight.title"), rows.size());
+        popup.add(RowMenu.swatchRow(header, RowMenu.markedSlot(rows, highlighter::highlightOf), slot -> {
+            if (slot == RowMenu.NONE) clearHighlights(rows);
+            else highlighter.highlight(rows, slot);
+        }));
         // Right-aligned with the button: it sits at the window's right edge.
         popup.show(highlightBtn, highlightBtn.getWidth() - popup.getPreferredSize().width, highlightBtn.getHeight());
+    }
+
+    /** None: uncolors the matches, after asking when two or more are colored (and the setting asks). */
+    private void clearHighlights(List<Integer> rows) {
+        long colored = rows.stream().filter(r -> highlighter.highlightOf(r) != null).count();
+        if (colored == 0) return;
+        if (colored >= 2 && AppPrefs.isHighlightClearAllConfirm()) {
+            int confirm = JOptionPane.showConfirmDialog(SwingUtilities.getWindowAncestor(this),
+                    MessageFormat.format(Messages.get("find.highlight.clear.confirm.message"), colored),
+                    Messages.get("find.highlight.clear.confirm.title"),
+                    JOptionPane.YES_NO_OPTION);
+            if (confirm != JOptionPane.YES_OPTION) return;
+        }
+        highlighter.highlight(rows, null);
     }
 
     /**

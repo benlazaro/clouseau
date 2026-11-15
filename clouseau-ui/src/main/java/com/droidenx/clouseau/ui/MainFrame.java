@@ -516,7 +516,9 @@ public final class MainFrame extends JFrame {
         JMenuItem notes = tabItem(edit, "menu.edit.notes",
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, ctrl | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
                 SharedTabContext::showAnnotationsDialog);
-        JMenuItem clearTable = tabItem(edit, "menu.edit.clear.table", null, SharedTabContext::clearTable);
+        JMenuItem clearTable = tabItem(edit, "menu.edit.clear.table",
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_K, ctrl | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
+                SharedTabContext::clearTable);
 
         whenOpened(edit, () -> {
             SharedTabContext t = activeActions();
@@ -670,6 +672,7 @@ public final class MainFrame extends JFrame {
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.copy.raw"),     "Ctrl+Alt+C");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.copy.entry"),   "Ctrl+Shift+C");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.notes"),        "Ctrl+Shift+N");
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.clear.table"),  "Ctrl+Shift+K");
 
         addDialogSection(grid, Messages.get("shortcuts.section.tabs"), "gaptop 20");
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.tab.next"),      "Ctrl+Tab");
