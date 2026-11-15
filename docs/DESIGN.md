@@ -531,6 +531,17 @@ transparent and fills the selection through `FlatListUI.paintCellSelection`, and
 text 4px more on the inset side. FlatLaf rounds a tree's selection whatever the renderer, and
 never a table's.
 
+**Contrast: two bars.** Text needs 4.5:1 on what it sits on; what isn't text but must be seen
+(control borders, the off-toggle outline, keyboard focus, the active tab's underline, the
+selection ring) needs 3:1, as WCAG 1.4.3 and 1.4.11 ask. Fields, buttons, drop-downs, check
+boxes and off toggles share one outline color per theme, the off label's gray (`#6B7079` in
+Dark, `#8A9099` in Light, about 3:1 on the window); a hovered button's outline is a step
+stronger. Purely decorative lines (separators, panel and popup hairlines, highlight swatch
+edges) have no bar. `ThemeContrastTest` checks both themes' pairs with these bars, so a
+color change that drops one below fails the build. The design system's Colors table checks
+every pair at 4.5:1, so its notes for non-text colors say "against" a surface rather than
+"on" it, which that check skips; the 3:1 check is the test's.
+
 **No painted shadows; popups use the OS's.** Structure comes from hairlines: menus, popups and
 tooltips are edged by their `PopupMenu.borderColor` hairline. Popups are the one exception to
 "no shadows": FlatLaf only rounds a popup's corners through the OS, and that path always comes
