@@ -728,14 +728,18 @@ rows. Its contents and order are in the design system (Content fundamentals, "Th
 menu"). It holds only what acts on those rows (D-25): actions on the whole tab (Reload
 File or Reconnect, Clear Table…, All Notes…) are in the File and Edit menus.
 
-The swatch row comes from `RowMenu.swatchRow(rows, header)`, shared with the find
-bar's Highlight popup so the two can't drift: a header label, then
-`RowMenu.swatch(slot, marked)` for None (slot −1) and slots 0–7. Each swatch is a
-focusable button with its color's name as a tooltip (`highlight.color.<slot>`,
-`highlight.color.none`). It paints the hover fill itself, since it isn't a menu item.
-Left and Right move focus along the row. Choosing None calls the same path Clear
-Highlight did (`setHighlights(rows, null, null)`), without asking: the user just chose
-the rows. In the find bar it uncolors every match, as its Clear Highlight did, after
+The swatch row comes from `RowMenu.swatchRow(header, marked, pick)`, shared with the
+find bar's Highlight popup so the two can't drift: a header label, then a
+`RowMenu.Swatch` for None (`RowMenu.NONE`, −1) and slots 0–7, the one `markedSlot` returns
+ringed. Each swatch is a 26×26 button around its 22×22 square, the 2px margin holding the
+hover fill, with its color's name as a tooltip (`highlight.color.<slot>`,
+`highlight.color.none`). The row itself is a `MenuElement`: Up and Down reach it as they
+reach a menu item, and the `MenuSelectionManager` hands it Left, Right, Enter and Space,
+which move along the row and apply the current swatch. The swatches aren't focusable, so
+the keys never leave the menu. The current swatch (under the mouse, which also selects the
+row in the menu, or reached with the keys) paints `MenuItem.selectionBackground` behind
+itself, as a menu item does. Choosing None calls the same path Clear Highlight did
+(`setHighlights(rows, null, null)`), without asking: the user just chose the rows. In the find bar it uncolors every match, as its Clear Highlight did, after
 asking when that's 2 or more matches and `AppPrefs.isHighlightClearAllConfirm()` is on
 (the count is of matches that have a highlight, not of all matches).
 
