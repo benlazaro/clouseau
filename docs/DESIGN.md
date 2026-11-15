@@ -726,7 +726,10 @@ drops the cached sizes (`BasicTreeUI.setLeftChildIndent` with its current value)
 `RowMenu` builds the table's right-click menu each time it opens, for the selected
 rows. Its contents and order are in the design system (Content fundamentals, "The row
 menu"). It holds only what acts on those rows (D-25): actions on the whole tab (Reload
-File or Reconnect, Clear Table…, All Notes…) are in the File and Edit menus.
+File or Reconnect, Clear Table…, All Notes…, Clear All Highlights…) are in the File and Edit
+menus, and Clear All Highlights is also on the highlight bar. Show All Loggers sits in the
+logger group with Hide Logger and Show Only Logger, as Show All Times does with the time
+items: each group undoes what it filters.
 
 The swatch row comes from `RowMenu.swatchRow(header, marked, pick)`, shared with the
 find bar's Highlight popup so the two can't drift: a header label, then a
@@ -735,7 +738,11 @@ ringed in `ClouseauColors.highlightRing()` (`Clouseau.highlightRing`: white in D
 text color in Light, where white vanishes on the pastels; `ThemeContrastTest` keeps it at
 3:1 or more against every highlight and the menu). Each swatch is a 26×26 button around its 22×22 square, the 2px margin holding the
 hover fill, with its color's name as a tooltip (`highlight.color.<slot>`,
-`highlight.color.none`). The row itself is a `MenuElement`: Up and Down reach it as they
+`highlight.color.none`). The header and the first square start where the menu items start their text, so the row
+lines up with them: `SwatchRow.alignToMenuText` takes it from a real item in the popup (its
+inset, plus `MenuItem.minimumIconSize` for the icon column FlatLaf always keeps, plus the
+icon-text gap), less the square's 2px margin. In the find bar's popup, which has no items,
+the row keeps a compact 8px inset. The row itself is a `MenuElement`: Up and Down reach it as they
 reach a menu item, and the `MenuSelectionManager` hands it Left, Right, Enter and Space,
 which move along the row and apply the current swatch. The swatches aren't focusable, so
 the keys never leave the menu. The current swatch (under the mouse, which also selects the
@@ -2227,7 +2234,7 @@ form mixed a server's details with one log's.
 
 A right-click menu offers what acts on the thing under the mouse (rows, a tab, a
 chip, a saved item) and nothing wider. The row menu used to repeat Reload File,
-Clear Table… and All Notes…, which act on the whole tab; they now live only in the
+Clear Table…, All Notes… and Clear All Highlights…, which act on the whole tab; they now live only in the
 menu bar, where every action can be found, each with a shortcut (Clear Table… gets
 `Ctrl+Shift+K` for this). Rejected: keeping them for mouse users (the menu bar is one
 click away and shows their shortcuts), and moving them to the filter bar (Clear Table

@@ -47,7 +47,7 @@ readable in any theme.
 | Detail Panel | Font size | The detail panel's font size (also changed with **Aa** in its header) |
 | | Wrap long lines | Wrap long lines in the detail panel instead of scrolling sideways (also the **Wrap** button in its header) |
 | Tabs | Confirm when closing a tab | Ask before closing a tab |
-| | Confirm when clearing all highlights | Ask before **Clear all highlights** |
+| | Confirm when clearing all highlights | Ask before **Clear All Highlights** (Edit menu, highlight bar) |
 | | Confirm when deleting a note | Ask before deleting a note |
 | | Start at the newest line | Open files at their newest line, with [Follow](following.md) on; off opens them at the top |
 | | Max entries per tab | How many lines an SSH or plugin-source tab keeps in memory (10,000 to 2,000,000; default 200,000). Files you open are never trimmed. |

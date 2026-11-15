@@ -98,18 +98,8 @@ final class RowMenu {
                 host.highlightsChanged();
             }));
 
-            final boolean hasHL = logTableModel.hasHighlights();
-
-            // "…" while clearing asks first, as on the highlight bar's Clear All.
-            JMenuItem clearAllItem = new JMenuItem(Messages.get("highlight.clear.all")
-                    + (AppPrefs.isHighlightClearAllConfirm() ? "…" : ""));
-            if (hasHL) {
-                clearAllItem.addActionListener(e -> clearAllHighlights());
-            } else {
-                clearAllItem.setEnabled(false);
-            }
-            menu.add(clearAllItem);
-
+            // Clear All Highlights acts on the whole tab, so it's in the Edit menu and on the
+            // highlight bar, not here (D-25).
             menu.addSeparator();
         }
 
@@ -207,7 +197,7 @@ final class RowMenu {
     /** Highlights model rows (null clears them) and saves them with the annotations (D-15). */
     /**
      * Removes every highlight in the tab, the ones the filters hide too, after asking (unless
-     * the user turned that off), and saves. The row menu's and the highlight bar's Clear All.
+     * the user turned that off), and saves. Edit → Clear All Highlights… and the highlight bar's Clear All.
      */
     void clearAllHighlights() {
         if (!logTableModel.hasHighlights() && host.notes().highlights().isEmpty()) return;
@@ -291,14 +281,18 @@ final class RowMenu {
         /** Where the keys start: the ringed swatch, else None. */
         private final int start;
         private int current = -1;
+        private final JLabel title;
+        /** Where a swatch's square starts inside its button (Swatch paints it 2px in). */
+        private static final int SQUARE_INSET = 2;
 
         private SwatchRow(String header, int marked, IntConsumer pick) {
-            super(new MigLayout("insets 6 8 4 8, gap 0"));
+            super(new MigLayout("insets 0, gap 0"));
             this.pick = pick;
             setOpaque(false);
-            JLabel title = new JLabel(header);
+            title = new JLabel(header);
             ClouseauColors.themedForeground(title, ClouseauColors::dimForeground);
-            add(title, "span, wrap, gapleft 2, gapbottom 2");
+            add(title, "span, wrap");
+            alignToMenuText();
             int colors = ClouseauColors.highlightColors().length;
             for (int slot = NONE; slot < colors; slot++) {
                 Swatch swatch = new Swatch(slot, slot == marked);
@@ -311,6 +305,37 @@ final class RowMenu {
                 add(swatch, "w 26!, h 26!");   // FlatLaf's button minimum width would stretch it
             }
             start = marked >= NONE ? marked - NONE : 0;
+        }
+
+        @Override public void addNotify() {
+            super.addNotify();
+            alignToMenuText();   // the popup's items are all in place by now
+        }
+
+        /**
+         * Starts the header and the first square where the popup's menu items start their text,
+         * so the row lines up with them (DESIGN.md 6.14). FlatLaf puts that text after the item's
+         * inset, an icon column of {@code MenuItem.minimumIconSize} and the icon-text gap, so it's
+         * worked out from a real item. A popup with no items (the find bar's) keeps a compact inset.
+         */
+        private void alignToMenuText() {
+            int left = com.formdev.flatlaf.util.UIScale.scale(8);
+            Container popup = getParent();
+            if (popup != null) {
+                for (Component c : popup.getComponents()) {
+                    if (c instanceof JMenuItem item) {
+                        Dimension icon = UIManager.getDimension("MenuItem.minimumIconSize");
+                        int textX = item.getInsets().left
+                                + com.formdev.flatlaf.util.UIScale.scale(icon != null ? icon.width : 16)
+                                + com.formdev.flatlaf.util.UIScale.scale(item.getIconTextGap());
+                        left = textX - SQUARE_INSET;
+                        break;
+                    }
+                }
+            }
+            int s2 = com.formdev.flatlaf.util.UIScale.scale(2);
+            setBorder(BorderFactory.createEmptyBorder(3 * s2, left, 2 * s2, 4 * s2));
+            title.setBorder(BorderFactory.createEmptyBorder(0, SQUARE_INSET, s2, 0));
         }
 
         /** The mouse is on swatch {@code index}: it becomes current, and the row the menu's selection. */
@@ -443,8 +468,8 @@ final class RowMenu {
 
     /**
      * Hide Logger "RouteResolver" and Show Only Logger "RouteResolver" for the selected rows'
-     * loggers (or "Hide 3 Loggers" for several), then, below its own line so it isn't hit by
-     * mistake, Show All Loggers with how many are hidden: that's what it would undo.
+     * loggers (or "Hide 3 Loggers" for several), then Show All Loggers with how many are hidden
+     * (that's what it would undo), all in one group, as the time items are.
      */
     private void addLoggerItems(JPopupMenu menu, List<Integer> entries) {
         java.util.Set<String> loggers = new java.util.LinkedHashSet<>();
@@ -472,7 +497,6 @@ final class RowMenu {
             only.addActionListener(e -> filters.showOnlyLoggers(loggers));
             menu.add(hide);
             menu.add(only);
-            menu.addSeparator();
         }
         JMenuItem all = new JMenuItem(hidden > 0
                 ? java.text.MessageFormat.format(Messages.get("table.context.logger.all.hidden"), hidden)

@@ -516,6 +516,8 @@ public final class MainFrame extends JFrame {
         JMenuItem notes = tabItem(edit, "menu.edit.notes",
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, ctrl | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
                 SharedTabContext::showAnnotationsDialog);
+        // On the whole tab, so here and on the highlight bar rather than in the row menu (D-25).
+        JMenuItem clearHighlights = tabItem(edit, "highlight.clear.all", null, SharedTabContext::clearAllHighlights);
         JMenuItem clearTable = tabItem(edit, "menu.edit.clear.table",
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_K, ctrl | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
                 SharedTabContext::clearTable);
@@ -532,6 +534,10 @@ public final class MainFrame extends JFrame {
             note.setText(Messages.get(t != null && t.selectedHasNote() ? "menu.edit.note.edit" : "menu.edit.note.add"));
             note.setEnabled(t != null && t.canEditNote());
             notes.setEnabled(t != null && t.hasNotes());
+            // "…" while clearing asks first, as on the highlight bar's Clear All.
+            clearHighlights.setText(Messages.get("highlight.clear.all")
+                    + (AppPrefs.isHighlightClearAllConfirm() ? "\u2026" : ""));
+            clearHighlights.setEnabled(t != null && t.hasHighlights());
             clearTable.setEnabled(t != null && t.canClearTable());
         });
         return edit;

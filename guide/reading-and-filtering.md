@@ -140,8 +140,8 @@ Highlights mark rows you want to come back to.
    that color (or **All**), and use **▲** and **▼** to go to the previous or next
    highlighted row.
 3. **None**, the first swatch, removes the color from the selected rows. To remove a
-   whole color, right-click its chip in the bar and choose **Clear *color* Highlight**. **Clear all
-   highlights** in the row menu, or **Clear All** after the count in the bar, removes every
+   whole color, right-click its chip in the bar and choose **Clear *color* Highlight**. **Edit → Clear All
+   Highlights…**, or **Clear All** after the count in the bar, removes every
    highlight in the tab. Both take the rows the filters hide too, and ask first unless you
    turned that off in Settings.
 

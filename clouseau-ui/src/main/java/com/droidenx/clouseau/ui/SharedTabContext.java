@@ -394,6 +394,12 @@ final class SharedTabContext {
 
     boolean hasNotes() { return notes.size() > 0; }
 
+    /** Whether any row in the tab is highlighted, hidden by the filters or not. */
+    boolean hasHighlights() { return model.hasHighlights() || !notes.highlights().isEmpty(); }
+
+    /** Edit → Clear All Highlights…: the highlight bar's Clear All, asking first as it does. */
+    void clearAllHighlights() { if (rowMenu[0] != null) rowMenu[0].clearAllHighlights(); }
+
     boolean wrapLines() { return detailPanel.wrapLines(); }
     void toggleWrap()   { detailPanel.toggleWrap(); }
     void changeTextSize(int step) { detailPanel.changeTextSize(step); }
