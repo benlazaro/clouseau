@@ -172,6 +172,7 @@ final class FilterBar extends JPanel {
         searchField.putClientProperty("JTextField.placeholderText", Messages.get("filter.search.placeholder"));
         searchField.putClientProperty("JTextField.leadingIcon", new FlatSearchIcon());
         searchField.putClientProperty("JTextField.showClearButton", true);
+        searchField.setToolTipText(Messages.get("filter.search.tooltip"));
         searchField.getDocument().addDocumentListener(docListener(this::scheduleChange));
         add(searchField, "growx, pushx, wmin 200");
 

@@ -63,6 +63,7 @@ class CombinedFilterTest {
             filter(all, Set.of(), false, Map.of(), null, null, "timeout"),
             filter(all, Set.of(), false, Map.of(), null, null, "event 1[0-9]$"),
             filter(all, Set.of(), false, Map.of(), null, null, "(x"),                   // not a regex: literal
+            filter(all, Set.of(), false, Map.of(), null, null, "event && timeout"),
             filter(all, Set.of(), false, Map.of("req", Set.of("r10", "r11")), null, null, null),
             filter(EnumSet.of(LogLevel.INFO), Set.of("com.acme.b"), false,
                     Map.of("app", Set.of("web")), T0, T0.plusMillis(2_500), "event"));
@@ -107,6 +108,33 @@ class CombinedFilterTest {
         assertThat(filter(all, Set.of(), false, Map.of(), null, null, "timeout").needsText(index)).isTrue();
         assertThat(filter(all, Set.of(), false, Map.of("req", Set.of("r1")), null, null, null).needsText(index)).isTrue();
         assertThat(filter(all, Set.of(), false, Map.of("req", Set.of()), null, null, null).needsText(index)).isFalse();
+    }
+
+    @Test
+    void ampersandsJoinTermsThatMustAllMatch() {
+        Set<LogLevel> all = EnumSet.allOf(LogLevel.class);
+        LogEntry both = new LogEntry(null, null, null, null,
+                "Request done: id = 10, value = 32", "x", Map.of());
+        LogEntry one = new LogEntry(null, null, null, null, "Request done: id = 10, value = 7", "x", Map.of());
+        LogEntry multiLine = new LogEntry(null, null, null, null, "request id = 10\nvalue = 32", "x", Map.of());
+
+        CombinedFilter f = filter(all, Set.of(), false, Map.of(), null, null, "request && id = 10 && value = 32");
+        assertThat(f.test(both)).isTrue();
+        assertThat(f.test(one)).isFalse();
+        assertThat(f.test(multiLine)).as("terms on different lines").isTrue();
+
+        // order doesn't matter; | still means "or" inside a term; blank terms are ignored
+        assertThat(filter(all, Set.of(), false, Map.of(), null, null, "value = 32&&REQUEST").test(both)).isTrue();
+        assertThat(filter(all, Set.of(), false, Map.of(), null, null, "request && value = (7|8)").test(one)).isTrue();
+        assertThat(filter(all, Set.of(), false, Map.of(), null, null, "request && value = (7|8)").test(both)).isFalse();
+        assertThat(filter(all, Set.of(), false, Map.of(), null, null, " && request && ").test(one)).isTrue();
+        // each term falls back to literal text on its own
+        assertThat(filter(all, Set.of(), false, Map.of(), null, null, "done: && (id").test(both)).isFalse();
+        assertThat(filter(all, Set.of(), false, Map.of(), null, null, "done: && id = 10,").test(both)).isTrue();
+        // only ampersands: no text at all
+        CombinedFilter none = filter(all, Set.of(), false, Map.of(), null, null, " && ");
+        assertThat(none.hasText()).isFalse();
+        assertThat(none.test(one)).isTrue();
     }
 
     @Test

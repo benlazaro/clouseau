@@ -105,8 +105,15 @@ fold and unfold), `Space` ticks or unticks the row you're on, and `Esc` closes t
   While a range is set, the button shows it, for example **10:00:00 → 10:15:00**;
   **Clear** in the same popup removes it, and so does **Show All Times** when you
   right-click a line (it names the range it drops).
-- **Filter message…**: show only lines containing the text, in any column. The **×** at
-  its right end clears it.
+- **Filter message…**: show only lines whose message contains the text. Upper and lower
+  case don't matter. The **×** at its right end clears it.
+  - `&&` narrows it down: `request && id = 10 && value = 32` shows only messages that
+    contain all three, in any order.
+  - `|` widens it: `timeout|refused` shows messages that contain either.
+  - Both work together: `request && id = (10|11)`.
+  - The text is also a [Java regular expression](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/regex/Pattern.html),
+    so `id = 10\b` matches `id = 10` but not `id = 100`. Characters such as `(`, `[`, `.`
+    and `*` have special meanings; put a `\` before one to match it as it is.
 
 ![Logger filter](../docs/screenshots/logger-filter.png)
 

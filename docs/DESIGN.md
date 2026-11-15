@@ -373,6 +373,11 @@ entries arriving during a session are checked against the active filter as they 
 appended. Find (`Ctrl+F`) searches the visible rows, including their continuation lines,
 on its own executor (`LogTableModel.find`) and returns matching ordinals to the EDT.
 
+The message filter's text is split on `&&` into terms that must all match the message (blank
+terms dropped). Each term is compiled on its own as a case-insensitive regex, falling back to
+literal text if it doesn't compile, so `|` is still "or" inside a term. The split ignores regex
+syntax: a character-class intersection such as `[a-z&&[^x]]` can't be typed into the bar.
+
 The time range is the one filter not typed into the bar: the **Time** button opens a popup with
 the From and To fields and applies them on **Apply** or `Enter`, so the most-used control, the
 message filter, gets the bar's width. The range is kept as typed (`Session.Filters.from`/`to`)

@@ -4,8 +4,10 @@ import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogEntry.LogLevel;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -15,6 +17,10 @@ import java.util.regex.PatternSyntaxException;
  * The filter bar's filters, ANDed: levels, excluded loggers, excluded custom-field
  * values, a time range and message text. Everything but the text, and fields with too
  * many values to index, is decided from the index columns (D-16).
+ * <p>
+ * The text may hold several terms joined by {@code &&}; a message must match every one.
+ * Each term is a case-insensitive regex if it compiles, else literal text, so {@code |}
+ * still means "or" within a term.
  * <p>
  * The time range is compared in whole milliseconds, which is what the index keeps and
  * what the table shows.
@@ -29,7 +35,7 @@ public final class CombinedFilter implements EntryFilter {
     private final boolean noLoggers;
     private final Map<String, Set<String>> excludedFieldValues;
     private final long fromMillis, toMillis;
-    private final Pattern text;                    // null = none
+    private final List<Pattern> text;              // null = none; every term must match
     private final Set<Integer> excludedSources;    // empty = none
 
     /**
@@ -39,8 +45,8 @@ public final class CombinedFilter implements EntryFilter {
      * @param excludedFieldValues per field, the values to hide ({@link #EMPTY_VALUE} for none)
      * @param from            earliest time to show, or null; entries without one always show
      * @param to              latest time to show, or null
-     * @param text            message text, a case-insensitive regex if it compiles, else
-     *                        literal; null or blank for none
+     * @param text            message text: terms joined by {@code &&}, each a case-insensitive
+     *                        regex if it compiles, else literal; null or blank for none
      */
     public CombinedFilter(Set<LogLevel> levels, Set<String> excludedLoggers, boolean noLoggers,
                           Map<String, Set<String>> excludedFieldValues, Instant from, Instant to, String text) {
@@ -68,9 +74,17 @@ public final class CombinedFilter implements EntryFilter {
         this.text = compile(text);
     }
 
-    private static Pattern compile(String text) {
+    /** The text's terms, split on {@code &&} with blank ones dropped, or null if there are none. */
+    private static List<Pattern> compile(String text) {
         if (text == null || text.isBlank()) return null;
-        String t = text.trim();
+        List<Pattern> terms = new ArrayList<>();
+        for (String term : text.split("&&")) {
+            if (!term.isBlank()) terms.add(compileTerm(term.trim()));
+        }
+        return terms.isEmpty() ? null : List.copyOf(terms);
+    }
+
+    private static Pattern compileTerm(String t) {
         try {
             return Pattern.compile(t, Pattern.CASE_INSENSITIVE);
         } catch (PatternSyntaxException ex) {
@@ -88,7 +102,12 @@ public final class CombinedFilter implements EntryFilter {
             String v = e.fields() != null ? e.fields().get(f.getKey()) : null;
             if (excluded(f.getValue(), v)) return false;
         }
-        return text == null || text.matcher(e.message() != null ? e.message() : "").find();
+        if (text == null) return true;
+        String message = e.message() != null ? e.message() : "";
+        for (Pattern term : text) {
+            if (!term.matcher(message).find()) return false;
+        }
+        return true;
     }
 
     @Override
