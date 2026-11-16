@@ -2260,8 +2260,8 @@ it clears" rules out).
 Accepted in the use cases: none at the moment (UC-17, sessions, and UC-18, new-version
 notices, are built).
 
-**Ideas, not yet accepted.** Raised while designing UC-16 and kept for later; each needs a
-use case before it is built.
+**Ideas, not yet accepted.** Kept for later, until a user asks for one or the need shows
+up in practice; each needs a use case before it is built.
 
 - **Same file twice:** open one file in two tabs with different filters (for example
   errors only next to everything). Needs an exception to "one tab per file" (UC-15).
@@ -2272,6 +2272,13 @@ use case before it is built.
 - **Diff two logs:** a good run against a bad one. Normalize what always changes
   (timestamps, IDs, numbers) into message templates and show what only one side has, or
   has far more of.
+- **Time range quick presets** (formerly G-12): the Time popup (6.4) takes typed times, a
+  span from the other end (`+5m`) and a line's time, but has no presets. A Quick row
+  could offer *Last 5 min*, *Last 15 min* and *Last hour*, counted back from the tab's last
+  entry rather than the clock (a static log ends in the past), and *±1 min of selected
+  row*, disabled with no selection. While following, "last" would move with the newest
+  entry only when the preset is applied again; a range that slides by itself would need
+  its own decision.
 
 ## 11. Known gaps
 
@@ -2281,13 +2288,6 @@ Remove an entry once it's fixed.
 G-9 (one tab class doing everything) was closed by D-21; `MainFrame` (about 1,600 lines)
 is now the biggest UI class.
 
-- **G-12 · Time range quick presets.** The filter bar's Time popup (6.4) takes typed
-  times, a span from the other end (`+5m`) and a line's time (Selected row, Show From /
-  Up to This Line), but has no presets. Planned: a Quick row in the popup with *Last 5
-  min*, *Last 15 min* and *Last hour*, counted back from the tab's last entry rather than
-  the clock (a static log ends in the past), and *±1 min of selected row*, disabled with
-  no selection. While following, "last" moves with the newest entry only when the preset
-  is applied again; a range that slides by itself would need its own decision.
 - **G-15 · Find Clouseau plugins, not any artifact.** Browse searches the whole repository,
   so "logfmt" on Maven Central returns any Java library, and finding a plugin means knowing
   its coordinates. Planned: a naming convention for published plugins (an artifact name
