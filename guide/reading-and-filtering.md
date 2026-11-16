@@ -206,7 +206,7 @@ Log timestamps usually don't say which timezone they're in, so Clouseau keeps tw
 
 The status bar shows them at the right: just `America/Chicago` when a log is read and shown
 in the same timezone, or `UTC → America/Chicago` when it's read in one and shown in
-another (`Mixed → …` in a merged view whose files have different ones). Point at it to
+another (`Per file → …` in a merged view whose files have different ones). Point at it to
 see how far apart they are.
 
 Click it (or choose **View → Timezones…**) to change either. Type in a

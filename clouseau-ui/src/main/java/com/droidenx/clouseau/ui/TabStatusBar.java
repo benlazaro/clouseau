@@ -17,7 +17,7 @@ import java.time.ZoneId;
 final class TabStatusBar extends JPanel {
 
     private final JLabel pathLabel = label(new Insets(6, 8, 8, 8));
-    private final JLabel timezoneLabel = label(new Insets(6, 0, 8, 4));
+    private final Badge timezoneLabel = new Badge();
     private final JLabel countsLabel = label(new Insets(6, 8, 8, 8));
 
     /** {@code onTimezoneClick} runs when the user clicks the timezone badge. */
@@ -31,17 +31,21 @@ final class TabStatusBar extends JPanel {
         countsLabel.setText(" ");
         countsLabel.setHorizontalAlignment(SwingConstants.RIGHT);
         timezoneLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        // A chevron after the text, as on the buttons that open a popup.
-        timezoneLabel.setIcon(new FilterBar.ChevronDown());
+        // A chevron after the text, as on the buttons that open a popup. Up, because the
+        // popup opens above the status bar.
+        timezoneLabel.setIcon(FilterBar.Chevron.up());
         timezoneLabel.setHorizontalTextPosition(SwingConstants.LEADING);
         timezoneLabel.setIconTextGap(6);
         timezoneLabel.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) { onTimezoneClick.run(); }
+            @Override public void mouseEntered(MouseEvent e) { timezoneLabel.setHover(true); }
+            @Override public void mouseExited(MouseEvent e) { timezoneLabel.setHover(false); }
         });
 
         JPanel east = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         east.setOpaque(false);
         east.add(timezoneLabel);
+        east.add(new Divider(countsLabel));
         east.add(countsLabel);
         // The path takes what's left and ends in "…" when it doesn't fit. A label's minimum
         // width is its whole text, so without this a merged tab's list of file names would
@@ -63,7 +67,7 @@ final class TabStatusBar extends JPanel {
     /**
      * The timezones: just one when the log is read and shown in the same zone
      * ("America/Chicago"), else how it's read, then how it's shown ("UTC → America/Chicago");
-     * "Mixed" when a merged tab's files are read in different zones ({@code perFile}).
+     * "Per file" when a merged tab's files are read in different zones ({@code perFile}).
      */
     void setTimezone(ZoneId source, boolean perFile) {
         ZoneId display = AppPrefs.getDisplayTimezone();
@@ -122,10 +126,55 @@ final class TabStatusBar extends JPanel {
     }
 
     private static JLabel label(Insets pad) {
-        JLabel l = new JLabel();
+        return style(new JLabel(), pad);
+    }
+
+    private static <L extends JLabel> L style(L l, Insets pad) {
         ClouseauColors.themedForeground(l, () -> UIManager.getColor("Button.foreground"));
         l.setFont(l.getFont().deriveFont(11f));   // ui-caption, like the other small chrome
         l.setBorder(BorderFactory.createEmptyBorder(pad.top, pad.left, pad.bottom, pad.right));
         return l;
+    }
+
+    /**
+     * The timezone badge: a rounded hover background, as the menu bar's items have, so it
+     * looks clickable. Colors are read when painting, so a theme switch needs nothing.
+     */
+    private static final class Badge extends JLabel {
+        private boolean hover;
+
+        Badge() { style(this, new Insets(6, 6, 8, 6)); }
+
+        void setHover(boolean on) { if (hover != on) { hover = on; repaint(); } }
+
+        @Override protected void paintComponent(Graphics g) {
+            if (hover) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(UIManager.getColor("MenuBar.hoverBackground"));
+                // Around the text, not the bar's whole height: 3px above and below it.
+                g2.fillRoundRect(0, 3, getWidth(), getHeight() - 8, 6, 6);
+                g2.dispose();
+            }
+            super.paintComponent(g);
+        }
+    }
+
+    /** A short vertical hairline between the badge and the counts, as tall as the text. */
+    private static final class Divider extends JComponent {
+        private final JComponent sizedLike;
+
+        Divider(JComponent sizedLike) { this.sizedLike = sizedLike; }
+
+        @Override public Dimension getPreferredSize() {
+            return new Dimension(15, sizedLike.getPreferredSize().height);
+        }
+
+        @Override protected void paintComponent(Graphics g) {
+            g.setColor(ClouseauColors.separatorColor());
+            // 14px of space each side, counting the badge's and the counts' padding. The
+            // counts' text runs from 6px below the top to 8px above the bottom.
+            g.fillRect(8, 7, 1, getHeight() - 16);
+        }
     }
 }

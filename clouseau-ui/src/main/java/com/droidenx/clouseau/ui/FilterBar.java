@@ -1087,7 +1087,7 @@ final class FilterBar extends JPanel {
      * color as a drop-down's, so pickers and drop-downs read as one family.
      */
     static void pickerArrow(JButton button) {
-        button.setIcon(new ChevronDown());
+        button.setIcon(Chevron.down());
         button.setHorizontalTextPosition(SwingConstants.LEADING);
         button.setIconTextGap(8);
         // The flag below lives for one click only: cleared once that click's action has run.
@@ -1128,7 +1128,18 @@ final class FilterBar extends JPanel {
         return closed;
     }
 
-    static final class ChevronDown implements Icon {
+    /** The chevron on a control that opens a popup, pointing the way the popup opens. */
+    static final class Chevron implements Icon {
+        private final boolean up;
+
+        private Chevron(boolean up) { this.up = up; }
+
+        /** For a popup that opens below the control. */
+        static Chevron down() { return new Chevron(false); }
+
+        /** For a popup that opens above it, as from the status bar. */
+        static Chevron up() { return new Chevron(true); }
+
         @Override public void paintIcon(Component c, Graphics g, int x, int y) {
             Color color = c.isEnabled() ? UIManager.getColor("ComboBox.buttonArrowColor")
                                         : UIManager.getColor("ComboBox.buttonDisabledArrowColor");
@@ -1139,9 +1150,10 @@ final class FilterBar extends JPanel {
             g2.setColor(color);
             g2.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             java.awt.geom.Path2D.Float p = new java.awt.geom.Path2D.Float();
-            p.moveTo(x + 0.5f, y + 1f);
-            p.lineTo(x + 4.5f, y + 5f);
-            p.lineTo(x + 8.5f, y + 1f);
+            float tips = up ? 5f : 1f, point = up ? 1f : 5f;
+            p.moveTo(x + 0.5f, y + tips);
+            p.lineTo(x + 4.5f, y + point);
+            p.lineTo(x + 8.5f, y + tips);
             g2.draw(p);
             g2.dispose();
         }
