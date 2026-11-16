@@ -421,7 +421,10 @@ final class DetailPanel extends JPanel {
         return true;
     }
 
-    /** Right-click in the pane: Copy for selected text, then the table menu's three Copy items. */
+    /**
+     * Right-click in the pane: Copy for selected text (only when there is some), then the table
+     * menu's three Copy items.
+     */
     private void installContextMenu() {
         detailArea.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override public void mousePressed(java.awt.event.MouseEvent e)  { maybeShow(e); }
@@ -429,11 +432,12 @@ final class DetailPanel extends JPanel {
             private void maybeShow(java.awt.event.MouseEvent e) {
                 if (!e.isPopupTrigger()) return;
                 JPopupMenu menu = new JPopupMenu();
-                JMenuItem sel = new JMenuItem(Messages.get("detail.copy.selection"));
-                sel.setEnabled(detailArea.getSelectedText() != null);
-                sel.addActionListener(a -> detailArea.copy());
-                menu.add(sel);
-                menu.addSeparator();
+                if (detailArea.getSelectedText() != null) {
+                    JMenuItem sel = new JMenuItem(Messages.get("detail.copy.selection"));
+                    sel.addActionListener(a -> detailArea.copy());
+                    menu.add(sel);
+                    menu.addSeparator();
+                }
                 addCopyItems(menu);
                 menu.show(detailArea, e.getX(), e.getY());
             }

@@ -70,7 +70,8 @@ trace included) and **Copy Entry** (every field, as shown). What you copied flas
 note in the middle of the panel confirms it, such as "Raw lines copied (10 lines)".
 Shortcuts work from the table or the panel: `Ctrl`+`C` copies the message (in the panel,
 the text you've selected, if any), `Ctrl`+`Alt`+`C` the raw line and `Ctrl`+`Shift`+`C` the
-entry. Right-click in the panel also offers **Copy** for the selected text.
+entry. When you've selected text in the panel, its right-click menu
+also offers **Copy** for that text.
 
 ## Filters
 
