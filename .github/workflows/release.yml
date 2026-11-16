@@ -16,7 +16,7 @@ jobs:
         include:
           - os: windows-latest
             platform: windows
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: linux
           - os: macos-latest
             platform: macos
@@ -69,7 +69,7 @@ jobs:
   publish:
     name: Publish release
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
