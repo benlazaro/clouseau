@@ -51,15 +51,16 @@ them from ticketing or mail systems itself.
 
 Each use case lists its current support status: ✅ supported · 🟡 partial · ❌ not yet.
 
-### UC-1 · Open a log file 🟡
+### UC-1 · Open a log file ✅
 
 **Actor:** Field engineer, Developer
 **Goal:** View a log someone sent me, or one my app just wrote.
 
 1. User opens a file with `File → Open…` (`Ctrl+O`), by dragging it onto the window, or
    by choosing Clouseau from the operating system's "Open with" menu.
-2. Clouseau detects the log format from the first lines and shows a parser preview.
-3. User accepts, or picks a different parser.
+2. Clouseau detects the log format from the first lines, with no extra step.
+3. To use a different parser, the user picks it in the open dialog's Parser list (it
+   defaults to auto-detect).
 4. Entries appear in a table with timestamp, level, thread, logger, and message columns.
    The columns fill the window (no horizontal scroll bar): Message takes the room the
    others leave, and gives or takes width as the user drags a column border. The table
