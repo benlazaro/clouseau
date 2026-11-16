@@ -606,6 +606,10 @@ without running a second copy of Clouseau.
 - **All windows are equal.** No window is the "main" one; any of them can be closed.
 - **Shortcuts stay in their window.** `Ctrl+Tab`, `Ctrl+1` to `Ctrl+9` and `Ctrl+W` act on
   the tabs of the window in front. Switching windows is left to the operating system.
+- **Each window is named by its selected tab.** The title bar shows the selected tab's
+  name, then the named session in use if any, then "Clouseau" (`app.log — Payments —
+  Clouseau`), so windows can be told apart in the taskbar and Alt+Tab. A window with no
+  tabs shows just "Clouseau" (or `Payments — Clouseau`).
 
 **Current behavior:** All of the above works. Besides **Move to New Window** and **Move
 to ▸ Window N** on a tab's right-click menu and dragging tabs between windows, **File →
@@ -637,7 +641,7 @@ with nothing to reopen or re-filter by hand.
 switch between them.
 1. User opens the logs for a project and chooses **File → Sessions → Save Session As…**,
    naming it, for example, *Payments*.
-2. The window titles show the session's name. **File → Sessions → Save Session** updates
+2. The window titles show the session's name, before "Clouseau". **File → Sessions → Save Session** updates
    it later with what is open now.
 3. Another day, the user picks *Payments* from **File → Sessions**. If logs are already
    open, Clouseau asks whether to **Close current windows** (the default), **Add to

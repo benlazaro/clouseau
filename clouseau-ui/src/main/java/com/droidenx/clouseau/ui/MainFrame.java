@@ -130,6 +130,12 @@ public final class MainFrame extends JFrame {
             @Override public void componentResized(java.awt.event.ComponentEvent e) { SwingUtilities.invokeLater(MainFrame.this::boundsChanged); }
         });
         tabbedPane.addChangeListener(e -> manager.sessionChanged());
+        tabbedPane.addChangeListener(e -> refreshTitle());
+    }
+
+    /** Sets the title bar to the selected tab's name, then the session in use and the app's name. */
+    void refreshTitle() {
+        setTitle(manager.windowTitle(selectedTabTitle()));
     }
 
     // ── The window's place, for the session (UC-17, D-19) ─────────────────────
@@ -928,6 +934,7 @@ public final class MainFrame extends JFrame {
         if (label != null) {
             label.setText(title);
             label.getParent().revalidate();
+            if (tabbedPane.getSelectedComponent() == panel) refreshTitle();
         }
     }
 
@@ -1423,6 +1430,7 @@ public final class MainFrame extends JFrame {
         tabbedPane.setTabComponentAt(idx, header);
         if (select) tabbedPane.setSelectedIndex(idx);
         updateCard();
+        refreshTitle();   // the header is set after insertTab selected it, so its title came too late
     }
 
     /** The label of the tab header at {@code idx}, or null. */

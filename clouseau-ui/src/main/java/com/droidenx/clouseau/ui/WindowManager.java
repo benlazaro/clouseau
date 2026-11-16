@@ -284,16 +284,21 @@ final class WindowManager {
 
     SessionManager sessions() { return session; }
 
-    /** A window's title: the app's name, and the named session in use if there is one. */
+    /** A window's title with no tab open: the app's name, after the named session in use if there is one. */
     String windowTitle() {
         String active = session != null ? session.active() : null;
         return active == null ? Messages.get("app.title")
                 : java.text.MessageFormat.format(Messages.get("app.title.session"), Messages.get("app.title"), active);
     }
 
+    /** A window's title: {@code document} (the selected tab's name, if any) before {@link #windowTitle()}. */
+    String windowTitle(String document) {
+        return document == null || document.isBlank() ? windowTitle()
+                : java.text.MessageFormat.format(Messages.get("app.title.document"), document, windowTitle());
+    }
+
     void updateTitles() {
-        String title = windowTitle();
-        windows.forEach(w -> w.setTitle(title));
+        windows.forEach(MainFrame::refreshTitle);
     }
 
     /** Takes a window closed for a named session out of the list, without quitting. */
@@ -340,7 +345,7 @@ final class WindowManager {
         }
         if (replace) session.setActive(named.name());
         for (int i = opened.size() - 1; i >= 0; i--) {
-            opened.get(i).setTitle(windowTitle());
+            opened.get(i).refreshTitle();
             opened.get(i).setVisible(true);
         }
         opened.get(0).toFront();
@@ -367,7 +372,7 @@ final class WindowManager {
         MainFrame window = createFirstWindow();
         if (bounds != null) window.setBounds(bounds);
         window.setExtendedState(state);
-        window.setTitle(windowTitle());
+        window.refreshTitle();
         window.setVisible(true);
         window.toFront();
         log.info("Closed session '{}'", name);

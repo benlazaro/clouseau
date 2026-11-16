@@ -133,6 +133,9 @@ To watch logs on more than one monitor, spread your tabs across several windows:
 A moved tab carries on as it was: following, filters, notes and Find aren't interrupted,
 and nothing is reloaded. A window you empty by moving its last tab away closes itself.
 
+Each window's title bar shows its selected tab's name, such as `app.log — Clouseau`, so you
+can tell windows apart in the taskbar and when switching with `Alt+Tab`.
+
 Every window has the full menu bar, and the menus and shortcuts act on the window you're
 in, and a file dropped on a window opens in that window. Files opened from outside
 Clouseau (double-clicking a file, "Open with") open in the window you used last. A file can only be open once: opening it
@@ -181,7 +184,7 @@ Keep one set of open logs per project or incident, and switch between them:
 
 1. Open the logs you need, in as many windows as you like.
 2. Choose **File → Sessions → Save Session As…** and give it a name, for example
-   *Payments*. Every window's title now ends in "— Payments".
+   *Payments*. Every window's title now shows "Payments" before "Clouseau".
 3. Another day, pick *Payments* from **File → Sessions**. If logs are already open,
    Clouseau asks whether to **Close current windows** (the default) or **Add to current**;
    adding leaves files that are already open where they are.
