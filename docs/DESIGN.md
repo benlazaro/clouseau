@@ -761,6 +761,15 @@ The Copy items call the same `SharedTabContext` actions as the Edit menu
 (`copyMessage`, `copyRaw`, `copyEntry`) and show the same accelerators. **Edit → Clear
 Table…** gets `Ctrl+Shift+K`, so it keeps a quick path after leaving the row menu.
 
+### 6.15 Status bar
+
+A tab's status bar (`TabStatusBar`) is read at a glance, so it stays quieter than the rows
+above it: all its text is `dimForeground` at 11px. The timezone badge opens a popup, and
+shows it the way the menu bar's items do, without a chevron: pointing at it paints a
+rounded `MenuBar.hoverBackground` behind it and brightens its text to `foreground`. A
+short hairline in `separatorColor`, as tall as the text, separates the badge from the row
+counts.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:

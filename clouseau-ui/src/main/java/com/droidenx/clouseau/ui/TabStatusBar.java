@@ -31,11 +31,6 @@ final class TabStatusBar extends JPanel {
         countsLabel.setText(" ");
         countsLabel.setHorizontalAlignment(SwingConstants.RIGHT);
         timezoneLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        // A chevron after the text, as on the buttons that open a popup. Up, because the
-        // popup opens above the status bar.
-        timezoneLabel.setIcon(FilterBar.Chevron.up());
-        timezoneLabel.setHorizontalTextPosition(SwingConstants.LEADING);
-        timezoneLabel.setIconTextGap(6);
         timezoneLabel.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) { onTimezoneClick.run(); }
             @Override public void mouseEntered(MouseEvent e) { timezoneLabel.setHover(true); }
@@ -129,16 +124,18 @@ final class TabStatusBar extends JPanel {
         return style(new JLabel(), pad);
     }
 
+    /** Dim text: the status bar is glanced at, so it stays quieter than the rows above it. */
     private static <L extends JLabel> L style(L l, Insets pad) {
-        ClouseauColors.themedForeground(l, () -> UIManager.getColor("Button.foreground"));
+        ClouseauColors.themedForeground(l, ClouseauColors::dimForeground);
         l.setFont(l.getFont().deriveFont(11f));   // ui-caption, like the other small chrome
         l.setBorder(BorderFactory.createEmptyBorder(pad.top, pad.left, pad.bottom, pad.right));
         return l;
     }
 
     /**
-     * The timezone badge: a rounded hover background, as the menu bar's items have, so it
-     * looks clickable. Colors are read when painting, so a theme switch needs nothing.
+     * The timezone badge. No chevron: pointing at it shows a rounded background, as the
+     * menu bar's items have, and brightens its text to the normal foreground. Colors are
+     * read when painting, so a theme switch needs nothing.
      */
     private static final class Badge extends JLabel {
         private boolean hover;
@@ -146,6 +143,10 @@ final class TabStatusBar extends JPanel {
         Badge() { style(this, new Insets(6, 6, 8, 6)); }
 
         void setHover(boolean on) { if (hover != on) { hover = on; repaint(); } }
+
+        @Override public Color getForeground() {
+            return hover ? ClouseauColors.foreground() : super.getForeground();
+        }
 
         @Override protected void paintComponent(Graphics g) {
             if (hover) {
