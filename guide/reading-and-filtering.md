@@ -56,7 +56,7 @@ hidden: **Log entry · file line 41**, **Log entry · db.log, line 41** in a mer
 - **JSON** appears when the message is JSON. Pressed (the default), the message is
   pretty-printed and colored; released, it's shown exactly as logged. Plugin formats get a
   button of their own in the same way.
-- **Wrap** wraps long lines to the panel's width instead of scrolling sideways (the same
+- **Wrap Lines** wraps long lines to the panel's width instead of scrolling sideways (the same
   setting as in Settings).
 - **Aa** opens the text size: **−** and **+** around the current size, and **Reset**. With
   the panel focused, `Ctrl`+mouse wheel, `Ctrl`+`+` and `Ctrl`+`-` change it too, and the new
