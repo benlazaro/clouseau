@@ -1667,7 +1667,7 @@ re-parent, not a reload, and everything shared stays shared.
   drop on a moved tab opens in the window it is in now.
 - **Themes:** `ThemeManager.updateUI` already walks every window (6.8.1), so a theme
   switch reaches all of them.
-- **Apply to all open tabs** in the timezone popup applies to the tabs of every window.
+- **Same for all open tabs** in the timezone popup applies to the tabs of every window.
 
 **Unchanged:** a tab's own state (filters, follow, highlights, layout, timezone) is the
 tab's, wherever it is. Several windows share one heap, as several tabs do, so the memory

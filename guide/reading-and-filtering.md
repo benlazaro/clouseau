@@ -197,7 +197,7 @@ columns keep their widths, order and hiding.
 
 Log timestamps usually don't say which timezone they're in, so Clouseau keeps two:
 
-- **Read times as** belongs to the log: the timezone its timestamps were written in. It
+- **Written in** belongs to the log: the timezone its timestamps were written in. It
   starts as your computer's timezone and is remembered for each file.
 - **Show times in** belongs to you: the timezone every tab shows times in, and the one the
   **Time** filter's **From** and **To** use. It's the same setting as in
@@ -210,9 +210,9 @@ see how far apart they are.
 
 Click it (or choose **View → Timezones…**) to change either. Type in a
 timezone box to search it: "chic" finds America/Chicago. Your computer's timezone and UTC
-are listed first, then the ones you've used lately. Tick **Apply to all open tabs** to read
+are listed first, then the ones you've used lately. Tick **Same for all open tabs** to read
 every open tab, in every window, in the same timezone; otherwise only this tab changes.
-Changing how a log is read reloads it. In a merged view, the timezone you choose applies
+Changing **Written in** reloads the log. In a merged view, the timezone you choose applies
 to all its files; to set one file's, right-click the tab and use **Sources**.
 
 When a log is read in one timezone and shown in another, the detail panel adds **In the
