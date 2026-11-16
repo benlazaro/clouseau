@@ -64,6 +64,11 @@ final class LogTableView {
     private final JScrollPane tableScrollPane;
     /** Whether follow mode scrolls to new rows: only while the view is at the bottom. */
     private final BottomPin bottomPin;
+    /**
+     * Rows dropped from the top of the table so far (a live tab over its entry limit). Only
+     * its parity matters: added to a row's index, it keeps stripes on their rows.
+     */
+    private int droppedFromTop;
     private boolean tableColumnsManaged = false;
     private int fittedColumnsWidth = 0;
     /** model-column-index → hidden TableColumn, in insertion order for restore positioning */
@@ -179,7 +184,10 @@ final class LogTableView {
                 } else if (sel) {
                     setBackground(ClouseauColors.selectionBackground());
                 } else {
-                    setBackground(r % 2 == 1 && AppPrefs.isTableStripes() ? ClouseauColors.stripeBackground() : t.getBackground());
+                    // Counted with the rows dropped from the top, so a row keeps its stripe when
+                    // older rows are trimmed away under it.
+                    boolean odd = ((r + droppedFromTop) & 1) == 1;
+                    setBackground(odd && AppPrefs.isTableStripes() ? ClouseauColors.stripeBackground() : t.getBackground());
                 }
 
                 // Ring border on any selected row
@@ -373,10 +381,12 @@ final class LogTableView {
         bottomPin = new BottomPin(tableScrollPane.getVerticalScrollBar().getModel(), logTable::getRowHeight);
         // Added after the table's own listener, so this one hears of a column change first.
         logTableModel.addTableModelListener(e -> {
+            boolean droppedTop = e.getType() == javax.swing.event.TableModelEvent.DELETE && e.getFirstRow() == 0;
+            // Each remaining row moves up by as many rows; its stripe goes with it.
+            if (droppedTop) droppedFromTop += e.getLastRow() - e.getFirstRow() + 1;
             // Rows dropped from the top (a live tab over its entry limit) while the user reads
             // earlier rows: move the view up with them, so the row being read stays put.
-            if (e.getType() == javax.swing.event.TableModelEvent.DELETE && e.getFirstRow() == 0
-                    && !bottomPin.pinned()) {
+            if (droppedTop && !bottomPin.pinned()) {
                 JViewport vp = tableScrollPane.getViewport();
                 Point p = vp.getViewPosition();
                 int removed = (e.getLastRow() - e.getFirstRow() + 1) * logTable.getRowHeight();

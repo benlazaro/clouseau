@@ -59,6 +59,10 @@ final class SharedTabContext {
     private static final String CARD_LOADING = "loading";
     private static final String CARD_PLAIN = "plain";
     private static final String CARD_MESSAGE = "message";
+    /** In {@link #tableCards}: the table's scroll pane. */
+    private static final String CARD_TABLE = "table";
+    /** Above the detail pane: the table, or the message card in its place. */
+    private final JPanel tableCards = new JPanel(new CardLayout());
 
     private final JComponent tab;
     private final Host host;
@@ -164,7 +168,10 @@ final class SharedTabContext {
         });
 
         detailPanel = new DetailPanel(formatters, highlighters, this::currentDetail);
-        JSplitPane split = new RememberedSplit(tableView.scrollPane(), detailPanel);
+        // The table's place above the detail pane: the rows, or a message instead of them
+        // (a missing file, a source that couldn't connect), with the detail pane left empty.
+        tableCards.add(tableView.scrollPane(), CARD_TABLE);
+        JSplitPane split = new RememberedSplit(tableCards, detailPanel);
         // Ctrl+C copies the selected line's message, Ctrl+Alt+C its raw text, Ctrl+Shift+C the
         // whole entry, from the table or the detail pane alike; the pane flashes and confirms
         // what was copied. Ctrl+C is bound on the table itself, ahead of its row copy (tab-joined
@@ -213,7 +220,7 @@ final class SharedTabContext {
         });
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                refreshDetail();
+                detailPanel.selectionChanged();
                 highlightNavBar.updatePosition();
             }
         });
@@ -309,12 +316,19 @@ final class SharedTabContext {
 
     void showLoading() { showCard(CARD_LOADING); }
 
-    void showRows() { showCard(CARD_ROWS); }
+    void showRows() { showMessageCard(false); }
 
-    /** Adds the message card a restored tab shows instead of rows (D-19). */
-    void addMessageCard(JComponent card) { centerCards.add(card, CARD_MESSAGE); }
+    /**
+     * Adds the message card a tab shows instead of rows (a restored tab, D-19, or a source
+     * that couldn't connect). It takes the table's place; the detail pane stays, empty.
+     */
+    void addMessageCard(JComponent card) { tableCards.add(card, CARD_MESSAGE); }
 
-    void showMessageCard(boolean show) { showCard(show ? CARD_MESSAGE : CARD_ROWS); }
+    void showMessageCard(boolean show) {
+        ((CardLayout) tableCards.getLayout()).show(tableCards, show ? CARD_MESSAGE : CARD_TABLE);
+        detailPanel.setBlank(show);
+        showCard(CARD_ROWS);
+    }
 
     private void showCard(String name) {
         ((CardLayout) centerCards.getLayout()).show(centerCards, name);

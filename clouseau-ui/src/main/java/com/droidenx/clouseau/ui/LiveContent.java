@@ -111,8 +111,15 @@ final class LiveContent implements TabContent {
                             ? MessageFormat.format(Messages.get("ssh.error.unreadable"), u.path())
                             : cause.getMessage() != null ? cause.getMessage() : cause.toString();
                     connection.disconnected(message);
-                    JOptionPane.showMessageDialog(tab.window(), message,
-                            Messages.get("source.error.title"), JOptionPane.ERROR_MESSAGE);
+                    if (firstBatch) {
+                        // Nothing arrived: say why in place of the empty table, with a way to try again.
+                        tab.showMessage(MessageFormat.format(Messages.get("source.failed.card"), name, message),
+                                canReconnect() ? Messages.get("source.failed.reconnect") : null,
+                                canReconnect() ? tab::reconnect : null);
+                    } else {
+                        JOptionPane.showMessageDialog(tab.window(), message,
+                                Messages.get("source.error.title"), JOptionPane.ERROR_MESSAGE);
+                    }
                 } catch (Exception e) {
                     connection.disconnected(null);
                 }

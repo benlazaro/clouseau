@@ -218,6 +218,10 @@ public final class TabPanel extends JPanel {
         @Override public void textLost() { if (current()) shared.textLost(); }
         @Override public void statusChanged() { if (current()) shared.statusChanged(); }
         @Override public void connectionChanged() { if (current()) connectionListener.run(); }
+        @Override public void showMessage(String text, String buttonText, Runnable action) {
+            if (current()) TabPanel.this.showMessage(text, buttonText, action);
+        }
+        @Override public void reconnect() { if (current()) TabPanel.this.reconnect(); }
     }
 
     // ── Files (D-16, G-11) ────────────────────────────────────────────────────
@@ -474,7 +478,8 @@ public final class TabPanel extends JPanel {
      */
     Session.Tab sessionTab() {
         if (sessionOrigin == null) return null;
-        if (restored.keepsOrigin()) return sessionOrigin;
+        // A live source that failed to connect shows a message too, but has its own state to keep.
+        if (restored.keepsOrigin() && !(content instanceof LiveContent)) return sessionOrigin;
         Session.Tab t = sessionOrigin;
         if (t.kind() == Session.Kind.MERGED && content instanceof MergedContent merged) {
             t = t.withFiles(merged.sessionFiles());

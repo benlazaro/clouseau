@@ -86,7 +86,10 @@ final class DetailPanel extends JPanel {
     private final CardLayout bodyCards = new CardLayout();
     private final JPanel     body      = new JPanel(bodyCards);
     private Content shown;
+    /** True while the tab shows a message instead of rows: nothing selected shows nothing. */
+    private boolean blank;
     private final JTextPane detailArea;
+    private final JScrollPane detailScroll;
 
     private String  lastFormattedMessage = "";
     private int     messageFieldStart    = -1;
@@ -128,13 +131,16 @@ final class DetailPanel extends JPanel {
         add(buildHeader(), BorderLayout.NORTH);
         installKeys();
         installContextMenu();
-        JScrollPane detailScroll = new JScrollPane(detailArea);
+        detailScroll = new JScrollPane(detailArea);
         ClouseauColors.themedBackground(detailScroll.getViewport(), ClouseauColors::detailBackground);
         // No frame of its own: the header's hairline is the only line between header and text
         // (a frame doubled it into a bright 2px band), as the main toolbar has one line.
         detailScroll.setBorder(BorderFactory.createEmptyBorder());
         body.add(detailScroll, "entry");
         body.add(buildEmptyState(), "empty");
+        JPanel blankCard = new JPanel();
+        ClouseauColors.themedBackground(blankCard, ClouseauColors::detailBackground);
+        body.add(blankCard, "blank");
         add(body, BorderLayout.CENTER);
         render(null);
     }
@@ -142,6 +148,27 @@ final class DetailPanel extends JPanel {
     /** Redraws from the owner's current selection. */
     void refresh() {
         render(current.get());
+    }
+
+    /**
+     * Blank (true) while the tab shows a message instead of rows (nothing loaded): with no
+     * lines, the pane drops its "Select a line" hint and shows nothing.
+     */
+    void setBlank(boolean blank) {
+        if (this.blank == blank) return;
+        this.blank = blank;
+        render(current.get());
+    }
+
+    /**
+     * The table's selection or rows changed: redraws only if what to show did. A live tab's
+     * appends fire selection events for the same row, and redrawing on each would throw away
+     * where the user had scrolled to in a long message.
+     */
+    void selectionChanged() {
+        Content next = current.get();
+        if (next != null && next.equals(shown)) return;
+        render(next);
     }
 
     void setWrapLines(boolean wrap) {
@@ -477,6 +504,12 @@ final class DetailPanel extends JPanel {
 
     private void render(Content content) {
         LogEntry entry = content != null ? content.entry() : null;
+        // Drawing the same entry again (a note, a theme, a continuation line that arrived)
+        // keeps where the user had scrolled to and what they had selected.
+        boolean sameEntry = entry != null && shown != null && entry.equals(shown.entry())
+                && java.util.Objects.equals(content.where(), shown.where());
+        Point keepView = sameEntry ? detailScroll.getViewport().getViewPosition() : null;
+        int keepStart = detailArea.getSelectionStart(), keepEnd = detailArea.getSelectionEnd();
         shown = entry != null ? content : null;
         updateFontSizeLabel();
         // "Log entry", then where it is: "· file line 41", "· db.log, line 41" or "· #1042 since connecting".
@@ -505,7 +538,7 @@ final class DetailPanel extends JPanel {
             lastFormattedMessage = "";
             messageFieldStart = messageFieldEnd = -1;
             formatToggles.values().forEach(b -> b.setVisible(false));
-            bodyCards.show(body, "empty");
+            bodyCards.show(body, blank ? "blank" : "empty");
             return;
         }
 
@@ -615,7 +648,20 @@ final class DetailPanel extends JPanel {
         messageFieldEnd = doc.getLength() - 1; // exclude trailing newline
 
         spaceLines(doc);
-        detailArea.setCaretPosition(0);
+        if (keepView == null) {
+            detailArea.setCaretPosition(0);
+        } else {
+            int length = doc.getLength();
+            detailArea.setCaretPosition(Math.min(keepStart, length));
+            detailArea.moveCaretPosition(Math.min(keepEnd, length));
+            // Lay the new text out now, so the old position can be restored before painting.
+            detailScroll.validate();
+            JViewport viewport = detailScroll.getViewport();
+            Dimension view = viewport.getViewSize(), extent = viewport.getExtentSize();
+            viewport.setViewPosition(new Point(
+                    Math.max(0, Math.min(keepView.x, view.width - extent.width)),
+                    Math.max(0, Math.min(keepView.y, view.height - extent.height))));
+        }
     }
 
     /**

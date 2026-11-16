@@ -1899,6 +1899,14 @@ getting it back meant opening it again from the dialog.
   to tell where the old stream stopped. The tab keeps its title, parser, filters and
   layout. SSH reuses the `SshConfig` from the dialog, password included, so reconnecting
   doesn't prompt; nothing new is stored on disk.
+- **A source that fails before its first line shows a message card, not a dialog.**
+  `LiveContent` puts the reason and a **Reconnect** button on the tab's message card
+  (`TabContext.showMessage`, the card restored tabs use), so the tab doesn't sit empty.
+  Every message card takes only the table's place: the detail pane stays where it is,
+  blank (no "Select a line" hint, since there are no lines), so the layout doesn't jump.
+  Once lines have arrived, the rows stay and the error is a dialog, as before. The card
+  doesn't freeze the session entry the way a restored tab's card does: the tab is saved
+  with its current filters and layout.
 - **Restored tabs (D-19)** reconnect the same way: a restored SSH or plugin tab that
   connected by itself keeps a factory like any other. One waiting for a password the
   session didn't keep is marked disconnected, with the reason in the dot's tooltip, and

@@ -150,6 +150,10 @@ from the last lines, as if you had just opened it, so no line is shown twice. Th
 keeps its title, parser, filters and columns; notes on its lines are not kept. It signs
 in with the same details you entered, without asking again.
 
+If the log can't be opened at all, for example because the server is down or the file
+can't be read, the tab says so in place of the table, with the reason and a
+**Reconnect** button to try again.
+
 An SSH tab keeps its lines in memory, at most **Max entries per tab** (200,000 by default,
 in [Settings](settings.md)); past that, the oldest lines are dropped. The status bar shows
 how many were trimmed.

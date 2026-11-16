@@ -83,4 +83,13 @@ interface TabContext {
 
     /** The live source's connection changed, so the window's dot may too (D-20). */
     void connectionChanged();
+
+    /**
+     * Shows a message instead of the rows, with a button that runs {@code action}, or none
+     * if {@code buttonText} is null. The next content's load takes the rows back.
+     */
+    void showMessage(String text, String buttonText, Runnable action);
+
+    /** Reconnects the tab's live source, as File → Reconnect does. */
+    void reconnect();
 }

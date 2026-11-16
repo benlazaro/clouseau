@@ -206,7 +206,10 @@ connection with the same details, as if reopened: `tail -n N -F` sends its last 
 again, so keeping the old rows would duplicate them. The tab keeps its title, parser,
 filters and column layout; notes on the old rows go with them. SSH signs in again with
 the password or key passphrase entered in the dialog, without asking; a plugin source is
-created again from the same setting values.
+created again from the same setting values. A source that fails before sending a single
+line (the server can't be reached, the file can't be read) doesn't leave an empty table:
+the tab says it couldn't open the log and why, with a **Reconnect** button in the middle.
+A source that fails after lines arrived keeps them and shows the error in a dialog.
 
 **Signing in (SSH):** Password, private key (with or without a passphrase), or "None"
 for accounts without a password, common on embedded devices. "None" works with
