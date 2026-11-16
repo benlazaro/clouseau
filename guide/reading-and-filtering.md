@@ -61,15 +61,16 @@ hidden: **Log entry · file line 41**, **Log entry · db.log, line 41** in a mer
 - **Aa** opens the text size: **−** and **+** around the current size, and **Reset**. With
   the panel focused, `Ctrl`+mouse wheel, `Ctrl`+`+` and `Ctrl`+`-` change it too, and the new
   size shows briefly in the middle of the panel.
-- **Copy** opens three choices: **Message** (as shown), **Raw Line** (the lines exactly as
-  in the file, stack trace included) and **Entry** (every field, as shown). What you copied
-  flashes, and a note in the middle of the panel confirms it, such as "Raw lines copied (10
-  lines)". Shortcuts work from the table or the panel: `Ctrl`+`C` copies the message (in the
-  panel, the text you've selected, if any), `Ctrl`+`Alt`+`C` the raw line and
-  `Ctrl`+`Shift`+`C` the entry. Right-click in the panel offers the same choices, plus
-  **Copy** for the selection.
 - Drag the bar between the table and the panel to resize them. Files you open later start
   with the same split, even after a restart.
+
+To copy an entry, right-click it in the table or in the panel, or use the Edit menu:
+**Copy Message** (as shown), **Copy Raw Line** (the lines exactly as in the file, stack
+trace included) and **Copy Entry** (every field, as shown). What you copied flashes, and a
+note in the middle of the panel confirms it, such as "Raw lines copied (10 lines)".
+Shortcuts work from the table or the panel: `Ctrl`+`C` copies the message (in the panel,
+the text you've selected, if any), `Ctrl`+`Alt`+`C` the raw line and `Ctrl`+`Shift`+`C` the
+entry. Right-click in the panel also offers **Copy** for the selected text.
 
 ## Filters
 

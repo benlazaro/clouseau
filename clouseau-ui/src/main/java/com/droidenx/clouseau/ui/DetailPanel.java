@@ -82,7 +82,6 @@ final class DetailPanel extends JPanel {
     private JButton resetFontBtn;
     private JLabel  sizeToast;
     private Timer   toastTimer;
-    private JButton copyBtn;
     /** The body: the entry's text, or the empty state when nothing is selected. */
     private final CardLayout bodyCards = new CardLayout();
     private final JPanel     body      = new JPanel(bodyCards);
@@ -214,29 +213,7 @@ final class DetailPanel extends JPanel {
 
         // Text size: one "Aa" button; its popup labels the stepper and offers Reset.
         tools.add(buildTextSizeButton());
-        tools.add(verticalSeparator(), "gapx 4 4");
-
-        // Copy ⌄: one button that opens the choices, like Loggers ⌄ and Time ⌄.
-        copyBtn = new JButton(Messages.get("detail.copy"));
-        copyBtn.setToolTipText(Messages.get("detail.copy.tooltip"));
-        copyBtn.setIcon(new FilterBar.ChevronDown());
-        copyBtn.setHorizontalTextPosition(SwingConstants.LEADING);
-        copyBtn.setIconTextGap(8);
-        copyBtn.setEnabled(false);
-        long[] closedAt = {0};
-        copyBtn.addActionListener(e -> {
-            if (System.currentTimeMillis() - closedAt[0] < 250) return;   // this click just closed it
-            JPopupMenu menu = new JPopupMenu();
-            addCopyItems(menu);
-            menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
-                @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent ev) { closedAt[0] = System.currentTimeMillis(); }
-                @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent ev) { }
-                @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent ev) { }
-            });
-            // Right-aligned under the button: it sits at the window's right edge.
-            menu.show(copyBtn, copyBtn.getWidth() - menu.getPreferredSize().width, copyBtn.getHeight());
-        });
-        tools.add(copyBtn);
+        // Copying is in the right-click menus, the Edit menu and the shortcuts, not a button here.
 
         bar.add(tools);
         updateFontSizeLabel();
@@ -399,15 +376,16 @@ final class DetailPanel extends JPanel {
         toastTimer.restart();
     }
 
-    /** Message (Ctrl+C), Raw Line and Entry: the Copy menu and the pane's right-click menu. */
+    /** Copy Message (Ctrl+C), Copy Raw Line and Copy Entry, named and keyed as in the table's row menu. */
     private void addCopyItems(JPopupMenu menu) {
-        JMenuItem msg = new JMenuItem(Messages.get("detail.copy.message"));
+        String keys = "menu.edit.copy.";
+        JMenuItem msg = new JMenuItem(Messages.get(keys + "message"));
         msg.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         msg.addActionListener(a -> copyMessage());
-        JMenuItem raw = new JMenuItem(Messages.get("detail.copy.raw"));
+        JMenuItem raw = new JMenuItem(Messages.get(keys + "raw"));
         raw.setAccelerator(COPY_RAW_KEY);
         raw.addActionListener(a -> copyRaw());
-        JMenuItem all = new JMenuItem(Messages.get("detail.copy.entry"));
+        JMenuItem all = new JMenuItem(Messages.get(keys + "entry"));
         all.setAccelerator(COPY_ENTRY_KEY);
         all.addActionListener(a -> copyEntry());
         for (JMenuItem i : new JMenuItem[] {msg, raw, all}) { i.setEnabled(shown != null); menu.add(i); }
@@ -443,7 +421,7 @@ final class DetailPanel extends JPanel {
         return true;
     }
 
-    /** Right-click in the pane: Copy for selected text, then the same three as the Copy menu. */
+    /** Right-click in the pane: Copy for selected text, then the table menu's three Copy items. */
     private void installContextMenu() {
         detailArea.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override public void mousePressed(java.awt.event.MouseEvent e)  { maybeShow(e); }
@@ -496,7 +474,6 @@ final class DetailPanel extends JPanel {
     private void render(Content content) {
         LogEntry entry = content != null ? content.entry() : null;
         shown = entry != null ? content : null;
-        copyBtn.setEnabled(entry != null);
         updateFontSizeLabel();
         // "Log entry", then where it is: "· file line 41", "· db.log, line 41" or "· #1042 since connecting".
         StringBuilder heading = new StringBuilder(Messages.get("detail.title.none"));
