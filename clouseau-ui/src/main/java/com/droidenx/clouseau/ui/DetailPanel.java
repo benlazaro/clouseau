@@ -745,8 +745,9 @@ final class DetailPanel extends JPanel {
 
     /** The width of a padded label ("Message:" and spaces to 12 columns, then a space). */
     private float valueIndent(int fontSize) {
-        Font bold  = new Font(ClouseauFonts.MONO_FAMILY, Font.BOLD, fontSize);
-        Font plain = new Font(ClouseauFonts.MONO_FAMILY, Font.PLAIN, fontSize);
+        // ClouseauFonts.mono, never new Font(MONO_FAMILY): see ClouseauFonts.MONO_FAMILY.
+        Font bold  = ClouseauFonts.mono(Font.BOLD, fontSize);
+        Font plain = ClouseauFonts.mono(Font.PLAIN, fontSize);
         return detailArea.getFontMetrics(bold).stringWidth("000000000000")
              + detailArea.getFontMetrics(plain).charWidth(' ');
     }
@@ -776,16 +777,33 @@ final class DetailPanel extends JPanel {
      * <p>Text carrying {@link #NO_BREAK} (the field labels) is never a break point, so a long
      * value starts beside its label and breaks inside, instead of leaving the label alone on
      * its line because the space after it was the only space to break at.
+     *
+     * <p>Text carrying {@link #CONTROL} is control characters, drawn as their Unicode control
+     * pictures ({@code ␀}, {@code ␛}, {@code ␡}). The document keeps the real characters, so a
+     * selection copies what was logged.
      */
     private static final class WrapAnywhereKit extends javax.swing.text.StyledEditorKit {
         static final Object NO_BREAK = new Object() {
             @Override public String toString() { return "noBreak"; }
         };
+        static final Object CONTROL = new Object() {
+            @Override public String toString() { return "control"; }
+        };
 
         private final javax.swing.text.ViewFactory factory = elem -> {
             if (javax.swing.text.AbstractDocument.ContentElementName.equals(elem.getName())) {
                 boolean noBreak = elem.getAttributes().getAttribute(NO_BREAK) != null;
+                boolean control = elem.getAttributes().getAttribute(CONTROL) != null;
                 return new javax.swing.text.LabelView(elem) {
+                    @Override
+                    public javax.swing.text.Segment getText(int p0, int p1) {
+                        javax.swing.text.Segment text = super.getText(p0, p1);
+                        if (!control) return text;
+                        char[] shown = new char[text.count];
+                        for (int i = 0; i < text.count; i++) shown[i] = controlPicture(text.array[text.offset + i]);
+                        return new javax.swing.text.Segment(shown, 0, shown.length);
+                    }
+
                     @Override
                     public float getMinimumSpan(int axis) {
                         return axis == X_AXIS ? 0 : super.getMinimumSpan(axis);
@@ -871,7 +889,40 @@ final class DetailPanel extends JPanel {
         hang(doc, start);
     }
 
+    /**
+     * Appends {@code text} in {@code style}. Control characters (a NUL, an escape) go in as runs
+     * of their own, dimmed and marked {@link WrapAnywhereKit#CONTROL}, so they show as control
+     * pictures instead of the font's empty box, or nothing at all.
+     */
     private static void insertText(StyledDocument doc, String text, SimpleAttributeSet style) {
-        try { doc.insertString(doc.getLength(), text, style); } catch (BadLocationException ignored) {}
+        try {
+            int i = 0;
+            while (i < text.length()) {
+                boolean control = isControl(text.charAt(i));
+                int end = i + 1;
+                while (end < text.length() && isControl(text.charAt(end)) == control) end++;
+                doc.insertString(doc.getLength(), text.substring(i, end), control ? controlStyle(style) : style);
+                i = end;
+            }
+        } catch (BadLocationException ignored) {}
+    }
+
+    private static SimpleAttributeSet controlStyle(SimpleAttributeSet style) {
+        SimpleAttributeSet control = new SimpleAttributeSet(style);
+        StyleConstants.setForeground(control, ClouseauColors.dimForeground());
+        control.addAttribute(WrapAnywhereKit.CONTROL, Boolean.TRUE);
+        return control;
+    }
+
+    /** A C0 control character other than tab and line breaks, or DEL. */
+    static boolean isControl(char c) {
+        return (c < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == 0x7F;
+    }
+
+    /** The Unicode control picture for a control character (U+2400–U+2421); others as they are. */
+    static char controlPicture(char c) {
+        if (c < 0x20) return (char) (0x2400 + c);
+        if (c == 0x7F) return '␡';
+        return c;
     }
 }

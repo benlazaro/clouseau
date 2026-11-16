@@ -64,6 +64,10 @@ hidden: **Log entry · file line 41**, **Log entry · db.log, line 41** in a mer
 - Drag the bar between the table and the panel to resize them. Files you open later start
   with the same split, even after a restart.
 
+Control characters in a field, such as a NUL byte or the escape that starts a terminal color
+code, are shown dimmed as their symbols (`␀`, `␛`) so you can see they're there. Copying
+still gives you the characters exactly as logged.
+
 To copy an entry, right-click it in the table or in the panel, or use the Edit menu:
 **Copy Message** (as shown), **Copy Raw Line** (the lines exactly as in the file, stack
 trace included) and **Copy Entry** (every field, as shown). What you copied flashes, and a

@@ -196,7 +196,9 @@ when there's no file.
   **Time** button (a From/To popup); `RowMenu` can set either end from a line.
 - `ClouseauColors`, `ClouseauFonts` (ui) — the theme's named colors, and the bundled fonts
   (Inter for the interface, JetBrains Mono for log text and code). Use `ClouseauFonts.mono`
-  for code-like text, never the logical `Monospaced` font. Theme files are
+  for code-like text, never the logical `Monospaced` font, and never `new Font(MONO_FAMILY, …)`:
+  it has no fallback fonts, and through Java's shared metrics cache it takes the fallbacks
+  away from every equal font, the detail pane's included. Theme files are
   `ClouseauDarkLaf.properties` and `ClouseauLightLaf.properties` in `ui/theme`, one per
   `ClouseauDarkLaf` / `ClouseauLightLaf` class: the same keys and design, colors for each.
 

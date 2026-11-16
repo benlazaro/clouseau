@@ -17,7 +17,15 @@ public final class ClouseauFonts {
     /** The interface font. */
     public static final String UI_FAMILY = FlatInterFont.FAMILY;
 
-    /** Log text, the detail pane, parser patterns and other code-like text. */
+    /**
+     * Log text, the detail pane, parser patterns and other code-like text.
+     *
+     * <p>Get the font from {@link #mono}, or name the family in a text pane's attributes; never
+     * {@code new Font(MONO_FAMILY, ...)}. That font has no fallback fonts, so it draws CJK and
+     * other characters JetBrains Mono lacks as boxes. Worse, {@code Font.equals} ignores
+     * fallbacks, so once any component measures with it, Java's shared metrics cache hands its
+     * glyphs to every equal font, and the detail pane's text loses its fallbacks too.
+     */
     public static final String MONO_FAMILY = FlatJetBrainsMonoFont.FAMILY;
 
     private static boolean installed;

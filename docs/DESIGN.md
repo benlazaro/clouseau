@@ -395,6 +395,14 @@ When a row is selected, the detail panel shows the entry and its continuation li
 `LogSyntaxHighlighter` returns color spans. The detail toolbar can turn individual
 formatters and highlighters on or off.
 
+Text is drawn in `ClouseauFonts.mono`'s composite font, so characters JetBrains Mono lacks
+(CJK, many symbols) come from the system's fallback fonts. Control characters other than
+tab and line breaks (C0 and DEL) are drawn as dim Unicode control pictures (`␀`, `␛`, `␡`)
+by the detail pane's view; the document keeps the real characters, so a selection copies
+what was logged. A formatter that decodes binary data should still turn it into readable
+text itself (for example, decode UTF-16 runs and show the other bytes as hex), since a NUL
+after every character reads badly even as a picture.
+
 ### 6.6 Annotations (UC-7 to UC-9)
 
 `AnnotationStore` (core) holds the annotations and row highlights for one file. Each records its note,
