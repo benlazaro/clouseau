@@ -28,6 +28,8 @@ tasks.jar {
         attributes(
             "Plugin-Id"       to pluginId,
             "Plugin-Version"  to pluginVersion,
+            // The API version it was built for (ClouseauApi.VERSION); Clouseau refuses it otherwise.
+            "Plugin-Requires" to ">=0.2.0",
             "Plugin-Provider" to "Clouseau",
             "Plugin-Name"     to "logfmt example",
             "Plugin-Description" to "Example plugin: a logfmt parser and a demo live source",

@@ -37,7 +37,7 @@ Documentation opens the guide.
 
 ```
 clouseau-api      ← plugin contract: LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
-                    LogSource, ConnectingLogSource, LogSourceProvider, SourceSetting. No Swing, no implementation.
+                    LogSource, ConnectingLogSource, LogSourceProvider, SourceSetting, ClouseauApi. No Swing, no implementation.
 clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogReaders, LogFileReader, FileIndexer, IndexedFollow,
                     FileFollower, FileTail, FileChangeWatcher, Utf8Bom,
                     MemoryGuard, ParserList, SshLogSource, SshRemote, SshConfig, SourceSettings,
@@ -45,7 +45,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
                     MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
-                    UpdateCheck, SshSaved
+                    UpdateCheck, SshSaved, SyntaxLayers
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -117,7 +117,11 @@ when there's no file.
 
 - `LogEntry` (api) — immutable record: timestamp, level, logger, thread, message, rawLine,
   fields. Lines no parser accepts become `UNKNOWN` entries (continuation lines).
-- `LogParser` / `LogFormatter` / `LogSyntaxHighlighter` (api) — PF4J extension points.
+- `LogParser` / `LogFormatter` / `LogSyntaxHighlighter` (api) — PF4J extension points. A highlighter
+  returns spans with a `Role`, never a color; the theme's `Clouseau.syntax.<role>` keys color them, and
+  `SyntaxLayers` (core) layers every highlighter that applies (D-26).
+- `ClouseauApi` (api) — `VERSION`, the plugin API's own version, which PF4J checks `Plugin-Requires`
+  against. Bump it with any API change (minor while 0.x if it breaks plugins), and note it in its javadoc.
 - `LogSource` (api) — pushes live lines; `ConnectingLogSource` (api) also reports when it is connected (D-20); `LogSourceProvider` (extension point) creates one
   from declared `SourceSetting`s, shown under File → Open Source by `SourceSettingsDialog`.
 - `RegexLogParser` (core) — the parser behind every JSON-defined format.

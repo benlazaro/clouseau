@@ -43,7 +43,14 @@ public final class ClouseauPluginManager {
     private final PluginManager pf4j;
 
     public ClouseauPluginManager(Path pluginsDir) {
-        this.pf4j = new DefaultPluginManager(pluginsDir);
+        // A plugin's Plugin-Requires is checked against the API's version, not the app's,
+        // so a snapshot build still loads plugins written for the API it carries.
+        // (PF4J's check reads the protected field, and its setter is deprecated.)
+        this.pf4j = new DefaultPluginManager(pluginsDir) {
+            {
+                systemVersion = com.droidenx.clouseau.api.ClouseauApi.VERSION;
+            }
+        };
     }
 
     public Path getPluginsRoot() {
@@ -59,12 +66,14 @@ public final class ClouseauPluginManager {
             Path file = pw.getPluginPath();
             if (file != null) loaded.add(file.toAbsolutePath().normalize());
             Throwable failure = pw.getFailedException();
-            String error = pw.getPluginState() == PluginState.FAILED
+            String wrongApi = wrongApi(pw);
+            String error = wrongApi != null ? wrongApi
+                    : pw.getPluginState() == PluginState.FAILED
                     ? (failure != null && failure.getMessage() != null ? failure.getMessage() : "Couldn't be started.")
                     : null;
             out.add(new PluginInfo(pw.getPluginId(), displayName(pw.getPluginId(), file),
                     blank(d.getPluginDescription()), blank(d.getProvider()), blank(d.getLicense()),
-                    d.getVersion(), deriveTypes(pw.getPluginId()), friendlyState(pw),
+                    d.getVersion(), deriveTypes(pw.getPluginId()), wrongApi != null ? "Failed" : friendlyState(pw),
                     pw.getPluginState() == PluginState.STARTED, error, file));
         }
         out.sort(java.util.Comparator.comparing(i -> i.name().toLowerCase(java.util.Locale.ROOT)));
@@ -207,6 +216,19 @@ public final class ClouseauPluginManager {
         pf4j.stopPlugin(id);
         pf4j.disablePlugin(id);
         log.info("Disabled plugin '{}'", id);
+    }
+
+    /**
+     * Why PF4J refused the plugin for its {@code Plugin-Requires}, or null. PF4J only disables
+     * such a plugin, which would read as if the user had switched it off.
+     */
+    private String wrongApi(PluginWrapper pw) {
+        String requires = pw.getDescriptor().getRequires();
+        if (pw.getPluginState() != PluginState.DISABLED || requires == null || requires.isBlank()
+                || requires.trim().equals("*")) return null;
+        String api = com.droidenx.clouseau.api.ClouseauApi.VERSION;
+        if (pf4j.getVersionManager().checkVersionConstraint(api, requires.trim())) return null;
+        return "Built for Clouseau plugin API " + requires.trim() + "; this Clouseau has " + api + ".";
     }
 
     private static String friendlyState(PluginWrapper pw) {

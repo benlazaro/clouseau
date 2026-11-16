@@ -33,8 +33,10 @@ Mono for log text, so it looks the same on every computer.
 one. Removing the active theme switches back to the default.
 
 A theme can set Clouseau's own colors too. For example, `Clouseau.level.ERROR` sets the
-color of error rows; levels a theme doesn't set keep Clouseau's defaults, so logs stay
-readable in any theme.
+color of error rows, and `Clouseau.syntax.key` the color of JSON keys and other names in
+the detail panel (the other roles are `string`, `number`, `literal`, `keyword`, `operator`,
+`punctuation`, `muted`, `accent` and `error`). Colors a theme doesn't set keep Clouseau's
+defaults, so logs stay readable in any theme.
 
 ## Settings
 

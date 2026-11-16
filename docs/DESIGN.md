@@ -120,7 +120,7 @@ tab.
 |---|---|---|---|
 | `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the JSON-defined parsers (section 5.1) | `RegexLogParser`, configured from JSON |
 | `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
-| `LogSyntaxHighlighter` | Color spans in the detail panel | Yes | `JsonSyntaxHighlighter` |
+| `LogSyntaxHighlighter` | Mark spans of the detail panel's message with a role (key, string, keyword, muted, …) that the theme colors (D-26) | Yes; every one that applies is layered | `JsonSyntaxHighlighter` |
 | `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File → Open Remote, after SSH (section 6.3) | None; SSH has its own dialog and creates `SshLogSource` directly, so a session keeps SSH and plugin tabs as different kinds |
 
 **Contract notes:**
@@ -130,6 +130,12 @@ tab.
 - `LogParser.customFields()` lists the `fields` keys that should become columns.
 - `LogFormatter` and `LogSyntaxHighlighter` work on message text, so one implementation
   works for any log format.
+- `LogSyntaxHighlighter.highlight` returns `Span`s that name a `Role`, never a color (D-26).
+  A highlighter marks only what it recognizes; the detail panel layers every enabled one.
+- `ClouseauApi.VERSION` is the API's own version (0.2.0), separate from the app's. PF4J
+  checks a plugin's `Plugin-Requires` against it, and the Plugin Manager lists a plugin
+  built for another API as Failed with the reason. While the API is 0.x, a change that
+  breaks plugins bumps the minor version.
 - `LogSource.open(Consumer<String>)` **pushes** lines to the consumer. The source decides
   how to get them: a server-side `tail -F`, or a streaming API. `open` runs on a
   background thread and blocks until the stream ends or `close()` is called; `close()`
@@ -391,9 +397,13 @@ and parsed in `buildFilter()`, as before.
 ### 6.5 Detail panel (UC-3)
 
 When a row is selected, the detail panel shows the entry and its continuation lines. Each
-`LogFormatter` whose `canFormat` accepts the message transforms it, then each matching
-`LogSyntaxHighlighter` returns color spans. The detail toolbar can turn individual
-formatters and highlighters on or off.
+`LogFormatter` whose `canFormat` accepts the message transforms it. Then every enabled
+`LogSyntaxHighlighter` whose `canHighlight` accepts the result marks its spans with roles,
+and `SyntaxLayers` (core) layers them: where spans overlap, the narrower wins, and among
+equal widths the earlier highlighter. Each role's color is the theme's
+`Clouseau.syntax.<role>` key (D-26). A highlighter that throws, or was built for an older
+API, is skipped and logged once. The detail toolbar can turn individual formatters and
+highlighters on or off.
 
 Text is drawn in `ClouseauFonts.mono`'s composite font, so characters JetBrains Mono lacks
 (CJK, many symbols) come from the system's fallback fonts. Control characters other than
@@ -797,7 +807,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 | `parsers.json` | User-defined parsers |
 | `plugins/` | Installed plugin JARs |
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
-| `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`); missing keys fall back to built-in defaults. |
+| `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`) and highlighter colors with `Clouseau.syntax.<role>` keys (for example `Clouseau.syntax.keyword`); missing keys fall back to built-in defaults. |
 | `settings.json` → `ssh.connections` | Saved SSH connections (D-24): each a sign-in (`name`, `host`, `port`, `user`, `authType`, encrypted `password` / `keyPassphrase`, `keyFilePath`) with its `logs` (`remotePath`, `parserName`). `ssh.favorites` and `ssh.hostNames` are the earlier format, read once to convert and then left alone. |
 | `settings.json` → `update.*` | The new-version check (D-23): `update.check` (on/off), `update.skipped` (a version the user skipped), `update.last.check` (epoch milliseconds). |
 | `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |
@@ -2278,6 +2288,30 @@ menu bar, where every action can be found, each with a shortcut (Clear Table… 
 click away and shows their shortcuts), and moving them to the filter bar (Clear Table
 would sit beside Clear All Filters and read as a filter, which "a clear sits with what
 it clears" rules out).
+
+### D-26 · Highlighters name roles, and every one that applies is layered · Adopted
+
+A `LogSyntaxHighlighter` used to return RGB colors, and the detail panel used the first one
+that accepted the message. So a plugin's colors were the same in Dark and Light (a yellow
+that reads on dark is lost on white), and two highlighters couldn't share a message: hex
+bytes with an HL7 segment inside got one or the other, in PF4J's load order.
+
+Now `highlight` returns `Span(start, end, Role)`, where `Role` is one of ten kinds of
+text: KEY, STRING, NUMBER, LITERAL, KEYWORD, OPERATOR, PUNCTUATION, MUTED, ACCENT and
+ERROR. Each theme colors every role (`Clouseau.syntax.<role>`), in hues no level or
+detail label uses, at 4.5:1 or more on the detail pane. Every enabled highlighter that
+accepts the message marks what it recognizes, and `SyntaxLayers` (core) layers them:
+where spans overlap, the narrower wins, so a token inside a larger region keeps its role
+whichever highlighter found it; among equal widths, the earlier highlighter wins.
+
+The change broke the API on purpose (alpha): `ColorSpan` is gone, with no fallback for
+old plugins. To make such breaks visible, the API has its own version,
+`ClouseauApi.VERSION` (0.2.0), which PF4J checks a plugin's `Plugin-Requires` against.
+Rejected: keeping RGB beside roles (the Dark/Light problem stays for every plugin that
+uses it); an open set of role names (themes couldn't color names they don't know);
+choosing between overlapping spans by load order (it isn't stable across installs);
+letting a highlighter hand regions to others (more API than layering, and layering
+already covers payloads that sit side by side).
 
 ## 10. Planned features
 

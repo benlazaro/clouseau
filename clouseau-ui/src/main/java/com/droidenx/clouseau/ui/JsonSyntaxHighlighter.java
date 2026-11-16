@@ -1,7 +1,6 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
-import com.droidenx.clouseau.ui.theme.ClouseauColors;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -15,7 +14,7 @@ import java.util.List;
  */
 final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
 
-    // Palette (keys, strings, literals, punctuation) is per theme, read from UIManager via ClouseauColors at highlight time.
+    // Names roles only; the theme colors them (ClouseauColors.syntaxColor).
 
     @Override
     public String getName() { return "JSON"; }
@@ -27,7 +26,7 @@ final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
     }
 
     @Override
-    public List<ColorSpan> highlight(String input) {
+    public List<Span> highlight(String input) {
         int jsonStart = findJsonStart(input);
         if (jsonStart < 0) return List.of();
         return tokenize(input, jsonStart);
@@ -38,8 +37,8 @@ final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
      * Characters before {@code jsonStart} (the prefix) are left unspanned
      * so the caller renders them in the base style.
      */
-    private static List<ColorSpan> tokenize(String text, int jsonStart) {
-        List<ColorSpan> spans = new ArrayList<>();
+    private static List<Span> tokenize(String text, int jsonStart) {
+        List<Span> spans = new ArrayList<>();
         int i = jsonStart;
         int len = text.length();
         // true = inside object, false = inside array
@@ -50,29 +49,29 @@ final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
             char c = text.charAt(i);
             switch (c) {
                 case '{' -> {
-                    spans.add(new ColorSpan(i, i + 1, ClouseauColors.jsonPunctColor()));
+                    spans.add(new Span(i, i + 1, Role.PUNCTUATION));
                     stack.push(true);
                     expectKey = true;
                     i++;
                 }
                 case '[' -> {
-                    spans.add(new ColorSpan(i, i + 1, ClouseauColors.jsonPunctColor()));
+                    spans.add(new Span(i, i + 1, Role.PUNCTUATION));
                     stack.push(false);
                     expectKey = false;
                     i++;
                 }
                 case '}', ']' -> {
-                    spans.add(new ColorSpan(i, i + 1, ClouseauColors.jsonPunctColor()));
+                    spans.add(new Span(i, i + 1, Role.PUNCTUATION));
                     if (!stack.isEmpty()) stack.pop();
                     i++;
                 }
                 case ',' -> {
-                    spans.add(new ColorSpan(i, i + 1, ClouseauColors.jsonPunctColor()));
+                    spans.add(new Span(i, i + 1, Role.PUNCTUATION));
                     expectKey = !stack.isEmpty() && Boolean.TRUE.equals(stack.peek());
                     i++;
                 }
                 case ':' -> {
-                    spans.add(new ColorSpan(i, i + 1, ClouseauColors.jsonPunctColor()));
+                    spans.add(new Span(i, i + 1, Role.PUNCTUATION));
                     expectKey = false;
                     i++;
                 }
@@ -80,16 +79,16 @@ final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
                     int start = i++;
                     while (i < len) {
                         char sc = text.charAt(i);
-                        if (sc == '\\') { i += 2; continue; }
+                        if (sc == '\\') { i = Math.min(len, i + 2); continue; }
                         if (sc == '"') { i++; break; }
                         i++;
                     }
-                    spans.add(new ColorSpan(start, i, expectKey ? ClouseauColors.jsonKeyColor() : ClouseauColors.jsonStringColor()));
+                    spans.add(new Span(start, i, expectKey ? Role.KEY : Role.STRING));
                 }
                 case 't', 'f', 'n' -> {
                     int start = i;
                     while (i < len && Character.isLetter(text.charAt(i))) i++;
-                    spans.add(new ColorSpan(start, i, ClouseauColors.jsonBoolNullColor()));
+                    spans.add(new Span(start, i, Role.LITERAL));
                 }
                 default -> {
                     if (Character.isDigit(c) || c == '-') {
@@ -100,7 +99,7 @@ final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
                                     || nc == 'E' || nc == '+' || nc == '-') i++;
                             else break;
                         }
-                        spans.add(new ColorSpan(start, i, ClouseauColors.jsonNumberColor()));
+                        spans.add(new Span(start, i, Role.NUMBER));
                     } else {
                         i++; // whitespace, newlines
                     }

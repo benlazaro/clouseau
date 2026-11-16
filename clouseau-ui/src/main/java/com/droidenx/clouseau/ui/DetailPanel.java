@@ -621,27 +621,26 @@ final class DetailPanel extends JPanel {
         // quiet on plain text and says at a glance that a line carries JSON.
         java.util.Set<String> applicable = new HashSet<>();
         for (LogFormatter f : formatters) if (f.canFormat(rawMsg)) applicable.add(f.getName());
-        for (LogSyntaxHighlighter h : syntaxHighlighters) if (h.canHighlight(rawMsg)) applicable.add(h.getName());
+        for (LogSyntaxHighlighter h : syntaxHighlighters) if (canHighlight(h, rawMsg)) applicable.add(h.getName());
 
         String messageText = applyFormatters(rawMsg);
         lastFormattedMessage = messageText;
-        for (LogSyntaxHighlighter h : syntaxHighlighters) if (h.canHighlight(messageText)) applicable.add(h.getName());
+        // Every enabled highlighter that has something to mark colors the message (D-26).
+        List<LogSyntaxHighlighter> colorizers = new ArrayList<>();
+        for (LogSyntaxHighlighter h : syntaxHighlighters) {
+            if (!canHighlight(h, messageText)) continue;
+            applicable.add(h.getName());
+            if (!disabledFormats.contains(h.getName())) colorizers.add(h);
+        }
         formatToggles.forEach((name, btn) -> {
             btn.setVisible(applicable.contains(name));
             btn.setSelected(!disabledFormats.contains(name));
         });
 
-        LogSyntaxHighlighter colorizer = null;
-        for (LogSyntaxHighlighter h : syntaxHighlighters) {
-            if (h.canHighlight(messageText) && !disabledFormats.contains(h.getName())) {
-                colorizer = h;
-                break;
-            }
-        }
         String msgLabel = String.format("%-12s ", Messages.get("table.col.message") + ":");
         messageFieldStart = doc.getLength() + msgLabel.length();
-        if (colorizer != null) {
-            renderSyntaxHighlightedField(doc, key, val, Messages.get("table.col.message"), messageText, colorizer);
+        if (!colorizers.isEmpty()) {
+            renderSyntaxHighlightedField(doc, key, val, Messages.get("table.col.message"), messageText, colorizers);
         } else {
             appendField(doc, key, val, Messages.get("table.col.message"), messageText);
         }
@@ -851,6 +850,25 @@ final class DetailPanel extends JPanel {
         @Override public int getIconHeight() { return height; }
     }
 
+    /** Highlighters that have failed once, so a broken plugin is logged once, not on every row. */
+    private final java.util.Set<String> failedHighlighters = new HashSet<>();
+
+    private boolean canHighlight(LogSyntaxHighlighter h, String text) {
+        try {
+            return h.canHighlight(text);
+        } catch (Exception | LinkageError e) {
+            warnOnce(h, e);
+            return false;
+        }
+    }
+
+    private void warnOnce(LogSyntaxHighlighter h, Throwable e) {
+        if (failedHighlighters.add(h.getClass().getName())) {
+            log.warn("Highlighter {} failed; is it built for an older Clouseau API than {}?",
+                    h.getName(), com.droidenx.clouseau.api.ClouseauApi.VERSION, e);
+        }
+    }
+
     private void appendField(StyledDocument doc, SimpleAttributeSet keyStyle,
                              SimpleAttributeSet valStyle, String label, String value) {
         int start = doc.getLength();
@@ -861,24 +879,25 @@ final class DetailPanel extends JPanel {
 
     private void renderSyntaxHighlightedField(StyledDocument doc, SimpleAttributeSet keyStyle,
                                               SimpleAttributeSet baseStyle, String label,
-                                              String text, LogSyntaxHighlighter colorizer) {
+                                              String text, List<LogSyntaxHighlighter> colorizers) {
         int start = doc.getLength();
         insertText(doc, String.format("%-12s ", label + ":"), keyStyle);
-        List<LogSyntaxHighlighter.ColorSpan> spans;
-        try {
-            spans = colorizer.highlight(text);
-        } catch (Exception e) {
-            insertText(doc, text + "\n", baseStyle);
-            hang(doc, start);
-            return;
+        List<List<LogSyntaxHighlighter.Span>> layers = new ArrayList<>();
+        for (LogSyntaxHighlighter h : colorizers) {
+            try {
+                layers.add(h.highlight(text));
+            } catch (Exception | LinkageError e) {
+                // LinkageError: a plugin built for an older API (one that returned RGB colors).
+                warnOnce(h, e);
+            }
         }
         int pos = 0;
-        for (LogSyntaxHighlighter.ColorSpan span : spans) {
+        for (LogSyntaxHighlighter.Span span : com.droidenx.clouseau.core.SyntaxLayers.resolve(text.length(), layers)) {
             if (span.start() > pos) {
                 insertText(doc, text.substring(pos, span.start()), baseStyle);
             }
             SimpleAttributeSet spanStyle = new SimpleAttributeSet(baseStyle);
-            StyleConstants.setForeground(spanStyle, new Color(span.rgb()));
+            StyleConstants.setForeground(spanStyle, ClouseauColors.syntaxColor(span.role()));
             insertText(doc, text.substring(span.start(), span.end()), spanStyle);
             pos = span.end();
         }

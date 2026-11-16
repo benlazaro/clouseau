@@ -150,6 +150,30 @@ class ClouseauPluginManagerTest {
     }
 
     @Test
+    void aPluginThatNeedsANewerApiIsNotStarted() throws IOException {
+        Path jar = pluginsDir.resolve("future-1.0.jar");
+        java.util.jar.Manifest m = new java.util.jar.Manifest();
+        java.util.jar.Attributes a = m.getMainAttributes();
+        a.put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+        a.putValue("Plugin-Id", "future");
+        a.putValue("Plugin-Version", "1.0.0");
+        a.putValue("Plugin-Requires", ">=99.0.0");
+        try (var out = new java.util.jar.JarOutputStream(Files.newOutputStream(jar), m)) { /* empty */ }
+        manager.refresh();
+
+        assertThat(manager.getPluginInfos()).filteredOn(info -> info.id().equals("future"))
+                .singleElement().satisfies(info -> {
+                    assertThat(info.enabled()).isFalse();
+                    assertThat(info.failed()).isTrue();
+                    assertThat(info.error()).isEqualTo("Built for Clouseau plugin API >=99.0.0; this Clouseau has "
+                            + com.droidenx.clouseau.api.ClouseauApi.VERSION + ".");
+                });
+        // The example plugin declares the API it was built for, and it's this one.
+        assertThat(manager.getPluginInfos()).filteredOn(info -> !info.id().equals("future"))
+                .singleElement().satisfies(info -> assertThat(info.enabled()).isTrue());
+    }
+
+    @Test
     void anOtherFileIsIgnoredAndTheFolderStampChangesWithTheFolder() throws IOException {
         String before = manager.folderStamp();
         Files.writeString(pluginsDir.resolve("README.txt"), "hello");

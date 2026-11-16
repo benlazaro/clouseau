@@ -326,16 +326,27 @@ public final class ClouseauColors {
     /** Peak flash color for the detail-pane copy animation. */
     public static Color flashPeakColor()  { return get("Clouseau.flashPeakColor", "Clouseau.dimForeground", "Label.disabledForeground"); }
 
-    // ── JSON syntax-highlight palette (returned as packed RGB int) ────────────
+    // ── Syntax roles (detail-pane highlighting) ───────────────────────────────
 
-    // Fallbacks are the Dark theme's values. Keys orchid, strings cyan, numbers and
-    // true/false/null orange: hues no level or detail label uses, so a payload never reads as one.
-
-    public static int jsonKeyColor()      { return colorToRgb("Clouseau.json.key",     0xD896DA); }
-    public static int jsonStringColor()   { return colorToRgb("Clouseau.json.string",  0x8FD3E8); }
-    public static int jsonNumberColor()   { return colorToRgb("Clouseau.json.number",  0xF0B37E); }
-    public static int jsonBoolNullColor() { return colorToRgb("Clouseau.json.boolNull",0xF0B37E); }
-    public static int jsonPunctColor()    { return colorToRgb("Clouseau.json.punct",   0x8A8F99); }
+    /**
+     * The theme's color for a highlighter role: {@code Clouseau.syntax.<role>}, so a custom
+     * theme can set each one. Falls back to the Dark theme's value when the theme doesn't.
+     */
+    public static Color syntaxColor(com.droidenx.clouseau.api.LogSyntaxHighlighter.Role role) {
+        Color c = UIManager.getColor("Clouseau.syntax." + role.name().toLowerCase(java.util.Locale.ROOT));
+        if (c != null) return c;
+        return new Color(switch (role) {
+            case KEY         -> 0xD896DA;
+            case STRING      -> 0x8FD3E8;
+            case NUMBER, LITERAL -> 0xF0B37E;
+            case KEYWORD     -> 0xB4A7F5;
+            case OPERATOR    -> 0x7FC8B8;
+            case PUNCTUATION -> 0x8A8F99;
+            case MUTED       -> 0x7C828C;
+            case ACCENT      -> 0xE8C468;
+            case ERROR       -> 0xFF7A75;
+        });
+    }
 
     // ── Colors that follow theme switches ─────────────────────────────────────
 
@@ -431,10 +442,5 @@ public final class ClouseauColors {
             if (c != null) return c;
         }
         return Color.GRAY;
-    }
-
-    private static int colorToRgb(String key, int fallback) {
-        Color c = UIManager.getColor(key);
-        return c != null ? (c.getRGB() & 0xFFFFFF) : fallback;
     }
 }

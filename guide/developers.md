@@ -102,6 +102,9 @@ complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
 - **Manifest:** `Plugin-Id` and `Plugin-Version` (semantic version) in the JAR manifest.
   The Plugin Manager also shows `Plugin-Name` (otherwise the ID, made readable),
   `Plugin-Description`, `Plugin-Provider` and `Plugin-License` when you set them.
+  Set `Plugin-Requires` to the plugin API you built against, such as `>=0.2.0`. The API has
+  its own version (`ClouseauApi.VERSION`), separate from Clouseau's. A Clouseau with another
+  API version lists your plugin as Failed and says why, instead of loading it and failing later.
 - **The extension:**
 
 ```java
@@ -125,6 +128,47 @@ use it right away.
 Plugin parsers come after the built-in and `parsers.json` parsers during auto-detection,
 and a plugin parser can't reuse a name that's already taken. Exceptions thrown by a plugin
 parser are logged and the line is shown as UNKNOWN, so a bug can't stop a file loading.
+
+### Highlighters
+
+A `LogSyntaxHighlighter` colors parts of a message in the detail panel. It works on the
+text after the formatters have run, and it says what each part *is*, not what color it
+is: the theme picks the colors, so they read well in Dark, Light and custom themes.
+
+```java
+@Extension
+public class KeyValueHighlighter implements LogSyntaxHighlighter {
+    private static final Pattern PAIR = Pattern.compile("(\\w+)(=)(\\S+)");
+
+    @Override public String getName() { return "Key=Value"; }
+
+    @Override public boolean canHighlight(String text) { return PAIR.matcher(text).find(); }
+
+    @Override public List<Span> highlight(String text) {
+        List<Span> spans = new ArrayList<>();
+        Matcher m = PAIR.matcher(text);
+        while (m.find()) {
+            spans.add(new Span(m.start(1), m.end(1), Role.KEY));
+            spans.add(new Span(m.start(2), m.end(2), Role.OPERATOR));
+            spans.add(new Span(m.start(3), m.end(3), Role.STRING));
+        }
+        return spans;
+    }
+}
+```
+
+The roles are `KEY`, `STRING`, `NUMBER`, `LITERAL` (true, false, null), `KEYWORD` (a word
+that gives the structure, such as an HL7 segment name), `OPERATOR`, `PUNCTUATION`, `MUTED`
+(text that matters less, such as raw bytes), `ACCENT` (something to notice among muted
+text) and `ERROR`. A theme colors them with `Clouseau.syntax.<role>` keys.
+
+Mark only what your highlighter recognizes. Every enabled highlighter that accepts a
+message colors it, so a hex highlighter and an HL7 highlighter can both color one message.
+Where two spans overlap, the narrower one wins. Spans can come in any order, and ones past
+the end of the text are cut. Each highlighter gets a button in the detail panel's header
+that turns it off; give a highlighter the same name as the formatter whose output it colors,
+and the two share one button (the built-in JSON formatter and highlighter do). An exception from your highlighter is logged once, and the message is
+shown without its colors.
 
 ### Log sources
 
