@@ -35,7 +35,7 @@ are shown from how many lines, such as **57 rows · 108 lines**.
 - Right-click a row to copy it, [highlight](#highlights) it, filter by its time or
   logger, or add a [note](annotations-and-review.md).
 - **File → Reload File** (`Ctrl+R`) reads the file again from the start, keeping
-  your column widths, order and hidden columns, and **Edit → Clear Table…** (`Ctrl+Shift+K`) empties the table.
+  your filters and your column widths, order and hidden columns, and **Edit → Clear Table…** (`Ctrl+Shift+K`) empties the table.
 - **Clear Table** empties the table so you see only what's written from now on, for example
   while you reproduce a bug. On a file, the rows are only hidden: new rows keep their line
   numbers in the file, your notes and highlights stay, and **Reload File** brings every row

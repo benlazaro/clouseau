@@ -1852,7 +1852,10 @@ Rejected: saving only at exit (fails in the cases above), and saving every N sec
   values and hidden sources the tab hasn't seen yet are kept by the filter bar as
   **pending** exclusions: they are in the filter and in the saved state, and become
   ordinary exclusions when that logger, field or file appears. (Before this, the filter bar
-  dropped excluded loggers it didn't know.) Clear filters drops them too.
+  dropped excluded loggers it didn't know.) Clear filters drops them too. Reload File uses
+  the same mechanism: `FilterBar.keepThroughReload` turns the current exclusions into pending
+  ones before the load resets the filter bar, and `TabPanel.reload` also hands the current
+  column layout to `LogTableView.restoreLayout`, so a reload keeps filters and columns.
 - A tab that waits for a password (an SSH tab without a saved secret, a plugin source
   missing a required `PASSWORD` setting) keeps its saved state until the user reconnects. Its connection dot
   shows it disconnected, and Reconnect on the tab menu or `Ctrl+R` does the same as its

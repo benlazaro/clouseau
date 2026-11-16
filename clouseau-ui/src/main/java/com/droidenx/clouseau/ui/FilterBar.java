@@ -288,6 +288,19 @@ final class FilterBar extends JPanel {
         onChanged.run();
     }
 
+    /**
+     * Before a reload: the hidden loggers, field values and merged files wait as a restored
+     * session's do, so they still apply to the rows read again instead of being cleared with
+     * the old rows. Levels, time range and text aren't cleared by a load, so they need nothing.
+     */
+    void keepThroughReload() {
+        pendingLoggers.addAll(excludedLoggers);
+        excludedFieldValues.forEach((k, v) -> {
+            if (!v.isEmpty()) pendingFieldValues.put(k, new LinkedHashSet<>(v));
+        });
+        pendingSources.addAll(excludedSources);
+    }
+
     /** Pending loggers that have now appeared become ordinary exclusions. */
     private void adoptPendingLoggers(Set<String> known) {
         if (pendingLoggers.isEmpty()) return;

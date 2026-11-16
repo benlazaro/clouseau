@@ -262,6 +262,8 @@ public final class TabPanel extends JPanel {
             LogTableView view = shared.tableView();
             view.restoreLayout(view.sessionLayout());
         }
+        // And the filters: the load forgets hidden loggers, field values and merged files.
+        if (content instanceof FileContent || content instanceof MergedContent) shared.filterBar().keepThroughReload();
         if (content instanceof MergedContent merged) loadMerged(merged.files(), merged.parser(), merged.listener());
         else if (content instanceof FileContent file) load(file.file(), file.entry(), file.parser(), () -> {});
     }

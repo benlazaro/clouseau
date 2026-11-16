@@ -64,6 +64,30 @@ class FilterBarLoggersTest {
     }
 
     @Test
+    void hiddenLoggersAndFilesSurviveAReload() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            FilterBar bar = new FilterBar(() -> {});
+            bar.setSources(List.of("app.log", "db.log"));
+            bar.updateLoggers(ENTRIES);
+            bar.hideLoggers(Set.of("a.Router"));
+            bar.setTimeRange("2026-03-26 00:00:00", "");   // local time: a day early anywhere
+
+            bar.keepThroughReload();
+            bar.clearLoggers();   // what every load does first
+            // Still hidden before the reloaded rows name the logger, and after.
+            assertThat(shown(bar)).containsExactly("a.Gateway", "b.Cache");
+            bar.setSources(List.of("app.log", "db.log"));
+            bar.updateLoggers(ENTRIES);
+            assertThat(shown(bar)).containsExactly("a.Gateway", "b.Cache");
+            assertThat(bar.hiddenLoggerCount()).isEqualTo(1);
+            assertThat(bar.timeButtonText()).isNotEqualTo("Time");
+
+            bar.showAllLoggers();
+            assertThat(shown(bar)).hasSize(3);
+        });
+    }
+
+    @Test
     void menuLabelsUseTheLoggersLastPart() {
         assertThat(RowMenu.shortLogger("com.example.gateway.route.RouteResolver")).isEqualTo("RouteResolver");
         assertThat(RowMenu.shortLogger("main")).isEqualTo("main");

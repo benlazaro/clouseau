@@ -245,7 +245,7 @@ suggest typing the path.
 
 **Clear Table** (**Edit → Clear Table…**, `Ctrl+Shift+K`): Empties the table so only lines written from then on show. On a file the
 rows are hidden, not dropped: new rows keep their line in the file, notes and highlights
-stay, and Reload File shows everything again. On an SSH or plugin source the rows so far
+stay, and Reload File shows everything again (it keeps the filters and column layout). On an SSH or plugin source the rows so far
 are removed. Not offered on a merged view or a file shown as plain text.
 
 **Memory limit:** A followed local file is indexed (UC-1, D-16), so its lines cost about
