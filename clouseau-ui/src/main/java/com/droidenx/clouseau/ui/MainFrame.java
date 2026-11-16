@@ -364,10 +364,17 @@ public final class MainFrame extends JFrame {
         rebuildRemoteMenu(remoteMenu);
         fileMenu.add(remoteMenu);
 
+        // Disabled when no recent file exists any more. Rebuilt each time the File menu opens,
+        // so files deleted or moved since, and a new limit in Settings, show at once.
         recentMenu = new JMenu(Messages.get("menu.file.recent"));
         recentMenu.setMargin(menuMargin());
         fileMenu.add(recentMenu);
         refreshRecentMenu();
+        fileMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { refreshRecentMenu(); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        });
         fileMenu.addSeparator();
 
         // One item for the active tab: Reload File on a file, Reconnect on a live source
