@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
+import com.formdev.flatlaf.ui.FlatNativeWindowsLibrary;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
@@ -61,7 +62,6 @@ final class TimezonePopup extends JDialog {
         JPanel footer = DialogFooter.of(new JComponent[] { reloadNote }, cancel, ok);
 
         JPanel root = new JPanel(new BorderLayout());
-        root.setBorder(BorderFactory.createLineBorder(ClouseauColors.borderColor()));
         root.add(p, BorderLayout.CENTER);
         root.add(footer, BorderLayout.SOUTH);
         setContentPane(root);
@@ -76,6 +76,11 @@ final class TimezonePopup extends JDialog {
             }
         });
         pack();
+        // Rounded and outlined by the OS, as FlatLaf does its popups; else a square line.
+        if (!roundCorners(this)) {
+            root.setBorder(BorderFactory.createLineBorder(ClouseauColors.borderColor()));
+            pack();
+        }
         // Above the badge, right edges aligned, kept on screen.
         Point at = anchor.getLocationOnScreen();
         Rectangle screen = owner.getGraphicsConfiguration().getBounds();
@@ -90,6 +95,29 @@ final class TimezonePopup extends JDialog {
         Window owner = SwingUtilities.getWindowAncestor(anchor);
         if (owner == null || !anchor.isShowing()) return;
         new TimezonePopup(owner, anchor, source, mixed, openTabs, apply).setVisible(true);
+    }
+
+    /**
+     * Gives {@code w} the 4px corners and border the theme's popups have (Popup.borderCornerRadius),
+     * through the same Windows 11 call FlatLaf uses for them, since this is a window and not a
+     * popup FlatLaf rounds itself. {@code w} must be displayable. False where the OS can't (Windows
+     * 10, macOS, Linux): the caller draws a square border instead.
+     */
+    static boolean roundCorners(Window w) {
+        try {
+            if (!FlatNativeWindowsLibrary.isLoaded()
+                    || FlatNativeWindowsLibrary.getOSBuildNumber() < 22000) return false;
+            long hwnd = FlatNativeWindowsLibrary.getHWND(w);
+            if (hwnd == 0 || !FlatNativeWindowsLibrary.setWindowCornerPreference(
+                    hwnd, FlatNativeWindowsLibrary.DWMWCP_ROUNDSMALL)) return false;
+            Color border = UIManager.getColor("PopupMenu.borderColor");
+            FlatNativeWindowsLibrary.dwmSetWindowAttributeCOLORREF(hwnd,
+                    FlatNativeWindowsLibrary.DWMWA_BORDER_COLOR,
+                    border != null ? border : ClouseauColors.borderColor());
+            return true;
+        } catch (Throwable t) {   // the native library failed to link: fall back to the square border
+            return false;
+        }
     }
 
     private static JLabel hint(String text) {
