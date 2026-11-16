@@ -255,6 +255,13 @@ public final class TabPanel extends JPanel {
     }
 
     public void reload() {
+        // Keep the columns as the user left them (widths, order, hidden): the load would
+        // fit them to the first rows again. Not mid-load or as plain text, when the table
+        // only has default columns; a session layout not yet applied is kept as it is.
+        if (content != null && !content.loading() && !shared.isPlain()) {
+            LogTableView view = shared.tableView();
+            view.restoreLayout(view.sessionLayout());
+        }
         if (content instanceof MergedContent merged) loadMerged(merged.files(), merged.parser(), merged.listener());
         else if (content instanceof FileContent file) load(file.file(), file.entry(), file.parser(), () -> {});
     }
