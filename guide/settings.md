@@ -70,7 +70,8 @@ after Clouseau starts. It doesn't block what you're doing:
 
 To install a new version over an old one, close Clouseau first. On Windows, keep the old
 `Clouseau` folder's `data` folder (your settings, sessions and parsers), delete the rest,
-and unzip the new version in its place. If the old version is still running when you start
+and unzip the new version in its place. On macOS and Linux your data is in `~/.clouseau/`,
+outside the app, so replace the old app with the new one. If the old version is still running when you start
 the new one, Clouseau says which version is running and asks you to close it, rather than
 bringing up the old one.
 
