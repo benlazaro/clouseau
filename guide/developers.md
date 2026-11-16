@@ -96,9 +96,22 @@ The quickest start is to copy **[`clouseau-example-plugin`](https://github.com/b
 complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
 (`time=… level=info msg="…" key=value`). It shows everything a plugin needs:
 
-- **Dependencies:** `clouseau-api` and PF4J as `compileOnly` (the app provides both), plus
-  PF4J as an `annotationProcessor`, which writes `META-INF/extensions.idx` from your
-  `@Extension` classes.
+- **Dependencies:** `clouseau-api` and PF4J as `compileOnly` (the app provides both, so don't
+  bundle them in your JAR), plus PF4J as an `annotationProcessor`, which writes
+  `META-INF/extensions.idx` from your `@Extension` classes. The API is released on its own,
+  with its own version: download `clouseau-api-<version>.jar` from the newest **Clouseau
+  plugin API** release on the [releases page](https://github.com/benlazaro/clouseau/releases)
+  (tags `api-v…`). Or build it into your local Maven repository with
+  `./gradlew :clouseau-api:publishToMavenLocal` from a Clouseau checkout, and depend on it as:
+
+  ```kotlin
+  repositories { mavenLocal(); mavenCentral() }
+  dependencies {
+      compileOnly("com.droidenx.clouseau:clouseau-api:0.2.0")
+      compileOnly("org.pf4j:pf4j:3.12.0")
+      annotationProcessor("org.pf4j:pf4j:3.12.0")
+  }
+  ```
 - **Manifest:** `Plugin-Id` and `Plugin-Version` (semantic version) in the JAR manifest.
   The Plugin Manager also shows `Plugin-Name` (otherwise the ID, made readable),
   `Plugin-Description`, `Plugin-Provider` and `Plugin-License` when you set them.

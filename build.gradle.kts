@@ -27,7 +27,7 @@ extra["slf4jVersion"]     = slf4jVersion
 subprojects {
     apply(plugin = "java")
 
-    group   = "com.tlaloc"
+    group   = "com.droidenx.clouseau"
     version = findProperty("appVersion") as String? ?: "0.1.1-SNAPSHOT"
 
     repositories {
@@ -50,7 +50,8 @@ subprojects {
 
         compileOnly("org.projectlombok:lombok:$lombokVersion")
         annotationProcessor("org.projectlombok:lombok:$lombokVersion")
-        implementation("org.slf4j:slf4j-api:$slf4jVersion")
+        // Not in clouseau-api: its published POM would hand SLF4J to every plugin.
+        if (project.name != "clouseau-api") implementation("org.slf4j:slf4j-api:$slf4jVersion")
 
         testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
         testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")

@@ -369,7 +369,7 @@ runtime {
                 installerType = "exe"
                 imageOptions = listOf("--icon", packagingDir.resolve("windows/clouseau.ico").absolutePath)
                 installerOptions = fileAssociations + listOf(
-                    "--vendor", "Tlaloc",
+                    "--vendor", "Droidenx",
                     "--win-per-user-install",
                     "--win-dir-chooser",
                     "--win-menu",
@@ -381,7 +381,7 @@ runtime {
                 installerType = "dmg"
                 imageOptions = listOf("--icon", packagingDir.resolve("macos/clouseau.icns").absolutePath)
                 installerOptions = fileAssociations + listOf(
-                    "--vendor", "Tlaloc",
+                    "--vendor", "Droidenx",
                     "--mac-package-name", "Clouseau"
                 )
             }
@@ -389,7 +389,7 @@ runtime {
                 installerType = "deb"
                 imageOptions = listOf("--icon", packagingDir.resolve("linux/clouseau.png").absolutePath)
                 installerOptions = fileAssociations + listOf(
-                    "--vendor", "Tlaloc",
+                    "--vendor", "Droidenx",
                     "--linux-shortcut",
                     "--linux-menu-group", "Development;Utility;",
                     "--linux-app-category", "utils"

@@ -136,6 +136,9 @@ tab.
   checks a plugin's `Plugin-Requires` against it, and the Plugin Manager lists a plugin
   built for another API as Failed with the reason. While the API is 0.x, a change that
   breaks plugins bumps the minor version.
+- The API is released on its own (D-27): `com.droidenx.clouseau:clouseau-api:<ClouseauApi.VERSION>`,
+  on `api-v*` tags, only when it changes. Plugins depend on it `compileOnly` and never bundle
+  it; Clouseau provides the classes at runtime.
 - `LogSource.open(Consumer<String>)` **pushes** lines to the consumer. The source decides
   how to get them: a server-side `tail -F`, or a streaming API. `open` runs on a
   background thread and blocks until the stream ends or `close()` is called; `close()`
@@ -2312,6 +2315,25 @@ uses it); an open set of role names (themes couldn't color names they don't know
 choosing between overlapping spans by load order (it isn't stable across installs);
 letting a highlighter hand regions to others (more API than layering, and layering
 already covers payloads that sit side by side).
+
+### D-27 · The plugin API is released on its own, with its own version · Adopted
+
+Plugins compile against `clouseau-api`, but releases published only the app, so a plugin
+author had to build the API from this repository. Now the API module's version is
+`ClouseauApi.VERSION` (its build script reads the constant, so code, jar and POM agree), and
+the API Release workflow publishes `com.droidenx.clouseau:clouseau-api` on `api-v*` tags: the
+jar, sources, Javadoc and POM, attached to a GitHub release that is never Latest. It is
+released only when the API changes, because a published version can't be replaced, and many
+app releases can share one API version. The group is under `com.droidenx`, the domain the
+packages already use, so Maven Central can verify it. The POM declares no dependencies (PF4J
+is `compileOnly`, and the root build's SLF4J is left out), so a plugin gets nothing it
+doesn't ask for. The jars are signed when signing keys are configured, ready for Maven Central,
+which isn't wired up yet.
+
+Rejected: one version for the app and the API (every app release would be an API release,
+and a plugin's `Plugin-Requires` would break on app releases that changed nothing it uses);
+JitPack (it versions by Git tag, which can't follow a separate API version); GitHub
+Packages (Gradle needs a token even to download from it).
 
 ## 10. Planned features
 

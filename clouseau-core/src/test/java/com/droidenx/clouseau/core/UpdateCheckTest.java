@@ -62,6 +62,14 @@ class UpdateCheckTest {
     }
 
     @Test
+    void pluginApiReleasesAreNotAppVersions() {
+        // The plugin API is released on its own tags (api-v*), with its own, often higher, version.
+        assertThat(Version.parse("api-v0.2.0")).isNull();
+        String json = list(release("api-v0.2.0", false, false), release("v0.1.1", true, false));
+        assertThat(UpdateCheck.newest(json, "0.1.1")).isEmpty();
+    }
+
+    @Test
     void nothingWhenUpToDate() {
         String json = list(release("v0.9.0-alpha", true, false), release("v0.8.0-alpha", true, false));
         assertThat(UpdateCheck.newest(json, "0.9.0-alpha")).isEmpty();

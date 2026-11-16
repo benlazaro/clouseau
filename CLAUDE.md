@@ -113,6 +113,16 @@ tags. Write a release's notes for users in `docs/releases/<tag>.md` (first line
 Release workflow publishes them as the release's title and notes, or GitHub's list of commits
 when there's no file.
 
+**API Release** publishes the plugin API (`com.droidenx.clouseau:clouseau-api`) on its own, on
+`api-v*` tags, with its own version: `ClouseauApi.VERSION`, which `clouseau-api/build.gradle.kts`
+reads, so bump only that constant. Release it only when the API changes: tag the commit
+`api-v<VERSION>` (the workflow fails if they differ), with notes for plugin authors in
+`docs/releases/api-v<VERSION>.md`, same format. It runs the tests, builds the jar, sources, Javadoc
+and POM (signed if the `SIGNING_KEY`/`SIGNING_PASSWORD` secrets exist), and attaches them to a
+GitHub release that is never marked Latest; the update check ignores `api-v*` tags. Maven Central
+isn't wired up yet. `./gradlew :clouseau-api:publishToMavenLocal` puts the API in `~/.m2` for
+local plugin builds.
+
 ## Key classes
 
 - `LogEntry` (api) — immutable record: timestamp, level, logger, thread, message, rawLine,

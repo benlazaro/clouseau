@@ -1,0 +1,89 @@
+name: API Release
+
+# The plugin API (clouseau-api) is released on its own, with its own version
+# (ClouseauApi.VERSION), only when it changes. Tag the commit api-v<that version>,
+# for example api-v0.2.0. App releases (v* tags, release.yml) don't publish it.
+
+on:
+  push:
+    tags:
+      - 'api-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish the plugin API
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check the tag names ClouseauApi.VERSION
+        id: version
+        shell: bash
+        run: |
+          VERSION="${TAG#api-v}"
+          CODE="$(sed -n 's/.*VERSION *= *"\([^"]*\)".*/\1/p' clouseau-api/src/main/java/com/droidenx/clouseau/api/ClouseauApi.java)"
+          if [[ "$VERSION" != "$CODE" ]]; then
+            echo "::error::Tag $TAG names $VERSION, but ClouseauApi.VERSION is $CODE."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      # Every module builds on the API, so all of it must pass.
+      - name: Run tests
+        run: ./gradlew test
+
+      # Signed when the SIGNING_KEY and SIGNING_PASSWORD secrets are set (Maven Central needs it).
+      - name: Build the API jars
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: ./gradlew :clouseau-api:publishAllPublicationsToStagingRepository
+
+      - name: Create the release
+        shell: bash
+        run: |
+          # A re-run finds the release already there and only uploads again.
+          if gh release view "$TAG" > /dev/null 2>&1; then exit 0; fi
+          prerelease=()
+          if [[ "$TAG" == *-*-* ]]; then prerelease=(--prerelease); fi   # api-v1.0.0-rc.1
+          # Notes written for plugin authors in docs/releases/<tag>.md, first line
+          # "Title: <the release's title>", as for app releases. Else GitHub's list of commits.
+          notes=(--generate-notes)
+          file="docs/releases/$TAG.md"
+          if [[ -f "$file" ]]; then
+            title="$(head -n 1 "$file" | sed -n 's/^Title: *//p')"
+            if [[ -n "$title" ]]; then
+              tail -n +2 "$file" | sed '/./,$!d' > release-notes.md
+              notes=(--title "$title" --notes-file release-notes.md)
+            else
+              notes=(--notes-file "$file")
+            fi
+          fi
+          # Never "Latest": that stays the newest app release. The app's update check only
+          # reads v<version> tags, so it never offers an API release (D-23).
+          gh release create "$TAG" --verify-tag --latest=false "${notes[@]}" "${prerelease[@]}"
+
+      - name: Upload the jars and the POM
+        shell: bash
+        run: |
+          dir="clouseau-api/build/staging-repo/com/droidenx/clouseau/clouseau-api/${{ steps.version.outputs.VERSION }}"
+          shopt -s nullglob
+          gh release upload "$TAG" "$dir"/*.jar "$dir"/*.pom "$dir"/*.asc --clobber
