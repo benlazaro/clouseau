@@ -25,6 +25,11 @@ in view:
 - **Scroll back down** to the newest line, or press **Ctrl+End**, and Follow turns back on.
 - **Click Follow** on to jump to the newest line, or off to stop the table moving where it is.
 
+If you sort newest first (click the **#** or **Timestamp** header twice), the newest line
+is at the top and Follow works the other way up: it keeps the top in view, scrolling down
+turns it off, and scrolling back to the top (or **Ctrl+Home**) turns it on again. With
+Follow off, new lines go in above what you're reading without moving it.
+
 A file opens at its newest line, with Follow on. To open files at the top instead, turn off
 **Start at the newest line** in [Settings](settings.md).
 

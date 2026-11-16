@@ -240,13 +240,18 @@ refresh; open tabs keep the list they were created with.
 
 **The Follow toggle is the view, not the reading.** Every file, merged view and live source
 reads new lines for as long as its tab is open (a partly loaded file excepted, above).
-Follow says whether the view is held at the newest row: `BottomPin` (ui) watches the
+Follow says whether the view is held at the newest row: `NewestPin` (ui) watches the
 vertical scroll bar, and `SharedTabContext` (and `PlainTextView` for plain text) turns
-Follow off when the user scrolls away from the end and on when they scroll back to it.
-Turning Follow on scrolls to the newest row and holds it there (`BottomPin.hold`, also
-when the bar didn't move); turning it off lets go where the view is (`BottomPin.release`,
-so a row arriving just after doesn't hold it again). Rows a live tab drops at its entry
-limit move the view up with them while it isn't held, so the row being read stays put.
+Follow off when the user scrolls away from the newest end and on when they scroll back to it.
+The newest end is the bottom, or the top when the table is sorted newest first (# or
+Timestamp descending, `LogRowSorter.newestFirst`); reversing the sort while following
+jumps to the newest row at its new end, and Ctrl+Home / Ctrl+End stay first / last row.
+Turning Follow on scrolls to the newest row and holds it there (`NewestPin.hold`, also
+when the bar didn't move); turning it off lets go where the view is (`NewestPin.release`,
+so a row arriving just after doesn't hold it again). While the view isn't held, nothing
+the user is reading moves: rows a live tab drops at its entry limit move the view up with
+them, and, newest first, rows added at the top move it down past them (not during a load,
+`LogTableModel.isBatchLoading`). Stripes count those rows too, so each stays on its row.
 The setting **Start at the newest line** (`AppPrefs.isFollowByDefault`) is the toggle's
 starting state.
 
@@ -1519,9 +1524,9 @@ as a reusable "workspace".
    - `LogTableModel.reorderTail` re-filters from the changed point (in the background
      if a long tail needs text), with highlights moved to their entry's new ordinal;
      `MergedNotes.setOrder` does the same for notes, and the selection stays on its
-     entry. Find's matches are cleared. With Follow on the table scrolls to the bottom,
-     as on a single-file tab, unless the user has scrolled up (`BottomPin`: the vertical
-     bar is held at the bottom until the user moves it away; rows arriving don't count).
+     entry. Find's matches are cleared. With Follow on the table scrolls to the newest row,
+     as on a single-file tab, unless the user has scrolled away (`NewestPin`: the vertical
+     bar is held at the newest end until the user moves it away; rows arriving don't count).
    - Clear on a merged tab stops following it; reload follows again.
    - `MergeOrderExtendTest` (including that extending in random steps gives the same
      order as one merge), `MergedFollowTest`, `MergedViewTest`.

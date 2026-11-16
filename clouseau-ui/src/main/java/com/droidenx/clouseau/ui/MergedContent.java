@@ -173,7 +173,7 @@ final class MergedContent implements TabContent {
                 // Every file's name, not just those in the sampled rows.
                 tableView.widenColumnToFit(Messages.get("table.col.source"), sourceLabels(view));
                 tableView.applyDefaultLayoutIfSet();
-                if (tab.follow()) tableView.scrollToBottomWhenShown();   // opens at the newest line
+                if (tab.follow()) tableView.scrollToNewestWhenShown();   // opens at the newest line
             });
         };
         model.addTableModelListener(sizeColumns);

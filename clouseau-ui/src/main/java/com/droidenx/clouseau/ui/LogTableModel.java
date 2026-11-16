@@ -879,6 +879,9 @@ public final class LogTableModel extends AbstractTableModel {
      * Call after the last batch has been appended. Fires a single {@code fireTableStructureChanged()}
      * if any new fields were discovered during loading, then resets batch-load mode.
      */
+    /** True between {@link #beginBatchLoad} and {@link #endBatchLoad}: a load is filling the table. */
+    public boolean isBatchLoading() { return batchLoad; }
+
     public void endBatchLoad() {
         batchLoad = false;
         if (structureChangePending) {

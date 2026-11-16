@@ -175,6 +175,9 @@ filter matches the message, case-insensitively, as a regex (literal if it doesn'
    view stays put; scrolling back to the end (or Ctrl+End, or clicking Follow) turns it on
    again. Clicking Follow off stops the view moving where it is. On a live source, rows
    dropped at the entry limit while the user reads earlier ones don't move the view.
+   Sorted newest first (# or Timestamp descending), the newest end is the top: Follow
+   holds the view there, scrolling down turns it off, and new rows then go in above the
+   view without moving what the user is reading.
 3. If the file is rotated, Clouseau keeps existing rows and continues with the new file.
 4. Clouseau stays responsive and does not crash, however long it is left running.
 

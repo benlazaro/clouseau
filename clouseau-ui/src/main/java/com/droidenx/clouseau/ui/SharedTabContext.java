@@ -212,7 +212,7 @@ final class SharedTabContext {
             TabContent content = host.content();
             boolean loading = content != null && content.loading();
             if (follow && !loading && e.getType() == TableModelEvent.INSERT)
-                SwingUtilities.invokeLater(tableView::followToBottom);
+                SwingUtilities.invokeLater(tableView::followNewest);
             updateStatusBar();
             // Filtering, loading or trimming changes which highlighted rows show.
             if (e.getType() != TableModelEvent.UPDATE || e.getLastRow() == Integer.MAX_VALUE)
@@ -261,7 +261,7 @@ final class SharedTabContext {
         boolean was = follow;
         follow = on;
         filterBar.setFollowSelected(on);
-        if (on && !was) SwingUtilities.invokeLater(tableView::scrollToBottom);
+        if (on && !was) SwingUtilities.invokeLater(tableView::scrollToNewest);
         else if (!on && was) tableView.stopAtNewest();
     }
 
@@ -452,7 +452,7 @@ final class SharedTabContext {
                     if (!follow) table.scrollRectToVisible(table.getCellRect(v, 0, true));
                 }
             }
-            if (follow) tableView.followToBottom();
+            if (follow) tableView.followNewest();
             refreshDetail();
         };
         if (done) restore.run();

@@ -225,7 +225,7 @@ final class FileContent implements TabContent {
                     else try { follower.setPosition(Files.size(file)); } catch (IOException ignored) {}
                     // New lines are always read; Follow only decides whether the view keeps up.
                     startTailing();
-                    if (tab.follow()) tab.tableView().scrollToBottomWhenShown();
+                    if (tab.follow()) tab.tableView().scrollToNewestWhenShown();
                 } catch (Exception ex) {
                     log.error("Failed to load {}", file, ex);
                     onError.run();

@@ -183,6 +183,12 @@ final class LogRowSorter extends RowSorter<LogTableModel> {
         return !keys.isEmpty() && keys.get(0).getColumn() == TIME_COLUMN;
     }
 
+    /**
+     * Whether the view runs newest first (# or Timestamp descending): new rows go in at the
+     * top of the view, and rows trimmed from the model's start leave from its bottom.
+     */
+    boolean newestFirst() { return descending(); }
+
     private boolean descending() {
         return !keys.isEmpty() && keys.get(0).getSortOrder() == SortOrder.DESCENDING;
     }

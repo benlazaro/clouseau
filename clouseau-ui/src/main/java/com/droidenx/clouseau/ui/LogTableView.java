@@ -62,13 +62,14 @@ final class LogTableView {
     private final Host host;
     private final JTable logTable;
     private final JScrollPane tableScrollPane;
-    /** Whether follow mode scrolls to new rows: only while the view is at the bottom. */
-    private final BottomPin bottomPin;
+    /** Whether follow mode scrolls to new rows: only while the view is at the newest end. */
+    private final NewestPin newestPin;
     /**
-     * Rows dropped from the top of the table so far (a live tab over its entry limit). Only
-     * its parity matters: added to a row's index, it keeps stripes on their rows.
+     * Rows that moved every row below them so far: dropped from the top (a live tab over its
+     * entry limit) or added at the top (newest first). Only its parity matters: added to a
+     * row's index, it keeps stripes on their rows.
      */
-    private int droppedFromTop;
+    private int rowsShifted;
     private boolean tableColumnsManaged = false;
     private int fittedColumnsWidth = 0;
     /** model-column-index → hidden TableColumn, in insertion order for restore positioning */
@@ -184,9 +185,9 @@ final class LogTableView {
                 } else if (sel) {
                     setBackground(ClouseauColors.selectionBackground());
                 } else {
-                    // Counted with the rows dropped from the top, so a row keeps its stripe when
-                    // older rows are trimmed away under it.
-                    boolean odd = ((r + droppedFromTop) & 1) == 1;
+                    // Counted with the rows added or dropped above it, so a row keeps its stripe when
+                    // rows come and go around it.
+                    boolean odd = ((r + rowsShifted) & 1) == 1;
                     setBackground(odd && AppPrefs.isTableStripes() ? ClouseauColors.stripeBackground() : t.getBackground());
                 }
 
@@ -378,19 +379,45 @@ final class LogTableView {
         tableScrollPane.setCorner(JScrollPane.UPPER_LEFT_CORNER, new GutterCorner());
         ClouseauColors.themedBackground(tableScrollPane.getRowHeader(), ClouseauColors::tableBackground);
         tableScrollPane.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
-        bottomPin = new BottomPin(tableScrollPane.getVerticalScrollBar().getModel(), logTable::getRowHeight);
+        newestPin = new NewestPin(tableScrollPane.getVerticalScrollBar().getModel(), logTable::getRowHeight,
+                this::newestFirst);
+        // Reversing the sort while following: go to the newest row, now at the other end.
+        logTable.getRowSorter().addRowSorterListener(e -> {
+            if (e.getType() == javax.swing.event.RowSorterEvent.Type.SORT_ORDER_CHANGED && newestPin.pinned())
+                SwingUtilities.invokeLater(this::scrollToNewest);
+        });
         // Added after the table's own listener, so this one hears of a column change first.
         logTableModel.addTableModelListener(e -> {
-            boolean droppedTop = e.getType() == javax.swing.event.TableModelEvent.DELETE && e.getFirstRow() == 0;
-            // Each remaining row moves up by as many rows; its stripe goes with it.
-            if (droppedTop) droppedFromTop += e.getLastRow() - e.getFirstRow() + 1;
-            // Rows dropped from the top (a live tab over its entry limit) while the user reads
-            // earlier rows: move the view up with them, so the row being read stays put.
-            if (droppedTop && !bottomPin.pinned()) {
+            boolean newestFirst = newestFirst();
+            int count = e.getLastRow() - e.getFirstRow() + 1;
+            // Rows trimmed from the model's start (a live tab over its entry limit) leave from
+            // the view's top, or from its bottom when newest is first.
+            boolean droppedTop = e.getType() == javax.swing.event.TableModelEvent.DELETE && e.getFirstRow() == 0
+                    && !newestFirst;
+            // Rows added at the model's end go in at the view's top when newest is first.
+            boolean addedTop = e.getType() == javax.swing.event.TableModelEvent.INSERT && newestFirst
+                    && e.getLastRow() != Integer.MAX_VALUE;
+            // Every row below moves by as many rows; its stripe goes with it.
+            if (droppedTop || addedTop) rowsShifted += count;
+            // Rows dropped from the top while the user reads earlier rows: move the view up
+            // with them, so the row being read stays put.
+            if (droppedTop && !newestPin.pinned()) {
                 JViewport vp = tableScrollPane.getViewport();
                 Point p = vp.getViewPosition();
-                int removed = (e.getLastRow() - e.getFirstRow() + 1) * logTable.getRowHeight();
-                vp.setViewPosition(new Point(p.x, Math.max(0, p.y - removed)));
+                vp.setViewPosition(new Point(p.x, Math.max(0, p.y - count * logTable.getRowHeight())));
+            }
+            // Rows added above while not following: move the view down past them, once the
+            // table has taken them in, so nothing moves. While following, the newest rows show
+            // at the top as they come. Not while a load fills an empty table.
+            if (addedTop && !newestPin.pinned() && e.getFirstRow() > 0 && !logTableModel.isBatchLoading()) {
+                int shift = count * logTable.getRowHeight();
+                SwingUtilities.invokeLater(() -> {
+                    tableScrollPane.validate();
+                    JViewport vp = tableScrollPane.getViewport();
+                    Point p = vp.getViewPosition();
+                    int maxY = Math.max(0, vp.getViewSize().height - vp.getExtentSize().height);
+                    vp.setViewPosition(new Point(p.x, Math.min(maxY, p.y + shift)));
+                });
             }
             if (e.getFirstRow() == javax.swing.event.TableModelEvent.HEADER_ROW && tableColumnsManaged)
                 keepColumnsThroughRebuild();
@@ -421,38 +448,62 @@ final class LogTableView {
 
     JScrollPane scrollPane() { return tableScrollPane; }
 
+    /** Ctrl+Home: the first row, which is the newest when the table is sorted newest first. */
     void scrollToTop() {
+        if (newestFirst()) {
+            scrollToNewest();
+            return;
+        }
         if (logTable.getRowCount() > 0) logTable.scrollRectToVisible(logTable.getCellRect(0, 0, true));
     }
 
-    /** Scrolls to the newest row and holds the view there: Follow is on from here. */
-    void scrollToBottom() {
-        int last = logTable.getRowCount() - 1;
-        if (last >= 0) logTable.scrollRectToVisible(logTable.getCellRect(last, 0, true));
-        bottomPin.hold();
+    /** Whether the table is sorted newest first (# or Timestamp descending): the newest row is at the top. */
+    boolean newestFirst() {
+        return logTable.getRowSorter() instanceof LogRowSorter s && s.newestFirst();
     }
 
-    /** {@link #scrollToBottom} once the table has been laid out (after a load shows it). */
-    void scrollToBottomWhenShown() {
-        SwingUtilities.invokeLater(this::scrollToBottom);
+    /** Ctrl+End: the last row, which is the newest unless the table is sorted newest first. */
+    private void scrollToBottom() {
+        if (!newestFirst()) {
+            scrollToNewest();
+            return;
+        }
+        int last = logTable.getRowCount() - 1;
+        if (last >= 0) logTable.scrollRectToVisible(logTable.getCellRect(last, 0, true));
     }
 
     /**
-     * Follow mode's scroll after new rows: to the bottom, unless the user has scrolled up to
-     * read earlier rows. Scrolling back down to the end (or Ctrl+End) follows again.
+     * Scrolls to the newest row (the bottom, or the top when sorted newest first) and holds
+     * the view there: Follow is on from here.
      */
-    void followToBottom() {
-        if (bottomPin.pinned()) scrollToBottom();
+    void scrollToNewest() {
+        int n = logTable.getRowCount();
+        if (n > 0) logTable.scrollRectToVisible(logTable.getCellRect(newestFirst() ? 0 : n - 1, 0, true));
+        newestPin.hold();
+    }
+
+    /** {@link #scrollToNewest} once the table has been laid out (after a load shows it). */
+    void scrollToNewestWhenShown() {
+        SwingUtilities.invokeLater(this::scrollToNewest);
+    }
+
+    /**
+     * Follow mode's scroll after new rows: to the newest, unless the user has scrolled away
+     * to read earlier rows. Scrolling back to the newest end (Ctrl+End, or Ctrl+Home when
+     * sorted newest first) follows again.
+     */
+    void followNewest() {
+        if (newestPin.pinned()) scrollToNewest();
     }
 
     /** Whether the view is held at the newest row (what the Follow toggle shows). */
-    boolean atNewest() { return bottomPin.pinned(); }
+    boolean atNewest() { return newestPin.pinned(); }
 
     /** Runs with the new state when the user scrolls away from the newest row, or back to it. */
-    void onAtNewestChanged(java.util.function.Consumer<Boolean> listener) { bottomPin.onChange(listener); }
+    void onAtNewestChanged(java.util.function.Consumer<Boolean> listener) { newestPin.onChange(listener); }
 
     /** Follow turned off: the view stays where it is, even at the newest row, until the user scrolls. */
-    void stopAtNewest() { bottomPin.release(); }
+    void stopAtNewest() { newestPin.release(); }
 
     /** Forgets hidden columns and the applied layout, before the tab shows another log. */
     void resetColumns() {

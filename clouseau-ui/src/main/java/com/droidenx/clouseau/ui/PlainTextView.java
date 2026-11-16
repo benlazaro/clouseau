@@ -64,8 +64,8 @@ final class PlainTextView extends JPanel {
     private String entry;
     private Path copy;
     private boolean follow;
-    /** Whether the view is at the last line: Follow is on while it is (see BottomPin). */
-    private BottomPin pin;
+    /** Whether the view is at the last line: Follow is on while it is (see NewestPin). */
+    private NewestPin pin;
     private final Consumer<Boolean> onFollow;
     private SwingWorker<?, ?> loader;
     private SwingWorker<?, ?> follower;
@@ -177,7 +177,7 @@ final class PlainTextView extends JPanel {
         JScrollPane scroll = new JScrollPane(table);
         // Follow is on while the view is at the last line: scrolling up turns it off, scrolling
         // back to the end turns it on. New lines are read either way.
-        pin = new BottomPin(scroll.getVerticalScrollBar().getModel(), table::getRowHeight);
+        pin = new NewestPin(scroll.getVerticalScrollBar().getModel(), table::getRowHeight);
         pin.onChange(atEnd -> {
             if (atEnd == follow || !followBtn.isEnabled()) return;
             follow = atEnd;

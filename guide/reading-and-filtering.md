@@ -184,6 +184,10 @@ of order, the rows settle into time order a moment after the click while the win
 usable. A stack trace stays under its entry. The other columns don't sort: the filters
 answer "only errors" or "only this thread" without losing the timeline.
 
+With newest first on a log that's still growing, Follow keeps the top in view and new
+lines appear there. Scroll down (or turn Follow off) and they're added above the view while
+what you're reading stays where it is. See [Following live logs](following.md).
+
 The columns always fill the window, so there's no horizontal scroll bar. **Message** takes
 whatever room the other columns leave. Drag the border on a column's right to resize it,
 and Message grows or shrinks to make up the difference. A message too long for its column

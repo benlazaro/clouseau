@@ -94,7 +94,7 @@ final class LiveContent implements TabContent {
                 // A later line that brings a new field column: the table keeps the user's
                 // widths and sizes only the new column (LogTableView.keepColumnsThroughRebuild).
                 tab.filterBar().addBatch(chunk);
-                if (tab.follow()) view.followToBottom();
+                if (tab.follow()) view.followNewest();
             }
 
             @Override
