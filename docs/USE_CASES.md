@@ -64,7 +64,10 @@ Each use case lists its current support status: ✅ supported · 🟡 partial ·
 4. Entries appear in a table with timestamp, level, thread, logger, and message columns.
    The columns fill the window (no horizontal scroll bar): Message takes the room the
    others leave, and gives or takes width as the user drags a column border. The table
-   scrolls sideways only when Message would drop below 150px.
+   scrolls sideways when Message would drop below 150px, or when the user makes Message
+   wider than the window. Double-clicking a column's border fits it to the widest value in
+   the rows in view (Message can then pass the window's edge). Dragging Message's border
+   does the same when it's the last column.
 
 **Success:** The file is readable within seconds, and columns are parsed correctly
 without manual configuration for common formats (Log4j, Logback/Spring Boot, JSON).

@@ -192,12 +192,18 @@ With newest first on a log that's still growing, Follow keeps the top in view an
 lines appear there. Scroll down (or turn Follow off) and they're added above the view while
 what you're reading stays where it is. See [Following live logs](following.md).
 
-The columns always fill the window, so there's no horizontal scroll bar. **Message** takes
+The columns fill the window, so normally there's no horizontal scroll bar. **Message** takes
 whatever room the other columns leave. Drag the border on a column's right to resize it,
 and Message grows or shrinks to make up the difference. A message too long for its column
 ends with **…**; the [detail panel](#the-detail-panel) shows all of it. If a window is so
 narrow, or has so many columns, that Message would get very narrow, the table scrolls
 sideways instead.
+
+Double-click the border on a column's right to fit the column to its content: it becomes as
+wide as the longest value in the rows on screen. Fit **Message** and it can grow past the
+window's edge to show long messages in full, and the table scrolls sideways. If Message is
+the last column, you can also drag its border past the window's edge. Message always
+reaches at least to the window's edge.
 
 A log that gains a new field while you follow it gets a column for it, and your other
 columns keep their widths, order and hiding.

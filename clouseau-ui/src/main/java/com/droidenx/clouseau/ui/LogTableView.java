@@ -57,6 +57,13 @@ final class LogTableView {
     private static final int MIN_OTHER_WIDTH = 30;
     /** Set while this class changes column widths, so it doesn't take them for a user's drag. */
     private boolean adjustingWidths;
+    /**
+     * The flex column's least width while {@link #flexFloorColumn} is the flex column: set when
+     * it's fitted to its content or its border is dragged past the window's edge, so it can be
+     * wider than the window. Otherwise it just fills the window.
+     */
+    private int flexFloor;
+    private TableColumn flexFloorColumn;
 
     private final LogTableModel logTableModel;
     private final Host host;
@@ -109,6 +116,22 @@ final class LogTableView {
             @Override
             protected JTableHeader createDefaultTableHeader() {
                 return new JTableHeader(columnModel) {
+                    /**
+                     * A double-click on a column's border fits the column to its content. A click
+                     * on a border never sorts: Swing's header would sort the column under it.
+                     */
+                    @Override
+                    protected void processMouseEvent(MouseEvent e) {
+                        if (e.getID() == MouseEvent.MOUSE_CLICKED && SwingUtilities.isLeftMouseButton(e)) {
+                            int border = borderColumnAt(this, e.getPoint());
+                            if (border >= 0) {
+                                if (e.getClickCount() == 2) fitColumnToContent(border);
+                                return;
+                            }
+                        }
+                        super.processMouseEvent(e);
+                    }
+
                     @Override
                     public void updateUI() {
                         super.updateUI();
@@ -509,9 +532,11 @@ final class LogTableView {
     void resetColumns() {
         hiddenColumns.clear();
         activeLayoutName = null;
+        flexFloorColumn = null;
     }
 
     void autoResizeColumns() {
+        flexFloorColumn = null;
         for (int col = 0; col < logTable.getColumnCount(); col++) {
             if (logTable.getColumnModel().getColumn(col).getModelIndex() == MESSAGE_MODEL_COL) continue;
             fitColumn(col);
@@ -525,30 +550,76 @@ final class LogTableView {
 
     /** Sizes one column to its title and the first rows' values. */
     private void fitColumn(int col) {
-        int sampleSize = Math.min(logTable.getRowCount(), 50);
-        {
-            int maxWidth = 0;
-            TableCellRenderer hr = logTable.getColumnModel().getColumn(col).getHeaderRenderer();
-            if (hr == null) hr = logTable.getTableHeader().getDefaultRenderer();
-            Component hc = hr.getTableCellRendererComponent(
-                    logTable, logTable.getColumnName(col), false, false, -1, col);
-            maxWidth = Math.max(maxWidth, hc.getPreferredSize().width);
-            for (int row = 0; row < sampleSize; row++) {
-                // Measured as if selected: bold, with the selection ring, its widest look.
-                Component rc = logTable.getCellRenderer(row, col).getTableCellRendererComponent(
-                        logTable, logTable.getValueAt(row, col), true, false, row, col);
-                maxWidth = Math.max(maxWidth, rc.getPreferredSize().width);
-            }
-            if (logTable.getColumnModel().getColumn(col).getModelIndex() == 0) {
-                // The number is the line in the file (or position), so it can exceed the rows shown.
-                FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
-                long widest = Math.max(logTable.getRowCount(), logTableModel.lineCount() + logTableModel.getTrimmedCount());
-                maxWidth = Math.max(maxWidth, fm.stringWidth(String.valueOf(widest)) + 16);
-            }
-            maxWidth += 8;
-            logTable.getColumnModel().getColumn(col).setPreferredWidth(maxWidth);
-            logTable.getColumnModel().getColumn(col).setWidth(maxWidth);
+        int width = contentWidth(col, 0, Math.min(logTable.getRowCount(), 50) - 1);
+        logTable.getColumnModel().getColumn(col).setPreferredWidth(width);
+        logTable.getColumnModel().getColumn(col).setWidth(width);
+    }
+
+    /** The width a view column needs for its title and the values in view rows {@code first..last}. */
+    private int contentWidth(int col, int first, int last) {
+        int maxWidth = 0;
+        TableCellRenderer hr = logTable.getColumnModel().getColumn(col).getHeaderRenderer();
+        if (hr == null) hr = logTable.getTableHeader().getDefaultRenderer();
+        Component hc = hr.getTableCellRendererComponent(
+                logTable, logTable.getColumnName(col), false, false, -1, col);
+        maxWidth = Math.max(maxWidth, hc.getPreferredSize().width);
+        for (int row = Math.max(first, 0); row <= last && row < logTable.getRowCount(); row++) {
+            // Measured as if selected: bold, with the selection ring, its widest look.
+            Component rc = logTable.getCellRenderer(row, col).getTableCellRendererComponent(
+                    logTable, logTable.getValueAt(row, col), true, false, row, col);
+            maxWidth = Math.max(maxWidth, rc.getPreferredSize().width);
         }
+        if (logTable.getColumnModel().getColumn(col).getModelIndex() == 0) {
+            // The number is the line in the file (or position), so it can exceed the rows shown.
+            FontMetrics fm = logTable.getFontMetrics(logTable.getFont().deriveFont(Font.BOLD));
+            long widest = Math.max(logTable.getRowCount(), logTableModel.lineCount() + logTableModel.getTrimmedCount());
+            maxWidth = Math.max(maxWidth, fm.stringWidth(String.valueOf(widest)) + 16);
+        }
+        return maxWidth + 8;
+    }
+
+    /**
+     * The view column whose right border is at {@code p} in the header, where a drag resizes
+     * it (within 3px, as Swing's header decides), or -1.
+     */
+    private static int borderColumnAt(JTableHeader header, Point p) {
+        if (!header.getResizingAllowed()) return -1;
+        int col = header.columnAtPoint(p);
+        if (col < 0) return -1;
+        Rectangle r = header.getHeaderRect(col);
+        r.grow(-3, 0);
+        if (r.contains(p)) return -1;
+        int border = p.x < r.x + r.width / 2 ? col - 1 : col;
+        if (border < 0 || !header.getColumnModel().getColumn(border).getResizable()) return -1;
+        return border;
+    }
+
+    /**
+     * A double-click on a column's border: the column becomes as wide as its title and the
+     * widest value in the rows in view. Message (the flex column) still fills the window when
+     * its values are shorter, and grows past the window's edge when they're longer.
+     */
+    private void fitColumnToContent(int col) {
+        if (!tableColumnsManaged || col >= logTable.getColumnCount()) return;
+        Rectangle view = logTable.getVisibleRect();
+        int first = logTable.rowAtPoint(new Point(0, view.y));
+        int last = logTable.rowAtPoint(new Point(0, view.y + view.height - 1));
+        if (last < 0) last = logTable.getRowCount() - 1;
+        int width = contentWidth(col, Math.max(first, 0), last);
+        TableColumn column = logTable.getColumnModel().getColumn(col);
+        if (col == flexViewColumn()) {
+            flexFloor = width;
+            flexFloorColumn = column;
+        } else {
+            adjustingWidths = true;
+            try {
+                column.setPreferredWidth(width);
+                column.setWidth(width);
+            } finally {
+                adjustingWidths = false;
+            }
+        }
+        recalcFittedColumnsWidth();
     }
 
     /**
@@ -614,15 +685,16 @@ final class LogTableView {
 
     /**
      * Sizes the flex column ({@link #flexViewColumn}) so the columns fill the window, with no
-     * horizontal scroll bar. Only if that would leave it narrower than {@link #MIN_FLEX_WIDTH}
-     * does the table grow wider than the window and scroll.
+     * horizontal scroll bar. The table grows wider than the window and scrolls only if that
+     * would leave it narrower than {@link #MIN_FLEX_WIDTH}, or if it was made wider than the
+     * window ({@link #flexFloor}).
      */
     void stretchMessageColumn() {
         int flex = flexViewColumn();
         if (flex < 0) return;
-        int viewportWidth = (tableScrollPane != null) ? tableScrollPane.getViewport().getWidth() : logTable.getWidth();
-        int msgWidth = Math.max(viewportWidth - fittedColumnsWidth, MIN_FLEX_WIDTH);
         TableColumn column = logTable.getColumnModel().getColumn(flex);
+        int msgWidth = Math.max(fillWidth(), MIN_FLEX_WIDTH);
+        if (column == flexFloorColumn) msgWidth = Math.max(msgWidth, flexFloor);
         boolean was = adjustingWidths;
         adjustingWidths = true;
         try {
@@ -633,11 +705,18 @@ final class LogTableView {
         }
     }
 
+    /** The flex column's width that makes the columns exactly fill the window. */
+    private int fillWidth() {
+        int viewportWidth = (tableScrollPane != null) ? tableScrollPane.getViewport().getWidth() : logTable.getWidth();
+        return viewportWidth - fittedColumnsWidth;
+    }
+
     /**
      * A column border is being dragged: the flex column gives or takes the difference, so
      * the columns keep filling the window. Dragging the flex column's own right border
-     * trades width with the column after it instead (if it has none, the drag is undone:
-     * the flex column always reaches the window's edge).
+     * trades width with the column after it instead. If it has none, or the flex column is
+     * already wider than the window, the flex column takes the drag's width and can grow
+     * past the window's edge; it never gets narrower than filling the window.
      */
     private void columnDragged() {
         TableColumn resizing = logTable.getTableHeader().getResizingColumn();
@@ -648,7 +727,12 @@ final class LogTableView {
         try {
             // A drag changes only the width; layouts and the next layout pass read the preferred one.
             resizing.setPreferredWidth(resizing.getWidth());
-            if (resizing == cm.getColumn(flex) && flex + 1 < cm.getColumnCount()) {
+            boolean flexWide = flexFloorColumn == resizing && flexFloor > fillWidth();
+            if (resizing == cm.getColumn(flex) && (flexWide || flex + 1 >= cm.getColumnCount())) {
+                flexFloor = resizing.getWidth();
+                flexFloorColumn = resizing;
+            } else if (resizing == cm.getColumn(flex)) {
+                flexFloorColumn = null;
                 int viewportWidth = tableScrollPane.getViewport().getWidth();
                 int others = 0;
                 for (int i = 0; i < cm.getColumnCount(); i++) {
@@ -793,6 +877,7 @@ final class LogTableView {
 
         tableColumnsManaged = true;
         activeLayoutName = layout.name();
+        flexFloorColumn = null;   // Message fills the window again
         recalcFittedColumnsWidth();
     }
 
