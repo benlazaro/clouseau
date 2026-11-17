@@ -5,6 +5,8 @@ import com.droidenx.clouseau.api.LogParser;
 import org.pf4j.Extension;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -48,21 +50,34 @@ public class LogfmtParser implements LogParser {
         return line.startsWith(keyEq) || line.contains(" " + keyEq);
     }
 
+    /** Parses as if the log was written in this computer's timezone. */
     @Override
     public LogEntry parse(String rawLine) {
+        return parse(rawLine, ZoneId.systemDefault());
+    }
+
+    /**
+     * Clouseau calls this one, with the timezone the user says the log was written in. logfmt
+     * times usually end in {@code Z} or an offset, which say the instant on their own; a time
+     * without one is read in {@code writtenIn}. Overriding this method (rather than only
+     * {@link #parse(String)}) is what keeps an offset from being moved.
+     */
+    @Override
+    public LogEntry parse(String rawLine, ZoneId writtenIn) {
         Map<String, String> pairs = tokenize(rawLine);
 
         String time = take(pairs, "time", "ts");
-        Instant timestamp = parseTime(time);
+        Instant timestamp = parseTime(time, writtenIn);
         if (timestamp == null && time != null) pairs.put("time", time); // keep an unreadable time visible
 
-        LogEntry.LogLevel level = parseLevel(take(pairs, "level", "lvl"));
-        String message = take(pairs, "msg", "message");
-        String logger  = pairs.remove("logger");
-        String thread  = pairs.remove("thread");
-
-        return new LogEntry(timestamp, level, logger, thread,
-                message != null ? message : rawLine, rawLine, Map.copyOf(pairs));
+        return LogEntry.builder(rawLine)
+                .timestamp(timestamp)
+                .level(parseLevel(take(pairs, "level", "lvl")))
+                .message(take(pairs, "msg", "message"))   // null keeps the whole line as the message
+                .logger(pairs.remove("logger"))
+                .thread(pairs.remove("thread"))
+                .fields(pairs)                           // every other key: a custom column
+                .build();
     }
 
     /** Removes all of {@code keys} from {@code pairs} and returns the first one's value, or null. */
@@ -122,10 +137,14 @@ public class LogfmtParser implements LogParser {
         return pairs;
     }
 
-    private static Instant parseTime(String value) {
+    /**
+     * An ISO-8601 time. With an offset ({@code Z}, {@code +02:00}) or zone, that says when it
+     * was; without one, it's wall time in {@code writtenIn} ({@code withZone}: a parsed offset wins).
+     */
+    private static Instant parseTime(String value, ZoneId writtenIn) {
         if (value == null || value.isEmpty()) return null;
         try {
-            return Instant.parse(value);   // ISO-8601, with Z or an offset
+            return DateTimeFormatter.ISO_DATE_TIME.withZone(writtenIn).parse(value, Instant::from);
         } catch (DateTimeParseException e) {
             return null;
         }

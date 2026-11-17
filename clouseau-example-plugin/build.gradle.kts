@@ -12,7 +12,7 @@ plugins {
 val pluginId      = "clouseau-example-logfmt"
 val pluginVersion = "1.0.0"
 // The plugin API it's built for (ClouseauApi.VERSION of an api-v* release on Maven Central).
-val clouseauApi   = "0.2.0"
+val clouseauApi   = "0.3.0"
 
 dependencies {
     compileOnly("com.droidenx.clouseau:clouseau-api:$clouseauApi")

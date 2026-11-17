@@ -4,6 +4,7 @@ import com.droidenx.clouseau.api.LogEntry;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +50,21 @@ class LogfmtParserTest {
         assertThat(e.level()).isEqualTo(LogEntry.LogLevel.ERROR);
         assertThat(e.message()).isEqualTo("say \"hi\" C:\\tmp");
         assertThat(e.fields()).isEmpty();
+    }
+
+    /** A time that says its offset keeps it, whatever timezone the log is said to be written in. */
+    @Test
+    void anOffsetWinsOverTheLogsTimezone() {
+        LogEntry e = parser.parse("time=2026-03-27T08:00:00Z level=info msg=x", ZoneId.of("Asia/Tokyo"));
+
+        assertThat(e.timestamp()).isEqualTo(Instant.parse("2026-03-27T08:00:00Z"));
+    }
+
+    @Test
+    void aTimeWithoutAnOffsetIsReadInTheLogsTimezone() {
+        LogEntry e = parser.parse("time=2026-03-27T08:00:00 level=info msg=x", ZoneId.of("Asia/Tokyo"));
+
+        assertThat(e.timestamp()).isEqualTo(Instant.parse("2026-03-26T23:00:00Z"));
     }
 
     @Test

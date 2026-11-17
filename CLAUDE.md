@@ -134,8 +134,9 @@ plugin builds.
 
 `checkApiCompatibility` (part of `check`) fails if the API would break plugins built against the
 last release on Maven Central, `apiBaseline` in `clouseau-api/build.gradle.kts`; the report is in
-`clouseau-api/build/reports/japicmp/`. Once a new API version is published, set `apiBaseline` to it
-(and drop the 0.2.0-only `SUPERCLASS_REMOVED` exception when it stops applying). For a deliberate
+`clouseau-api/build/reports/japicmp/`. Once a new API version is published (and on Maven Central,
+which can take half an hour after clicking Publish), set `apiBaseline` to it and move
+`clouseau-example-plugin`'s `clouseauApi` to it. For a deliberate
 break, bump the minor version while 0.x (the major after 1.0) and set `allowBreakingChanges` for that
 release only.
 

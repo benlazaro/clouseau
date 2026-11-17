@@ -45,7 +45,7 @@ tasks.jar {
 //
 // A deliberate break (a new minor version while 0.x, a new major after): bump ClouseauApi.VERSION,
 // set allowBreakingChanges to true for that release, and back to false once it's the baseline.
-val apiBaseline = "0.2.0"
+val apiBaseline = "0.3.0"
 val allowBreakingChanges = false
 
 val apiBaselineJar: Configuration by configurations.creating {
@@ -79,10 +79,6 @@ val checkApiCompatibility = tasks.register<me.champeau.gradle.japicmp.JapicmpTas
     // (onlyBinaryIncompatibleModified would hide a new abstract method, which is source-incompatible.)
     onlyBinaryIncompatibleModified.set(false)
     failOnSourceIncompatibility.set(!allowBreakingChanges)
-    // 0.3.0 turned LogEntry, SourceSetting and Span from records into final classes with the same
-    // constructors and methods. That drops java.lang.Record as their superclass, which no plugin can
-    // depend on. Accepted against 0.2.0 only.
-    if (apiBaseline == "0.2.0") compatibilityChangeExcludes.set(listOf("SUPERCLASS_REMOVED"))
     txtOutputFile.set(layout.buildDirectory.file("reports/japicmp/api-compatibility.txt"))
     htmlOutputFile.set(layout.buildDirectory.file("reports/japicmp/api-compatibility.html"))
 }
