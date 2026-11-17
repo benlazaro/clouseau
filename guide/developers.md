@@ -99,13 +99,14 @@ complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
 - **Dependencies:** `clouseau-api` and PF4J as `compileOnly` (the app provides both, so don't
   bundle them in your JAR), plus PF4J as an `annotationProcessor`, which writes
   `META-INF/extensions.idx` from your `@Extension` classes. The API is released on its own,
-  with its own version: download `clouseau-api-<version>.jar` from the newest **Clouseau
-  plugin API** release on the [releases page](https://github.com/benlazaro/clouseau/releases)
-  (tags `api-v…`). Or build it into your local Maven repository with
-  `./gradlew :clouseau-api:publishToMavenLocal` from a Clouseau checkout, and depend on it as:
+  with its own version, on Maven Central as `com.droidenx.clouseau:clouseau-api`; each
+  **Clouseau plugin API** release on the [releases page](https://github.com/benlazaro/clouseau/releases)
+  (tags `api-v…`) says what changed and has the same jars to download. To try API changes
+  that aren't released yet, run `./gradlew :clouseau-api:publishToMavenLocal` from a Clouseau
+  checkout and add `mavenLocal()` to your repositories. Depend on it as:
 
   ```kotlin
-  repositories { mavenLocal(); mavenCentral() }
+  repositories { mavenCentral() }
   dependencies {
       compileOnly("com.droidenx.clouseau:clouseau-api:0.2.0")
       compileOnly("org.pf4j:pf4j:3.12.0")

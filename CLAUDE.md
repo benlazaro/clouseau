@@ -118,10 +118,14 @@ when there's no file.
 reads, so bump only that constant. Release it only when the API changes: tag the commit
 `api-v<VERSION>` (the workflow fails if they differ), with notes for plugin authors in
 `docs/releases/api-v<VERSION>.md`, same format. It runs the tests, builds the jar, sources, Javadoc
-and POM (signed if the `SIGNING_KEY`/`SIGNING_PASSWORD` secrets exist), and attaches them to a
-GitHub release that is never marked Latest; the update check ignores `api-v*` tags. Maven Central
-isn't wired up yet. `./gradlew :clouseau-api:publishToMavenLocal` puts the API in `~/.m2` for
-local plugin builds.
+and POM (signed with the `SIGNING_KEY`/`SIGNING_PASSWORD` secrets), uploads them to Maven Central
+(namespace `com.droidenx`, Portal user token in `CENTRAL_USERNAME`/`CENTRAL_PASSWORD`) and waits
+for Central's checks, then attaches them to a GitHub release that is never marked Latest; the
+update check ignores `api-v*` tags. The Central deployment is `USER_MANAGED`: after the run, click
+**Publish** under Publish → Deployments at central.sonatype.com (a version on Central can never be
+replaced or removed). The signing key is RSA 4096 `7541ACF1F02F4686` (`gpg@droidenx.com`, on
+keys.openpgp.org). `./gradlew :clouseau-api:publishToMavenLocal` puts the API in `~/.m2` for local
+plugin builds.
 
 ## Key classes
 

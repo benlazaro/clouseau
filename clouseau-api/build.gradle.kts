@@ -66,7 +66,7 @@ publishing {
         }
     }
     repositories {
-        // A Maven-layout folder the release workflow uploads from (and, later, bundles for Maven Central).
+        // A Maven-layout folder the release workflow bundles for Maven Central and attaches to the release.
         maven {
             name = "staging"
             url = uri(layout.buildDirectory.dir("staging-repo"))

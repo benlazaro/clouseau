@@ -57,6 +57,64 @@ jobs:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: ./gradlew :clouseau-api:publishAllPublicationsToStagingRepository
 
+      # Maven Central (central.sonatype.com, namespace com.droidenx): upload the signed bundle
+      # and wait for Central's checks, so a bundle it rejects fails the job before the GitHub
+      # release exists. USER_MANAGED: the deployment then waits under Publish → Deployments
+      # until someone clicks Publish there, because a version on Central can never be replaced.
+      # Needs the CENTRAL_USERNAME / CENTRAL_PASSWORD secrets (a Portal user token); skipped
+      # without them.
+      - name: Upload to Maven Central
+        shell: bash
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          if [[ -z "$CENTRAL_USERNAME" || -z "$CENTRAL_PASSWORD" ]]; then
+            echo "::notice::No CENTRAL_USERNAME / CENTRAL_PASSWORD secrets, so nothing goes to Maven Central."
+            exit 0
+          fi
+          path="com/droidenx/clouseau/clouseau-api/$VERSION"
+          # A re-run after Central already published this version has nothing to upload.
+          if curl -sfI "https://repo1.maven.org/maven2/$path/clouseau-api-$VERSION.pom" > /dev/null; then
+            echo "::notice::clouseau-api $VERSION is already on Maven Central."
+            exit 0
+          fi
+          cd clouseau-api/build/staging-repo
+          if ! compgen -G "$path/*.asc" > /dev/null; then
+            echo "::error::The jars aren't signed (is the SIGNING_KEY secret set?), and Maven Central requires signatures."
+            exit 1
+          fi
+          # The bundle is the version's folder in Maven layout: jars, POM, Gradle module file,
+          # their .asc signatures and the checksums Gradle wrote next to them.
+          zip -r "$RUNNER_TEMP/central-bundle.zip" "$path"
+          token="$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 -w0)"
+          echo "::add-mask::$token"
+          api="https://central.sonatype.com/api/v1/publisher"
+          id="$(curl -sS --fail-with-body -X POST -H "Authorization: Bearer $token" \
+            -F "bundle=@$RUNNER_TEMP/central-bundle.zip" \
+            "$api/upload?name=clouseau-api-$VERSION&publishingType=USER_MANAGED")"
+          echo "Uploaded as deployment $id. Waiting for Maven Central's checks..."
+          for _ in $(seq 60); do
+            sleep 10
+            status="$(curl -sS --fail-with-body -X POST -H "Authorization: Bearer $token" "$api/status?id=$id")"
+            state="$(jq -r .deploymentState <<< "$status")"
+            echo "  $state"
+            case "$state" in
+              VALIDATED)
+                echo "::notice::Maven Central accepted clouseau-api $VERSION. Publish it at https://central.sonatype.com/publishing/deployments"
+                exit 0 ;;
+              PUBLISHING|PUBLISHED)
+                exit 0 ;;
+              FAILED)
+                echo "::error::Maven Central rejected clouseau-api $VERSION (deployment $id):"
+                jq '.errors' <<< "$status"
+                exit 1 ;;
+            esac
+          done
+          echo "::error::Maven Central was still checking deployment $id after 10 minutes. See Publish → Deployments at central.sonatype.com."
+          exit 1
+
       - name: Create the release
         shell: bash
         run: |

@@ -2327,8 +2327,10 @@ released only when the API changes, because a published version can't be replace
 app releases can share one API version. The group is under `com.droidenx`, the domain the
 packages already use, so Maven Central can verify it. The POM declares no dependencies (PF4J
 is `compileOnly`, and the root build's SLF4J is left out), so a plugin gets nothing it
-doesn't ask for. The jars are signed when signing keys are configured, ready for Maven Central,
-which isn't wired up yet.
+doesn't ask for. The jars are signed, and the workflow uploads them to Maven Central through the
+Central Portal API before it creates the GitHub release, waiting for Central's checks so a
+rejected bundle fails the run first. The deployment is user-managed: it waits in the Portal until
+someone publishes it, the last chance to look before a version that can never be replaced.
 
 Rejected: one version for the app and the API (every app release would be an API release,
 and a plugin's `Plugin-Requires` would break on app releases that changed nothing it uses);

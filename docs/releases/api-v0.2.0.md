@@ -1,7 +1,8 @@
 Title: Clouseau plugin API 0.2.0 — Highlighters name roles, and the theme colors them
 
-The first release of the plugin API on its own. Build your plugin against `clouseau-api-0.2.0.jar`
-as a `compileOnly` dependency (Clouseau provides the API at runtime, so don't bundle it), and set
+The first release of the plugin API on its own, now on Maven Central. Build your plugin against
+`com.droidenx.clouseau:clouseau-api:0.2.0` as a `compileOnly` dependency (Clouseau provides the
+API at runtime, so don't bundle it), and set
 `Plugin-Requires: >=0.2.0` in your JAR's manifest. A Clouseau with a different API version lists
 your plugin as Failed and says why, instead of loading it and failing later.
 
