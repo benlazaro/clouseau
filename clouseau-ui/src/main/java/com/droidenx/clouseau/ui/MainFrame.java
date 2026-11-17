@@ -740,14 +740,21 @@ public final class MainFrame extends JFrame {
         // The version in the theme's dim text color, read now (the box is modal, so no theme switch while it shows).
         Color dim = ClouseauColors.dimForeground();
         String dimHex = dim != null ? String.format("#%06x", dim.getRGB() & 0xFFFFFF) : "gray";
-        JOptionPane.showMessageDialog(
+        // A message box that only informs: Close is the default, Licenses the option. The
+        // default first: OptionPane.isYesLast lays it out last, on the right (DESIGN.md 6.12).
+        Object[] options = { Messages.get("about.close"), Messages.get("about.licenses") };
+        int choice = JOptionPane.showOptionDialog(
                 this,
                 "<html><b>" + Messages.get("about.version") + "</b>"
                         + "<br><font color='" + dimHex + "'>" + AppPrefs.getAppVersion() + "</font>"
-                        + "<br><br>" + Messages.get("about.description") + "</html>",
+                        + "<br><br>" + Messages.get("about.description")
+                        + "<br><br>" + Messages.get("about.license") + "</html>",
                 Messages.get("about.title"),
+                JOptionPane.DEFAULT_OPTION,
                 JOptionPane.INFORMATION_MESSAGE,
-                icon64 != null ? new ImageIcon(icon64) : null);
+                icon64 != null ? new ImageIcon(icon64) : null,
+                options, options[0]);
+        if (choice == 1) LicensesDialog.show(this);
     }
 
     /**

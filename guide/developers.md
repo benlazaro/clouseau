@@ -26,6 +26,12 @@ cd clouseau
 ```
 
 `distZipImage` skips `-SNAPSHOT` versions, so pass a release version to build it locally.
+
+Every library the app ships is listed in
+`clouseau-ui/src/main/resources/com/droidenx/clouseau/ui/legal/THIRD-PARTY-NOTICES.txt`
+with its license. `./gradlew check` fails if a runtime dependency is missing there, so
+when you add or replace one, add its entry too (and its license text, if it's a new
+license).
 Running from source keeps its data in `clouseau-ui/data/`.
 
 To retake this guide's screenshots after a UI change, close any running Clouseau and run

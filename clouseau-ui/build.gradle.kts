@@ -33,7 +33,53 @@ tasks.processResources {
     filesMatching("version.properties") {
         expand("appVersion" to appVersion)
     }
+    // Clouseau's own license, next to the third-party notices, for Help → About → Licenses.
+    from(rootProject.file("LICENSE")) {
+        into("com/droidenx/clouseau/ui/legal")
+        rename { "LICENSE.txt" }
+    }
 }
+
+// The license and third-party notices, shipped in the release image as a "legal" folder
+// beside the launcher (inside Clouseau.app/Contents on macOS), through jpackage's
+// --app-content so the files are in place before macOS signs the app.
+val legalSource = file("src/main/resources/com/droidenx/clouseau/ui/legal/THIRD-PARTY-NOTICES.txt")
+val appContentDir = layout.buildDirectory.dir("app-content/legal")
+val stageLegal = tasks.register<Sync>("stageLegal") {
+    from(legalSource)
+    from(rootProject.file("LICENSE")) { rename { "LICENSE.txt" } }
+    into(appContentDir)
+}
+
+// Every library the app ships must be listed in THIRD-PARTY-NOTICES.txt by its Maven
+// coordinates (group:name), so a new or changed dependency can't ship without its notice.
+val checkThirdPartyNotices = tasks.register("checkThirdPartyNotices") {
+    group = "verification"
+    description = "Fails if a runtime dependency is missing from THIRD-PARTY-NOTICES.txt."
+    val modules = configurations.runtimeClasspath.flatMap { c ->
+        c.incoming.artifacts.resolvedArtifacts.map { artifacts ->
+            artifacts.mapNotNull { a ->
+                (a.id.componentIdentifier as? org.gradle.api.artifacts.component.ModuleComponentIdentifier)
+                        ?.let { "${it.group}:${it.module}" }
+            }.toSortedSet()
+        }
+    }
+    val notices = legalSource
+    inputs.file(notices)
+    inputs.property("modules", modules)
+    val marker = layout.buildDirectory.file("checkThirdPartyNotices.ok")
+    outputs.file(marker)
+    doLast {
+        val listed = Regex("""[\w.-]+:[\w.-]+""").findAll(notices.readText()).map { it.value }.toSet()
+        val missing = modules.get().filter { it !in listed }
+        if (missing.isNotEmpty()) {
+            throw GradleException("THIRD-PARTY-NOTICES.txt doesn't list: ${missing.joinToString()}. " +
+                    "Add each with its license, copyright and website, and its license text if new.")
+        }
+        marker.get().asFile.writeText(modules.get().joinToString("\n"))
+    }
+}
+tasks.named("check") { dependsOn(checkThirdPartyNotices) }
 
 tasks.shadowJar {
     archiveBaseName.set("clouseau")
@@ -286,6 +332,7 @@ listOf("jre", "jpackageImage", "jpackage").forEach { name ->
 
 tasks.named("jpackageImage") {
     onlyIf { !isSnapshot }
+    dependsOn(stageLegal)
     val os = org.gradle.internal.os.OperatingSystem.current()
     when {
         os.isWindows -> dependsOn("generateWindowsIcon")
@@ -358,6 +405,8 @@ runtime {
         // portable zip is never installed, so it registers nothing.
         val fileAssociations = listOf("--file-associations",
                 packagingDir.resolve("file-associations/log.properties").absolutePath)
+        // The "legal" folder (stageLegal): LICENSE.txt and THIRD-PARTY-NOTICES.txt.
+        val appContent = listOf("--app-content", appContentDir.get().asFile.absolutePath)
 
         // JVM flags baked into the native launcher. On macOS/Linux the working directory of an
         // installed app is not meaningful, so keep data in the home folder (AppDirs expands "~/").
@@ -367,7 +416,7 @@ runtime {
         when {
             os.isWindows -> {
                 installerType = "exe"
-                imageOptions = listOf("--icon", packagingDir.resolve("windows/clouseau.ico").absolutePath)
+                imageOptions = listOf("--icon", packagingDir.resolve("windows/clouseau.ico").absolutePath) + appContent
                 installerOptions = fileAssociations + listOf(
                     "--vendor", "Droidenx",
                     "--win-per-user-install",
@@ -379,7 +428,7 @@ runtime {
             }
             os.isMacOsX -> {
                 installerType = "dmg"
-                imageOptions = listOf("--icon", packagingDir.resolve("macos/clouseau.icns").absolutePath)
+                imageOptions = listOf("--icon", packagingDir.resolve("macos/clouseau.icns").absolutePath) + appContent
                 installerOptions = fileAssociations + listOf(
                     "--vendor", "Droidenx",
                     "--mac-package-name", "Clouseau"
@@ -387,7 +436,7 @@ runtime {
             }
             else -> {
                 installerType = "deb"
-                imageOptions = listOf("--icon", packagingDir.resolve("linux/clouseau.png").absolutePath)
+                imageOptions = listOf("--icon", packagingDir.resolve("linux/clouseau.png").absolutePath) + appContent
                 installerOptions = fileAssociations + listOf(
                     "--vendor", "Droidenx",
                     "--linux-shortcut",

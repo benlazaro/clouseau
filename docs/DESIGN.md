@@ -211,6 +211,16 @@ refresh; open tabs keep the list they were created with.
    10 threads across the JVM, so ten followed files would hold every thread and the next
    load, preview, export or download would wait forever. One-shot work (loads, merges,
    previews, exports, downloads) keeps using `execute`.
+5. An exception no code catches, on any thread, reaches `CrashHandler`, the default
+   uncaught-exception handler (installed right after logging is configured). It logs the
+   error with its thread and shows **Clouseau ran into a problem**: the details (version,
+   Java, OS, thread, stack trace) with Copy Details, Open Log Folder and Report Issue…
+   (the plain new-issue page; nothing about the error goes into the address, and nothing
+   is sent). The EDT survives an exception (AWT starts a new one), so the app keeps
+   running. One notice shows at a time, and an error whose type and top stack frames
+   match one already shown this run is only logged, so a failure on every repaint can't
+   stack up dialogs. This is a safety net: code that can expect a failure (I/O, a
+   plugin, the network) still catches it and says what went wrong in place.
 
 ### 6.2 Opening a file (UC-1, UC-2)
 
@@ -886,6 +896,18 @@ Clouseau builds with Gradle 8.8 (Kotlin DSL) on Java 21 (see D-12). The `org.ber
 produces a jpackage image with a bundled JRE, published as a **portable zip**. The default
 heap is `-Xmx2g`. Icons and the splash image are pre-rendered at build time, so the
 runtime needs no SVG library.
+
+**Licenses.** `THIRD-PARTY-NOTICES.txt` (in `clouseau-ui`'s resources, under `legal/`)
+lists every library and font the app ships, by Maven coordinates, with its license,
+copyright and website, followed by the full text of each license; the JRE's own notices
+stay in the runtime's `legal` folder. The build copies the root `LICENSE` beside it as
+`LICENSE.txt`, so both are in the jar for Help → About → Licenses (`LicensesDialog`) and in
+the Edge jar. `stageLegal` puts both in a `legal` folder that jpackage adds with
+`--app-content` (next to `Clouseau.exe` on Windows, `lib/legal` on Linux,
+`Clouseau.app/Contents/legal` on macOS), before macOS signs the app, so the files don't
+break its signature. `checkThirdPartyNotices`, part of `check`, fails the build when a
+module on the runtime classpath isn't listed: adding or replacing a dependency means adding
+its entry (and its license text, if it's a new license).
 
 The native installers (`jpackage` task: exe, dmg, deb; local builds only for now) pass
 `--file-associations packaging/file-associations/log.properties`, registering `.log`

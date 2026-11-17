@@ -10,6 +10,8 @@ Open an issue and include:
 - **Operating system** and Java version if not using the bundled JRE
 - **Steps to reproduce** — what you did, what you expected, what happened instead
 - **Log file snippet** — a sample of the log format that triggered the issue, if relevant
+- **Error details** — if Clouseau showed "Clouseau ran into a problem", click Copy Details
+  (or Report Issue…, which copies them too) and paste them in
 
 ## Suggesting a feature
 

@@ -758,7 +758,7 @@ the notices off sees one.
 |---|---|
 | **Readability** | Level colors, formatting, and highlighting make problems obvious. This is Clouseau's main reason to exist. |
 | **Modern UI** | A clean, consistent, themeable look (FlatLaf); no dated Swing feel. |
-| **Stability** | Never crash or run out of memory, including during long follow sessions. Prefer degrading gracefully (for example, dropping the oldest entries) over failing. |
+| **Stability** | Never crash or run out of memory, including during long follow sessions. Prefer degrading gracefully (for example, dropping the oldest entries) over failing. An unexpected error is logged and shown with details to report, never left as a window that silently stopped working. |
 | **Scale** | File size is not capped by design. 2 GB is a current benchmark, not a ceiling. A static file never loses lines because of a memory limit. |
 | **Responsiveness** | Opening, filtering, and scrolling must not freeze the UI; long work runs off the Event Dispatch Thread. |
 | **Portability** | Runs on Windows, macOS, and Linux from a portable zip with a bundled JRE. |

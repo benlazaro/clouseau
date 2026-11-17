@@ -21,6 +21,8 @@ public final class ClouseauApp {
         // Configure Log4j2 from <data dir>/log4j2.xml (the bundled copy is named default-log4j2.xml
         // so Log4j2 does not auto-load it and create a log file before the data dir is known)
         configureLogging();
+        // From here on, an error no code handled is logged and shown, not lost.
+        CrashHandler.install();
 
         String version = AppPrefs.getAppVersion();
         log.info("Starting Clouseau Log Viewer {} (Java {}, {} {})", version,
@@ -236,7 +238,7 @@ public final class ClouseauApp {
         try {
             // Create directory if it doesn't exist
             Files.createDirectories(clouseauDir);
-            System.setProperty("clouseau.log.dir", clouseauDir.resolve("logs").toString());
+            System.setProperty("clouseau.log.dir", AppDirs.logsDir().toString());
 
             // Copy default config to the data dir if not present
             if (!Files.exists(configFile)) {

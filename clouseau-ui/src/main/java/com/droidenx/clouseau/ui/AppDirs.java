@@ -31,6 +31,9 @@ public final class AppDirs {
     /** Decompressed copies of the compressed logs open in tabs (D-16); emptied at startup. */
     public static Path cacheDir() { return DATA_DIR.resolve("cache"); }
 
+    /** Clouseau's own log, {@code clouseau.log} (see {@code default-log4j2.xml}). */
+    public static Path logsDir() { return DATA_DIR.resolve("logs"); }
+
     /** {@code true} when data lives next to the install (Windows jpackage image). */
     public static boolean isPortable() { return findInstallRoot() != null; }
 

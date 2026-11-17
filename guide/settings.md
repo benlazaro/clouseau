@@ -164,3 +164,25 @@ Clouseau's own log, and saved passwords (encrypted) all live in one folder:
 | macOS and Linux | `~/.clouseau/` |
 | The Edge jar, or from source | `data` in the folder you start it from |
 | With `-Dclouseau.data.dir=<path>` | `<path>` |
+
+## When something goes wrong
+
+If Clouseau hits an error it didn't expect, it keeps running and tells you in a
+**Clouseau ran into a problem** window. The window shows the details (Clouseau's version,
+Java, your operating system and where the error happened), and has buttons to:
+
+- **Copy Details**: copy them to the clipboard.
+- **Open Log Folder**: open the folder with Clouseau's own log, `logs/clouseau.log` in the
+  [data folder](#the-data-folder), which records the same error.
+- **Report Issue…**: copy the details and open a new issue on GitHub, so you can paste them
+  in. Clouseau sends nothing by itself.
+
+If something doesn't look right afterwards, restart Clouseau. The same error shows only
+once per run, so a problem that keeps repeating doesn't flood you with windows.
+
+## Licenses
+
+Clouseau is free and open source under the MIT License. **Help → About Clouseau →
+Licenses** shows its license and the licenses of the libraries and fonts it includes. The
+release zips also have them as files, in a `legal` folder: next to `Clouseau.exe` on
+Windows, `Clouseau.app/Contents/legal` on macOS and `lib/legal` on Linux.
