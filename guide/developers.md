@@ -115,7 +115,11 @@ since those come from Clouseau's own build. It shows everything a plugin needs:
       compileOnly("org.pf4j:pf4j:3.12.0")
       annotationProcessor("org.pf4j:pf4j:3.12.0")
   }
+  java { toolchain { languageVersion.set(JavaLanguageVersion.of(21)) } }
   ```
+
+  Build for Java 21, which is what Clouseau runs on. Gradle won't resolve the API for an older
+  target ("only compatible with JVM runtime version 21 or newer").
 - **Manifest:** `Plugin-Id` and `Plugin-Version` (semantic version) in the JAR manifest.
   The Plugin Manager also shows `Plugin-Name` (otherwise the ID, made readable),
   `Plugin-Description`, `Plugin-Provider` and `Plugin-License` when you set them.
