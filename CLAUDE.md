@@ -109,8 +109,9 @@ the project's JDK) before running `./gradlew`.
   `AppDirs` for the release locations.
 - `samples/sample.log` and `samples/gen_log.ps1` provide test logs.
 
-CI (`.github/workflows`): **Edge** runs tests and publishes `clouseau-edge.jar` on every
-push to `main`; **Release** runs tests and publishes a portable zip per platform on `v*`
+CI (`.github/workflows`) runs `./gradlew check` (the tests, the third-party notices and plugin API
+compatibility) before anything else: **Edge** then publishes `clouseau-edge.jar` on every
+push to `main`; **Release** publishes a portable zip per platform on `v*`
 tags. Write a release's notes for users in `docs/releases/<tag>.md` (first line
 `Title: Clouseau <version> — <headline>`, then Markdown) and commit them before tagging: the
 Release workflow publishes them as the release's title and notes, or GitHub's list of commits
@@ -131,11 +132,21 @@ replaced or removed). The signing key is RSA 4096 `7541ACF1F02F4686` (`gpg@droid
 keys.openpgp.org). `./gradlew :clouseau-api:publishToMavenLocal` puts the API in `~/.m2` for local
 plugin builds.
 
+`checkApiCompatibility` (part of `check`) fails if the API would break plugins built against the
+last release on Maven Central, `apiBaseline` in `clouseau-api/build.gradle.kts`; the report is in
+`clouseau-api/build/reports/japicmp/`. Once a new API version is published, set `apiBaseline` to it
+(and drop the 0.2.0-only `SUPERCLASS_REMOVED` exception when it stops applying). For a deliberate
+break, bump the minor version while 0.x (the major after 1.0) and set `allowBreakingChanges` for that
+release only.
+
 ## Key classes
 
-- `LogEntry` (api) — immutable record: timestamp, level, logger, thread, message, rawLine,
-  fields. Lines no parser accepts become `UNKNOWN` entries (continuation lines).
-- `LogParser` / `LogFormatter` / `LogSyntaxHighlighter` (api) — PF4J extension points. A highlighter
+- `LogEntry` (api) — immutable final class (not a record, so it can grow; build with `LogEntry.builder`):
+  timestamp, level, logger, thread, message, rawLine, fields. Lines no parser accepts become `UNKNOWN`
+  entries (continuation lines). API data types are never records, and interfaces grow only by default
+  methods (DESIGN.md 5, forward compatibility).
+- `LogParser` / `LogFormatter` / `LogSyntaxHighlighter` (api) — PF4J extension points. Core calls
+  `LogParser.parse(rawLine, writtenIn)`, so the parser reads zoneless times in the log's timezone. A highlighter
   returns spans with a `Role`, never a color; the theme's `Clouseau.syntax.<role>` keys color them, and
   `SyntaxLayers` (core) layers every highlighter that applies (D-26).
 - `ClouseauApi` (api) — `VERSION`, the plugin API's own version, which PF4J checks `Plugin-Requires`

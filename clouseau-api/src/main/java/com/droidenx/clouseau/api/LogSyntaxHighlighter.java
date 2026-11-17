@@ -31,11 +31,46 @@ public interface LogSyntaxHighlighter extends ExtensionPoint {
      */
     List<Span> highlight(String input);
 
-    /** A half-open {@code [start, end)} character range of the input and what it is. */
-    record Span(int start, int end, Role role) {
-        public Span {
+    /**
+     * A half-open {@code [start, end)} character range of the input and what it is. Immutable.
+     * A final class rather than a record (since 0.3.0), so it can gain values later without
+     * changing this constructor.
+     */
+    final class Span {
+        private final int start;
+        private final int end;
+        private final Role role;
+
+        public Span(int start, int end, Role role) {
             if (start < 0 || end < start) throw new IllegalArgumentException("bad span [" + start + ", " + end + ")");
             if (role == null) throw new IllegalArgumentException("role is required");
+            this.start = start;
+            this.end = end;
+            this.role = role;
+        }
+
+        /** The first character's index. */
+        public int start() { return start; }
+
+        /** The index just past the last character. */
+        public int end() { return end; }
+
+        /** What the text is. */
+        public Role role() { return role; }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Span s && start == s.start && end == s.end && role == s.role;
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(start, end, role);
+        }
+
+        @Override
+        public String toString() {
+            return "Span[start=" + start + ", end=" + end + ", role=" + role + "]";
         }
     }
 

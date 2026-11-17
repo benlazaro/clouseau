@@ -86,7 +86,11 @@ A log flows through the system like this:
 
 ### 4.1 `LogEntry`
 
-`LogEntry` (in `clouseau-api`) is an immutable record:
+`LogEntry` (in `clouseau-api`) is an immutable final class, built with
+`LogEntry.builder(rawLine)`. It was a record until API 0.3.0; a record can't gain a value
+without changing its constructor, which every plugin parser calls. Now a new value gets a
+builder method and a default, and the seven-value constructor (kept for plugins built for
+0.2) never changes. `SourceSetting` and `LogSyntaxHighlighter.Span` changed the same way, for the same reason.
 
 | Field | Meaning |
 |---|---|
@@ -111,8 +115,14 @@ collects the continuation lines after a row).
 ### 4.3 Timezones
 
 Timestamps without a zone are interpreted in a per-tab **source timezone** (default: the
-system zone). Each entry is corrected as it is read, and the user can change the zone per
-tab.
+system zone), and the user can change the zone per tab. `LineParser` passes it to each
+parser as `LogParser.parse(rawLine, writtenIn)` (API 0.3.0), so the parser reads a
+timestamp without an offset in that zone and keeps the offset of one that has it.
+`RegexLogParser` parses with `DateTimeFormatter.withZone(writtenIn)`, where a parsed
+offset wins. The interface's default, for plugin parsers that only implement
+`parse(rawLine)`, re-reads that method's system-zone wall time in `writtenIn`, as Clouseau
+did for every parser before 0.3.0. That moved timestamps with an offset (an ISO time
+ending in `Z`) whenever the source timezone wasn't the system's.
 
 ## 5. Extension points
 
@@ -128,11 +138,28 @@ tab.
 - `LogParser.canParse` must be cheap: during auto-detection it is called on every line
   for every parser until one accepts.
 - `LogParser.customFields()` lists the `fields` keys that should become columns.
+- One `LogParser` instance serves every tab and is called from several background threads
+  at once (loads, follows, merges), so it must be stateless or thread-safe. A plugin
+  parser's exceptions or a `null` entry make the line unparsed (`ParserList.guard`).
+- Forward compatibility: interfaces grow only by default methods; data types are final
+  classes that grow by builder or `with…` methods, never records (a new record component
+  changes the constructor plugins call); an optional capability is a sub-interface, as
+  `ConnectingLogSource` is. Within an API version line, plugins built for an older version
+  keep loading and running: 0.3.0 is binary-compatible with plugins built for 0.2.0.
+  `checkApiCompatibility` (japicmp, part of `check`) compares the API jar with the last
+  release on Maven Central (`apiBaseline` in `clouseau-api/build.gradle.kts`) and fails on
+  any binary or source incompatibility: a removed or changed class, method or field, or a
+  new abstract method in an interface, which is binary-compatible by the JLS but breaks
+  every plugin implementing it. A deliberate break sets `allowBreakingChanges` for that
+  release. The baseline jar is fetched by its Maven Central path under a made-up group:
+  under its real coordinates Gradle resolves it to the project itself. As a second check,
+  `ClouseauPluginManagerTest` loads the example plugin built against the released API and
+  parses lines with it.
 - `LogFormatter` and `LogSyntaxHighlighter` work on message text, so one implementation
   works for any log format.
 - `LogSyntaxHighlighter.highlight` returns `Span`s that name a `Role`, never a color (D-26).
   A highlighter marks only what it recognizes; the detail panel layers every enabled one.
-- `ClouseauApi.VERSION` is the API's own version (0.2.0), separate from the app's. PF4J
+- `ClouseauApi.VERSION` is the API's own version (0.3.0), separate from the app's. PF4J
   checks a plugin's `Plugin-Requires` against it, and the Plugin Manager lists a plugin
   built for another API as Failed with the reason. While the API is 0.x, a change that
   breaks plugins bumps the minor version.

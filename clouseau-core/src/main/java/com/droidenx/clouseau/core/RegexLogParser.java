@@ -43,6 +43,10 @@ public final class RegexLogParser implements LogParser {
     private final Pattern           pattern;
     private final DateTimeFormatter timestampFormatter;
     private final Set<String>       namedGroups;
+    /** {@link #timestampFormatter} in the zone used last, so a file's lines don't each copy it. */
+    private volatile Zoned          zoned;
+
+    private record Zoned(ZoneId zone, DateTimeFormatter formatter) {}
 
     public RegexLogParser(String name, Pattern pattern, String timestampFormat) {
         this.name    = name;
@@ -70,12 +74,22 @@ public final class RegexLogParser implements LogParser {
 
     @Override
     public LogEntry parse(String rawLine) {
+        return parse(rawLine, ZoneId.systemDefault());
+    }
+
+    /**
+     * Reads a timestamp without an offset as wall time in {@code writtenIn}; one with an
+     * offset or zone in the text keeps it ({@code ISO_OFFSET_DATE_TIME}, or a pattern with
+     * {@code XXX} or {@code VV}).
+     */
+    @Override
+    public LogEntry parse(String rawLine, ZoneId writtenIn) {
         Matcher m = pattern.matcher(rawLine);
         if (!m.matches()) {
             return new LogEntry(null, LogLevel.UNKNOWN, "", "", rawLine, rawLine, Map.of());
         }
 
-        Instant  timestamp = parseTimestamp(group(m, "timestamp"));
+        Instant  timestamp = parseTimestamp(group(m, "timestamp"), writtenIn);
         LogLevel level     = parseLevel(group(m, "level"));
         String   logger    = trim(group(m, "logger"));
         String   thread    = trim(group(m, "thread"));
@@ -109,13 +123,23 @@ public final class RegexLogParser implements LogParser {
         }
     }
 
-    private Instant parseTimestamp(String raw) {
+    private Instant parseTimestamp(String raw, ZoneId zone) {
         if (raw == null || timestampFormatter == null) return null;
         try {
-            return timestampFormatter.parse(raw.replace(',', '.'), Instant::from);
+            return formatterIn(zone).parse(raw.replace(',', '.'), Instant::from);
         } catch (DateTimeParseException ignored) {
             return null;
         }
+    }
+
+    /** The formatter in {@code zone}: an offset or zone in the text still wins over it. */
+    private DateTimeFormatter formatterIn(ZoneId zone) {
+        Zoned z = zoned;
+        if (z == null || !z.zone().equals(zone)) {
+            z = new Zoned(zone, timestampFormatter.withZone(zone));
+            zoned = z;
+        }
+        return z.formatter();
     }
 
     private static LogLevel parseLevel(String raw) {
@@ -131,7 +155,7 @@ public final class RegexLogParser implements LogParser {
         if ("ISO_OFFSET_DATE_TIME".equals(format)) return DateTimeFormatter.ISO_OFFSET_DATE_TIME;
         // Normalize comma decimal separator to dot — Logback uses comma (HH:mm:ss,SSS)
         // but parseTimestamp normalizes the raw value the same way, so both must agree.
-        return DateTimeFormatter.ofPattern(format.replace(',', '.')).withZone(ZoneId.systemDefault());
+        return DateTimeFormatter.ofPattern(format.replace(',', '.'));
     }
 
     private static Set<String> extractNamedGroups(Pattern p) {

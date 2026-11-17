@@ -26,13 +26,18 @@ cd clouseau
 ```
 
 `distZipImage` skips `-SNAPSHOT` versions, so pass a release version to build it locally.
-
-Every library the app ships is listed in
-`clouseau-ui/src/main/resources/com/droidenx/clouseau/ui/legal/THIRD-PARTY-NOTICES.txt`
-with its license. `./gradlew check` fails if a runtime dependency is missing there, so
-when you add or replace one, add its entry too (and its license text, if it's a new
-license).
 Running from source keeps its data in `clouseau-ui/data/`.
+
+`./gradlew check` also runs two checks you may meet when changing things:
+
+- **Third-party notices.** Every library the app ships is listed in
+  `clouseau-ui/src/main/resources/com/droidenx/clouseau/ui/legal/THIRD-PARTY-NOTICES.txt`
+  with its license. The check fails if a runtime dependency is missing there, so when you
+  add or replace one, add its entry too (and its license text, if it's a new license).
+- **Plugin API compatibility.** `checkApiCompatibility` compares `clouseau-api` with the
+  last release on Maven Central and fails on any change that would break a plugin built
+  against it, such as a removed method or a new abstract method in an interface (add a
+  `default` method instead). The report is in `clouseau-api/build/reports/japicmp/`.
 
 To retake this guide's screenshots after a UI change, close any running Clouseau and run
 `./gradlew :clouseau-ui:screenshots`. It opens each scene from the logs in `samples/` (with
@@ -117,7 +122,7 @@ since those come from Clouseau's own build. It shows everything a plugin needs:
   ```kotlin
   repositories { mavenCentral() }
   dependencies {
-      compileOnly("com.droidenx.clouseau:clouseau-api:0.2.0")
+      compileOnly("com.droidenx.clouseau:clouseau-api:0.3.0")
       compileOnly("org.pf4j:pf4j:3.12.0")
       annotationProcessor("org.pf4j:pf4j:3.12.0")
   }
@@ -129,9 +134,10 @@ since those come from Clouseau's own build. It shows everything a plugin needs:
 - **Manifest:** `Plugin-Id` and `Plugin-Version` (semantic version) in the JAR manifest.
   The Plugin Manager also shows `Plugin-Name` (otherwise the ID, made readable),
   `Plugin-Description`, `Plugin-Provider` and `Plugin-License` when you set them.
-  Set `Plugin-Requires` to the plugin API you built against, such as `>=0.2.0`. The API has
-  its own version (`ClouseauApi.VERSION`), separate from Clouseau's. A Clouseau with another
-  API version lists your plugin as Failed and says why, instead of loading it and failing later.
+  Set `Plugin-Requires` to the plugin API you built against, such as `>=0.3.0`. The API has
+  its own version (`ClouseauApi.VERSION`), separate from Clouseau's. A Clouseau whose API
+  doesn't satisfy it lists your plugin as Failed and says why, instead of loading it and
+  failing later.
 - **The extension:**
 
 ```java
@@ -146,6 +152,31 @@ public class LogfmtParser implements LogParser {
     @Override public LogEntry parse(String line) { /* parse it */ }
 }
 ```
+
+A few rules for parsers:
+
+- **Build entries with `LogEntry.builder(line)`** and set only what your format has. Values
+  added to `LogEntry` in later API versions come with a builder method and a default, so a
+  parser written this way keeps working.
+- **Timezones.** Users can say which timezone a log was written in. Clouseau calls
+  `parse(line, writtenIn)`; its default calls your `parse(line)` and moves the time from your
+  computer's timezone to `writtenIn`, which is right if your timestamps never have an offset.
+  If they can (`2026-03-27T08:00:00Z`, `+02:00`), override `parse(line, writtenIn)` instead,
+  read a time without an offset in `writtenIn`, and keep the offset of one that has it:
+
+  ```java
+  @Override public LogEntry parse(String line) { return parse(line, ZoneId.systemDefault()); }
+
+  @Override public LogEntry parse(String line, ZoneId writtenIn) {
+      // DateTimeFormatter.withZone(writtenIn): an offset in the text wins over writtenIn
+      Instant time = FORMAT.withZone(writtenIn).parse(timeText, Instant::from);
+      return LogEntry.builder(line).timestamp(time) /* … */ .build();
+  }
+  ```
+- **Threads.** One instance serves every tab, from several background threads at once, so
+  keep a parser stateless (or thread-safe).
+- **Failures.** If `canParse` or `parse` throws, or `parse` returns `null`, the line shows as
+  an unparsed line; the first failure is logged.
 
 Build the JAR with `./gradlew :clouseau-example-plugin:jar` (it lands in
 `clouseau-example-plugin/build/libs/`), drop it in the `plugins` folder of the

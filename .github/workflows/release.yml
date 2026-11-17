@@ -36,9 +36,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
-      - name: Run tests
+      - name: Run tests and checks
         shell: bash
-        run: ./gradlew test
+        run: ./gradlew check   # the tests, third-party notices and plugin API compatibility
 
       - name: Extract version from tag
         id: version

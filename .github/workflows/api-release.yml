@@ -47,8 +47,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
 
       # Every module builds on the API, so all of it must pass.
-      - name: Run tests
-        run: ./gradlew test
+      - name: Run tests and checks
+        run: ./gradlew check   # the tests, third-party notices and plugin API compatibility
 
       # Signed when the SIGNING_KEY and SIGNING_PASSWORD secrets are set (Maven Central needs it).
       - name: Build the API jars

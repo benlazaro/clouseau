@@ -23,8 +23,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
-      - name: Run tests
-        run: ./gradlew test
+      - name: Run tests and checks
+        run: ./gradlew check   # the tests, third-party notices and plugin API compatibility
 
       - name: Build fat JAR
         run: ./gradlew :clouseau-ui:shadowJar -PappVersion=edge

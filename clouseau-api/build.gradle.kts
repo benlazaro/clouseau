@@ -9,6 +9,7 @@ plugins {
     java
     `maven-publish`
     signing
+    id("me.champeau.gradle.japicmp") version "0.4.6"
 }
 
 val apiVersion: String = Regex("""VERSION\s*=\s*"([^"]+)"""")
@@ -26,6 +27,66 @@ java {
     withSourcesJar()
     withJavadocJar()
 }
+
+// A stable module name for plugins built as Java modules; without it, the name would come from
+// the jar's file name.
+tasks.jar {
+    manifest {
+        attributes("Automatic-Module-Name" to "com.droidenx.clouseau.api")
+    }
+}
+
+// ── Compatibility with the released API ─────────────────────────────────────────────────────
+// checkApiCompatibility (part of check) compares this jar with the last API on Maven Central and
+// fails on any change that would break a plugin built against it: a removed or changed class,
+// method or field, or a new abstract method in an interface (binary-compatible by the JLS, but
+// every plugin implementing the interface would then fail when Clouseau calls it). The report is
+// build/reports/japicmp/. After an API release is published, set apiBaseline to it.
+//
+// A deliberate break (a new minor version while 0.x, a new major after): bump ClouseauApi.VERSION,
+// set allowBreakingChanges to true for that release, and back to false once it's the baseline.
+val apiBaseline = "0.2.0"
+val allowBreakingChanges = false
+
+val apiBaselineJar: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    isTransitive = false
+}
+// The released jar, fetched by its Maven Central path under a made-up group: asked for as
+// com.droidenx.clouseau:clouseau-api, Gradle would resolve it to this project (same coordinates)
+// and compare the jar with itself.
+repositories {
+    ivy {
+        name = "releasedApi"
+        url = uri("https://repo1.maven.org/maven2/")
+        patternLayout { artifact("com/droidenx/clouseau/[module]/[revision]/[module]-[revision].[ext]") }
+        metadataSources { artifact() }
+        content { includeGroup("released-clouseau-api") }
+    }
+}
+dependencies {
+    apiBaselineJar("released-clouseau-api:clouseau-api:$apiBaseline@jar")
+}
+
+val checkApiCompatibility = tasks.register<me.champeau.gradle.japicmp.JapicmpTask>("checkApiCompatibility") {
+    group = "verification"
+    description = "Fails if the API breaks plugins built against clouseau-api $apiBaseline."
+    oldClasspath.from(apiBaselineJar)
+    newClasspath.from(tasks.jar)
+    // PF4J's ExtensionPoint is compileOnly: on neither classpath.
+    ignoreMissingClasses.set(true)
+    // The report lists every change; the build fails only on a binary or source incompatibility.
+    // (onlyBinaryIncompatibleModified would hide a new abstract method, which is source-incompatible.)
+    onlyBinaryIncompatibleModified.set(false)
+    failOnSourceIncompatibility.set(!allowBreakingChanges)
+    // 0.3.0 turned LogEntry, SourceSetting and Span from records into final classes with the same
+    // constructors and methods. That drops java.lang.Record as their superclass, which no plugin can
+    // depend on. Accepted against 0.2.0 only.
+    if (apiBaseline == "0.2.0") compatibilityChangeExcludes.set(listOf("SUPERCLASS_REMOVED"))
+    txtOutputFile.set(layout.buildDirectory.file("reports/japicmp/api-compatibility.txt"))
+    htmlOutputFile.set(layout.buildDirectory.file("reports/japicmp/api-compatibility.html"))
+}
+tasks.named("check") { dependsOn(checkApiCompatibility) }
 
 tasks.javadoc {
     (options as StandardJavadocDocletOptions).apply {

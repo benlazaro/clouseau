@@ -212,7 +212,9 @@ columns keep their widths, order and hiding.
 Log timestamps usually don't say which timezone they're in, so Clouseau keeps two:
 
 - **Written in** belongs to the log: the timezone its timestamps were written in. It
-  starts as your computer's timezone and is remembered for each file.
+  starts as your computer's timezone and is remembered for each file. A timestamp that
+  says its own offset, such as `2026-03-27T08:00:00Z` or `+02:00` in a JSON log, already
+  says when it happened, so **Written in** doesn't change it.
 - **Show times in** belongs to you: the timezone every tab shows times in, and the one the
   **Time** filter's **From** and **To** use. It's the same setting as in
   [Settings](settings.md).

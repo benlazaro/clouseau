@@ -97,6 +97,19 @@ public final class ParserList {
         }
 
         @Override
+        public LogEntry parse(String rawLine, java.time.ZoneId writtenIn) {
+            try {
+                LogEntry entry = delegate.parse(rawLine, writtenIn);
+                if (entry != null) return entry;
+                throw new IllegalStateException("parse returned null");
+            } catch (RuntimeException e) {
+                if (parseFailed.compareAndSet(false, true))
+                    log.warn("Plugin parser '{}' failed in parse; showing the line as UNKNOWN", name, e);
+                return new LogEntry(null, LogEntry.LogLevel.UNKNOWN, null, null, rawLine, rawLine, Map.of());
+            }
+        }
+
+        @Override
         public List<String> customFields() {
             try {
                 List<String> fields = delegate.customFields();
