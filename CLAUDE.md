@@ -123,7 +123,8 @@ reads, so bump only that constant. Release it only when the API changes: tag the
 `docs/releases/api-v<VERSION>.md`, same format. It runs the tests, builds the jar, sources, Javadoc
 and POM (signed with the `SIGNING_KEY`/`SIGNING_PASSWORD` secrets), uploads them to Maven Central
 (namespace `com.droidenx`, Portal user token in `CENTRAL_USERNAME`/`CENTRAL_PASSWORD`) and waits
-for Central's checks, then attaches them to a GitHub release that is never marked Latest; the
+for Central's checks, then attaches them to a GitHub release that is never marked Latest (a pre-release while the API
+is 0.x, or GitHub shows it as Latest anyway, since every app release is a pre-release); the
 update check ignores `api-v*` tags. The Central deployment is `USER_MANAGED`: after the run, click
 **Publish** under Publish → Deployments at central.sonatype.com (a version on Central can never be
 replaced or removed). The signing key is RSA 4096 `7541ACF1F02F4686` (`gpg@droidenx.com`, on

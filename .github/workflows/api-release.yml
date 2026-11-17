@@ -121,7 +121,9 @@ jobs:
           # A re-run finds the release already there and only uploads again.
           if gh release view "$TAG" > /dev/null 2>&1; then exit 0; fi
           prerelease=()
-          if [[ "$TAG" == *-*-* ]]; then prerelease=(--prerelease); fi   # api-v1.0.0-rc.1
+          # A pre-release while the API is 0.x, or with a suffix (api-v1.0.0-rc.1). GitHub shows the
+          # newest full release as Latest even with --latest=false, and app releases are pre-releases.
+          if [[ "$TAG" == api-v0.* || "$TAG" == *-*-* ]]; then prerelease=(--prerelease); fi
           # Notes written for plugin authors in docs/releases/<tag>.md, first line
           # "Title: <the release's title>", as for app releases. Else GitHub's list of commits.
           notes=(--generate-notes)

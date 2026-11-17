@@ -2322,7 +2322,8 @@ Plugins compile against `clouseau-api`, but releases published only the app, so 
 author had to build the API from this repository. Now the API module's version is
 `ClouseauApi.VERSION` (its build script reads the constant, so code, jar and POM agree), and
 the API Release workflow publishes `com.droidenx.clouseau:clouseau-api` on `api-v*` tags: the
-jar, sources, Javadoc and POM, attached to a GitHub release that is never Latest. It is
+jar, sources, Javadoc and POM, attached to a GitHub release that is never Latest (and a pre-release while the API is 0.x,
+since GitHub otherwise shows the only full release as Latest even when told not to). It is
 released only when the API changes, because a published version can't be replaced, and many
 app releases can share one API version. The group is under `com.droidenx`, the domain the
 packages already use, so Maven Central can verify it. The POM declares no dependencies (PF4J
