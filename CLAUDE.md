@@ -57,7 +57,10 @@ clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo L
 - `clouseau-plugin` depends only on `clouseau-core`.
 - `clouseau-ui` may depend on `clouseau-core` and `clouseau-plugin`.
 - Third-party plugins depend only on `clouseau-api`, as `compileOnly`. `clouseau-example-plugin`
-  follows the same rule; only `clouseau-plugin`'s tests use its JAR (as a file, never on the classpath).
+  follows the same rule, using the released API from Maven Central (its `clouseauApi` version),
+  not `project(":clouseau-api")`, so it can use a new API only once that's released. Only
+  `clouseau-plugin`'s tests use its JAR (as a file, never on the classpath), which checks that a
+  plugin built for the released API still loads.
 - Anything that doesn't need Swing belongs in `clouseau-core`, not `clouseau-ui`.
 
 There is no built-in parser plugin module: built-in parsers are regex definitions in

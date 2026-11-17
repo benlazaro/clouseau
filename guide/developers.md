@@ -94,7 +94,10 @@ you don't need a plugin: create it in the [parser editor](parsers.md) instead.
 
 The quickest start is to copy **[`clouseau-example-plugin`](https://github.com/benlazaro/clouseau/tree/main/clouseau-example-plugin)**, a
 complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
-(`time=… level=info msg="…" key=value`). It shows everything a plugin needs:
+(`time=… level=info msg="…" key=value`). It builds against the released API from Maven Central,
+just as your plugin will. When you copy it out of the Clouseau repository, add
+`repositories { mavenCentral() }` and replace `rootProject.extra["pf4jVersion"]` with `3.12.0`,
+since those come from Clouseau's own build. It shows everything a plugin needs:
 
 - **Dependencies:** `clouseau-api` and PF4J as `compileOnly` (the app provides both, so don't
   bundle them in your JAR), plus PF4J as an `annotationProcessor`, which writes
