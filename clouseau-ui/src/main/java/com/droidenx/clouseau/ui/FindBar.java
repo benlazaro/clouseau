@@ -66,6 +66,8 @@ final class FindBar extends JPanel {
     private Set<Integer>  matchModelRows = Set.of();
     /** The query the current matches are for, lower case; null with none. */
     private String matchedQuery;
+    /** The query being found or last found, as typed; null when the bar has none. */
+    private String activeQuery;
     /** Matching model rows in view order. */
     private List<Integer> matches = List.of();
     private int cursor = -1;
@@ -245,6 +247,8 @@ final class FindBar extends JPanel {
     /** Hides the bar, drops the matches and returns focus to the table. */
     private void close() {
         setVisible(false);
+        activeQuery = null;
+        searcher.cancel();
         clearMatches();
         table.requestFocusInWindow();
     }
@@ -284,28 +288,44 @@ final class FindBar extends JPanel {
 
     void search(String query) {
         if (query == null || query.isBlank()) {
-            searcher.cancel();
-            clearMatches();
+            cancel();
             return;
         }
+        activeQuery = query;
+        find(query, true);
+    }
+
+    private void find(String query, boolean select) {
         // Read in the background: on an indexed file, every visible row comes from disk.
         searcher.find(query.toLowerCase(), percent -> {
             ClouseauColors.themedForeground(counter, ClouseauColors::dimForeground);
             counter.setText(MessageFormat.format(Messages.get("find.searching"), percent));
         }, rows -> {
             matchedQuery = query.toLowerCase();
-            showMatches(rows);
+            showMatches(rows, select);
         });
     }
 
     /** Stops a running find, e.g. when the tab's content is replaced. */
     void cancel() {
+        activeQuery = null;
         searcher.cancel();
         clearMatches();
     }
 
-    /** Shows the result of a find: the matching model rows. */
-    private void showMatches(int[] modelRows) {
+    /**
+     * The table's rows changed (filtered, trimmed or reloaded), so the matches' model rows
+     * no longer point at the same entries: drops them and finds again in the rows shown now,
+     * leaving the selection where it is.
+     */
+    void rowsChanged() {
+        if (activeQuery == null) return;
+        clearMatches();
+        find(activeQuery, false);
+    }
+
+    /** Shows the result of a find: the matching model rows, selecting the first if {@code select}. */
+    private void showMatches(int[] modelRows, boolean select) {
         List<Integer> list = new ArrayList<>();
         Set<Integer>  set  = new HashSet<>();
         for (int modelRow : modelRows) {
@@ -324,7 +344,7 @@ final class FindBar extends JPanel {
         highlightBtn.setEnabled(n > 0);
         highlightBtn.setToolTipText(n > 0 ? MessageFormat.format(Messages.get("find.highlight.tooltip"), n) : null);
         repaintTable();
-        if (n > 0) navigate(+1);
+        if (n > 0 && select) navigate(+1);
     }
 
     static boolean matches(LogEntry entry, String lower) {

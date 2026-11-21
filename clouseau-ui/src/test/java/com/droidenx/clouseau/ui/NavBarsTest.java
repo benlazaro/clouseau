@@ -75,6 +75,33 @@ class NavBarsTest {
         assertThat(FindBar.matches(new LogEntry(null, null, null, null, null, "raw", null), "x")).isFalse();
     }
 
+    /** Issue 7: stepping after a filter hid rows threw, as the matches were the old rows. */
+    @Test
+    void findMatchesFollowAFilter() throws Exception {
+        onEdt(() -> table.setRowSorter(new LogRowSorter(model)));
+        FindBar bar = onEdt(() -> new FindBar(table, FindBar.searchIn(model)));
+        onEdt(() -> model.addTableModelListener(e -> bar.rowsChanged()));
+        onEdt(() -> bar.search("NEEDLE"));
+        awaitCounter(bar, "1 / 2");
+
+        // Keep entries 5..9: the needle in entry 8 is now row 3, and row 8 is gone.
+        onEdt(() -> model.applyFilter(e -> e.message().charAt(e.message().length() - 1) >= '5'));
+        awaitCounter(bar, "1 match");
+        assertThat(onEdt(() -> bar.isMatch(3) && !bar.isMatch(8))).isTrue();
+
+        onEdt(() -> bar.navigate(+1));
+        assertThat(selectedRow()).isEqualTo(3);
+        assertThat(onEdt(bar::counterText)).isEqualTo("1 / 1");
+    }
+
+    private static void awaitCounter(FindBar bar, String text) throws Exception {
+        long deadline = System.currentTimeMillis() + 5_000;
+        while (!text.equals(onEdt(bar::counterText)) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20);
+        }
+        assertThat(onEdt(bar::counterText)).isEqualTo(text);
+    }
+
     @Test
     void matchCountReadsNaturally() {
         String pattern = Messages.get("find.count");

@@ -217,6 +217,10 @@ final class SharedTabContext {
             // Filtering, loading or trimming changes which highlighted rows show.
             if (e.getType() != TableModelEvent.UPDATE || e.getLastRow() == Integer.MAX_VALUE)
                 highlightNavBar.refresh();
+            // ...and moves rows, so the find's matches go stale; appending moves none.
+            if (e.getType() == TableModelEvent.DELETE
+                    || e.getType() == TableModelEvent.UPDATE && e.getLastRow() == Integer.MAX_VALUE)
+                findBar.rowsChanged();
         });
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
