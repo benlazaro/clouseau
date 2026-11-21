@@ -11,3 +11,9 @@ data/
 
 # Claude desktop app preview servers (local only)
 .claude/launch.json
+
+# Clouseau notes files written next to opened logs
+*.clouseau
+
+# Scratch output from Claude sessions
+/Claude outputs/
