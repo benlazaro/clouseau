@@ -35,7 +35,7 @@ final class DetailFindBar extends JPanel {
     private final JToggleButton caseToggle = new JToggleButton(Messages.get("detail.find.case"));
     private final JToggleButton regexToggle = new JToggleButton(Messages.get("detail.find.regex"));
     private final JLabel counter = new JLabel();
-    private final WrapNotice wrapNotice = new WrapNotice();
+    private final WrapNotice wrapNotice = new WrapNotice(field);
     /** Where focus goes when the strip closes. */
     private final Runnable focusBack;
 

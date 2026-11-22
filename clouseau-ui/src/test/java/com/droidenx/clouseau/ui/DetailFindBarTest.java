@@ -75,10 +75,12 @@ class DetailFindBarTest {
         assertThat(bar.wrapNoteText()).isNull();                // 1 → 2, no wrap
         edt(() -> bar.step(+1));
         assertThat(bar.wrapNoteText()).isEqualTo(Messages.get("find.wrapped.top"));
+        assertThat(bar.field().getBackground()).isNotEqualTo(UIManager.getColor("TextField.background"));
         edt(() -> bar.step(-1));
         assertThat(bar.wrapNoteText()).isEqualTo(Messages.get("find.wrapped.bottom"));
         edt(() -> bar.step(-1));
         assertThat(bar.wrapNoteText()).isNull();                // an ordinary step hides it
+        assertThat(bar.field().getBackground()).isEqualTo(UIManager.getColor("TextField.background"));
     }
 
     @Test

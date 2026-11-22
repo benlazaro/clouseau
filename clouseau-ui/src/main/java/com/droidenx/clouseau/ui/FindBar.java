@@ -62,7 +62,7 @@ final class FindBar extends JPanel {
     private final Search searcher;
     private final JTextField field = new JTextField();
     private final JLabel counter = new JLabel();
-    private final WrapNotice wrapNotice = new WrapNotice();
+    private final WrapNotice wrapNotice = new WrapNotice(field);
 
     private Set<Integer>  matchModelRows = Set.of();
     /** The query the current matches are for, lower case; null with none. */
