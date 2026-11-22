@@ -62,6 +62,7 @@ final class FindBar extends JPanel {
     private final Search searcher;
     private final JTextField field = new JTextField();
     private final JLabel counter = new JLabel();
+    private final WrapNotice wrapNotice = new WrapNotice();
 
     private Set<Integer>  matchModelRows = Set.of();
     /** The query the current matches are for, lower case; null with none. */
@@ -155,6 +156,7 @@ final class FindBar extends JPanel {
         add(label);
         add(field, "growx");
         add(counter);
+        add(wrapNotice, "hidemode 3");
         add(prevBtn);
         add(nextBtn);
         add(highlightBtn, "hidemode 3");
@@ -282,6 +284,7 @@ final class FindBar extends JPanel {
         matchedQuery   = null;
         cursor         = -1;
         highlightBtn.setEnabled(false);
+        wrapNotice.clear();
         counter.setText("");
         repaintTable();
     }
@@ -363,28 +366,42 @@ final class FindBar extends JPanel {
     /** Whether the bar is open with something typed, so Find Next / Previous can step. */
     boolean hasQuery() { return isVisible() && !field.getText().isBlank(); }
 
+    /** The wrap note's text while it shows, else null; for tests. */
+    String wrapNoteText() { return wrapNotice.isVisible() ? wrapNotice.getText() : null; }
+
     /** What's typed in the field, as typed. */
     String query() { return field.getText(); }
 
+    /**
+     * The next (+1) or previous (-1) match, wrapping round; going past the last or first match
+     * says so for a moment ({@link WrapNotice}).
+     */
     void navigate(int direction) {
         if (matches.isEmpty()) return;
+        boolean wrapped;
         if (cursor < 0) {
+            // The first step starts from the selected row; with none after (before) it, it wraps.
             int currentView  = table.getSelectedRow();
             int currentModel = currentView >= 0 ? table.convertRowIndexToModel(currentView) : -1;
+            boolean found = false;
             cursor = 0;
             if (direction > 0) {
                 for (int i = 0; i < matches.size(); i++) {
-                    if (matches.get(i) >= currentModel) { cursor = i; break; }
+                    if (matches.get(i) >= currentModel) { cursor = i; found = true; break; }
                 }
             } else {
                 cursor = matches.size() - 1;
                 for (int i = matches.size() - 1; i >= 0; i--) {
-                    if (matches.get(i) <= currentModel) { cursor = i; break; }
+                    if (matches.get(i) <= currentModel) { cursor = i; found = true; break; }
                 }
             }
+            wrapped = !found && currentModel >= 0;
         } else {
+            int from = cursor;
             cursor = (cursor + direction + matches.size()) % matches.size();
+            wrapped = WrapNotice.isWrap(from, cursor, direction, matches.size());
         }
+        if (wrapped) wrapNotice.wrapped(direction > 0); else wrapNotice.clear();
         int viewRow = table.convertRowIndexToView(matches.get(cursor));
         if (viewRow >= 0) {
             table.setRowSelectionInterval(viewRow, viewRow);

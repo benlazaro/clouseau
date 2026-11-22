@@ -143,7 +143,8 @@ focus is in the panel or with its header's search button (`Ctrl+F` elsewhere ope
 table's find bar). It searches the entry as shown, so formatted JSON is searched formatted,
 with **Aa** (match case) and **.\*** (regular expression) toggles. Every match gets Find's
 light mark and the current one an amber box, scrolled into view; `Enter` / `Shift+Enter` and
-`F3` / `Shift+F3` step through them, `Esc` closes it. The query stays as the selection moves:
+`F3` / `Shift+F3` step through them, wrapping round with a brief "Back to the first match"
+note (as the table's find bar does), and `Esc` closes it. The query stays as the selection moves:
 each new entry is searched again and shown at its first match. Its first query is the
 selected text, else the table's find query. It searches text only; it doesn't know JSON
 paths or HL7 field numbers (`PID-5`).

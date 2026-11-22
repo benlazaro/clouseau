@@ -126,14 +126,18 @@ class NavBarsTest {
 
         onEdt(() -> bar.navigate(+1));
         assertThat(selectedRow()).isEqualTo(8);
+        assertThat(onEdt(bar::wrapNoteText)).isNull();
         onEdt(() -> bar.navigate(+1));
         assertThat(selectedRow()).isEqualTo(3);
+        assertThat(onEdt(bar::wrapNoteText)).isEqualTo(Messages.get("find.wrapped.top"));
         onEdt(() -> bar.navigate(-1));
         assertThat(selectedRow()).isEqualTo(8);
+        assertThat(onEdt(bar::wrapNoteText)).isEqualTo(Messages.get("find.wrapped.bottom"));
 
         onEdt(bar::clearMatches);
         assertThat(onEdt(() -> bar.isMatch(3))).isFalse();
         assertThat(onEdt(bar::counterText)).isEmpty();
+        assertThat(onEdt(bar::wrapNoteText)).isNull();
     }
 
     // ── Highlight navigation bar ─────────────────────────────────────────────

@@ -77,7 +77,8 @@ searches every row.)
 - Every match is marked, and the current one is boxed in amber and scrolled into view. The
   count shows which one it is, such as **2 / 5**.
 - `Enter` or `F3` goes to the next match, `Shift+Enter` or `Shift+F3` to the previous one.
-  `Esc` closes the strip.
+  Past the last match it goes back to the first, and the strip says **↻ Back to the first
+  match** for a moment (**↺ Back to the last match** going backwards). `Esc` closes the strip.
 - **Aa** matches case. **.\*** treats the text as a regular expression, so `^OBX\|` finds
   every OBX segment of an HL7 message.
 - The search stays when you select another row. Move through the table with `↑` `↓` and
@@ -154,7 +155,9 @@ filter reads the text of the remaining rows in the background; the status bar sh
 `Ctrl+F` (**Edit → Find…**) opens the find bar. It searches every column of the rows the filters show.
 
 - `Enter`, `F3` or **▼** goes to the next match, `Shift+Enter`, `Shift+F3` or **▲** to the
-  previous one. `F3` works from the table too.
+  previous one. `F3` works from the table too. Past the last match it goes back to the first,
+  and the bar says **↻ Back to the first match** for a moment (**↺ Back to the last match**
+  going backwards), so you know you've seen them all.
 - Each match is marked with a light box around the matching text, in every column, so a
   highlighted row keeps its color and still shows what matched. A short bar at the
   table's left edge marks every matching row, including one that matched only in a

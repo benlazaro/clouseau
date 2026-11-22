@@ -67,6 +67,31 @@ class DetailFindBarTest {
     }
 
     @Test
+    void steppingPastTheEndSaysItWrapped() throws Exception {
+        DetailFindBar bar = bar("x a x");
+        edt(() -> bar.open("x"));
+        assertThat(bar.wrapNoteText()).isNull();
+        edt(() -> bar.step(+1));
+        assertThat(bar.wrapNoteText()).isNull();                // 1 → 2, no wrap
+        edt(() -> bar.step(+1));
+        assertThat(bar.wrapNoteText()).isEqualTo(Messages.get("find.wrapped.top"));
+        edt(() -> bar.step(-1));
+        assertThat(bar.wrapNoteText()).isEqualTo(Messages.get("find.wrapped.bottom"));
+        edt(() -> bar.step(-1));
+        assertThat(bar.wrapNoteText()).isNull();                // an ordinary step hides it
+    }
+
+    @Test
+    void wrapDetection() {
+        assertThat(WrapNotice.isWrap(2, 0, +1, 3)).isTrue();
+        assertThat(WrapNotice.isWrap(0, 2, -1, 3)).isTrue();
+        assertThat(WrapNotice.isWrap(0, 1, +1, 3)).isFalse();
+        assertThat(WrapNotice.isWrap(2, 1, -1, 3)).isFalse();
+        assertThat(WrapNotice.isWrap(0, 0, +1, 1)).isTrue();    // the only match, again
+        assertThat(WrapNotice.isWrap(-1, 0, +1, 3)).isFalse();  // the first step
+    }
+
+    @Test
     void typingIsFoundOnTheNextStepWithoutWaitingForTheDebounce() throws Exception {
         DetailFindBar bar = bar("PID|1\nOBX|1\nOBX|2");
         edt(() -> bar.open(null));

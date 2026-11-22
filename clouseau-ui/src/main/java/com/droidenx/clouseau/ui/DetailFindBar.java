@@ -35,6 +35,7 @@ final class DetailFindBar extends JPanel {
     private final JToggleButton caseToggle = new JToggleButton(Messages.get("detail.find.case"));
     private final JToggleButton regexToggle = new JToggleButton(Messages.get("detail.find.regex"));
     private final JLabel counter = new JLabel();
+    private final WrapNotice wrapNotice = new WrapNotice();
     /** Where focus goes when the strip closes. */
     private final Runnable focusBack;
 
@@ -99,6 +100,7 @@ final class DetailFindBar extends JPanel {
         add(caseToggle);
         add(regexToggle);
         add(counter, "wmin 70");
+        add(wrapNotice, "hidemode 3");
         add(prev);
         add(next);
         add(closeBtn);
@@ -127,6 +129,7 @@ final class DetailFindBar extends JPanel {
         matches = List.of();
         cursor = -1;
         counter.setText("");
+        wrapNotice.clear();
         focusBack.run();
     }
 
@@ -144,14 +147,23 @@ final class DetailFindBar extends JPanel {
         research(newEntry);
     }
 
-    /** The next (+1) or previous (-1) match, wrapping around, scrolled into view. */
+    /**
+     * The next (+1) or previous (-1) match, wrapping around, scrolled into view. Going past the
+     * last or first match says so for a moment ({@link WrapNotice}).
+     */
     void step(int direction) {
         if (debounce != null && debounce.isRunning()) { debounce.stop(); research(false); }
         if (matches.isEmpty()) return;
+        int from = cursor;
         cursor = cursor < 0 ? (direction > 0 ? 0 : matches.size() - 1)
                             : Math.floorMod(cursor + direction, matches.size());
+        if (WrapNotice.isWrap(from, cursor, direction, matches.size())) wrapNotice.wrapped(direction > 0);
+        else wrapNotice.clear();
         showCurrent();
     }
+
+    /** The wrap note's text while it shows, else null; for tests. */
+    String wrapNoteText() { return wrapNotice.isVisible() ? wrapNotice.getText() : null; }
 
     // For tests.
     String counterText() { return counter.getText(); }
@@ -184,6 +196,7 @@ final class DetailFindBar extends JPanel {
     /** Finds the query again; {@code jump} goes to the first match, else the current one stays. */
     private void research(boolean jump) {
         String query = field.getText();
+        if (jump) wrapNotice.clear();      // a new query or entry starts afresh
         TextMatches.Result result = TextMatches.find(documentText(), query,
                 caseToggle.isSelected(), regexToggle.isSelected());
         clearMarks();
