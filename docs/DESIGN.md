@@ -453,6 +453,20 @@ what was logged. A formatter that decodes binary data should still turn it into 
 text itself (for example, decode UTF-16 runs and show the other bytes as hex), since a NUL
 after every character reads badly even as a picture.
 
+**Find in the entry.** `DetailFindBar` (ui), under the panel's header, searches the panel's
+document text, the formatted message and the field lines, with `TextMatches` (core: plain
+or regex, optional case, no empty or overlapping matches, at most 10,000). One entry is
+small, so it runs on the EDT with no worker. Its marks are the text component's own
+highlights, painted under the text by a non-layered painter that draws one box per line
+over the whole match (a layered painter would draw one per colored run, splitting a match
+across JSON's colors). Other matches use Find's `Clouseau.findMarkBg`/`findMarkBorder`, the
+current one `Clouseau.findCurrentBg`/`findCurrentBorder` (accent amber). The bar removes
+only its own highlight tags, never the caret's selection or the copy flash. Each render
+calls `textChanged(newEntry)`: a new entry goes to its first match, a redraw of the same
+entry keeps the current match and the scroll. `Ctrl+F` and `F3` are window-wide (UC-15) and
+routed by focus in `SharedTabContext`: focus inside the panel goes to its find, anywhere
+else to the table's find bar.
+
 ### 6.6 Annotations (UC-7 to UC-9)
 
 `AnnotationStore` (core) holds the annotations and row highlights for one file. Each records its note,

@@ -220,6 +220,13 @@ public final class ClouseauColors {
     public static Color findMarkBackground() { return get("Clouseau.findMarkBg", "Table.background"); }
     public static Color findMarkBorder()     { return get("Clouseau.findMarkBorder", "Label.foreground"); }
 
+    /**
+     * The detail pane's current find match: Find's mark in the accent amber, so it stands out
+     * from the other matches' light boxes.
+     */
+    public static Color findCurrentBackground() { return get("Clouseau.findCurrentBg", "Clouseau.findMarkBg", "Table.selectionBackground"); }
+    public static Color findCurrentBorder()     { return get("Clouseau.findCurrentBorder", "Component.focusColor", "Label.foreground"); }
+
     // ── Row-highlight palette ─────────────────────────────────────────────────
 
     /** Returns the 8-color highlight palette, reading from UIManager when available. */

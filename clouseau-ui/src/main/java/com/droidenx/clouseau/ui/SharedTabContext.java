@@ -387,7 +387,8 @@ final class SharedTabContext {
 
     /** F3 / Shift+F3: the next or previous match, or the find bar when nothing is searched yet. */
     void findStep(int direction) {
-        if (plainView == null && findBar.hasQuery()) findBar.navigate(direction);
+        if (plainView == null && detailPanel.hasFocusInside()) detailPanel.findStep(direction);
+        else if (plainView == null && findBar.hasQuery()) findBar.navigate(direction);
         else openFind();
     }
 
@@ -424,9 +425,13 @@ final class SharedTabContext {
 
     void clearFilters() { filterBar.clear(); }
 
-    /** Ctrl+F: the plain-text view's find, or the find bar. */
+    /**
+     * Ctrl+F: the plain-text view's find; with focus in the detail pane, the pane's find (its
+     * first query the table's); else the table's find bar.
+     */
     void openFind() {
         if (plainView != null) plainView.openFind();
+        else if (detailPanel.hasFocusInside()) detailPanel.openFind(findBar.hasQuery() ? findBar.query() : null);
         else findBar.open();
     }
 

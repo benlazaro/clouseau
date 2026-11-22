@@ -711,6 +711,7 @@ public final class MainFrame extends JFrame {
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.next"),  Messages.get("shortcuts.key.find.next"));
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.prev"),  Messages.get("shortcuts.key.find.prev"));
         addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.close"), Messages.get("shortcuts.key.esc"));
+        addShortcutRow(grid, Messages.get("shortcuts.shortcut.find.detail"), Messages.get("shortcuts.key.find.detail"));
 
         // Close is plain, not the default: the window applies nothing.
         JButton close = new JButton(Messages.get("shortcuts.button.close"));

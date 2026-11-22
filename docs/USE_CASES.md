@@ -133,8 +133,20 @@ too. A zip that is a review bundle (UC-9) opens its log directly.
    and any structured payload (such as JSON) formatted and syntax-highlighted.
 4. Optionally, the user applies their own highlight colors to rows and jumps between
    highlights of a given color.
+5. In a long entry (a pretty-printed JSON payload, an HL7 message), the user finds text in
+   the detail panel itself, and keeps that search while moving from row to row.
 
 **Success:** A user can find the first ERROR in a log much faster than in a text editor.
+
+**Current behavior:** Step 5 is the detail panel's own find strip, opened with `Ctrl+F` while
+focus is in the panel or with its header's search button (`Ctrl+F` elsewhere opens the
+table's find bar). It searches the entry as shown, so formatted JSON is searched formatted,
+with **Aa** (match case) and **.\*** (regular expression) toggles. Every match gets Find's
+light mark and the current one an amber box, scrolled into view; `Enter` / `Shift+Enter` and
+`F3` / `Shift+F3` step through them, `Esc` closes it. The query stays as the selection moves:
+each new entry is searched again and shown at its first match. Its first query is the
+selected text, else the table's find query. It searches text only; it doesn't know JSON
+paths or HL7 field numbers (`PID-5`).
 
 ### UC-4 · Focus on specific loggers ✅
 

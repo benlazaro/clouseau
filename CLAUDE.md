@@ -45,7 +45,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
                     MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
-                    UpdateCheck, SshSaved, SyntaxLayers
+                    UpdateCheck, SshSaved, SyntaxLayers, TextMatches
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -192,6 +192,7 @@ release only.
   `TabStatusBar` (ui) is a tab's path, timezone badge and row counts; `RestoredTab` (ui) its session message card,
   deferred load and "filters restored" strip (D-19).
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
+  `DetailFindBar` (ui) is its find strip (Ctrl+F with focus in the pane), matching with `TextMatches` (core).
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.
 - `DialogFooter`, `NoticeLabel`, `PromptDialog`, `ManagerDialogs` (ui) — the dialog building blocks

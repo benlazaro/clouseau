@@ -61,8 +61,30 @@ hidden: **Log entry · file line 41**, **Log entry · db.log, line 41** in a mer
 - **Aa** opens the text size: **−** and **+** around the current size, and **Reset**. With
   the panel focused, `Ctrl`+mouse wheel, `Ctrl`+`+` and `Ctrl`+`-` change it too, and the new
   size shows briefly in the middle of the panel.
+- The **search** button opens [Find in the entry](#find-in-the-entry).
 - Drag the bar between the table and the panel to resize them. Files you open later start
   with the same split, even after a restart.
+
+### Find in the entry
+
+To search inside a long entry, such as a JSON payload or an HL7 message, click in the
+panel and press `Ctrl+F`, or click the search button in its header. A find strip opens
+under the header. (`Ctrl+F` with the table focused opens the table's find bar, which
+searches every row.)
+
+- It searches the entry as you see it: a pretty-printed JSON message is searched
+  pretty-printed, and the field lines above the message are searched too.
+- Every match is marked, and the current one is boxed in amber and scrolled into view. The
+  count shows which one it is, such as **2 / 5**.
+- `Enter` or `F3` goes to the next match, `Shift+Enter` or `Shift+F3` to the previous one.
+  `Esc` closes the strip.
+- **Aa** matches case. **.\*** treats the text as a regular expression, so `^OBX\|` finds
+  every OBX segment of an HL7 message.
+- The search stays when you select another row. Move through the table with `↑` `↓` and
+  each entry opens at its first match, which makes it easy to compare one value across many
+  lines.
+- If you selected text in the panel, `Ctrl+F` searches for it. Otherwise the strip starts
+  with what the table's find bar is searching for.
 
 Control characters in a field, such as a NUL byte or the escape that starts a terminal color
 code, are shown dimmed as their symbols (`␀`, `␛`) so you can see they're there. Copying

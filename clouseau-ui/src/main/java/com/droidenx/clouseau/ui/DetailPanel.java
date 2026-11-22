@@ -90,6 +90,8 @@ final class DetailPanel extends JPanel {
     private boolean blank;
     private final JTextPane detailArea;
     private final JScrollPane detailScroll;
+    /** Find in this entry: Ctrl+F with focus in the pane, or the header's search button. */
+    private final DetailFindBar findBar;
 
     private String  lastFormattedMessage = "";
     private int     messageFieldStart    = -1;
@@ -128,7 +130,12 @@ final class DetailPanel extends JPanel {
         ClouseauColors.themedForeground(detailArea, ClouseauColors::foreground);
         detailArea.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
-        add(buildHeader(), BorderLayout.NORTH);
+        findBar = new DetailFindBar(detailArea, detailArea::requestFocusInWindow);
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+        top.add(buildHeader(), BorderLayout.NORTH);
+        top.add(findBar, BorderLayout.SOUTH);
+        add(top, BorderLayout.NORTH);
         installKeys();
         installContextMenu();
         detailScroll = new JScrollPane(detailArea);
@@ -238,6 +245,13 @@ final class DetailPanel extends JPanel {
         tools.add(wrapToggle);
         tools.add(verticalSeparator(), "gapx 4 4");
 
+        JButton findBtn = new JButton(new com.formdev.flatlaf.icons.FlatSearchIcon());
+        findBtn.setToolTipText(Messages.get("detail.find.tooltip"));
+        findBtn.putClientProperty("JButton.buttonType", "borderless");
+        findBtn.setFocusable(false);
+        findBtn.addActionListener(e -> openFind(null));
+        tools.add(findBtn);
+
         // Text size: one "Aa" button; its popup labels the stepper and offers Reset.
         tools.add(buildTextSizeButton());
         // Copying is in the right-click menus, the Edit menu and the shortcuts, not a button here.
@@ -334,6 +348,31 @@ final class DetailPanel extends JPanel {
     boolean hasEntry() { return shown != null; }
 
     boolean wrapLines() { return wrapLines; }
+
+    /** Whether keyboard focus is somewhere in the pane: Ctrl+F and F3 then find in the entry. */
+    boolean hasFocusInside() {
+        Component owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        return owner != null && SwingUtilities.isDescendingFrom(owner, this);
+    }
+
+    /**
+     * Opens the find strip. Its query becomes the selected text (one line of it), else
+     * {@code fallback} (the table's query) when the strip has none yet, else stays.
+     */
+    void openFind(String fallback) {
+        String selected = detailArea.getSelectedText();
+        String seed = selected != null && !selected.isBlank() && selected.indexOf('\n') < 0 ? selected
+                    : findBar.hasQuery() ? null : fallback;
+        findBar.open(seed);
+    }
+
+    /** F3 / Shift+F3 in the pane: the next or previous match, opening the strip if it has no query. */
+    void findStep(int direction) {
+        if (findBar.hasQuery()) findBar.step(direction);
+        else openFind(null);
+    }
+
+    DetailFindBar findBar() { return findBar; }
 
     /** View → Wrap Lines: the same as the header's Wrap toggle. */
     void toggleWrap() {
@@ -539,6 +578,7 @@ final class DetailPanel extends JPanel {
             messageFieldStart = messageFieldEnd = -1;
             formatToggles.values().forEach(b -> b.setVisible(false));
             bodyCards.show(body, blank ? "blank" : "empty");
+            findBar.textChanged(true);
             return;
         }
 
@@ -661,6 +701,8 @@ final class DetailPanel extends JPanel {
                     Math.max(0, Math.min(keepView.x, view.width - extent.width)),
                     Math.max(0, Math.min(keepView.y, view.height - extent.height))));
         }
+        // The find strip's marks were on the old text: find again, from the first match on a new entry.
+        findBar.textChanged(keepView == null);
     }
 
     /**

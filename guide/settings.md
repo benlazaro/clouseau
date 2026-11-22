@@ -111,6 +111,7 @@ window, and act on that window.
 | `Ctrl+F` | Find |
 | `Enter` / `Shift+Enter` | Next / previous match |
 | `Escape` | Close the find bar |
+| `Ctrl+F` in the detail panel | Find in the entry |
 | `Ctrl+Shift+N` | All notes |
 | `Ctrl+Shift+K` | Clear the table |
 
