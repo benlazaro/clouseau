@@ -17,7 +17,7 @@ class DetailFindBarTest {
         DetailFindBar[] bar = new DetailFindBar[1];
         SwingUtilities.invokeAndWait(() -> {
             text.setText(content);
-            bar[0] = new DetailFindBar(text, focusedBack::incrementAndGet);
+            bar[0] = new DetailFindBar(text, new Toast(), focusedBack::incrementAndGet);
         });
         return bar[0];
     }
@@ -75,22 +75,20 @@ class DetailFindBarTest {
         assertThat(bar.wrapNoteText()).isNull();                // 1 → 2, no wrap
         edt(() -> bar.step(+1));
         assertThat(bar.wrapNoteText()).isEqualTo(Messages.get("find.wrapped.top"));
-        assertThat(bar.field().getBackground()).isNotEqualTo(UIManager.getColor("TextField.background"));
         edt(() -> bar.step(-1));
         assertThat(bar.wrapNoteText()).isEqualTo(Messages.get("find.wrapped.bottom"));
         edt(() -> bar.step(-1));
         assertThat(bar.wrapNoteText()).isNull();                // an ordinary step hides it
-        assertThat(bar.field().getBackground()).isEqualTo(UIManager.getColor("TextField.background"));
     }
 
     @Test
     void wrapDetection() {
-        assertThat(WrapNotice.isWrap(2, 0, +1, 3)).isTrue();
-        assertThat(WrapNotice.isWrap(0, 2, -1, 3)).isTrue();
-        assertThat(WrapNotice.isWrap(0, 1, +1, 3)).isFalse();
-        assertThat(WrapNotice.isWrap(2, 1, -1, 3)).isFalse();
-        assertThat(WrapNotice.isWrap(0, 0, +1, 1)).isTrue();    // the only match, again
-        assertThat(WrapNotice.isWrap(-1, 0, +1, 3)).isFalse();  // the first step
+        assertThat(FindBar.isWrap(2, 0, +1, 3)).isTrue();
+        assertThat(FindBar.isWrap(0, 2, -1, 3)).isTrue();
+        assertThat(FindBar.isWrap(0, 1, +1, 3)).isFalse();
+        assertThat(FindBar.isWrap(2, 1, -1, 3)).isFalse();
+        assertThat(FindBar.isWrap(0, 0, +1, 1)).isTrue();    // the only match, again
+        assertThat(FindBar.isWrap(-1, 0, +1, 3)).isFalse();  // the first step
     }
 
     @Test

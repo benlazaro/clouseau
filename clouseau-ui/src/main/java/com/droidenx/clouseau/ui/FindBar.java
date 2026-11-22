@@ -62,7 +62,10 @@ final class FindBar extends JPanel {
     private final Search searcher;
     private final JTextField field = new JTextField();
     private final JLabel counter = new JLabel();
-    private final WrapNotice wrapNotice = new WrapNotice(field);
+    /** Where a wrap past the last or first match is said, over the rows. */
+    private final Toast toast = new Toast();
+    /** The last wrap's note, until the next step that doesn't wrap; for tests. */
+    private String wrapNote;
 
     private Set<Integer>  matchModelRows = Set.of();
     /** The query the current matches are for, lower case; null with none. */
@@ -156,7 +159,6 @@ final class FindBar extends JPanel {
         add(label);
         add(field, "growx");
         add(counter);
-        add(wrapNotice, "hidemode 3");
         add(prevBtn);
         add(nextBtn);
         add(highlightBtn, "hidemode 3");
@@ -284,7 +286,7 @@ final class FindBar extends JPanel {
         matchedQuery   = null;
         cursor         = -1;
         highlightBtn.setEnabled(false);
-        wrapNotice.clear();
+        wrapNote       = null;
         counter.setText("");
         repaintTable();
     }
@@ -366,15 +368,15 @@ final class FindBar extends JPanel {
     /** Whether the bar is open with something typed, so Find Next / Previous can step. */
     boolean hasQuery() { return isVisible() && !field.getText().isBlank(); }
 
-    /** The wrap note's text while it shows, else null; for tests. */
-    String wrapNoteText() { return wrapNotice.isVisible() ? wrapNotice.getText() : null; }
+    /** The last wrap's note, until a step that doesn't wrap; for tests. */
+    String wrapNoteText() { return wrapNote; }
 
     /** What's typed in the field, as typed. */
     String query() { return field.getText(); }
 
     /**
      * The next (+1) or previous (-1) match, wrapping round; going past the last or first match
-     * says so for a moment ({@link WrapNotice}).
+     * says so in a toast over the rows, clear of the selected one.
      */
     void navigate(int direction) {
         if (matches.isEmpty()) return;
@@ -399,14 +401,32 @@ final class FindBar extends JPanel {
         } else {
             int from = cursor;
             cursor = (cursor + direction + matches.size()) % matches.size();
-            wrapped = WrapNotice.isWrap(from, cursor, direction, matches.size());
+            wrapped = isWrap(from, cursor, direction, matches.size());
         }
-        if (wrapped) wrapNotice.wrapped(direction > 0); else wrapNotice.clear();
+        wrapNote = wrapped ? Messages.get(direction > 0 ? "find.wrapped.top" : "find.wrapped.bottom") : null;
         int viewRow = table.convertRowIndexToView(matches.get(cursor));
         if (viewRow >= 0) {
             table.setRowSelectionInterval(viewRow, viewRow);
             table.scrollRectToVisible(table.getCellRect(viewRow, 0, true));
             counter.setText((cursor + 1) + " / " + matches.size());
+            if (wrapNote != null && table.getParent() instanceof JViewport rows) {
+                // Over the rows, clear of the one just selected.
+                Rectangle row = table.getCellRect(viewRow, 0, true);
+                row.x = 0;
+                row.width = table.getWidth();
+                toast.show(rows, wrapNote, SwingUtilities.convertRectangle(table, row, rows));
+            }
         }
+    }
+
+    /**
+     * Whether stepping from match {@code from} to {@code to} by {@code direction} (+1 or -1)
+     * went round the end of {@code count} matches. A single match wraps onto itself.
+     * The detail pane's find uses it too.
+     */
+    static boolean isWrap(int from, int to, int direction, int count) {
+        if (from < 0 || count <= 0) return false;
+        if (count == 1) return true;
+        return direction > 0 ? to < from : to > from;
     }
 }

@@ -80,8 +80,8 @@ final class DetailPanel extends JPanel {
     private JLabel  title;
     private JLabel  fontSizeLabel;
     private JButton resetFontBtn;
-    private JLabel  sizeToast;
-    private Timer   toastTimer;
+    /** The pane's notes ("Text size 14", "Message copied", its find's wraps), over its body. */
+    private final Toast toast = new Toast();
     /** The body: the entry's text, or the empty state when nothing is selected. */
     private final CardLayout bodyCards = new CardLayout();
     private final JPanel     body      = new JPanel(bodyCards);
@@ -130,7 +130,7 @@ final class DetailPanel extends JPanel {
         ClouseauColors.themedForeground(detailArea, ClouseauColors::foreground);
         detailArea.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
-        findBar = new DetailFindBar(detailArea, detailArea::requestFocusInWindow);
+        findBar = new DetailFindBar(detailArea, toast, detailArea::requestFocusInWindow);
         JPanel top = new JPanel(new BorderLayout());
         top.setOpaque(false);
         top.add(buildHeader(), BorderLayout.NORTH);
@@ -412,34 +412,7 @@ final class DetailPanel extends JPanel {
      * would be missed in once a menu closes.
      */
     private void showToast(String text) {
-        JRootPane root = getRootPane();
-        if (root == null || !isShowing()) return;
-        if (sizeToast == null) {
-            sizeToast = new JLabel();
-            sizeToast.setOpaque(true);
-            sizeToast.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(UIManager.getColor("PopupMenu.borderColor") != null
-                            ? UIManager.getColor("PopupMenu.borderColor") : ClouseauColors.separatorColor()),
-                    BorderFactory.createEmptyBorder(8, 16, 8, 16)));
-            toastTimer = new Timer(1200, e -> sizeToast.setVisible(false));
-            toastTimer.setRepeats(false);
-        }
-        // The "on" toggle fill: a mid-gray chip that stands apart from the pane in both themes
-        // (a popup's or tooltip's white would vanish on Light's white pane).
-        Color bg = UIManager.getColor("ToggleButton.selectedBackground"), fg = UIManager.getColor("ToggleButton.selectedForeground");
-        sizeToast.setBackground(bg != null ? bg : UIManager.getColor("PopupMenu.background"));
-        sizeToast.setForeground(fg != null ? fg : ClouseauColors.foreground());
-        sizeToast.setText(text);
-        JLayeredPane layers = root.getLayeredPane();
-        if (sizeToast.getParent() != layers) layers.add(sizeToast, JLayeredPane.POPUP_LAYER);
-        Dimension d = sizeToast.getPreferredSize();
-        Component body = ((BorderLayout) getLayout()).getLayoutComponent(BorderLayout.CENTER);
-        Rectangle area = body != null ? SwingUtilities.convertRectangle(this, body.getBounds(), layers)
-                                      : SwingUtilities.convertRectangle(getParent(), getBounds(), layers);
-        Point p = new Point(area.x + (area.width - d.width) / 2, area.y + (area.height - d.height) / 2);
-        sizeToast.setBounds(p.x, p.y, d.width, d.height);
-        sizeToast.setVisible(true);
-        toastTimer.restart();
+        toast.show(body, text);
     }
 
     /** Copy Message (Ctrl+C), Copy Raw Line and Copy Entry, named and keyed as in the table's row menu. */

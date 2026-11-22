@@ -193,6 +193,7 @@ release only.
   deferred load and "filters restored" strip (D-19).
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
   `DetailFindBar` (ui) is its find strip (Ctrl+F with focus in the pane), matching with `TextMatches` (core).
+  `Toast` (ui) is the brief centered note (copy, text size, find wraps) over the pane or the table.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows.
 - `DialogFooter`, `NoticeLabel`, `PromptDialog`, `ManagerDialogs` (ui) — the dialog building blocks

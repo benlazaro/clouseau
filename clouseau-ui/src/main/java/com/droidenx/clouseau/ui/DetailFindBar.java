@@ -35,7 +35,10 @@ final class DetailFindBar extends JPanel {
     private final JToggleButton caseToggle = new JToggleButton(Messages.get("detail.find.case"));
     private final JToggleButton regexToggle = new JToggleButton(Messages.get("detail.find.regex"));
     private final JLabel counter = new JLabel();
-    private final WrapNotice wrapNotice = new WrapNotice(field);
+    /** Where a wrap is said: the pane's toast, over its text. */
+    private final Toast toast;
+    /** The last wrap's note, until the next step that doesn't wrap; for tests. */
+    private String wrapNote;
     /** Where focus goes when the strip closes. */
     private final Runnable focusBack;
 
@@ -44,9 +47,10 @@ final class DetailFindBar extends JPanel {
     private int cursor = -1;
     private Timer debounce;
 
-    DetailFindBar(JTextComponent text, Runnable focusBack) {
+    DetailFindBar(JTextComponent text, Toast toast, Runnable focusBack) {
         super(new MigLayout("insets 3 10 3 8, gap 6", "[grow][][]8[][][][]", "[center]"));
         this.text = text;
+        this.toast = toast;
         this.focusBack = focusBack;
         setVisible(false);
         ClouseauColors.themedBackground(this, ClouseauColors::detailBackground);
@@ -100,7 +104,6 @@ final class DetailFindBar extends JPanel {
         add(caseToggle);
         add(regexToggle);
         add(counter, "wmin 70");
-        add(wrapNotice, "hidemode 3");
         add(prev);
         add(next);
         add(closeBtn);
@@ -129,7 +132,7 @@ final class DetailFindBar extends JPanel {
         matches = List.of();
         cursor = -1;
         counter.setText("");
-        wrapNotice.clear();
+        wrapNote = null;
         focusBack.run();
     }
 
@@ -149,7 +152,7 @@ final class DetailFindBar extends JPanel {
 
     /**
      * The next (+1) or previous (-1) match, wrapping around, scrolled into view. Going past the
-     * last or first match says so for a moment ({@link WrapNotice}).
+     * last or first match says so in a toast over the text, clear of the match.
      */
     void step(int direction) {
         if (debounce != null && debounce.isRunning()) { debounce.stop(); research(false); }
@@ -157,13 +160,13 @@ final class DetailFindBar extends JPanel {
         int from = cursor;
         cursor = cursor < 0 ? (direction > 0 ? 0 : matches.size() - 1)
                             : Math.floorMod(cursor + direction, matches.size());
-        if (WrapNotice.isWrap(from, cursor, direction, matches.size())) wrapNotice.wrapped(direction > 0);
-        else wrapNotice.clear();
+        wrapNote = FindBar.isWrap(from, cursor, direction, matches.size())
+                ? Messages.get(direction > 0 ? "find.wrapped.top" : "find.wrapped.bottom") : null;
         showCurrent();
     }
 
-    /** The wrap note's text while it shows, else null; for tests. */
-    String wrapNoteText() { return wrapNotice.isVisible() ? wrapNotice.getText() : null; }
+    /** The last wrap's note, until a step that doesn't wrap; for tests. */
+    String wrapNoteText() { return wrapNote; }
 
     // For tests.
     String counterText() { return counter.getText(); }
@@ -196,7 +199,7 @@ final class DetailFindBar extends JPanel {
     /** Finds the query again; {@code jump} goes to the first match, else the current one stays. */
     private void research(boolean jump) {
         String query = field.getText();
-        if (jump) wrapNotice.clear();      // a new query or entry starts afresh
+        wrapNote = null;      // finding again is never a wrap
         TextMatches.Result result = TextMatches.find(documentText(), query,
                 caseToggle.isSelected(), regexToggle.isSelected());
         clearMarks();
@@ -237,11 +240,15 @@ final class DetailFindBar extends JPanel {
         // The caret goes to the match: a new entry's caret reset scrolls to the caret later on
         // (DefaultCaret does it in an invokeLater), which would otherwise undo this scroll.
         text.setCaretPosition(r.start());
-        SwingUtilities.invokeLater(() -> scrollTo(r));
+        String note = wrapNote;
+        SwingUtilities.invokeLater(() -> scrollTo(r, note));
     }
 
-    /** Scrolls the match into view with some room around it, once the text is laid out. */
-    private void scrollTo(TextMatches.Range r) {
+    /**
+     * Scrolls the match into view with some room around it, once the text is laid out, then
+     * shows {@code note} (a wrap, or null) in a toast that keeps clear of the match.
+     */
+    private void scrollTo(TextMatches.Range r, String note) {
         if (r.end() > text.getDocument().getLength()) return;     // the text changed since
         Container scroll = SwingUtilities.getAncestorOfClass(JScrollPane.class, text);
         if (scroll != null) scroll.validate();
@@ -253,6 +260,10 @@ final class DetailFindBar extends JPanel {
             int pad = a.getBounds().height * 2;
             area.grow(40, pad);
             text.scrollRectToVisible(area);
+            if (note != null && scroll instanceof JScrollPane pane) {
+                Rectangle match = a.getBounds().union(b.getBounds());
+                toast.show(pane, note, SwingUtilities.convertRectangle(text, match, pane));
+            }
         } catch (BadLocationException ignored) {}
     }
 

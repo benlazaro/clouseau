@@ -331,6 +331,14 @@ public final class ClouseauColors {
     public static Color starColor()       { return get("Clouseau.starColor", null, new Color(0xFFD700)); }
 
     /** Peak flash color for the detail-pane copy animation. */
+    /**
+     * A toast's chip: inverted against the window (light on Dark, dark on Light) so it never
+     * reads as a find mark, with a mid-gray frame.
+     */
+    public static Color toastBackground() { return get("Clouseau.toast.background", "Label.foreground", Color.LIGHT_GRAY); }
+    public static Color toastForeground() { return get("Clouseau.toast.foreground", "TextArea.background", Color.BLACK); }
+    public static Color toastBorder()     { return get("Clouseau.toast.border", "Clouseau.dimForeground", Color.GRAY); }
+
     public static Color flashPeakColor()  { return get("Clouseau.flashPeakColor", "Clouseau.dimForeground", "Label.disabledForeground"); }
 
     // ── Syntax roles (detail-pane highlighting) ───────────────────────────────

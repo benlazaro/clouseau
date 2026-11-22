@@ -467,6 +467,17 @@ entry keeps the current match and the scroll. `Ctrl+F` and `F3` are window-wide 
 routed by focus in `SharedTabContext`: focus inside the panel goes to its find, anywhere
 else to the table's find bar.
 
+**Toasts.** `Toast` (ui) is the brief note in the middle of an area, on the window's popup
+layer for 1.2 s ("Text size 14", "Message copied"): a rounded chip with bold text in a 1px
+frame, inverted against the window (light on Dark, dark on Light) so it never reads as a
+find mark or a row. Its colors are the theme's `Clouseau.toast.background`, `.foreground`
+and `.border`, read when shown and painted, so it follows a theme switch. Given a rectangle to keep
+clear, it moves to the middle of the larger free part above or below it. Both find bars use
+it when stepping wraps past the last or first match ("Back to the first match"): the table's
+over the rows' viewport, clear of the selected row; the detail strip over the pane's text,
+clear of the current match, shown after the match is scrolled into view. The detail pane's
+own notes and its find share one `Toast`, so they replace rather than stack.
+
 ### 6.6 Annotations (UC-7 to UC-9)
 
 `AnnotationStore` (core) holds the annotations and row highlights for one file. Each records its note,
