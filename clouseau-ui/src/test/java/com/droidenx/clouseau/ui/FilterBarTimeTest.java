@@ -120,6 +120,39 @@ class FilterBarTimeTest {
     }
 
     @Test
+    void aDisplayTimezoneChangeFiltersAgainOnlyWithARangeSet() throws Exception {
+        onEdt(() -> {
+            AtomicInteger changes = new AtomicInteger();
+            FilterBar bar = new FilterBar(changes::incrementAndGet);
+            bar.displayTimezoneChanged();
+            assertThat(changes).hasValue(0);                  // no range: nothing to redo
+
+            bar.setTimeRange("10:00", "");
+            assertThat(changes).hasValue(1);
+            bar.displayTimezoneChanged();
+            assertThat(changes).hasValue(2);
+        });
+    }
+
+    @Test
+    void aTimeAloneIsOnTheDayOfTheFirstEntry() throws Exception {
+        onEdt(() -> {
+            FilterBar bar = new FilterBar(() -> {});
+            bar.addBatch(List.of(at("2026-03-27T09:00:00"), at("2026-03-28T09:00:00")));
+            bar.setTimeRange("10:00", "");
+            EntryFilter f = bar.buildFilter();
+            assertThat(f.test(at("2026-03-27T09:59:59"))).isFalse();
+            assertThat(f.test(at("2026-03-27T10:00:00"))).isTrue();
+
+            bar.clearLoggers();                              // a new load: the next batch decides the day
+            bar.addBatch(List.of(at("2026-04-01T09:00:00")));
+            f = bar.buildFilter();
+            assertThat(f.test(at("2026-03-27T23:00:00"))).isFalse();
+            assertThat(f.test(at("2026-04-01T10:00:00"))).isTrue();
+        });
+    }
+
+    @Test
     void showAllTimesDropsBothEnds() throws Exception {
         onEdt(() -> {
             FilterBar bar = new FilterBar(() -> {});

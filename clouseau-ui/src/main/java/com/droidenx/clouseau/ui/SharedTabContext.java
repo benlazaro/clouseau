@@ -656,6 +656,7 @@ final class SharedTabContext {
     void refreshTimezone() {
         model.refreshTimezone();
         detailPanel.refreshTimezone();
+        filterBar.displayTimezoneChanged();
         updateTimezoneBadge();
     }
 

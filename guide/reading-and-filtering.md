@@ -266,7 +266,8 @@ Log timestamps usually don't say which timezone they're in, so Clouseau keeps tw
   says when it happened, so **Written in** doesn't change it.
 - **Show times in** belongs to you: the timezone every tab shows times in, and the one the
   **Time** filter's **From** and **To** use. It's the same setting as in
-  [Settings](settings.md).
+  [Settings](settings.md). Change it while a time range is set and the range keeps its
+  text, now read in the new timezone, and the rows are filtered again to match.
 
 The status bar shows them at the right: just `America/Chicago` when a log is read and shown
 in the same timezone, or `UTC → America/Chicago` when it's read in one and shown in

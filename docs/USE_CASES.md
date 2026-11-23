@@ -186,7 +186,8 @@ filter matches the message, case-insensitively, as a regex (literal if it doesn'
 In the Time popup, digits are formatted as they're typed or pasted (`20261123030700`
 becomes `2026-11-23 03:07:00`), and a partial time is filled out dimmed and taken on Tab,
 Enter or Apply: From with the first instant of what's typed, To with the last, so To
-`2026-11-23` keeps the whole day (`23:59:59.999`).
+`2026-11-23` keeps the whole day (`23:59:59.999`). The range is read in the display
+timezone, as the table shows times; changing that timezone filters again with the same text.
 
 ### UC-6 · Follow a live log for a long time ✅
 

@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -94,9 +95,9 @@ final class FilterBar extends JPanel {
     private List<String>        allSources      = List.of();
     private final Set<Integer>  excludedSources = new LinkedHashSet<>();
 
-    // Used when only HH:mm:ss is typed — anchors time to the date of the first log entry
-    private LocalDate referenceDate = LocalDate.now();
-    private boolean referenceDateSet = false;
+    // Used when only HH:mm:ss is typed: the time is on the day of the first log entry, as
+    // displayed. Kept as an instant, so the day follows a change of display timezone.
+    private Instant referenceTime;
 
     FilterBar(Runnable onChanged) {
         super(new MigLayout("insets 2 8 2 8, gap 6", "", "[center]"));
@@ -195,7 +196,7 @@ final class FilterBar extends JPanel {
     void clearLoggers() {
         allLoggers = List.of();
         excludedLoggers.clear();
-        referenceDateSet = false;
+        referenceTime = null;
         updateLoggerButtonLabel();
         allFieldValues.clear();
         excludedFieldValues.clear();
@@ -316,17 +317,14 @@ final class FilterBar extends JPanel {
     /**
      * Incrementally merges loggers from a streamed batch into the logger picker.
      * Only rebuilds the sorted list when new loggers are found; only sets
-     * {@code referenceDate} once, from the first entry with a timestamp.
+     * {@code referenceTime} once, from the first entry with a timestamp.
      */
     void addBatch(List<LogEntry> entries) {
-        if (!referenceDateSet) {
+        if (referenceTime == null) {
             entries.stream()
                     .filter(e -> e.timestamp() != null)
                     .findFirst()
-                    .ifPresent(e -> {
-                        referenceDate = e.timestamp().atZone(AppPrefs.getDisplayTimezone()).toLocalDate();
-                        referenceDateSet = true;
-                    });
+                    .ifPresent(e -> referenceTime = e.timestamp());
         }
         Set<String> known = new HashSet<>(allLoggers);
         int sizeBefore = known.size();
@@ -394,7 +392,7 @@ final class FilterBar extends JPanel {
         entries.stream()
             .filter(e -> e.timestamp() != null)
             .findFirst()
-            .ifPresent(e -> referenceDate = e.timestamp().atZone(AppPrefs.getDisplayTimezone()).toLocalDate());
+            .ifPresent(e -> referenceTime = e.timestamp());
 
         updateLoggerButtonLabel();
     }
@@ -874,6 +872,20 @@ final class FilterBar extends JPanel {
     String timeFrom() { return fromText; }
     String timeTo()   { return toText; }
 
+    /**
+     * The display timezone changed. The range is typed in display time, so the same text is
+     * now another instant: filter again with it, if a range is set.
+     */
+    void displayTimezoneChanged() {
+        if (hasTimeRange()) onChanged.run();
+    }
+
+    /** The day a time typed without a date is on: the first entry's, as displayed; today with none. */
+    private LocalDate referenceDate() {
+        ZoneId zone = AppPrefs.getDisplayTimezone();
+        return referenceTime != null ? referenceTime.atZone(zone).toLocalDate() : LocalDate.now(zone);
+    }
+
     /** Drops the time range, both ends (the row menu's "Show All Times"). */
     void showAllTimes() {
         setTimeRange("", "");
@@ -1050,7 +1062,7 @@ final class FilterBar extends JPanel {
             catch (DateTimeParseException ignored) {}
             try { return LocalDate.parse(text, fmt).atStartOfDay(AppPrefs.getDisplayTimezone()).toInstant(); }
             catch (DateTimeParseException ignored) {}
-            try { return LocalTime.parse(text, fmt).atDate(referenceDate).atZone(AppPrefs.getDisplayTimezone()).toInstant(); }
+            try { return LocalTime.parse(text, fmt).atDate(referenceDate()).atZone(AppPrefs.getDisplayTimezone()).toInstant(); }
             catch (DateTimeParseException ignored) {}
         }
         return null;
