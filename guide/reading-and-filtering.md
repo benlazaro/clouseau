@@ -132,9 +132,17 @@ fold and unfold), `Space` ticks or unticks the row you're on, and `Esc` closes t
   fills in the selected line's time. You can type:
   - just a time, `10:00` or `10:00:05` (with or without `.SSS` milliseconds), which means
     that time on the day the log starts;
-  - a date and time, `yyyy-MM-dd HH:mm` or `yyyy-MM-dd HH:mm:ss`, or just a date;
+  - a date and time, `yyyy-MM-dd HH:mm` or `yyyy-MM-dd HH:mm:ss`, or just a date. You
+    can type or paste it as digits only and the separators go in as you type:
+    `20261123030700` becomes `2026-11-23 03:07:00`;
   - a span counted from the other end: `+5m` in **To** means five minutes after **From**,
     and `-90s` in **From** means 90 seconds before **To** (`ms`, `s`, `m`, `h`, `d`).
+
+  A time you leave short is filled out to the millisecond: the rest shows in gray as you
+  type, and goes in when you press `Tab`, `Enter` or **Apply**. **From** gets the first
+  moment of what you typed and **To** the last, so the day or minute you type in **To** is
+  included whole: **To** `2026-11-23` means `2026-11-23 23:59:59.999`, and **To** `10:15`
+  means `10:15:59.999`.
 
   While a range is set, the button shows it, for example **10:00:00 → 10:15:00**;
   **Clear** in the same popup removes it, and so does **Show All Times** when you

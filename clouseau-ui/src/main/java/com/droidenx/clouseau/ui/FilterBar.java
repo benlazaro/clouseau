@@ -770,8 +770,8 @@ final class FilterBar extends JPanel {
         if (consumeClosedByPress(invoker)) return;   // this click just closed it
         JPopupMenu popup = new JPopupMenu();
         JPanel content = new JPanel(new MigLayout("insets 10, wrap 3, gapy 8", "[][grow, fill][]"));
-        JTextField from = new JTextField(fromText, 16);
-        JTextField to = new JTextField(toText, 16);
+        TimeField from = new TimeField(fromText, false);
+        TimeField to = new TimeField(toText, true);
         from.putClientProperty("JTextField.placeholderText", Messages.get("filter.from.placeholder"));
         to.putClientProperty("JTextField.placeholderText", Messages.get("filter.to.placeholder"));
 
@@ -785,18 +785,18 @@ final class FilterBar extends JPanel {
         content.add(useSelectedRowButton(to, selected));
         // Two plain lines, not one wrapping HTML label: the popup is sized before an HTML label
         // wraps, so its second line would push the buttons out of the popup.
-        for (String key : List.of("filter.time.hint", "filter.time.hint.open")) {
+        for (String key : List.of("filter.time.hint", "filter.time.hint.digits", "filter.time.hint.open")) {
             JLabel hint = new JLabel(Messages.get(key));
             hint.setForeground(ClouseauColors.dimForeground());
             hint.setFont(hint.getFont().deriveFont(11f));
-            content.add(hint, key.endsWith("open") ? "skip, span 2, gaptop -8" : "skip, span 2, gaptop -4");
+            content.add(hint, key.equals("filter.time.hint") ? "skip, span 2, gaptop -4" : "skip, span 2, gaptop -8");
         }
 
         JButton clearBtn = new JButton(Messages.get("filter.time.clear"));
         JButton applyBtn = new JButton(Messages.get("filter.time.apply"));
         applyBtn.putClientProperty("FlatLaf.style", DEFAULT_BUTTON_STYLE);
         Runnable validate = () -> {
-            String f = from.getText().trim(), t = to.getText().trim();
+            String f = from.effectiveText(), t = to.effectiveText();
             boolean fromOk = readable(f), toOk = readable(t);
             boolean ok = fromOk && toOk && range(f, t) != null;
             // A relative end with no time at the other end to count from is the one at fault.
@@ -814,6 +814,8 @@ final class FilterBar extends JPanel {
 
         Runnable apply = () -> {
             if (!applyBtn.isEnabled()) return;
+            from.complete();
+            to.complete();
             popup.setVisible(false);
             setTimeRange(from.getText().trim(), to.getText().trim());
         };

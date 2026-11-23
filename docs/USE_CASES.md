@@ -183,6 +183,10 @@ responsive (about 1.6 s for 1M lines). When it takes longer than a quarter of a 
 thin bar fills along the top of the rows and the rows fade until it's done. Times are compared to the millisecond. The text
 filter matches the message, case-insensitively, as a regex (literal if it doesn't compile);
 `&&` joins terms that must all match, so narrowing down needs no regex lookaheads.
+In the Time popup, digits are formatted as they're typed or pasted (`20261123030700`
+becomes `2026-11-23 03:07:00`), and a partial time is filled out dimmed and taken on Tab,
+Enter or Apply: From with the first instant of what's typed, To with the last, so To
+`2026-11-23` keeps the whole day (`23:59:59.999`).
 
 ### UC-6 · Follow a live log for a long time ✅
 
