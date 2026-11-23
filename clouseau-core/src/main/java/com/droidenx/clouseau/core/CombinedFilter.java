@@ -20,7 +20,7 @@ import java.util.regex.PatternSyntaxException;
  * <p>
  * The text may hold several terms joined by {@code &&}; a message must match every one.
  * Each term is a case-insensitive regex if it compiles, else literal text, so {@code |}
- * still means "or" within a term.
+ * still means "or" within a term. Spaces around {@code &&} and around an "or" {@code |} are ignored.
  * <p>
  * The time range is compared in whole milliseconds, which is what the index keeps and
  * what the table shows.
@@ -86,10 +86,53 @@ public final class CombinedFilter implements EntryFilter {
 
     private static Pattern compileTerm(String t) {
         try {
-            return Pattern.compile(t, Pattern.CASE_INSENSITIVE);
+            return Pattern.compile(tidyAlternatives(t), Pattern.CASE_INSENSITIVE);
         } catch (PatternSyntaxException ex) {
             return Pattern.compile(Pattern.quote(t), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
         }
+    }
+
+    /**
+     * Drops the spaces around each {@code |} that means "or", so {@code timeout | refused}
+     * reads as {@code timeout|refused}, as {@code &&} already allows. An escaped {@code \|}
+     * and a {@code |} inside {@code [...]} are literal and keep their spaces.
+     */
+    static String tidyAlternatives(String regex) {
+        StringBuilder out = new StringBuilder(regex.length());
+        boolean inClass = false;
+        for (int i = 0; i < regex.length(); i++) {
+            char c = regex.charAt(i);
+            if (c == '\\' && i + 1 < regex.length()) {          // an escape: keep both characters
+                out.append(c).append(regex.charAt(++i));
+                continue;
+            }
+            if (inClass) {
+                if (c == ']') inClass = false;
+            } else if (c == '[') {
+                inClass = true;
+                out.append(c);
+                if (i + 1 < regex.length() && regex.charAt(i + 1) == '^') out.append(regex.charAt(++i));
+                if (i + 1 < regex.length() && regex.charAt(i + 1) == ']') out.append(regex.charAt(++i));
+                continue;                                        // "[]...]": that first ] is literal
+            } else if (c == '|') {
+                while (!out.isEmpty() && Character.isWhitespace(out.charAt(out.length() - 1))
+                        && !escapedAt(out, out.length() - 1)) {
+                    out.setLength(out.length() - 1);
+                }
+                out.append(c);
+                while (i + 1 < regex.length() && Character.isWhitespace(regex.charAt(i + 1))) i++;
+                continue;
+            }
+            out.append(c);
+        }
+        return out.toString();
+    }
+
+    /** Whether the character at {@code pos} follows an odd run of backslashes. */
+    private static boolean escapedAt(CharSequence s, int pos) {
+        int n = 0;
+        for (int i = pos - 1; i >= 0 && s.charAt(i) == '\\'; i--) n++;
+        return n % 2 == 1;
     }
 
     @Override

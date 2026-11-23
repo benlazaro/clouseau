@@ -426,7 +426,9 @@ on its own executor (`LogTableModel.find`) and returns matching ordinals to the 
 
 The message filter's text is split on `&&` into terms that must all match the message (blank
 terms dropped). Each term is compiled on its own as a case-insensitive regex, falling back to
-literal text if it doesn't compile, so `|` is still "or" inside a term. The split ignores regex
+literal text if it doesn't compile, so `|` is still "or" inside a term. Terms are trimmed, and
+spaces around each `|` that means "or" are dropped before compiling (`CombinedFilter.tidyAlternatives`;
+not an escaped `\|` or one inside `[...]`), so `a | b` reads as `a|b`. The split ignores regex
 syntax: a character-class intersection such as `[a-z&&[^x]]` can't be typed into the bar.
 
 The time range is the one filter not typed into the bar: the **Time** button opens a popup with
@@ -477,6 +479,18 @@ it when stepping wraps past the last or first match ("Back to the first match"):
 over the rows' viewport, clear of the selected row; the detail strip over the pane's text,
 clear of the current match, shown after the match is scrolled into view. The detail pane's
 own notes and its find share one `Toast`, so they replace rather than stack.
+
+**No matches.** `NoMatchState` (ui) is the find fields' red look while a query matches
+nothing (or, in the detail strip, is an invalid pattern): FlatLaf's `JComponent.outline =
+"error"` plus a background tint of the theme's `Clouseau.status.error` over
+`TextField.background`. Turning red pulses the tint once (about 0.4 s, Swing timer); staying
+red never pulses again, and the tint is recomputed on a theme switch. Red is the "nothing
+here" signal while typing; the words come only on a deliberate step: `Enter`/`F3` with no
+matches toasts "No matches for “…”" (or the pattern error) over the rows or the pane, so a
+user who types never gets a toast per keystroke. Both bars lay out like a browser's find bar:
+the field has a set width (`FindBar.FIELD_WIDTH`, 320 px, down to 120 px when narrow) with its
+count, toggles and arrows beside it, and only the close button at the far end, so the red
+field, its count and a toast stay together near where the user types.
 
 ### 6.6 Annotations (UC-7 to UC-9)
 

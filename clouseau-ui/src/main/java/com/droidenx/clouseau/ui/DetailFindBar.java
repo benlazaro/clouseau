@@ -35,10 +35,14 @@ final class DetailFindBar extends JPanel {
     private final JToggleButton caseToggle = new JToggleButton(Messages.get("detail.find.case"));
     private final JToggleButton regexToggle = new JToggleButton(Messages.get("detail.find.regex"));
     private final JLabel counter = new JLabel();
-    /** Where a wrap is said: the pane's toast, over its text. */
+    /** Where a step's note (a wrap, or nothing to go to) is said: the pane's toast, over its text. */
     private final Toast toast;
-    /** The last wrap's note, until the next step that doesn't wrap; for tests. */
-    private String wrapNote;
+    /** The last step's note, until the next step that has none; for tests. */
+    private String stepNote;
+    /** The field turns red while the query finds nothing or isn't a valid pattern. */
+    private final NoMatchState noMatch = new NoMatchState(field);
+    /** Why the last search found nothing: the pattern's error, or null. */
+    private String patternError;
     /** Where focus goes when the strip closes. */
     private final Runnable focusBack;
 
@@ -48,7 +52,7 @@ final class DetailFindBar extends JPanel {
     private Timer debounce;
 
     DetailFindBar(JTextComponent text, Toast toast, Runnable focusBack) {
-        super(new MigLayout("insets 3 10 3 8, gap 6", "[grow][][]8[][][][]", "[center]"));
+        super(new MigLayout("insets 3 10 3 8, gap 6", "[][][]8[][][]push[]", "[center]"));
         this.text = text;
         this.toast = toast;
         this.focusBack = focusBack;
@@ -100,7 +104,7 @@ final class DetailFindBar extends JPanel {
         closeBtn.addActionListener(e -> close());
         for (JButton b : new JButton[] {prev, next, closeBtn}) b.setFocusable(false);
 
-        add(field, "growx, wmin 120");
+        add(field, FindBar.FIELD_WIDTH);
         add(caseToggle);
         add(regexToggle);
         add(counter, "wmin 70");
@@ -114,11 +118,14 @@ final class DetailFindBar extends JPanel {
      * or the table's query) replaces the query; otherwise the last one stays, selected.
      */
     void open(String seed) {
+        boolean reopening = !isVisible();
         setVisible(true);
         revalidate();
         if (seed != null && !seed.isBlank() && !seed.equals(field.getText())) {
             field.setText(seed);
             research(true);      // now, not after the debounce: the field's text is already final
+        } else if (reopening && !field.getText().isEmpty()) {
+            research(true);      // closing dropped the kept query's marks: find it again
         }
         field.selectAll();
         field.requestFocusInWindow();
@@ -132,7 +139,8 @@ final class DetailFindBar extends JPanel {
         matches = List.of();
         cursor = -1;
         counter.setText("");
-        wrapNote = null;
+        stepNote = null;
+        noMatch.set(false);
         focusBack.run();
     }
 
@@ -152,21 +160,34 @@ final class DetailFindBar extends JPanel {
 
     /**
      * The next (+1) or previous (-1) match, wrapping around, scrolled into view. Going past the
-     * last or first match says so in a toast over the text, clear of the match.
+     * last or first match says so in a toast over the text, clear of the match. With nothing to
+     * go to, the toast says why: no matches, or the pattern isn't valid.
      */
     void step(int direction) {
         if (debounce != null && debounce.isRunning()) { debounce.stop(); research(false); }
-        if (matches.isEmpty()) return;
+        if (matches.isEmpty()) {
+            String query = field.getText();
+            if (query.isEmpty()) { stepNote = null; return; }
+            stepNote = patternError != null
+                    ? Messages.get("detail.find.invalid") + ": " + patternError
+                    : MessageFormat.format(Messages.get("find.none.toast"), query);
+            JScrollPane pane = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, text);
+            if (pane != null) toast.show(pane, stepNote);
+            return;
+        }
         int from = cursor;
         cursor = cursor < 0 ? (direction > 0 ? 0 : matches.size() - 1)
                             : Math.floorMod(cursor + direction, matches.size());
-        wrapNote = FindBar.isWrap(from, cursor, direction, matches.size())
+        stepNote = FindBar.isWrap(from, cursor, direction, matches.size())
                 ? Messages.get(direction > 0 ? "find.wrapped.top" : "find.wrapped.bottom") : null;
         showCurrent();
     }
 
-    /** The last wrap's note, until a step that doesn't wrap; for tests. */
-    String wrapNoteText() { return wrapNote; }
+    /** The last step's note (a wrap, or nothing to go to), until a step that has none; for tests. */
+    String stepNoteText() { return stepNote; }
+
+    /** Whether the field shows "nothing matches"; for tests. */
+    boolean showsNoMatch() { return noMatch.isNoMatch(); }
 
     // For tests.
     String counterText() { return counter.getText(); }
@@ -199,7 +220,7 @@ final class DetailFindBar extends JPanel {
     /** Finds the query again; {@code jump} goes to the first match, else the current one stays. */
     private void research(boolean jump) {
         String query = field.getText();
-        wrapNote = null;      // finding again is never a wrap
+        stepNote = null;      // finding again is never a step
         TextMatches.Result result = TextMatches.find(documentText(), query,
                 caseToggle.isSelected(), regexToggle.isSelected());
         clearMarks();
@@ -211,7 +232,8 @@ final class DetailFindBar extends JPanel {
                 tags.add(hl.addHighlight(r.start(), r.end(), new MarkPainter(i)));
             } catch (BadLocationException ignored) {}
         }
-        field.putClientProperty("JComponent.outline", result.error() != null ? "error" : null);
+        patternError = result.error();
+        noMatch.set(!query.isEmpty() && matches.isEmpty());   // an invalid pattern finds nothing too
         if (result.error() != null) {
             cursor = -1;
             showCount(Messages.get("detail.find.invalid"), true);
@@ -240,7 +262,7 @@ final class DetailFindBar extends JPanel {
         // The caret goes to the match: a new entry's caret reset scrolls to the caret later on
         // (DefaultCaret does it in an invokeLater), which would otherwise undo this scroll.
         text.setCaretPosition(r.start());
-        String note = wrapNote;
+        String note = stepNote;
         SwingUtilities.invokeLater(() -> scrollTo(r, note));
     }
 
@@ -280,6 +302,8 @@ final class DetailFindBar extends JPanel {
     private void clearMarks() {
         Highlighter hl = text.getHighlighter();
         for (Object tag : tags) hl.removeHighlight(tag);
+        // A mark is drawn a little wider than its text, past what removeHighlight repaints.
+        if (!tags.isEmpty()) text.repaint();
         tags.clear();
     }
 

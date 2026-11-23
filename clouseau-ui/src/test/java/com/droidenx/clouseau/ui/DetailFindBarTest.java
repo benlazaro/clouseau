@@ -3,6 +3,7 @@ package com.droidenx.clouseau.ui;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.*;
+import java.text.MessageFormat;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,15 +71,63 @@ class DetailFindBarTest {
     void steppingPastTheEndSaysItWrapped() throws Exception {
         DetailFindBar bar = bar("x a x");
         edt(() -> bar.open("x"));
-        assertThat(bar.wrapNoteText()).isNull();
+        assertThat(bar.stepNoteText()).isNull();
         edt(() -> bar.step(+1));
-        assertThat(bar.wrapNoteText()).isNull();                // 1 → 2, no wrap
+        assertThat(bar.stepNoteText()).isNull();                // 1 → 2, no wrap
         edt(() -> bar.step(+1));
-        assertThat(bar.wrapNoteText()).isEqualTo(Messages.get("find.wrapped.top"));
+        assertThat(bar.stepNoteText()).isEqualTo(Messages.get("find.wrapped.top"));
         edt(() -> bar.step(-1));
-        assertThat(bar.wrapNoteText()).isEqualTo(Messages.get("find.wrapped.bottom"));
+        assertThat(bar.stepNoteText()).isEqualTo(Messages.get("find.wrapped.bottom"));
         edt(() -> bar.step(-1));
-        assertThat(bar.wrapNoteText()).isNull();                // an ordinary step hides it
+        assertThat(bar.stepNoteText()).isNull();                // an ordinary step hides it
+    }
+
+    @Test
+    void nothingFoundTurnsTheFieldRedAndAStepSaysWhy() throws Exception {
+        DetailFindBar bar = bar("PID|1\nOBX|1\nOBX|2");
+        edt(() -> bar.open("ZZZ"));
+        assertThat(bar.showsNoMatch()).isTrue();
+        assertThat(bar.field().getClientProperty("JComponent.outline")).isEqualTo("error");
+        edt(() -> bar.step(+1));
+        assertThat(bar.stepNoteText()).isEqualTo(MessageFormat.format(Messages.get("find.none.toast"), "ZZZ"));
+
+        edt(() -> { bar.field().setText("OBX"); bar.step(+1); });
+        assertThat(bar.showsNoMatch()).isFalse();
+        assertThat(bar.field().getClientProperty("JComponent.outline")).isNull();
+        assertThat(bar.stepNoteText()).isNull();
+    }
+
+    @Test
+    void anInvalidPatternIsRedAndAStepSaysWhy() throws Exception {
+        DetailFindBar bar = bar("abc");
+        edt(() -> { bar.regexToggle().doClick(); bar.open("("); });
+        assertThat(bar.showsNoMatch()).isTrue();
+        edt(() -> bar.step(+1));
+        assertThat(bar.stepNoteText()).startsWith(Messages.get("detail.find.invalid") + ": ");
+    }
+
+    @Test
+    void closingClearsTheRed() throws Exception {
+        DetailFindBar bar = bar("abc");
+        edt(() -> bar.open("zzz"));
+        edt(bar::close);
+        assertThat(bar.showsNoMatch()).isFalse();
+        assertThat(bar.field().getBackground()).isEqualTo(UIManager.getColor("TextField.background"));
+    }
+
+    @Test
+    void reopeningFindsTheKeptQueryAgain() throws Exception {
+        DetailFindBar bar = bar("PID|1\nOBX|1\nOBX|2");
+        edt(() -> bar.open("OBX"));
+        edt(bar::close);
+        assertThat(text.getHighlighter().getHighlights()).isEmpty();
+        edt(() -> bar.open(null));                 // no seed
+        assertThat(bar.matchCount()).isEqualTo(2);
+        assertThat(bar.counterText()).isEqualTo("1 / 2");
+        edt(bar::close);
+        edt(() -> bar.open("OBX"));                // the same seed as the kept query
+        assertThat(bar.matchCount()).isEqualTo(2);
+        assertThat(text.getHighlighter().getHighlights()).hasSize(2);
     }
 
     @Test

@@ -103,6 +103,43 @@ class NavBarsTest {
     }
 
     @Test
+    void findingNothingTurnsTheFieldRedAndAStepSaysSo() throws Exception {
+        FindBar bar = onEdt(() -> new FindBar(table, FindBar.searchIn(model)));
+        onEdt(() -> bar.search("NO-SUCH-TEXT"));
+        awaitCounter(bar, "0 matches");
+        assertThat(onEdt(bar::showsNoMatch)).isTrue();
+        onEdt(() -> bar.navigate(+1));
+        assertThat(onEdt(bar::stepNoteText))
+                .isEqualTo(MessageFormat.format(Messages.get("find.none.toast"), "NO-SUCH-TEXT"));
+
+        onEdt(() -> bar.search("NEEDLE"));
+        awaitCounter(bar, "1 / 2");
+        assertThat(onEdt(bar::showsNoMatch)).isFalse();
+
+        onEdt(() -> bar.search("NO-SUCH-TEXT"));
+        awaitCounter(bar, "0 matches");
+        onEdt(bar::cancel);
+        assertThat(onEdt(bar::showsNoMatch)).isFalse();
+    }
+
+    @Test
+    void reopeningFindsTheKeptQueryAgain() throws Exception {
+        FindBar bar = onEdt(() -> new FindBar(table, FindBar.searchIn(model)));
+        onEdt(() -> { bar.open(); bar.field().setText("NEEDLE"); bar.search("NEEDLE"); });
+        awaitCounter(bar, "1 / 2");
+        assertThat(onEdt(bar::canHighlight)).isTrue();
+        onEdt(bar::close);
+        assertThat(onEdt(bar::counterText)).isEmpty();
+        assertThat(onEdt(bar::canHighlight)).isFalse();
+
+        onEdt(bar::open);
+        awaitCounter(bar, "1 / 2");
+        assertThat(onEdt(bar::canHighlight)).isTrue();                                   // Highlight ⌄ again
+        assertThat(onEdt(() -> bar.field().getText())).isEqualTo("NEEDLE");
+        assertThat(onEdt(() -> bar.field().getSelectedText())).isEqualTo("NEEDLE");   // typing replaces it
+    }
+
+    @Test
     void matchCountReadsNaturally() {
         String pattern = Messages.get("find.count");
         assertThat(MessageFormat.format(pattern, 0)).isEqualTo("0 matches");
@@ -126,18 +163,18 @@ class NavBarsTest {
 
         onEdt(() -> bar.navigate(+1));
         assertThat(selectedRow()).isEqualTo(8);
-        assertThat(onEdt(bar::wrapNoteText)).isNull();
+        assertThat(onEdt(bar::stepNoteText)).isNull();
         onEdt(() -> bar.navigate(+1));
         assertThat(selectedRow()).isEqualTo(3);
-        assertThat(onEdt(bar::wrapNoteText)).isEqualTo(Messages.get("find.wrapped.top"));
+        assertThat(onEdt(bar::stepNoteText)).isEqualTo(Messages.get("find.wrapped.top"));
         onEdt(() -> bar.navigate(-1));
         assertThat(selectedRow()).isEqualTo(8);
-        assertThat(onEdt(bar::wrapNoteText)).isEqualTo(Messages.get("find.wrapped.bottom"));
+        assertThat(onEdt(bar::stepNoteText)).isEqualTo(Messages.get("find.wrapped.bottom"));
 
         onEdt(bar::clearMatches);
         assertThat(onEdt(() -> bar.isMatch(3))).isFalse();
         assertThat(onEdt(bar::counterText)).isEmpty();
-        assertThat(onEdt(bar::wrapNoteText)).isNull();
+        assertThat(onEdt(bar::stepNoteText)).isNull();
     }
 
     // ── Highlight navigation bar ─────────────────────────────────────────────

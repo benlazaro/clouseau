@@ -138,6 +138,32 @@ class CombinedFilterTest {
     }
 
     @Test
+    void spacesAroundBarsAreIgnored() {
+        Set<LogLevel> all = EnumSet.allOf(LogLevel.class);
+        LogEntry timeout = new LogEntry(null, null, null, null, "Read timeout after 30s", "x", Map.of());
+        LogEntry refused = new LogEntry(null, null, null, null, "Connection refused", "x", Map.of());
+        LogEntry other = new LogEntry(null, null, null, null, "Request done: id = 11", "x", Map.of());
+
+        CombinedFilter spaced = filter(all, Set.of(), false, Map.of(), null, null, "timeout | refused");
+        assertThat(spaced.test(timeout)).isTrue();
+        assertThat(spaced.test(refused)).isTrue();
+        assertThat(spaced.test(other)).isFalse();
+        assertThat(filter(all, Set.of(), false, Map.of(), null, null, "request && id = (10 | 11)").test(other)).isTrue();
+        assertThat(filter(all, Set.of(), false, Map.of(), null, null, "timeout  |refused").test(refused)).isTrue();
+    }
+
+    @Test
+    void onlyBarsThatMeanOrLoseTheirSpaces() {
+        assertThat(CombinedFilter.tidyAlternatives("a | b|  c")).isEqualTo("a|b|c");
+        assertThat(CombinedFilter.tidyAlternatives("(10 | 11)")).isEqualTo("(10|11)");
+        assertThat(CombinedFilter.tidyAlternatives("a \\| b")).isEqualTo("a \\| b");      // a literal |
+        assertThat(CombinedFilter.tidyAlternatives("[ | ] x")).isEqualTo("[ | ] x");      // in a class
+        assertThat(CombinedFilter.tidyAlternatives("[] |] | x")).isEqualTo("[] |]|x");
+        assertThat(CombinedFilter.tidyAlternatives("a\\  | b")).isEqualTo("a\\ |b");      // an escaped space stays
+        assertThat(CombinedFilter.tidyAlternatives("id = 10")).isEqualTo("id = 10");      // other spaces stay
+    }
+
+    @Test
     void entriesWithoutALevelLoggerOrTimeAlwaysPass() {
         LogEntry bare = new LogEntry(null, null, null, null, "m", "m", Map.of());
         CombinedFilter f = filter(EnumSet.of(LogLevel.ERROR), Set.of("a"), false, Map.of(),

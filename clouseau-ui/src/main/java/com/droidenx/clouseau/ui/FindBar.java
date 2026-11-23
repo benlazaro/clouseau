@@ -62,10 +62,12 @@ final class FindBar extends JPanel {
     private final Search searcher;
     private final JTextField field = new JTextField();
     private final JLabel counter = new JLabel();
-    /** Where a wrap past the last or first match is said, over the rows. */
+    /** Where a step's note (a wrap, or nothing to go to) is said, over the rows. */
     private final Toast toast = new Toast();
-    /** The last wrap's note, until the next step that doesn't wrap; for tests. */
-    private String wrapNote;
+    /** The last step's note, until the next step that has none; for tests. */
+    private String stepNote;
+    /** The field turns red while the query finds nothing. */
+    private final NoMatchState noMatch = new NoMatchState(field);
 
     private Set<Integer>  matchModelRows = Set.of();
     /** The query the current matches are for, lower case; null with none. */
@@ -86,8 +88,13 @@ final class FindBar extends JPanel {
     private Highlighter highlighter;
     private final JButton highlightBtn = new JButton(Messages.get("find.highlight"));
 
+    /** The find fields' width: 320 px, down to 120 px when the bar is narrow. */
+    static final String FIELD_WIDTH = "w 120:320:320";
+
     FindBar(JTable table, Search searcher) {
-        super(new MigLayout("insets 3 8 3 8, gap 6", "[][grow][][][]8[][]", "[center]"));
+        // As in a browser's find bar, the field has a set width with its controls beside it,
+        // and only the close button sits at the far end.
+        super(new MigLayout("insets 3 8 3 8, gap 6", "[][][][][]8[]push[]", "[center]"));
         this.table = table;
         this.searcher = searcher;
         setBorder(new BarSeparator());
@@ -146,9 +153,6 @@ final class FindBar extends JPanel {
         closeBtn.setMargin(new Insets(1, 4, 1, 4));
         closeBtn.addActionListener(e -> close());
 
-        add(label);
-        add(field, "growx");
-        add(counter);
         // Highlight ⌄: color every match at once, with the row menu's swatches.
         FilterBar.pickerArrow(highlightBtn);
         highlightBtn.setFont(highlightBtn.getFont().deriveFont(11f));
@@ -157,7 +161,7 @@ final class FindBar extends JPanel {
         highlightBtn.addActionListener(e -> showHighlightPopup());
 
         add(label);
-        add(field, "growx");
+        add(field, FIELD_WIDTH);
         add(counter);
         add(prevBtn);
         add(nextBtn);
@@ -244,17 +248,32 @@ final class FindBar extends JPanel {
     /** Shows the bar and puts the cursor in the search field, text selected. */
     void open() {
         setVisible(true);
+        // Closing keeps the text but drops its matches, so the kept query is found again,
+        // as a browser does; typing still replaces it, as it's selected.
+        if (activeQuery == null && !field.getText().isBlank()) search(field.getText());
         field.selectAll();
         field.requestFocusInWindow();
     }
 
     /** Hides the bar, drops the matches and returns focus to the table. */
-    private void close() {
+    void close() {
         setVisible(false);
+        if (debounce != null) debounce.stop();   // a query typed just before Esc isn't searched
         activeQuery = null;
         searcher.cancel();
         clearMatches();
+        noMatch.set(false);
         table.requestFocusInWindow();
+    }
+
+    /** Whether Highlight ⌄ can be pressed; for tests. */
+    boolean canHighlight() {
+        return highlightBtn.isEnabled();
+    }
+
+    /** The search field; for tests. */
+    JTextField field() {
+        return field;
     }
 
     /** The counter's text ("3 / 12", "0 matches"); for tests. */
@@ -286,7 +305,7 @@ final class FindBar extends JPanel {
         matchedQuery   = null;
         cursor         = -1;
         highlightBtn.setEnabled(false);
-        wrapNote       = null;
+        stepNote       = null;
         counter.setText("");
         repaintTable();
     }
@@ -316,6 +335,7 @@ final class FindBar extends JPanel {
         activeQuery = null;
         searcher.cancel();
         clearMatches();
+        noMatch.set(false);
     }
 
     /**
@@ -349,8 +369,13 @@ final class FindBar extends JPanel {
         highlightBtn.setEnabled(n > 0);
         highlightBtn.setToolTipText(n > 0 ? MessageFormat.format(Messages.get("find.highlight.tooltip"), n) : null);
         repaintTable();
+        // Kept while the rows are searched again (clearMatches), so a filter change doesn't flicker it.
+        noMatch.set(n == 0);
         if (n > 0 && select) navigate(+1);
     }
+
+    /** Whether the field shows "nothing matches"; for tests. */
+    boolean showsNoMatch() { return noMatch.isNoMatch(); }
 
     static boolean matches(LogEntry entry, String lower) {
         if (entry.message() != null && entry.message().toLowerCase().contains(lower)) return true;
@@ -368,18 +393,24 @@ final class FindBar extends JPanel {
     /** Whether the bar is open with something typed, so Find Next / Previous can step. */
     boolean hasQuery() { return isVisible() && !field.getText().isBlank(); }
 
-    /** The last wrap's note, until a step that doesn't wrap; for tests. */
-    String wrapNoteText() { return wrapNote; }
+    /** The last step's note (a wrap, or nothing to go to), until a step that has none; for tests. */
+    String stepNoteText() { return stepNote; }
 
     /** What's typed in the field, as typed. */
     String query() { return field.getText(); }
 
     /**
      * The next (+1) or previous (-1) match, wrapping round; going past the last or first match
-     * says so in a toast over the rows, clear of the selected one.
+     * says so in a toast over the rows, clear of the selected one. With a finished search that
+     * found nothing, the toast says so instead: the key did nothing, and this says why.
      */
     void navigate(int direction) {
-        if (matches.isEmpty()) return;
+        if (matches.isEmpty()) {
+            boolean searched = activeQuery != null && activeQuery.toLowerCase().equals(matchedQuery);
+            stepNote = searched ? MessageFormat.format(Messages.get("find.none.toast"), activeQuery) : null;
+            if (stepNote != null && table.getParent() instanceof JViewport rows) toast.show(rows, stepNote);
+            return;
+        }
         boolean wrapped;
         if (cursor < 0) {
             // The first step starts from the selected row; with none after (before) it, it wraps.
@@ -403,18 +434,18 @@ final class FindBar extends JPanel {
             cursor = (cursor + direction + matches.size()) % matches.size();
             wrapped = isWrap(from, cursor, direction, matches.size());
         }
-        wrapNote = wrapped ? Messages.get(direction > 0 ? "find.wrapped.top" : "find.wrapped.bottom") : null;
+        stepNote = wrapped ? Messages.get(direction > 0 ? "find.wrapped.top" : "find.wrapped.bottom") : null;
         int viewRow = table.convertRowIndexToView(matches.get(cursor));
         if (viewRow >= 0) {
             table.setRowSelectionInterval(viewRow, viewRow);
             table.scrollRectToVisible(table.getCellRect(viewRow, 0, true));
             counter.setText((cursor + 1) + " / " + matches.size());
-            if (wrapNote != null && table.getParent() instanceof JViewport rows) {
+            if (stepNote != null && table.getParent() instanceof JViewport rows) {
                 // Over the rows, clear of the one just selected.
                 Rectangle row = table.getCellRect(viewRow, 0, true);
                 row.x = 0;
                 row.width = table.getWidth();
-                toast.show(rows, wrapNote, SwingUtilities.convertRectangle(table, row, rows));
+                toast.show(rows, stepNote, SwingUtilities.convertRectangle(table, row, rows));
             }
         }
     }

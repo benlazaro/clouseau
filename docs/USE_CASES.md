@@ -145,7 +145,9 @@ with **Aa** (match case) and **.\*** (regular expression) toggles. Every match g
 light mark and the current one an amber box, scrolled into view; `Enter` / `Shift+Enter` and
 `F3` / `Shift+F3` step through them, wrapping round with a brief "Back to the first match"
 toast over the panel, clear of the match (the table's find bar shows the same toast over
-the rows, clear of the selected row), and `Esc` closes it. The query stays as the selection moves:
+the rows, clear of the selected row), and `Esc` closes it. In both bars a query that
+matches nothing (or an invalid pattern) turns the field red, with one pulse as it turns, and
+a step then toasts "No matches for “…”" (or the pattern error). The query stays as the selection moves:
 each new entry is searched again and shown at its first match. Its first query is the
 selected text, else the table's find query. It searches text only; it doesn't know JSON
 paths or HL7 field numbers (`PID-5`).

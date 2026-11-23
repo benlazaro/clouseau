@@ -80,13 +80,17 @@ searches every row.)
   Past the last match it goes back to the first, and a note in the middle of the panel says
   **↻ Back to the first match** (**↺ Back to the last match** going backwards).
   `Esc` closes the strip.
+- When nothing matches, the search field turns red with a short pulse, and stays red until
+  the text matches again. Pressing `Enter` or `F3` then says so in the middle of the panel:
+  **No matches for "…"**, or why a regular expression isn't valid.
 - **Aa** matches case. **.\*** treats the text as a regular expression, so `^OBX\|` finds
   every OBX segment of an HL7 message.
 - The search stays when you select another row. Move through the table with `↑` `↓` and
   each entry opens at its first match, which makes it easy to compare one value across many
   lines.
 - If you selected text in the panel, `Ctrl+F` searches for it. Otherwise the strip starts
-  with what the table's find bar is searching for.
+  with what the table's find bar is searching for, or with your last search here, found
+  again as it opens.
 
 Control characters in a field, such as a NUL byte or the escape that starts a terminal color
 code, are shown dimmed as their symbols (`␀`, `␛`) so you can see they're there. Copying
@@ -141,6 +145,8 @@ fold and unfold), `Space` ticks or unticks the row you're on, and `Esc` closes t
     contain all three, in any order.
   - `|` widens it: `timeout|refused` shows messages that contain either.
   - Both work together: `request && id = (10|11)`.
+  - Spaces around `&&` and `|` don't count, so `timeout | refused` is the same as
+    `timeout|refused`. To match a `|` itself, write `\|`.
   - The text is also a [Java regular expression](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/regex/Pattern.html),
     so `id = 10\b` matches `id = 10` but not `id = 100`. Characters such as `(`, `[`, `.`
     and `*` have special meanings; put a `\` before one to match it as it is.
@@ -154,12 +160,17 @@ filter reads the text of the remaining rows in the background; the status bar sh
 ## Find
 
 `Ctrl+F` (**Edit → Find…**) opens the find bar. It searches every column of the rows the filters show.
+Closing it with `Esc` or **×** keeps your text: open it again and the same search runs at
+once, with the text selected so typing replaces it.
 
 - `Enter`, `F3` or **▼** goes to the next match, `Shift+Enter`, `Shift+F3` or **▲** to the
   previous one. `F3` works from the table too. Past the last match it goes back to the first,
   and a note over the rows says **↻ Back to the first match** for a moment (**↺ Back to the
   last match** going backwards), so you know you've seen every match. The note moves above or
   below the selected row rather than cover it.
+- When no row matches, the search field turns red with a short pulse, and stays red until
+  the text matches again. Pressing `Enter` or `F3` then says **No matches for "…"** over
+  the rows.
 - Each match is marked with a light box around the matching text, in every column, so a
   highlighted row keeps its color and still shows what matched. A short bar at the
   table's left edge marks every matching row, including one that matched only in a
