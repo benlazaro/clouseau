@@ -92,6 +92,7 @@ public final class LogTableModel extends AbstractTableModel {
     private Future<?>  filterFuture;
     private long       filterGeneration = 0;
     private IntConsumer filterProgress = p -> {};
+    private IntConsumer findProgress = p -> {};
     /** Rows indexed during a text-filter run that are read on the EDT at the end, not in another run. */
     private static final int EDT_CATCH_UP_ROWS = 2_000;
     /** Rows a re-merged tail may re-filter on the EDT from the index columns alone. */
@@ -595,6 +596,15 @@ public final class LogTableModel extends AbstractTableModel {
         this.filterProgress = listener != null ? listener : p -> {};
     }
 
+    /**
+     * Receives find progress, whoever started the find: 0 when one starts, a percentage while
+     * it reads, and -1 when it has finished or was cancelled ({@link #cancelFind}, {@link #clear()}).
+     * Called on the EDT.
+     */
+    public void setFindProgressListener(IntConsumer listener) {
+        this.findProgress = listener != null ? listener : p -> {};
+    }
+
     /** Installs a new filter and schedules an off-EDT recompute of visible rows. Must be called on the EDT. */
     public void applyFilter(EntryFilter filter) {
         activeFilter = filter;
@@ -719,6 +729,7 @@ public final class LogTableModel extends AbstractTableModel {
     public void find(Predicate<LogEntry> matches, IntConsumer progress, Consumer<int[]> done) {
         cancelFind();
         long generation = findGeneration;
+        findProgress.accept(0);
         IntList visible = rows.copy();
         EntryRows indexedSnapshot = indexed;
         int indexedRows = indexedCount;
@@ -730,7 +741,9 @@ public final class LogTableModel extends AbstractTableModel {
             int first = visible.size() > 0 ? visible.get(0) : Integer.MAX_VALUE;
             if (indexedSnapshot != null && first < indexedRows) {
                 Progress p = new Progress(indexedRows - first, pct -> SwingUtilities.invokeLater(() -> {
-                    if (findGeneration == generation) progress.accept(pct);
+                    if (findGeneration != generation) return;
+                    findProgress.accept(pct);
+                    progress.accept(pct);
                 }));
                 indexedSnapshot.scan(first, indexedRows, new EntryRows.Visitor() {
                     @Override public void startRun() { scan.startRun(); }
@@ -752,6 +765,7 @@ public final class LogTableModel extends AbstractTableModel {
             int[] found = scan.result();
             SwingUtilities.invokeLater(() -> {
                 if (findGeneration != generation) return;
+                findProgress.accept(-1);
                 progress.accept(-1);
                 done.accept(found);
             });
@@ -762,6 +776,7 @@ public final class LogTableModel extends AbstractTableModel {
     public void cancelFind() {
         if (findFuture != null) findFuture.cancel(true);
         findGeneration++;
+        findProgress.accept(-1);
     }
 
     private static boolean isContinuation(LogEntry e) {

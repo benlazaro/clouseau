@@ -94,6 +94,8 @@ final class SharedTabContext {
     private boolean textLost;
     /** The running filter's progress while it reads text from the file, or -1. */
     private int filterPercent = -1;
+    /** The bar over the rows, and their fade, while a filter or find reads the file. */
+    private BusyIndicator busy;
     /** The plain-text view shown instead of the rows (UC-13), or null. Its content owns it. */
     private PlainTextView plainView;
 
@@ -112,6 +114,7 @@ final class SharedTabContext {
         StatusHolder status = new StatusHolder();
         model.setFilterProgressListener(percent -> {
             filterPercent = percent;
+            if (busy != null) busy.filterProgress(percent);
             if (status.ready) updateStatusBar();
         });
         model.applyFilter(filterBar.buildFilter());
@@ -170,7 +173,10 @@ final class SharedTabContext {
         detailPanel = new DetailPanel(formatters, highlighters, this::currentDetail);
         // The table's place above the detail pane: the rows, or a message instead of them
         // (a missing file, a source that couldn't connect), with the detail pane left empty.
-        tableCards.add(tableView.scrollPane(), CARD_TABLE);
+        // Over the rows: the bar and fade that show a filter or find still reading the file.
+        busy = new BusyIndicator(tableView.scrollPane());
+        model.setFindProgressListener(busy::findProgress);
+        tableCards.add(busy.component(), CARD_TABLE);
         JSplitPane split = new RememberedSplit(tableCards, detailPanel);
         // Ctrl+C copies the selected line's message, Ctrl+Alt+C its raw text, Ctrl+Shift+C the
         // whole entry, from the table or the detail pane alike; the pane flashes and confirms

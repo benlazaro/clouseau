@@ -872,6 +872,25 @@ rounded `MenuBar.hoverBackground` behind it and brightens its text to `foregroun
 short hairline in `separatorColor`, as tall as the text, separates the badge from the row
 counts.
 
+### 6.16 Busy bar over the rows
+
+A text filter or a Find on a big file can take seconds, and the status bar's "filtering n%"
+and the find counter's "Searching n%" are easy to miss. So the rows show it too
+(`BusyIndicator`, a `JLayer` over the table's scroll pane, and over the plain-text view's):
+
+- A 3px bar along the top of the rows, under the column headers, fills from left to right
+  with the run's percentage, in `progressForeground` over a `progressBackground` track (the
+  loading bar's colors). With a filter and a Find running together, it follows the filter.
+- The rows are faded, for a filter and a Find alike: the table's background is painted over
+  them at 75% opacity. The bar alone was too easy to miss, and a fade is seen wherever the eye is.
+- Both appear only once the run has gone on for 250 ms, so quick filters don't flicker.
+- It only paints. The rows can still be scrolled, selected and read.
+
+It is fed by the progress the model already reports: `LogTableModel`'s filter progress, and
+its find progress (`setFindProgressListener`: 0 when a find starts, -1 when it ends or is
+cancelled, `clear()` included, so the bar never outlives its find). `PlainTextView` feeds its
+own from its line scan.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:
@@ -1312,7 +1331,7 @@ two more methods, so one object carries both parts:
   with too many values to index. Then the filter executor reads only the rows
   `testIndex` passed, in file order, in large sequential reads (`IndexedEntries.scan`
   with a row predicate), and gives each to `test`. It reports progress to the status bar
-  and is cancelled by the next filter change.
+  and the busy bar over the rows (6.16), and is cancelled by the next filter change.
 
 `CombinedFilter` is the filter bar's implementation; `CombinedFilterTest` checks that the
 index and the entry decide alike. A plain lambda is also an `EntryFilter` whose rows are

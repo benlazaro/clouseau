@@ -196,7 +196,8 @@ release only.
   `Toast` (ui) is the brief centered note (copy, text size, find wraps) over the pane or the table.
   `NoMatchState` (ui) turns a find field red, with one pulse, while its query matches nothing.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
-  that steps through highlighted rows.
+  that steps through highlighted rows. `BusyIndicator` (ui) is the bar over the rows, and their fade,
+  while a filter or find reads the file (DESIGN.md 6.16).
 - `DialogFooter`, `NoticeLabel`, `PromptDialog`, `ManagerDialogs` (ui) — the dialog building blocks
   (DESIGN.md 6.12): the footer with its hairline, the "Still needed: …" / result notice line, a small
   modal form (never a form inside a `JOptionPane`), and the managers' shared list, actions and sizes.

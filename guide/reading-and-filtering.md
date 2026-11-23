@@ -154,8 +154,9 @@ fold and unfold), `Space` ticks or unticks the row you're on, and `Esc` closes t
 ![Logger filter](../docs/screenshots/logger-filter.png)
 
 Level, logger, field and time filters take milliseconds even on a million lines. A text
-filter reads the text of the remaining rows in the background; the status bar shows
-"filtering n%" while it runs, and you can keep working.
+filter reads the text of the remaining rows in the background, and you can keep working.
+If it takes more than a moment, a thin bar fills along the top of the rows and the rows
+fade until the filtered ones replace them; the status bar also shows "filtering n%".
 
 ## Find
 
@@ -175,7 +176,9 @@ once, with the text selected so typing replaces it.
   highlighted row keeps its color and still shows what matched. A short bar at the
   table's left edge marks every matching row, including one that matched only in a
   column you've hidden.
-- The counter shows how many rows match ("Searching n%" while it's still counting).
+- The counter shows how many rows match ("Searching n%" while it's still counting). On a
+  big file, the rows fade and the same thin bar as a filter's fills along the top of them
+  while it searches.
 - **Highlight ⌄** colors every match at once: pick one of the [highlight](#highlights)
   colors, or **None** (the first swatch) to uncolor them; it asks first when that's
   two or more rows, unless you turned that off in Settings. A ring marks what

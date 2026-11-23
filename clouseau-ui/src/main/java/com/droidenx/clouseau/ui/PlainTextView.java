@@ -74,6 +74,8 @@ final class PlainTextView extends JPanel {
     private int maxLineChars;
     private Future<?> findFuture;
     private long findGeneration;
+    /** The busy bar over the lines while a find reads them. */
+    private BusyIndicator busy;
 
     /**
      * @param onCreateParser runs when the user asks to create a parser for the file
@@ -194,7 +196,8 @@ final class PlainTextView extends JPanel {
         top.add(banner, "growx, wrap");
         top.add(findBar, "growx, hidemode 3");
         add(top, BorderLayout.NORTH);
-        add(scroll, BorderLayout.CENTER);
+        busy = new BusyIndicator(scroll);
+        add(busy.component(), BorderLayout.CENTER);
     }
 
     // ── Loading and following ────────────────────────────────────────────────
@@ -414,9 +417,11 @@ final class PlainTextView extends JPanel {
         TextLines target = lines;
         int count = model.getRowCount();
         if (target == null) {
+            busy.findProgress(-1);
             done.accept(new int[0]);
             return;
         }
+        busy.findProgress(0);
         findFuture = findExecutor.submit(() -> {
             List<Integer> found = new ArrayList<>();
             int[] lastPct = {-1};
@@ -426,7 +431,11 @@ final class PlainTextView extends JPanel {
                     int pct = (int) ((n + 1) * 100L / count);
                     if (pct != lastPct[0] && pct % 5 == 0) {
                         lastPct[0] = pct;
-                        SwingUtilities.invokeLater(() -> { if (findGeneration == generation) progress.accept(pct); });
+                        SwingUtilities.invokeLater(() -> {
+                            if (findGeneration != generation) return;
+                            busy.findProgress(pct);
+                            progress.accept(pct);
+                        });
                     }
                 }, () -> Thread.currentThread().isInterrupted());
             } catch (IOException e) {
@@ -434,13 +443,18 @@ final class PlainTextView extends JPanel {
             }
             if (Thread.currentThread().isInterrupted()) return;
             int[] rows = found.stream().mapToInt(Integer::intValue).toArray();
-            SwingUtilities.invokeLater(() -> { if (findGeneration == generation) done.accept(rows); });
+            SwingUtilities.invokeLater(() -> {
+                if (findGeneration != generation) return;
+                busy.findProgress(-1);
+                done.accept(rows);
+            });
         });
     }
 
     private void cancelFind() {
         if (findFuture != null) findFuture.cancel(true);
         findGeneration++;
+        if (busy != null) busy.findProgress(-1);
     }
 
     // ── Copy ─────────────────────────────────────────────────────────────────

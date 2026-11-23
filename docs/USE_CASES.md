@@ -179,7 +179,8 @@ in a few interactions.
 decided from the index and take milliseconds even on a million lines. A text filter and
 Find read the text of the rows the other filters keep, in the background: the status bar
 shows "filtering n%" and the Find counter "Searching n%", and the window stays
-responsive (about 1.6 s for 1M lines). Times are compared to the millisecond. The text
+responsive (about 1.6 s for 1M lines). When it takes longer than a quarter of a second, a
+thin bar fills along the top of the rows and the rows fade until it's done. Times are compared to the millisecond. The text
 filter matches the message, case-insensitively, as a regex (literal if it doesn't compile);
 `&&` joins terms that must all match, so narrowing down needs no regex lookaheads.
 
