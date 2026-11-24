@@ -76,7 +76,8 @@ searches every row.)
   pretty-printed, and the field lines above the message are searched too.
 - Every match is marked, and the current one is boxed in amber and scrolled into view. The
   count shows which one it is, such as **2 / 5**.
-- `Enter` or `F3` goes to the next match, `Shift+Enter` or `Shift+F3` to the previous one.
+- `Enter` or `F3` goes to the next match, `Shift+Enter` or `Shift+F3` to the previous one
+  (or **▼** and **▲**, which show while there are matches).
   Past the last match it goes back to the first, and a note in the middle of the panel says
   **↻ Back to the first match** (**↺ Back to the last match** going backwards).
   `Esc` closes the strip.
@@ -206,7 +207,7 @@ Closing it with `Esc` or **×** keeps your text: open it again and the same sear
 once, with the text selected so typing replaces it.
 
 - `Enter`, `F3` or **▼** goes to the next match, `Shift+Enter`, `Shift+F3` or **▲** to the
-  previous one. `F3` works from the table too. Past the last match it goes back to the first,
+  previous one (the arrows show while there are matches). `F3` works from the table too. Past the last match it goes back to the first,
   and a note over the rows says **↻ Back to the first match** for a moment (**↺ Back to the
   last match** going backwards), so you know you've seen every match. The note moves above or
   below the selected row rather than cover it.

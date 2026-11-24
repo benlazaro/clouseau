@@ -35,6 +35,9 @@ final class DetailFindBar extends JPanel {
     private final JToggleButton caseToggle = new JToggleButton(Messages.get("detail.find.case"));
     private final JToggleButton regexToggle = new JToggleButton(Messages.get("detail.find.regex"));
     private final JLabel counter = new JLabel();
+    /** Previous / next match: shown only while there are matches. Hidden, they take no room. */
+    private final JButton prev = FindBar.arrowButton("\u25b2");
+    private final JButton next = FindBar.arrowButton("\u25bc");
     /** Where a step's note (a wrap, or nothing to go to) is said: the pane's toast, over its text. */
     private final Toast toast;
     /** The last step's note, until the next step that has none; for tests. */
@@ -52,7 +55,7 @@ final class DetailFindBar extends JPanel {
     private Timer debounce;
 
     DetailFindBar(JTextComponent text, Toast toast, Runnable focusBack) {
-        super(new MigLayout("insets 3 10 3 8, gap 6", "[][][]8[][][]push[]", "[center]"));
+        super(new MigLayout("insets 3 10 3 8, gap 6", "[][][]8[]push[]", "[center]"));
         this.text = text;
         this.toast = toast;
         this.focusBack = focusBack;
@@ -91,8 +94,7 @@ final class DetailFindBar extends JPanel {
         ClouseauColors.themedForeground(counter, ClouseauColors::dimForeground);
         counter.setFont(counter.getFont().deriveFont(11f));
 
-        JButton prev = FindBar.arrowButton("\u25b2");
-        JButton next = FindBar.arrowButton("\u25bc");
+        showArrows(false);
         prev.setToolTipText(Messages.get("find.prev.tooltip"));
         next.setToolTipText(Messages.get("find.next.tooltip"));
         prev.addActionListener(e -> step(-1));
@@ -107,9 +109,10 @@ final class DetailFindBar extends JPanel {
         add(field, FindBar.FIELD_WIDTH);
         add(caseToggle);
         add(regexToggle);
+        // The arrows, then the count: hidden arrows take no room, so the count sits by the toggles.
+        add(prev, "split 3, hidemode 3");
+        add(next, "hidemode 3");
         add(counter, "wmin 70");
-        add(prev);
-        add(next);
         add(closeBtn);
     }
 
@@ -141,6 +144,7 @@ final class DetailFindBar extends JPanel {
         counter.setText("");
         stepNote = null;
         noMatch.set(false);
+        showArrows(false);
         focusBack.run();
     }
 
@@ -233,6 +237,7 @@ final class DetailFindBar extends JPanel {
             } catch (BadLocationException ignored) {}
         }
         patternError = result.error();
+        showArrows(!matches.isEmpty());
         noMatch.set(!query.isEmpty() && matches.isEmpty());   // an invalid pattern finds nothing too
         if (result.error() != null) {
             cursor = -1;
@@ -254,6 +259,14 @@ final class DetailFindBar extends JPanel {
             text.repaint();
         }
     }
+
+    private void showArrows(boolean show) {
+        prev.setVisible(show);
+        next.setVisible(show);
+    }
+
+    /** Whether the previous / next buttons show; for tests. */
+    boolean showsArrows() { return next.isVisible(); }
 
     private void showCurrent() {
         showCount(position(), false);
