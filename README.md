@@ -73,8 +73,11 @@ Open logs of any size, merge the logs of several services into one timeline, fil
 | **Edge** | [⬇ clouseau-edge.jar](https://github.com/benlazaro/clouseau/releases/download/edge/clouseau-edge.jar), built from the latest commit on `main` |
 
 Each release's zip is portable and brings its own Java runtime: unzip it and run the
-launcher (`Clouseau.exe` on Windows). Releases are pre-releases while the plugin API
-settles. The Edge build is a single jar for trying the newest changes; run it with
+launcher (`Clouseau.exe` on Windows). Clouseau isn't signed with a paid certificate, so
+Windows and macOS warn you the first time you start it:
+[Installing](https://benlazaro.github.io/clouseau/guide/installing.html) shows how to allow it
+once, and how to upgrade without losing your settings. Releases are pre-releases while the
+plugin API settles. The Edge build is a single jar for trying the newest changes; run it with
 `java -jar clouseau-edge.jar` on Java 21 or later. Clouseau tells you when a new release
 is out; [Settings → Updates](https://benlazaro.github.io/clouseau/guide/settings.html#new-versions)
 turns that off.

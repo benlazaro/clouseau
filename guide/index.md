@@ -7,10 +7,12 @@ has_children: true
 # User Guide
 
 Everything Clouseau does, one topic per page. New to Clouseau? Start with
-[Opening files](opening-files.md), then [Reading and filtering](reading-and-filtering.md).
+[Installing](installing.md), then [Opening files](opening-files.md) and
+[Reading and filtering](reading-and-filtering.md).
 
 | Page | What it covers |
 |---|---|
+| [Installing](installing.md) | Download, the first start on Windows and macOS, and upgrading |
 | [Opening files](opening-files.md) | Open, drag and drop, recent files, `.gz` and `.zip`, tabs, files no parser recognizes |
 | [Reading and filtering](reading-and-filtering.md) | The table, the detail panel, filters, Find, highlights and columns |
 | [Merged views](merged-views.md) | Several logs as one timeline; per-file timezone, parser and clock correction |
