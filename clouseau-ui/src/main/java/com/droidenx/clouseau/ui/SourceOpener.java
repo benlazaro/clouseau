@@ -22,9 +22,9 @@ import java.util.concurrent.ExecutionException;
  * chosen in Settings → Source Code.
  *
  * <p>The file is looked up in the source folders first. A JetBrains IDE is given its full path
- * ({@link JetBrainsIde}), which it opens whether or not the project is open; a file the folders
- * don't have is sent by its path in the source tree, for the IDE to look up in its open
- * projects. VS Code and Cursor get the full path, through their {@code vscode://} and
+ * ({@link JetBrainsIde}); a file the folders don't have is looked up in the folders of the
+ * projects open in the IDE, and one neither has (JDK or library code) gets a toast saying so.
+ * VS Code and Cursor get the full path, through their {@code vscode://} and
  * {@code cursor://} links.
  *
  * <p>The source folders are those chosen in Settings, or, with none chosen, the usual places
@@ -113,12 +113,13 @@ final class SourceOpener {
     }
 
     /**
-     * A JetBrains IDE: by full path when the source folders have the file, which the IDE opens
-     * whether or not its project is open; otherwise by the path in the source tree, for the IDE
-     * to look up in its open projects. Blocks.
+     * A JetBrains IDE: by full path when the source folders, or the folders of the projects open
+     * in the IDE, have the file. When neither has it, it's JDK or library code, which the IDE
+     * can't be asked to open: {@link Outcome#NOT_FOUND}. Blocks.
      *
-     * <p>The IDE Remote Control plugin answers 200 to a relative path whether or not it found
-     * the file, so a file asked for that way can't be known to have opened: it's
+     * <p>Only when the IDE's open projects can't be read is the file sent by its path in the
+     * source tree, for the IDE to look up in them. The IDE Remote Control plugin answers 200 to
+     * that whether or not it found the file, so it can't be known to have opened: it's
      * {@link Outcome#ASKED}, and gets a note. (IDEs before 2026.2 answered 404 when no project
      * had it, which still comes back as {@code NOT_FOUND}.)
      *
@@ -130,26 +131,43 @@ final class SourceOpener {
      */
     private static Done openInJetBrains(List<SourceRef> candidates) {
         JetBrainsIde ide = new JetBrainsIde();
+        Optional<JetBrainsIde.About> about = ide.about();
+        Optional<JetBrainsProjects> projects = about.flatMap(a -> JetBrainsProjects.of(a.name(), a.product(), a.build()));
         SourceFolders folders = index();
+        SourceFolders openProjects = projects.map(p -> openProjectIndex(p.openRoots(), folders.roots())).orElse(null);
         for (SourceRef ref : candidates) {
-            Optional<Path> file = folders.find(ref.path());
+            Optional<Path> file = folders.find(ref.path())
+                    .or(() -> openProjects != null ? openProjects.find(ref.path()) : Optional.empty());
             if (file.isEmpty()) continue;
-            Optional<JetBrainsIde.About> about = ide.about();
-            if (about.isPresent()) {
-                JetBrainsIde.About a = about.get();
-                Optional<JetBrainsProjects> projects = JetBrainsProjects.of(a.name(), a.product(), a.build());
-                if (projects.isPresent()) {
-                    Optional<JetBrainsProjects.Project> project = projects.get().projectOf(file.get());
-                    if (project.isEmpty() || !project.get().open()) {
-                        Path root = project.map(JetBrainsProjects.Project::root)
-                                .orElseGet(() -> JetBrainsProjects.likelyRoot(file.get()));
-                        return new Done(Outcome.NOT_OPEN, a.name(), root, file.get(), ref.line());
-                    }
+            if (projects.isPresent()) {
+                Optional<JetBrainsProjects.Project> project = projects.get().projectOf(file.get());
+                if (project.isEmpty() || !project.get().open()) {
+                    Path root = project.map(JetBrainsProjects.Project::root)
+                            .orElseGet(() -> JetBrainsProjects.likelyRoot(file.get()));
+                    return new Done(Outcome.NOT_OPEN, about.get().name(), root, file.get(), ref.line());
                 }
             }
             return openFull(ide, file.get(), ref.line());
         }
-        return new Done(outcome(ide.open(candidates), Outcome.ASKED));
+        // Can't tell which projects are open: let the IDE look the path up in them.
+        if (projects.isEmpty()) return new Done(outcome(ide.open(candidates), Outcome.ASKED));
+        // Neither the source folders nor the open projects have it: JDK or library code. The IDE
+        // would answer "OK" to its path in the source tree and open nothing, so it isn't asked.
+        return new Done(ide.canOpenFiles(about.get().port()) ? Outcome.NOT_FOUND : Outcome.NO_PLUGIN);
+    }
+
+    /** An index of the open projects outside the source folders; replaced when they change. Guarded by the class. */
+    private static SourceFolders openProjectIndex;
+
+    /**
+     * The open projects' folders that the source folders don't already cover, indexed (a project
+     * kept somewhere other than {@code ~/git}); null when there are none. Blocks briefly.
+     */
+    private static synchronized SourceFolders openProjectIndex(List<Path> open, List<Path> searched) {
+        List<Path> extra = open.stream().filter(root -> searched.stream().noneMatch(root::startsWith)).toList();
+        if (extra.isEmpty()) return null;
+        if (openProjectIndex == null || !openProjectIndex.roots().equals(extra)) openProjectIndex = new SourceFolders(extra);
+        return openProjectIndex;
     }
 
     /**

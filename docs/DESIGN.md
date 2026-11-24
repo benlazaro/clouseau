@@ -2527,9 +2527,16 @@ frame names, which also covers Kotlin's `FooKt` in `Foo.kt`), and the IDE looks 
   against IntelliJ 2026.3: a path no project has gets 200 and nothing opens), so a 200 to a
   relative path proves nothing and only the first IDE is asked. So the file is looked up in
   the source folders (below) first and sent by its full path, which opens reliably and
-  needn't have its project open: a user with dozens of projects sets nothing up. Only a
-  file the folders don't have goes by its relative path, and gets a toast saying the IDE
-  was asked, since Clouseau can't tell whether it found it.
+  needn't have its project open: a user with dozens of projects sets nothing up. A file the
+  folders don't have is looked up in the folders of the IDE's open projects (from
+  `recentProjects.xml`, below) that the source folders don't already cover, indexed the
+  same way, so a project kept elsewhere is found too. A file neither has is JDK or library
+  code: the IDE's `/api/file` searches only project source and content roots, never
+  libraries or the JDK, so asking would get a 200 and open nothing. It isn't asked, and a
+  toast says the file isn't in the user's projects (the IDE is asked with no file first, so
+  a missing plugin still gets its message). Only when the open projects can't be read does
+  a missed file go by its relative path, with a toast saying the IDE was asked, since
+  Clouseau can't tell whether it found it.
 
   A file whose project isn't open in the IDE opens there as a loose file, with none of the
   IDE's navigation, search or highlighting: no better than a text editor. So before sending

@@ -113,6 +113,16 @@ public final class JetBrainsIde {
         return best;
     }
 
+    /**
+     * Whether the IDE on {@code port} can open files for other programs: it has the IDE Remote
+     * Control service, which answers a request with no file with an error of its own rather than
+     * 404. Blocks.
+     */
+    public boolean canOpenFiles(int port) {
+        int status = request(port, "");
+        return status >= 0 && status != 404;
+    }
+
     /** The port of the IDE that last answered {@link Result#OPENED}, to find its process by. */
     public OptionalInt openedPort() {
         int port = openedPort;

@@ -61,6 +61,11 @@ public final class JetBrainsProjects {
         });
     }
 
+    /** The folders of the projects open in the IDE now. */
+    public List<Path> openRoots() {
+        return projects.stream().filter(Project::open).map(Project::root).toList();
+    }
+
     /** The project {@code file} is in (the deepest that holds it), if the IDE knows one. */
     public Optional<Project> projectOf(Path file) {
         Path abs = file.toAbsolutePath().normalize();

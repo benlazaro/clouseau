@@ -60,6 +60,13 @@ class JetBrainsProjectsTest {
     }
 
     @Test
+    void listsTheFoldersOfOpenProjectsOnly() {
+        Path home = dir.resolve("home");
+        JetBrainsProjects projects = new JetBrainsProjects(JetBrainsProjects.parse(recent("263.1"), home));
+        assertThat(projects.openRoots()).containsExactly(home.resolve("git/clouseau").toAbsolutePath().normalize());
+    }
+
+    @Test
     void aFileBelongsToTheDeepestProjectHoldingIt() {
         Path home = dir.resolve("home");
         JetBrainsProjects projects = new JetBrainsProjects(JetBrainsProjects.parse(recent("263.1"), home));

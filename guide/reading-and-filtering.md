@@ -106,8 +106,9 @@ class (`com.acme.OrderService`), the right-click menus of the panel and the tabl
 Choose your editor in **Settings → Source Code**:
 
 - **JetBrains IDE** (the default): IntelliJ IDEA, or any other JetBrains IDE. Clouseau
-  finds the file in your source folders and the IDE opens it at the line; a file that isn't
-  in your source folders, the IDE looks for in its open projects. If the file's project
+  finds the file in your source folders, or in the projects open in the IDE, and the IDE
+  opens it at the line. Frames from the JDK or a library aren't in your projects, so they
+  can't be opened from Clouseau; a brief note says so. If the file's project
   isn't open in the IDE, Clouseau says which project to open first, since the IDE can't
   navigate a file outside an open project; **Open File Anyway** opens it regardless, and
   brings the IDE to the front (on Linux that needs `wmctrl` or `xdotool` and an X11

@@ -113,6 +113,18 @@ class JetBrainsIdeTest {
     }
 
     @Test
+    void saysWhetherAnIdeCanOpenFiles() throws Exception {
+        int base = freePorts();
+        ide(base);
+        ide(base + 1, false);
+        JetBrainsIde ides = new JetBrainsIde("127.0.0.1", base, 3);
+        assertThat(ides.canOpenFiles(base)).as("with the plugin").isTrue();
+        assertThat(ides.canOpenFiles(base + 1)).as("without it").isFalse();
+        assertThat(ides.canOpenFiles(base + 2)).as("nothing listening").isFalse();
+        assertThat(requests).as("asks with no file").isEmpty();
+    }
+
+    @Test
     void triesEachCandidateUntilOneOpensAndLeavesOutAMissingLine() throws Exception {
         int base = freePorts();
         ide(base, "com/acme/Svc.kt");

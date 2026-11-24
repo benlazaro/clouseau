@@ -810,11 +810,11 @@ with nothing to configure for the usual setup.
   source folders: those listed in Settings, or by default the usual project folders in the
   home folder (`~/git`, `~/IdeaProjects`, …), and the editor opens that file. A user with
   dozens of projects under one folder sets nothing up, and the project needn't be open in
-  the IDE. A file the folders don't have is left to a JetBrains IDE to look up in its open
-  projects.
-- **Nothing is opened silently elsewhere.** If the source folders don't have the file (a
-  JDK or library frame), a toast says so; if no IDE answers, or it can't open files, a
-  message says what to do.
+  the IDE. A file the folders don't have is looked for in the projects open in a JetBrains
+  IDE, wherever they are.
+- **Nothing is opened silently elsewhere.** If neither has the file (a JDK or library
+  frame), a toast says it isn't in the user's projects, rather than a promise that nothing
+  keeps; if no IDE answers, or it can't open files, a message says what to do.
 - **Clicking a link doesn't get in the way of selecting text.** A drag that selects text
   opens nothing.
 
