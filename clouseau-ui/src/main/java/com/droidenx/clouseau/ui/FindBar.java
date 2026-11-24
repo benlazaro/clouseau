@@ -62,7 +62,7 @@ final class FindBar extends JPanel {
     private final Search searcher;
     private final JTextField field = new JTextField();
     private final JLabel counter = new JLabel();
-    /** Previous / next match: shown only while there are matches to step through. */
+    /** Previous / next match: enabled only while there are matches to step through. */
     private final JButton prevBtn = arrowButton("\u25b2");
     private final JButton nextBtn = arrowButton("\u25bc");
     /** Where a step's note (a wrap, or nothing to go to) is said, over the rows. */
@@ -144,9 +144,8 @@ final class FindBar extends JPanel {
 
         ClouseauColors.themedForeground(counter, ClouseauColors::dimForeground);
         counter.setFont(counter.getFont().deriveFont(11f));
-        counter.setPreferredSize(new Dimension(80, counter.getPreferredSize().height));
 
-        showArrows(false);
+        enableArrows(false);
         prevBtn.setToolTipText(Messages.get("find.prev.tooltip"));
         nextBtn.setToolTipText(Messages.get("find.next.tooltip"));
         prevBtn.addActionListener(e -> navigate(-1));
@@ -164,13 +163,14 @@ final class FindBar extends JPanel {
         highlightBtn.setEnabled(false);
         highlightBtn.addActionListener(e -> showHighlightPopup());
 
+        // As in the detail pane's strip: the field, what acts on its matches, the arrows, then
+        // the count. With the count last, its changing width moves nothing.
         add(label);
         add(field, FIELD_WIDTH);
-        // The arrows, then the count: hidden arrows take no room, so the count sits by the field.
-        add(prevBtn, "split 3, hidemode 3");
-        add(nextBtn, "hidemode 3");
-        add(counter);
         add(highlightBtn, "hidemode 3");
+        add(prevBtn, "split 3");
+        add(nextBtn);
+        add(counter);
         add(closeBtn);
     }
 
@@ -350,20 +350,21 @@ final class FindBar extends JPanel {
         searcher.cancel();
         clearMatches();
         noMatch.set(false);
-        showArrows(false);
+        enableArrows(false);
     }
 
     /**
-     * Shows the previous / next buttons only while there are matches; hidden, they take no
-     * room, so the count moves up to the field. {@link #clearMatches} leaves them: the rows are searched again right after.
+     * Enables the previous / next buttons only while there are matches; disabled rather than
+     * hidden, so the count beside them never moves. {@link #clearMatches} leaves them: the rows
+     * are searched again right after.
      */
-    private void showArrows(boolean show) {
-        prevBtn.setVisible(show);
-        nextBtn.setVisible(show);
+    private void enableArrows(boolean on) {
+        prevBtn.setEnabled(on);
+        nextBtn.setEnabled(on);
     }
 
-    /** Whether the previous / next buttons show; for tests. */
-    boolean showsArrows() { return nextBtn.isVisible(); }
+    /** Whether the previous / next buttons are enabled; for tests. */
+    boolean arrowsEnabled() { return nextBtn.isEnabled(); }
 
     /**
      * The table's rows changed (filtered, trimmed or reloaded), so the matches' model rows
@@ -394,7 +395,7 @@ final class FindBar extends JPanel {
                 () -> n == 0 ? ClouseauColors.statusError() : ClouseauColors.dimForeground());
         counter.setText(MessageFormat.format(Messages.get("find.count"), n));
         highlightBtn.setEnabled(n > 0);
-        showArrows(n > 0);
+        enableArrows(n > 0);
         highlightBtn.setToolTipText(n > 0 ? MessageFormat.format(Messages.get("find.highlight.tooltip"), n) : null);
         repaintTable();
         // Kept while the rows are searched again (clearMatches), so a filter change doesn't flicker it.

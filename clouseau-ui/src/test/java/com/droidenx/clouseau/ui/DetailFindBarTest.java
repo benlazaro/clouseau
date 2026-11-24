@@ -87,7 +87,7 @@ class DetailFindBarTest {
         DetailFindBar bar = bar("PID|1\nOBX|1\nOBX|2");
         edt(() -> bar.open("ZZZ"));
         assertThat(bar.showsNoMatch()).isTrue();
-        assertThat(bar.showsArrows()).isFalse();
+        assertThat(bar.arrowsEnabled()).isFalse();
         assertThat(bar.field().getClientProperty("JComponent.outline")).isEqualTo("error");
         edt(() -> bar.step(+1));
         assertThat(bar.stepNoteText()).isEqualTo(MessageFormat.format(Messages.get("find.none.toast"), "ZZZ"));
@@ -95,7 +95,7 @@ class DetailFindBarTest {
         edt(() -> { bar.field().setText("OBX"); bar.step(+1); });
         assertThat(bar.showsNoMatch()).isFalse();
         assertThat(bar.field().getClientProperty("JComponent.outline")).isNull();
-        assertThat(bar.showsArrows()).isTrue();
+        assertThat(bar.arrowsEnabled()).isTrue();
         assertThat(bar.stepNoteText()).isNull();
     }
 
@@ -114,8 +114,30 @@ class DetailFindBarTest {
         edt(() -> bar.open("zzz"));
         edt(bar::close);
         assertThat(bar.showsNoMatch()).isFalse();
-        assertThat(bar.showsArrows()).isFalse();
+        assertThat(bar.arrowsEnabled()).isFalse();
         assertThat(bar.field().getBackground()).isEqualTo(UIManager.getColor("TextField.background"));
+    }
+
+    @Test
+    void anEmptyPaneHidesTheStripUntilTheNextEntry() throws Exception {
+        DetailFindBar bar = bar("PID|1\nOBX|1\nOBX|2");
+        edt(() -> bar.open("OBX"));
+        edt(() -> bar.entryShown(false));
+        assertThat(bar.isVisible()).isFalse();
+        assertThat(bar.isOpen()).isTrue();
+        assertThat(bar.hasQuery()).isTrue();
+
+        edt(() -> { bar.entryShown(true); bar.textChanged(true); });
+        assertThat(bar.isVisible()).isTrue();
+        assertThat(bar.counterText()).isEqualTo("1 / 2");
+    }
+
+    @Test
+    void aClosedStripStaysHiddenWhenAnEntryShows() throws Exception {
+        DetailFindBar bar = bar("abc");
+        edt(() -> bar.entryShown(false));
+        edt(() -> bar.entryShown(true));
+        assertThat(bar.isVisible()).isFalse();
     }
 
     @Test

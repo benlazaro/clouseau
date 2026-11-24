@@ -655,11 +655,13 @@ final class DetailPanel extends JPanel {
             messageFieldStart = messageFieldEnd = -1;
             formatToggles.values().forEach(b -> b.setVisible(false));
             bodyCards.show(body, blank ? "blank" : "empty");
+            findBar.entryShown(false);     // an open strip waits, hidden, for the next entry
             findBar.textChanged(true);
             return;
         }
 
         bodyCards.show(body, "entry");
+        findBar.entryShown(true);
         SimpleAttributeSet levelVal = new SimpleAttributeSet(val);
         StyleConstants.setForeground(levelVal, ClouseauColors.levelColor(entry.level()));
         StyleConstants.setBold(levelVal, true);

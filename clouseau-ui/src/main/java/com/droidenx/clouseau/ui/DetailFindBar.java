@@ -35,7 +35,7 @@ final class DetailFindBar extends JPanel {
     private final JToggleButton caseToggle = new JToggleButton(Messages.get("detail.find.case"));
     private final JToggleButton regexToggle = new JToggleButton(Messages.get("detail.find.regex"));
     private final JLabel counter = new JLabel();
-    /** Previous / next match: shown only while there are matches. Hidden, they take no room. */
+    /** Previous / next match: enabled only while there are matches. */
     private final JButton prev = FindBar.arrowButton("\u25b2");
     private final JButton next = FindBar.arrowButton("\u25bc");
     /** Where a step's note (a wrap, or nothing to go to) is said: the pane's toast, over its text. */
@@ -48,6 +48,9 @@ final class DetailFindBar extends JPanel {
     private String patternError;
     /** Where focus goes when the strip closes. */
     private final Runnable focusBack;
+    /** Opened by the user and not closed since; it shows only while the pane has an entry. */
+    private boolean open;
+    private boolean hasEntry = true;
 
     private List<TextMatches.Range> matches = List.of();
     private final List<Object> tags = new ArrayList<>();
@@ -94,7 +97,7 @@ final class DetailFindBar extends JPanel {
         ClouseauColors.themedForeground(counter, ClouseauColors::dimForeground);
         counter.setFont(counter.getFont().deriveFont(11f));
 
-        showArrows(false);
+        enableArrows(false);
         prev.setToolTipText(Messages.get("find.prev.tooltip"));
         next.setToolTipText(Messages.get("find.next.tooltip"));
         prev.addActionListener(e -> step(-1));
@@ -109,9 +112,9 @@ final class DetailFindBar extends JPanel {
         add(field, FindBar.FIELD_WIDTH);
         add(caseToggle);
         add(regexToggle);
-        // The arrows, then the count: hidden arrows take no room, so the count sits by the toggles.
-        add(prev, "split 3, hidemode 3");
-        add(next, "hidemode 3");
+        // The arrows, then the count, which stays put: the arrows only disable with no matches.
+        add(prev, "split 3");
+        add(next);
         add(counter, "wmin 70");
         add(closeBtn);
     }
@@ -121,8 +124,9 @@ final class DetailFindBar extends JPanel {
      * or the table's query) replaces the query; otherwise the last one stays, selected.
      */
     void open(String seed) {
-        boolean reopening = !isVisible();
-        setVisible(true);
+        boolean reopening = !open;
+        open = true;
+        setVisible(hasEntry);
         revalidate();
         if (seed != null && !seed.isBlank() && !seed.equals(field.getText())) {
             field.setText(seed);
@@ -136,6 +140,7 @@ final class DetailFindBar extends JPanel {
 
     /** Hides the strip, drops its marks and gives focus back to the pane's text. */
     void close() {
+        open = false;
         setVisible(false);
         if (debounce != null) debounce.stop();
         clearMarks();
@@ -144,13 +149,28 @@ final class DetailFindBar extends JPanel {
         counter.setText("");
         stepNote = null;
         noMatch.set(false);
-        showArrows(false);
+        enableArrows(false);
         focusBack.run();
     }
 
     /** Whether the strip is open with a query, so F3 steps through its matches. */
     boolean hasQuery() {
-        return isVisible() && !field.getText().isEmpty();
+        return open && !field.getText().isEmpty();
+    }
+
+    /** Whether the strip is open, shown or not; for tests. */
+    boolean isOpen() { return open; }
+
+    /**
+     * Whether the pane shows an entry. With none (nothing selected, or the filters changed the
+     * rows), an open strip hides, keeping its query, and shows again with the next entry.
+     */
+    void entryShown(boolean shown) {
+        hasEntry = shown;
+        if (open && isVisible() != shown) {
+            setVisible(shown);
+            revalidate();
+        }
     }
 
     /**
@@ -158,7 +178,7 @@ final class DetailFindBar extends JPanel {
      * scrolled into view; the same entry drawn again keeps the current match and the scroll.
      */
     void textChanged(boolean newEntry) {
-        if (!isVisible() || field.getText().isEmpty()) return;
+        if (!open || field.getText().isEmpty()) return;
         research(newEntry);
     }
 
@@ -237,7 +257,7 @@ final class DetailFindBar extends JPanel {
             } catch (BadLocationException ignored) {}
         }
         patternError = result.error();
-        showArrows(!matches.isEmpty());
+        enableArrows(!matches.isEmpty());
         noMatch.set(!query.isEmpty() && matches.isEmpty());   // an invalid pattern finds nothing too
         if (result.error() != null) {
             cursor = -1;
@@ -260,13 +280,13 @@ final class DetailFindBar extends JPanel {
         }
     }
 
-    private void showArrows(boolean show) {
-        prev.setVisible(show);
-        next.setVisible(show);
+    private void enableArrows(boolean on) {
+        prev.setEnabled(on);
+        next.setEnabled(on);
     }
 
-    /** Whether the previous / next buttons show; for tests. */
-    boolean showsArrows() { return next.isVisible(); }
+    /** Whether the previous / next buttons are enabled; for tests. */
+    boolean arrowsEnabled() { return next.isEnabled(); }
 
     private void showCurrent() {
         showCount(position(), false);

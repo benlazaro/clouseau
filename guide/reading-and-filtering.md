@@ -77,7 +77,7 @@ searches every row.)
 - Every match is marked, and the current one is boxed in amber and scrolled into view. The
   count shows which one it is, such as **2 / 5**.
 - `Enter` or `F3` goes to the next match, `Shift+Enter` or `Shift+F3` to the previous one
-  (or **▼** and **▲**, which show while there are matches).
+  (or **▼** and **▲**, available while there are matches).
   Past the last match it goes back to the first, and a note in the middle of the panel says
   **↻ Back to the first match** (**↺ Back to the last match** going backwards).
   `Esc` closes the strip.
@@ -88,7 +88,8 @@ searches every row.)
   every OBX segment of an HL7 message.
 - The search stays when you select another row. Move through the table with `↑` `↓` and
   each entry opens at its first match, which makes it easy to compare one value across many
-  lines.
+  lines. When no line is selected (after clearing the filters, say), the strip hides, and it
+  comes back with your search when you select a line.
 - If you selected text in the panel, `Ctrl+F` searches for it. Otherwise the strip starts
   with what the table's find bar is searching for, or with your last search here, found
   again as it opens.
@@ -207,7 +208,7 @@ Closing it with `Esc` or **×** keeps your text: open it again and the same sear
 once, with the text selected so typing replaces it.
 
 - `Enter`, `F3` or **▼** goes to the next match, `Shift+Enter`, `Shift+F3` or **▲** to the
-  previous one (the arrows show while there are matches). `F3` works from the table too. Past the last match it goes back to the first,
+  previous one (the arrows are available while there are matches). `F3` works from the table too. Past the last match it goes back to the first,
   and a note over the rows says **↻ Back to the first match** for a moment (**↺ Back to the
   last match** going backwards), so you know you've seen every match. The note moves above or
   below the selected row rather than cover it.

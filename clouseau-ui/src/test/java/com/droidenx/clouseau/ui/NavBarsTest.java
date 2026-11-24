@@ -108,7 +108,7 @@ class NavBarsTest {
         onEdt(() -> bar.search("NO-SUCH-TEXT"));
         awaitCounter(bar, "0 matches");
         assertThat(onEdt(bar::showsNoMatch)).isTrue();
-        assertThat(onEdt(bar::showsArrows)).isFalse();
+        assertThat(onEdt(bar::arrowsEnabled)).isFalse();
         onEdt(() -> bar.navigate(+1));
         assertThat(onEdt(bar::stepNoteText))
                 .isEqualTo(MessageFormat.format(Messages.get("find.none.toast"), "NO-SUCH-TEXT"));
@@ -116,13 +116,13 @@ class NavBarsTest {
         onEdt(() -> bar.search("NEEDLE"));
         awaitCounter(bar, "1 / 2");
         assertThat(onEdt(bar::showsNoMatch)).isFalse();
-        assertThat(onEdt(bar::showsArrows)).isTrue();
+        assertThat(onEdt(bar::arrowsEnabled)).isTrue();
 
         onEdt(() -> bar.search("NO-SUCH-TEXT"));
         awaitCounter(bar, "0 matches");
         onEdt(bar::cancel);
         assertThat(onEdt(bar::showsNoMatch)).isFalse();
-        assertThat(onEdt(bar::showsArrows)).isFalse();
+        assertThat(onEdt(bar::arrowsEnabled)).isFalse();
     }
 
     @Test

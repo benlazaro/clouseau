@@ -514,10 +514,12 @@ here" signal while typing; the words come only on a deliberate step: `Enter`/`F3
 matches toasts "No matches for “…”" (or the pattern error) over the rows or the pane, so a
 user who types never gets a toast per keystroke. Both bars lay out like a browser's find bar:
 the field has a set width (`FindBar.FIELD_WIDTH`, 320 px, down to 120 px when narrow) with its
-toggles, arrows and count beside it, and only the close button at the far end, so the red
-field, its count and a toast stay together near where the user types. The ▲ ▼ arrows show
-only while there are matches to step through and come before the count, so the count sits
-right after them ("1 / 3"), or, with the arrows hidden, right after the field ("0 matches").
+controls beside it in one order: what acts on the matches (the detail strip's **Aa** and
+**.\***, the table bar's **Highlight ⌄**), the ▲ ▼ arrows, then the count, and only the close
+button at the far end, so the red field, its count and a toast stay together near where the
+user types. The arrows are enabled only while there are matches to step through; they are
+disabled, not hidden, so the count ("1 / 3", "0 matches") never moves as the query changes.
+The count comes last, so its own changing width moves nothing.
 
 ### 6.6 Annotations (UC-7 to UC-9)
 
