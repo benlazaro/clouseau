@@ -12,13 +12,15 @@ nav_order: 1
 
 ## Ways to open a file
 
-- **File → Open…** (`Ctrl+O`) opens the [open dialog](#the-open-dialog), and **File → Open
-  Merged…** the same dialog set to open several files as one merged view.
+- **File → Open File…** (`Ctrl+O`) opens the [open dialog](#the-open-dialog), where you can
+  also open several files as one merged view.
 - **Drag** one or more files onto the window: the table, the detail panel, the tab strip
   or the welcome screen. Folders are ignored.
-- **File → Recent Files** lists the files you opened last (how many is set in
-  [Settings](settings.md)). Files that no longer exist are left out, and the menu is
-  greyed out when none are left.
+- **Recent files** are listed near the bottom of the **File** menu, just above Exit,
+  numbered: click one, or press its number while the menu is open (how many are listed
+  is set in [Settings](settings.md)). Files that no longer exist are left out; two with
+  the same name show their folder too, and pointing at one shows its full path.
+  **Clear Recent Files** empties the list.
 - **"Open with"** from your file manager. The Windows, macOS and Linux installers
   associate `.log` files with Clouseau, so double-clicking one opens it. The portable zip
   doesn't register anything, so with it you pick the Clouseau launcher by hand.
@@ -33,8 +35,7 @@ Each file opens in its own tab. Opening a file that's already open switches to i
 
 ## The open dialog
 
-**File → Open…** (`Ctrl+O`) and **File → Open Merged…** open the same dialog; Open Merged
-just starts with **One merged view** chosen.
+**File → Open File…** (`Ctrl+O`) opens it.
 
 ![Open file dialog](../docs/screenshots/open-dialog.png)
 

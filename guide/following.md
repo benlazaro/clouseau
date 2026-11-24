@@ -52,7 +52,7 @@ Clouseau keeps your rows when the log is rotated:
 
 ## Remote logs over SSH
 
-**File → Open Remote → SSH…** opens **SSH Connections**: your saved connections on the left,
+**File → Open SSH…** opens **SSH Connections**: your saved connections on the left,
 and on the right a form for whatever you pick there. A *connection* is one way of signing in
 to a machine (a user, a host and a port, and a password or key), with an optional name and
 the logs you've saved on it. Two accounts on the same machine, such as `deploy` and `root`,
@@ -167,7 +167,7 @@ how many were trimmed.
 
 Clouseau can also receive logs that a program sends it, instead of reading a file:
 useful for an app that logs to a socket or syslog, a device on your desk, or a container.
-**File → Open Remote → TCP/UDP…** asks for:
+**File → Open TCP/UDP Listener…** asks for:
 
 - **Protocol**: **TCP** (one message per line, or syslog's length-prefixed frames) or
   **UDP** (one message per packet).
@@ -202,12 +202,11 @@ other tabs the next time Clouseau starts.
 ## Source plugins
 
 Plugins can bring in lines from other places, such as a log service or a message queue.
-Installed source plugins appear under **File → Open Remote**, after SSH, each under its own
-name. **Browse Plugins…** at the bottom opens the Plugin Manager's Browse tab. If one
-can't open its source, the error names the plugin. Each shows a form for its
-settings; Clouseau checks required fields, remembers the values, and stores passwords
-encrypted. Lines stream into a new tab, with the same limit, connection dot and
-**Reconnect** as SSH tabs.
+Installed source plugins appear in the **File** menu after the built-in ones, as **Open**
+and the source's name (for example **Open Loki…**). If one can't open its source, the
+error names the plugin. Each shows a form for its settings; Clouseau checks required
+fields, remembers the values, and stores passwords encrypted. Lines stream into a new tab,
+with the same limit, connection dot and **Reconnect** as SSH tabs.
 
-See [Plugins](settings.md#plugins) to install one, or [For developers](developers.md) to
-write one.
+To find and install one, use **Tools → Plugins…** (see [Plugins](settings.md#plugins)), or
+see [For developers](developers.md) to write one.

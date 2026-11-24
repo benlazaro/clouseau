@@ -54,9 +54,14 @@ public final class MainFrame extends JFrame {
     private final JPanel contentArea     = new JPanel(cardLayout);
     private JMenuItem closeTabItem;
     private JMenuItem reconnectItem;
-    private JMenu recentMenu;
+    /** The File menu, and the parts of it that change: plugin sources after the Open items, recent files before Exit. */
+    private JMenu fileMenu;
+    private JMenuItem lastOpenItem;
+    private JMenuItem exitItem;
+    private final List<Component> sourceItems = new ArrayList<>();
+    private final List<Component> recentItems = new ArrayList<>();
 
-    /** The built-in log receiver (UC-20), which File → Open Remote lists after SSH. */
+    /** The built-in log receiver (UC-20), which the File menu lists after Open SSH…. */
     private static final NetworkSourceProvider RECEIVER = new NetworkSourceProvider();
 
     private static final String CARD_WELCOME = "welcome";
@@ -357,6 +362,9 @@ public final class MainFrame extends JFrame {
         fileMenu.add(newWindowItem);
         fileMenu.addSeparator();
 
+        // Every way to open a log, one click each: a file, SSH, the TCP/UDP listener, then
+        // each source a plugin adds ("Open Loki…"), which are put back each time the menu
+        // opens, so sources from newly installed plugins appear.
         JMenuItem openItem = menuItem(Messages.get("menu.file.open"));
         Mnemonics.set(openItem, 'O');
         openItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O,
@@ -364,32 +372,26 @@ public final class MainFrame extends JFrame {
         openItem.addActionListener(e -> openFile());
         fileMenu.add(openItem);
 
-        // SSH, then the sources plugins add, under their own names. Rebuilt each time it
-        // opens, so sources from newly installed plugins appear.
-        JMenu remoteMenu = new JMenu(Messages.get("menu.file.remote"));
-        Mnemonics.set(remoteMenu, 'M');
-        remoteMenu.setMargin(menuMargin());
-        remoteMenu.addMenuListener(new javax.swing.event.MenuListener() {
-            @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildRemoteMenu(remoteMenu); }
-            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
-            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
-        });
-        rebuildRemoteMenu(remoteMenu);
-        fileMenu.add(remoteMenu);
+        JMenuItem sshItem = menuItem(Messages.get("menu.file.open.ssh"));
+        Mnemonics.set(sshItem, 'H');
+        sshItem.addActionListener(e -> openSsh());
+        fileMenu.add(sshItem);
 
-        // Disabled when no recent file exists any more. Rebuilt each time the File menu opens,
-        // so files deleted or moved since, and a new limit in Settings, show at once.
-        recentMenu = new JMenu(Messages.get("menu.file.recent"));
-        Mnemonics.set(recentMenu, 'F');
-        recentMenu.setMargin(menuMargin());
-        fileMenu.add(recentMenu);
-        refreshRecentMenu();
+        lastOpenItem = menuItem(Messages.get("menu.file.open.listener"));
+        Mnemonics.set(lastOpenItem, 'L');
+        lastOpenItem.addActionListener(e -> openReceiver());
+        fileMenu.add(lastOpenItem);
+        fileMenu.addSeparator();
+
+        this.fileMenu = fileMenu;
         fileMenu.addMenuListener(new javax.swing.event.MenuListener() {
-            @Override public void menuSelected(javax.swing.event.MenuEvent e) { refreshRecentMenu(); }
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) {
+                refreshSourceItems();
+                refreshRecentMenu();
+            }
             @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
             @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
         });
-        fileMenu.addSeparator();
 
         // One item for the active tab: Reload File on a file, Reconnect on a live source
         // (issue #4). Ctrl+R does whichever applies.
@@ -449,10 +451,12 @@ public final class MainFrame extends JFrame {
         closeTabItem.addActionListener(e -> closeTab(tabbedPane.getSelectedIndex()));
         fileMenu.add(closeTabItem);
 
-        JMenuItem exitItem = menuItem(Messages.get("menu.file.exit"));
+        exitItem = menuItem(Messages.get("menu.file.exit"));
         Mnemonics.set(exitItem, 'X');
         exitItem.addActionListener(e -> manager.exit());
         fileMenu.add(exitItem);
+        refreshSourceItems();
+        refreshRecentMenu();
 
         whenOpened(fileMenu, () -> {
             TabPanel active = activeTabPanel();
@@ -844,22 +848,70 @@ public final class MainFrame extends JFrame {
         }).setVisible(true);
     }
 
+    /**
+     * The recent files, in the File menu itself before Exit (Notepad++ style): numbered, so
+     * 1–9 and 0 open one while the menu is open; named by file, with the folder added when
+     * two share a name; the full path in the tooltip; then Clear Recent Files. With none, the
+     * section and its separators go. Called each time the File menu opens, so files deleted
+     * or moved since, and a new limit in Settings, show at once.
+     */
     void refreshRecentMenu() {
-        recentMenu.removeAll();
-        java.util.List<java.nio.file.Path> recents = AppPrefs.getRecentFiles();
-        recentMenu.setEnabled(!recents.isEmpty());
-        for (java.nio.file.Path p : recents) {
-            JMenuItem item = menuItem(p.getFileName().toString());
+        if (fileMenu == null || exitItem == null) return;
+        JPopupMenu popup = fileMenu.getPopupMenu();
+        recentItems.forEach(popup::remove);
+        recentItems.clear();
+        List<Path> recents = AppPrefs.getRecentFiles();
+        if (recents.isEmpty()) return;
+
+        Map<String, Integer> names = new HashMap<>();
+        for (Path p : recents) names.merge(String.valueOf(p.getFileName()), 1, Integer::sum);
+        recentItems.add(new JPopupMenu.Separator());
+        for (int i = 0; i < recents.size(); i++) {
+            Path p = recents.get(i);
+            String name = String.valueOf(p.getFileName());
+            Path parent = p.toAbsolutePath().getParent();
+            if (names.get(name) > 1 && parent != null && parent.getFileName() != null) {
+                name = MessageFormat.format(Messages.get("menu.file.recent.in"), name, parent.getFileName());
+            }
+            String number = i < 9 ? String.valueOf(i + 1) : i == 9 ? "0" : null;
+            JMenuItem item = menuItem(number != null ? number + "  " + name : "    " + name);
+            if (number != null) Mnemonics.set(item, number.charAt(0));
             item.setToolTipText(p.toAbsolutePath().toString());
             item.addActionListener(e -> openFile(p));
-            recentMenu.add(item);
+            recentItems.add(item);
         }
-        if (!recents.isEmpty()) {
-            recentMenu.addSeparator();
-            JMenuItem clear = menuItem(Messages.get("menu.file.recent.clear"));
-            Mnemonics.set(clear, 'C');
-            clear.addActionListener(e -> { AppPrefs.clearRecentFiles(); manager.refreshRecentMenus(); });
-            recentMenu.add(clear);
+        JMenuItem clear = menuItem(Messages.get("menu.file.recent.clear"));
+        clear.addActionListener(e -> { AppPrefs.clearRecentFiles(); manager.refreshRecentMenus(); });
+        recentItems.add(clear);
+
+        int at = popup.getComponentIndex(exitItem);
+        for (Component c : recentItems) popup.insert(c, at++);
+        recentItems.add(new JPopupMenu.Separator());
+        popup.insert(recentItems.get(recentItems.size() - 1), at);
+    }
+
+    /**
+     * Puts each source a plugin adds after the built-in Open items, as "Open Loki…", in
+     * the order the plugins give them. A plugin whose {@code getName} fails is left out.
+     */
+    private void refreshSourceItems() {
+        if (fileMenu == null || lastOpenItem == null) return;
+        JPopupMenu popup = fileMenu.getPopupMenu();
+        sourceItems.forEach(popup::remove);
+        sourceItems.clear();
+        int at = popup.getComponentIndex(lastOpenItem) + 1;
+        for (LogSourceProvider provider : manager.sourceProviders()) {
+            String name;
+            try {
+                name = provider.getName();
+            } catch (RuntimeException e) {
+                log.warn("Source plugin {} failed in getName()", provider.getClass().getName(), e);
+                continue;
+            }
+            JMenuItem item = menuItem(MessageFormat.format(Messages.get("menu.file.open.source"), name));
+            item.addActionListener(e -> openSource(provider, name));
+            sourceItems.add(item);
+            popup.insert(item, at++);
         }
     }
 
@@ -1408,42 +1460,6 @@ public final class MainFrame extends JFrame {
         });
     }
 
-    /**
-     * File → Open Remote: SSH, which is built in, then each source a plugin adds, listed by
-     * its own name like any other item, then Browse Plugins…, which opens the Plugin
-     * Manager's Browse tab.
-     */
-    private void rebuildRemoteMenu(JMenu menu) {
-        menu.removeAll();
-        JMenuItem ssh = menuItem(Messages.get("menu.file.remote.ssh"));
-        Mnemonics.set(ssh, 'S');
-        ssh.addActionListener(e -> openSsh());
-        menu.add(ssh);
-        JMenuItem receive = menuItem(Messages.get("menu.file.remote.receive"));
-        Mnemonics.set(receive, 'T');
-        receive.addActionListener(e -> openReceiver());
-        menu.add(receive);
-        menu.addSeparator();
-        for (LogSourceProvider provider : manager.sourceProviders()) {
-            String name;
-            try {
-                name = provider.getName();
-            } catch (RuntimeException e) {
-                log.warn("Source plugin {} failed in getName()", provider.getClass().getName(), e);
-                continue;
-            }
-            JMenuItem item = menuItem(name + "…");
-            item.addActionListener(e -> openSource(provider, name));
-            menu.add(item);
-        }
-        if (!manager.sourceProviders().isEmpty()) menu.addSeparator();
-        JMenuItem more = menuItem(Messages.get("menu.file.remote.more"));
-        Mnemonics.set(more, 'B');
-        more.addActionListener(e ->
-                new PluginManagerDialog(this, pluginManager, manager::reloadExtensions).browsing().setVisible(true));
-        menu.add(more);
-    }
-
     /** Shows a source plugin's settings form, then streams the source into a new tab. */
     private void openSource(LogSourceProvider provider, String name) {
         List<SourceSetting> settings;
@@ -1469,7 +1485,7 @@ public final class MainFrame extends JFrame {
     }
 
     /**
-     * File → Open Remote → TCP/UDP… (UC-20): the receiver's form, then a tab named after
+     * File → Open TCP/UDP Listener… (UC-20): the receiver's form, then a tab named after
      * what it listens on ("TCP :5140") that receives into it. A session keeps it like a
      * plugin source, so it listens again when restored.
      */

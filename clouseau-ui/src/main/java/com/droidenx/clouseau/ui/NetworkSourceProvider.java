@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The built-in source behind File → Open Remote → TCP/UDP… (UC-20, D-30): a
+ * The built-in source behind File → Open TCP/UDP Listener… (UC-20, D-30): a
  * {@link NetworkLogSource} from a protocol, a port and where to listen. A provider like a
  * plugin's, so the settings form, remembered values, Reconnect and sessions work the same
  * way; it isn't a PF4J extension and isn't listed with the plugins' sources.

@@ -68,7 +68,7 @@ still loading.
 
 ## Opening a review bundle
 
-Open the bundle like any other file (**File → Open**, drag and drop, or double-click).
+Open the bundle like any other file (**File → Open File…**, drag and drop, or double-click).
 Clouseau recognizes it, opens its log (or its merged view) without asking which file, and
 puts each note and highlight on its line, with the author's name.
 

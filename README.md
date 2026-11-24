@@ -81,7 +81,7 @@ turns that off.
 
 ## Getting started
 
-Download Clouseau as above, then open a log with `File → Open…` (`Ctrl+O`) or drag it onto the window. The [User Guide](https://benlazaro.github.io/clouseau/guide/) covers everything else.
+Download Clouseau as above, then open a log with `File → Open File…` (`Ctrl+O`) or drag it onto the window. The [User Guide](https://benlazaro.github.io/clouseau/guide/) covers everything else.
 
 To build Clouseau yourself or write a plugin, see [For developers](https://benlazaro.github.io/clouseau/guide/developers.html).
 

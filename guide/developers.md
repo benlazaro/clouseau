@@ -231,8 +231,8 @@ shown without its colors.
 ### Log sources
 
 A `LogSourceProvider` brings in live lines from somewhere else (a log aggregator, a
-message queue, …). It declares its settings, and Clouseau draws the form under
-**File → Open Remote**, checks required fields, numbers and choices, and remembers the
+message queue, …). It declares its settings, and Clouseau adds **File → Open *name*…**
+for it, draws the form, checks required fields, numbers and choices, and remembers the
 values (passwords encrypted). The example's `DemoStreamSource` shows the shape:
 
 ```java

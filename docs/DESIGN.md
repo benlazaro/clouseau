@@ -132,7 +132,7 @@ ending in `Z`) whenever the source timezone wasn't the system's.
 | `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the built-in ones (section 5.1) | `RegexLogParser`, configured from JSON; `JsonLinesParser` and `SyslogParser`, written in Java |
 | `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
 | `LogSyntaxHighlighter` | Mark spans of the detail panel's message with a role (key, string, keyword, muted, …) that the theme colors (D-26) | Yes; every one that applies is layered | `JsonSyntaxHighlighter` |
-| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File → Open Remote, after SSH (section 6.3) | `NetworkSourceProvider` (ui, not a PF4J extension), the log receiver (D-30). SSH has its own dialog and creates `SshLogSource` directly, so a session keeps SSH and plugin tabs as different kinds |
+| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed in the File menu as "Open <name>…", after the built-in Open items (section 6.3) | `NetworkSourceProvider` (ui, not a PF4J extension), the log receiver (D-30). SSH has its own dialog and creates `SshLogSource` directly, so a session keeps SSH and plugin tabs as different kinds |
 
 **Contract notes:**
 
@@ -404,8 +404,8 @@ starting state.
   prints is skipped, and fields are NUL-separated, so any name survives. Readability here
   is `test -r`'s, so ACLs count. Only when the shell can't list either is it
   `Reason.NO_SFTP`. The fallback is logged, not shown: the dialog looks the same.
-- **Plugin sources (D-14):** **File → Open Remote** lists SSH, then every `LogSourceProvider` by its own name, then Browse Plugins… (the Plugin Manager's Browse tab);
-  rebuilt each time the menu opens. Choosing one opens `SourceSettingsDialog`, a form
+- **Plugin sources (D-14):** the File menu lists every `LogSourceProvider` as **Open <name>…**, after Open File…, Open SSH… and Open TCP/UDP Listener…;
+  put back each time the menu opens (`MainFrame.refreshSourceItems`). Plugins are found under Tools → Plugins…. Choosing one opens `SourceSettingsDialog`, a form
   with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`
   (core) trims values, drops empty optional ones, and checks required values, numbers
   and choices; then `create` is called. The values are remembered per provider (keyed by
@@ -1852,7 +1852,7 @@ re-parent, not a reload, and everything shared stays shared.
   window used last (updated on `windowActivated`), and what all of them share: the parser,
   formatter, highlighter and source lists and the open dialog's last parser (moved out of
   `MainFrame`, so `reloadExtensions` serves every window), `findTab` behind "one tab per
-  file", `allPanels`, and refreshing every window's Recent Files menu. `ClouseauApp`
+  file", `allPanels`, and refreshing every window's recent files (listed in the File menu before Exit). `ClouseauApp`
   creates it and sends command-line files, macOS open-file events and files from
   `SingleInstanceManager` to the window used last. The single-instance protocol (6.8) is
   unchanged.
@@ -2684,8 +2684,8 @@ UC-20: apps, devices and containers that send their log instead of writing a fil
   values, the connection dot, Reconnect, the entry limit and sessions (`Kind.SOURCE` with
   the provider's class name; `MainFrame.sourceProvider` finds the built-in one first) all
   come from the plugin-source path (D-14, D-20), with no new session kind and no API
-  change. It has its own item under File → Open Remote, after SSH, and isn't listed with
-  plugin sources. Its tab is named after the source (`TCP :5140`), not the provider.
+  change. It has its own item, File → Open TCP/UDP Listener…, after Open SSH…, and isn't
+  listed with plugin sources. Its tab is named after the source (`TCP :5140`), not the provider.
 - **Text only, never Java serialization.** Log4j's `SocketAppender`/`SerializedLayout` and
   Logback's `SocketAppender` send serialized Java objects; deserializing untrusted bytes is
   a remote-code-execution hole (Log4j's own `SocketServer` was CVE-2017-5645), and
@@ -2755,6 +2755,6 @@ is now the biggest UI class.
   like `clouseau-*-plugin`, or a shared group), so Browse can list what's available when
   it opens, filter as you type, and mark plugins you have, with **Update** when a newer
   version exists. Needs the convention settled first, in `guide/developers.md`.
-  Once Browse knows each plugin's kind, File → Open Remote → Browse Plugins… should
-  open it filtered to sources and be renamed **Browse Connectivity Plugins…** ("remote
-  plugins" would read as plugins stored remotely).
+  Once Browse knows each plugin's kind, it could offer a **Sources** filter, for someone
+  looking for a connection to Loki or CloudWatch (the File menu no longer has a Browse
+  Plugins… item; Tools → Plugins… is the one way in).

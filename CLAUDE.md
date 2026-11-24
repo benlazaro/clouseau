@@ -158,11 +158,11 @@ release only.
 - `ClouseauApi` (api) — `VERSION`, the plugin API's own version, which PF4J checks `Plugin-Requires`
   against. Bump it with any API change (minor while 0.x if it breaks plugins), and note it in its javadoc.
 - `LogSource` (api) — pushes live lines; `ConnectingLogSource` (api) also reports when it is connected (D-20); `LogSourceProvider` (extension point) creates one
-  from declared `SourceSetting`s, shown under File → Open Source by `SourceSettingsDialog`.
+  from declared `SourceSetting`s, shown under the File menu as "Open <name>…" by `SourceSettingsDialog`.
 - `RegexLogParser` (core) — the parser behind every JSON-defined format.
 - `JsonLinesParser`, `SyslogParser` (core) — the two built-in parsers written in Java (JSON lines of the usual
   libraries; syslog RFC 5424 and 3164), after the JSON-defined ones (`ParserList.withBuiltIn`); not in the parser editor.
-- `NetworkLogSource` (core), `NetworkSourceProvider` (ui) — UC-20, D-30: File → Open Remote → TCP/UDP…, a
+- `NetworkLogSource` (core), `NetworkSourceProvider` (ui) — UC-20, D-30: File → Open TCP/UDP Listener…, a
   TCP/UDP listener on this computer (or every interface, if chosen) while its tab is open. Text only: never
   deserialize received bytes. A built-in `LogSourceProvider`, so the plugin-source form, Reconnect and sessions apply.
 - `FileTail` (core) — reads complete UTF-8 lines appended to a file, for follow mode.

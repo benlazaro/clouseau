@@ -40,7 +40,7 @@ exactly where the field left off.
 | Local development | Plain files written by the running app, still growing | Opened directly, optionally followed live |
 | Remote hosts | Files on a server reachable over SSH | Streamed via SSH (`tail -F`) |
 | Senders | An app, device, container or VM that sends its log as text (socket appender, syslog) | Received on a local TCP or UDP port while a tab is open (UC-20) |
-| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Open Remote (UC-11) |
+| Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from the File menu, "Open <name>…" (UC-11) |
 
 Logs from tickets and email are **local files the user has already saved**. Opening them
 should be as easy as possible (drag-and-drop, "Open with"), but Clouseau does not fetch
@@ -57,7 +57,7 @@ Each use case lists its current support status: ✅ supported · 🟡 partial ·
 **Actor:** Field engineer, Developer
 **Goal:** View a log someone sent me, or one my app just wrote.
 
-1. User opens a file with `File → Open…` (`Ctrl+O`), by dragging it onto the window, or
+1. User opens a file with `File → Open File…` (`Ctrl+O`), by dragging it onto the window, or
    by choosing Clouseau from the operating system's "Open with" menu.
 2. Clouseau detects the log format from the first lines, with no extra step.
 3. To use a different parser, the user picks it in the open dialog's Parser list (it
@@ -360,7 +360,7 @@ can't be exported, and a file can't be exported while it is still loading.
 **Success:** The developer sees exactly what the field engineer flagged, on the right
 lines, and knows who flagged it.
 
-**Current behavior:** A bundle opens like any `.zip` (File → Open…, Recent Files, the
+**Current behavior:** A bundle opens like any `.zip` (File → Open File…, the recent files, the
 command line or "Open with"): Clouseau recognizes it by its manifest, opens its log in
 one tab without asking which file, and attaches each annotation and highlight to its
 line (D-9), with its author. Notes the developer adds are saved next to the bundle in
@@ -396,7 +396,7 @@ ship with.
 2. User installs it by dropping the JAR in the plugins folder, or from a plugin repository
    (Nexus or Maven Central) in the Plugin Manager.
 3. The new capability is available without restarting.
-4. For a log source, the user picks it under **File → Open Remote**, fills in the form
+4. For a log source, the user picks **Open <name>…** in the File menu, fills in the form
    Clouseau builds from the settings the plugin declares, and the lines stream into a new
    tab.
 
@@ -645,13 +645,13 @@ without running a second copy of Clouseau.
 
 **Rules:**
 - **One application, several windows.** Every window belongs to the same running
-  Clouseau, so settings, parsers, plugins, themes and Recent Files are shared, and a
+  Clouseau, so settings, parsers, plugins, themes and recent files are shared, and a
   second launch still hands its files to the running one (UC-1). A launch of another
   version (a new release with the old one still running) doesn't: it says which version is
   running and to close it, so an upgrade never silently opens the old version.
 - **Menus act on their own window.** Open, Close Tab, Export for Review and the other
   menu actions apply to the window whose menu was used.
-- **New files open where you'd expect.** The open dialog and Recent Files open in their
+- **New files open where you'd expect.** The open dialog and the recent files open in their
   own window, a dropped file in the window it was dropped on, and files sent by "Open
   with" or a second launch in the window used last.
 - **One tab per file, across windows:** Opening a file that's already open in any window
@@ -849,7 +849,7 @@ languages (Python, .NET, JavaScript) aren't links yet. Design: DESIGN.md D-28.
 can open: an app with a socket or syslog appender, a device on the desk or the bench, a
 container or a VM.
 
-1. User chooses **File → Open Remote → TCP/UDP…**, picks TCP or UDP, a port (5140 by
+1. User chooses **File → Open TCP/UDP Listener…**, picks TCP or UDP, a port (5140 by
    default) and who may send: **This computer only** (the default) or **Any computer on
    the network**, and clicks **Listen**.
 2. A tab named after the port (`TCP :5140`) opens and says where it listens until the

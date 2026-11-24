@@ -10,7 +10,7 @@ import java.util.Map;
  * CloudWatch or a message queue. Annotate your implementation with {@code @Extension} and
  * drop the JAR in the plugins folder.
  *
- * <p>Each provider appears under <b>File → Open Source</b>. Choosing it shows a form built
+ * <p>Each provider appears in the <b>File</b> menu as <b>Open <i>name</i>…</b>. Choosing it shows a form built
  * from {@link #settings()}; when the user confirms, Clouseau calls {@link #create} with
  * their values and streams the returned {@link LogSource} into a new tab, parsing each
  * line with the parser they picked (or auto-detection).

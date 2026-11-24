@@ -36,7 +36,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * File → Open…. Favorites on the left (the star in the chooser's toolbar adds the folder
+ * File → Open File…. Favorites on the left (the star in the chooser's toolbar adds the folder
  * shown), the files in the middle, and on the right what the selection will become: each
  * file's verdict (which parser reads it, or why it opens as plain text), how several open
  * (one merged view or separate tabs), what reads them (parser, source time zone) and a
