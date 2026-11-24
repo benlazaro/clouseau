@@ -35,6 +35,7 @@ class ThemeContrastTest {
         {"@disabledForeground",             "@background",                  TEXT},
         {"Clouseau.mutedForeground",        "@background",                  TEXT},
         {"Clouseau.linkColor",              "TextArea.background",          TEXT},
+        {"ToolTip.foreground",              "ToolTip.background",           TEXT},
         {"Button.foreground",               "Button.background",            TEXT},
         {"TextField.foreground",            "TextField.background",         TEXT},
         {"TextField.placeholderForeground", "TextField.background",         TEXT},

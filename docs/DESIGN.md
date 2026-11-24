@@ -675,7 +675,12 @@ every pair at 4.5:1, so its notes for non-text colors say "against" a surface ra
 "on" it, which that check skips; the 3:1 check is the test's.
 
 **No painted shadows; popups use the OS's.** Structure comes from hairlines: menus, popups and
-tooltips are edged by their `PopupMenu.borderColor` hairline. Popups are the one exception to
+menus and popups are edged by their `PopupMenu.borderColor` hairline. Tooltips stand out
+more, since they appear over anything: their own surface, lighter than the menus in Dark
+(#484B52) and white in Light, with a stronger edge (#7A808A, #8A909A) set as a line
+`ToolTip.border`. FlatLaf's tooltip has an empty border and, in Dark, a fill darker than
+the window, so it vanished over the table header; a line border's color is what FlatLaf
+gives the native border on Windows 11. Popups are the one exception to
 "no shadows": FlatLaf only rounds a popup's corners through the OS, and that path always comes
 with the OS's own shadow, so both themes leave `Popup.dropShadowPainted` on. On Windows 11
 (with FlatLaf's native library) and macOS a popup is a native window with 4px corners, the
