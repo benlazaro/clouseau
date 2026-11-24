@@ -5,6 +5,7 @@ import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.SourceSettings;
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
@@ -53,13 +54,31 @@ final class SourceSettingsDialog extends JDialog {
     private final List<LogParser> parsers;
     private final JComboBox<String> parserCombo;
     private final NoticeLabel notice = new NoticeLabel();
-    private final JButton openBtn = new JButton(Messages.get("source.dialog.open"));
+    private final JButton openBtn = new JButton();
+    private final String intro;
+    private final String caution;
     private Result result;
 
     /** @param pluginName the plugin the source comes from, named when it fails; null if unknown */
     SourceSettingsDialog(Frame owner, LogSourceProvider provider, List<SourceSetting> settings,
                          List<LogParser> parsers, String pluginName) {
-        super(owner, MessageFormat.format(Messages.get("source.dialog.title"), provider.getName()), true);
+        this(owner, provider, settings, parsers, pluginName,
+                MessageFormat.format(Messages.get("source.dialog.title"), provider.getName()),
+                Messages.get("source.dialog.open"), null, null);
+    }
+
+    /**
+     * The form for a built-in source, with its own title and Open button text; above the fields,
+     * a dim note saying what it does, then a rule the user must not miss, in normal text (each
+     * null for none).
+     */
+    SourceSettingsDialog(Frame owner, LogSourceProvider provider, List<SourceSetting> settings,
+                         List<LogParser> parsers, String pluginName, String title, String openText, String intro,
+                         String caution) {
+        super(owner, title, true);
+        this.intro = intro;
+        this.caution = caution;
+        openBtn.setText(openText);
         this.pluginName = pluginName;
         this.provider = provider;
         this.settings = settings;
@@ -106,6 +125,15 @@ final class SourceSettingsDialog extends JDialog {
     private JPanel buildContent() {
         JPanel panel = new JPanel(new MigLayout("insets 20 20 12 20, wrap 2, gapy 8, gapx 16", "[][grow, fill]"));
         Map<String, String> saved = AppPrefs.getSourceSettings(providerId(), secretKeys());
+        if (intro != null) {
+            JLabel note = new JLabel("<html><body style='width: 380px'>" + escape(intro) + "</body></html>");
+            ClouseauColors.themedForeground(note, ClouseauColors::dimForeground);
+            panel.add(note, "span 2, growx, gapbottom " + (caution != null ? "6" : "8"));
+        }
+        if (caution != null) {
+            panel.add(new JLabel("<html><body style='width: 380px'>" + escape(caution) + "</body></html>"),
+                    "span 2, growx, gapbottom 8");
+        }
 
         for (SourceSetting s : settings) {
             fields.put(s.key(), buildField(s, saved.getOrDefault(s.key(), s.defaultValue())));
@@ -136,6 +164,10 @@ final class SourceSettingsDialog extends JDialog {
         root.add(footer, BorderLayout.SOUTH);
         updateOpen();
         return root;
+    }
+
+    private static String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private void addRow(JPanel panel, SourceSetting s) {

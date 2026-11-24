@@ -15,8 +15,8 @@ Everything Clouseau does, one topic per page. New to Clouseau? Start with
 | [Reading and filtering](reading-and-filtering.md) | The table, the detail panel, filters, Find, highlights and columns |
 | [Merged views](merged-views.md) | Several logs as one timeline; per-file timezone, parser and clock correction |
 | [Notes and review bundles](annotations-and-review.md) | Annotating lines, and handing a log with your notes to a colleague |
-| [Following live logs](following.md) | Follow mode, log rotation, SSH and source plugins |
-| [Parsers](parsers.md) | The built-in formats, the parser editor, and `parsers.json` |
+| [Following live logs](following.md) | Follow mode, log rotation, SSH, receiving logs over the network, and source plugins |
+| [Parsers](parsers.md) | The built-in formats (including JSON lines and syslog), the parser editor, and `parsers.json` |
 | [Themes and settings](settings.md) | Themes, every setting, keyboard shortcuts, memory and the data folder |
 
 Writing a plugin or building Clouseau yourself? See [For developers](developers.md).

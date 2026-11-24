@@ -187,6 +187,13 @@ final class LogTableView {
             public Component getTableCellRendererComponent(
                     JTable t, Object v, boolean sel, boolean foc, int r, int c) {
                 super.getTableCellRendererComponent(t, v, sel, foc, r, c);
+                // A value of several lines (a JSON record's message with its stack trace) shows its
+                // first line, as a file's entry shows above its continuation lines; the detail pane
+                // has the rest. A label would otherwise run the lines together.
+                if (v instanceof String s) {
+                    int nl = s.indexOf('\n');
+                    if (nl >= 0) setText(s.substring(0, nl > 0 && s.charAt(nl - 1) == '\r' ? nl - 1 : nl));
+                }
                 int rowModel = logTable.convertRowIndexToModel(r);
                 LogEntry entry = logTableModel.getEntry(rowModel);
                 Color hl = logTableModel.getRowColor(rowModel);

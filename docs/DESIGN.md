@@ -49,7 +49,8 @@ clouseau-ui ─────────────┐   MainFrame, tabs, TabPan
 clouseau-core ◀──────────┘   RegexLogParser, ParserList, LineParser, LogReaders,
                              LogFileReader, FileIndexer, IndexedFollow, FileFollower,
                              FileTail, FileChangeWatcher,
-                             SshLogSource, SshRemote, SourceSettings, AnnotationStore, ZipLogs, …
+                             SshLogSource, SshRemote, NetworkLogSource, JsonLinesParser,
+                             SyslogParser, SourceSettings, AnnotationStore, ZipLogs, …
    │
    ▼
 clouseau-api                 LogEntry, LogParser, LogFormatter, LogSyntaxHighlighter,
@@ -128,10 +129,10 @@ ending in `Z`) whenever the source timezone wasn't the system's.
 
 | Interface | Purpose | Discovered from plugins? | Built-in implementations |
 |---|---|---|---|
-| `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the JSON-defined parsers (section 5.1) | `RegexLogParser`, configured from JSON |
+| `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the built-in ones (section 5.1) | `RegexLogParser`, configured from JSON; `JsonLinesParser` and `SyslogParser`, written in Java |
 | `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
 | `LogSyntaxHighlighter` | Mark spans of the detail panel's message with a role (key, string, keyword, muted, …) that the theme colors (D-26) | Yes; every one that applies is layered | `JsonSyntaxHighlighter` |
-| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File → Open Remote, after SSH (section 6.3) | None; SSH has its own dialog and creates `SshLogSource` directly, so a session keeps SSH and plugin tabs as different kinds |
+| `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed under File → Open Remote, after SSH (section 6.3) | `NetworkSourceProvider` (ui, not a PF4J extension), the log receiver (D-30). SSH has its own dialog and creates `SshLogSource` directly, so a session keeps SSH and plugin tabs as different kinds |
 
 **Contract notes:**
 
@@ -200,9 +201,24 @@ plus any custom ones).
 This lets anyone add a format without writing a plugin. Plugins are for formats regex
 can't handle.
 
-**Combined list.** `MainFrame.reloadParsers` builds the list the open dialog, SSH dialog
-and tabs use with `ParserList.combine` (core): JSON-defined parsers first, then plugin
-`LogParser` extensions. Order matters because auto-detection takes the first parser
+**Two exceptions, written in Java (core).** JSON lines and syslog can't be regex
+definitions: a JSON object's keys come in any order and nesting, and syslog's level is a
+number to decode (`<PRI>` mod 8). So `JsonLinesParser` and `SyslogParser` are classes,
+built in after the JSON-defined parsers (`ParserList.withBuiltIn`), each replaced by a
+JSON-defined parser of the same name. Both accept only lines no regex format would (a
+whole JSON object with a time, level or message key; a valid priority), so their place in
+detection order costs nothing. `JsonLinesParser` reads the usual key names of each library
+case-insensitively (but only a lower-case `name`, Python's logger, since `Name` is an
+ordinary property elsewhere), ECS-style nested or dotted keys, epoch times by magnitude
+(seconds, ms, µs, ns), and pino's numeric levels; other top-level keys become fields,
+nested values as compact JSON; a stack trace key is appended to the message so the detail
+pane links its frames. A record without a level is INFO, not UNKNOWN (4.2): UNKNOWN means
+continuation line, hidden by the default level filter. Neither is listed in the parser
+editor, which edits only regex definitions.
+
+**Combined list.** `WindowManager.reloadParsers` builds the list the open dialog, SSH dialog
+and tabs use with `ParserList.combine` (core): JSON-defined parsers first, then the two
+built in Java, then plugin `LogParser` extensions. Order matters because auto-detection takes the first parser
 that accepts a line, so a plugin can't take over a format that already works. A plugin
 parser whose name is already used, or that has no name, is skipped with a warning, so
 `parsers.json` stays the way to override by name. Each plugin parser is wrapped so its
@@ -224,6 +240,7 @@ refresh; open tabs keep the list they were created with.
 | **Rule executor** (`clouseau-rules`, one per tab) | Match every entry against the highlight rules when they change, a merged view loads or a tail re-merges (D-29); a generation counter discards stale results. Appends are matched on the EDT. |
 | **Source worker** (`SwingWorker` on a `clouseau-follow-N` thread, D-22; one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. Marks the tab's `SourceConnection` connected; its changes reach the tab's dot through `invokeLater`. |
 | **Source close** (`source-close`, a daemon thread per close) | Run `LogSource.close` when a live tab is closed or reloaded. Closing can wait on the network or a plugin, so it never runs on the EDT (issue #1). |
+| **Log receiver** (`log-listener-<protocol>-<port>`, a daemon thread per bound address; `log-sender-<port>`, one per connected TCP sender, at most 64) | Accept connections or receive datagrams for a `NetworkLogSource` (D-30) and push their lines, one at a time, to the source worker, which stays blocked in `open` until the tab closes it. |
 
 **Rules:**
 
@@ -350,6 +367,11 @@ starting state.
   password is let in by. `SshLogSourceServerTest` runs the source against an embedded
   Apache MINA SSHD server (a test-only dependency). The source's TCP connect gives up
   after `SshRemote.TIMEOUT_SECONDS` (15 s) instead of the OS's own timeout.
+- **Received logs (UC-20, D-30):** `NetworkLogSource` (core) is a `ConnectingLogSource`
+  that binds a port in `open`, reports connected once bound, and pushes what senders send;
+  `close` closes the port and every sender. It reaches the tab like any plugin source,
+  through `LiveContent`, which also puts "listening on…" on the tab's message card until
+  the first line.
 - **Checking before Connect (formerly G-13, G-14):** `SshRemote` (core) is one sign-in for
   the SSH dialog, set up and signed in the same way as the source (`SshRemote.newClient`,
   `SshRemote.authenticate`, which `SshLogSource` calls). Each step is bounded by
@@ -2637,6 +2659,49 @@ highlight bar couldn't count or step through rows not yet drawn); per-parser rul
 UI, and a text rule rarely depends on the format; can be added as an optional condition);
 reusing the filter bar's conditions as rules (a filter's conditions combine differently
 from "the first rule wins", and most rules are one text).
+
+### D-30 · Received logs are a built-in live source that reads text only · Adopted
+
+UC-20: apps, devices and containers that send their log instead of writing a file.
+
+- **A `LogSource`, not a new kind of tab.** `NetworkLogSource` (core) implements
+  `ConnectingLogSource` (connected once the port is bound), and `NetworkSourceProvider`
+  (ui) is a `LogSourceProvider` that isn't a PF4J extension. So the settings form
+  (`SourceSettingsDialog`, given its own title, **Listen** button and a note), remembered
+  values, the connection dot, Reconnect, the entry limit and sessions (`Kind.SOURCE` with
+  the provider's class name; `MainFrame.sourceProvider` finds the built-in one first) all
+  come from the plugin-source path (D-14, D-20), with no new session kind and no API
+  change. It has its own item under File → Open Remote, after SSH, and isn't listed with
+  plugin sources. Its tab is named after the source (`TCP :5140`), not the provider.
+- **Text only, never Java serialization.** Log4j's `SocketAppender`/`SerializedLayout` and
+  Logback's `SocketAppender` send serialized Java objects; deserializing untrusted bytes is
+  a remote-code-execution hole (Log4j's own `SocketServer` was CVE-2017-5645), and
+  filtering classes would be a lasting maintenance burden. The receiver reads UTF-8 text,
+  bad bytes replaced, and leaves the format to the parsers; senders use a JSON or syslog
+  layout.
+- **Framing.** TCP: LF-ended lines (a CR before it dropped), and RFC 6587 octet counting,
+  recognized only as a count without leading zeros, a space and a valid `<PRI>`, so an
+  ordinary line beginning with a number isn't swallowed as a frame. UDP: one message per
+  datagram. A message of several lines is passed line by line (later lines become
+  continuations, as in a file), lines from several senders one at a time and each whole.
+- **Bounded.** A line is cut at 1 MB, at most 64 TCP senders at once (more are closed on
+  accept), and the tab's entry limit (D-7) bounds what's kept; nothing is written to disk.
+- **This computer only by default.** `Listen.LOCAL` binds 127.0.0.1 and, if it can, ::1
+  (Windows resolves `localhost` to ::1 first, so binding only 127.0.0.1 would miss senders
+  that use the name; binding the wildcard and filtering by address would raise a firewall
+  prompt and expose the port). `Listen.ALL` binds the wildcard address. The form stores the
+  choice as its label; anything but the "any computer" label (or `ALL`) reads as local, so a
+  damaged or reworded value fails safe.
+- **Only while the tab is open**, which keeps it within the "not a server" non-goal: there's
+  no background listener, and a restored session listens again only when its tab loads.
+- **Errors.** A taken port is `PortInUseException`, which `LiveContent` words for the user;
+  a refused bind (a port below 1024 without rights) keeps the system's message. Both reach
+  the tab's message card with Reconnect, as any source failing before its first line.
+
+Rejected: a dedicated receiver dialog and tab kind (duplicates D-20's machinery);
+binding the wildcard by default (exposes the port and prompts the firewall for the common
+local case); accepting serialized events behind an allow-list (see above); TLS and per-sender
+columns (not needed for the local case; can come later as settings).
 
 ## 10. Planned features
 

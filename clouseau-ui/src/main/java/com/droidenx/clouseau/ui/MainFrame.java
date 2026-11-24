@@ -6,6 +6,7 @@ import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSourceProvider;
 import com.droidenx.clouseau.api.SourceSetting;
 import com.droidenx.clouseau.core.MergeLoad;
+import com.droidenx.clouseau.core.NetworkLogSource;
 import com.droidenx.clouseau.core.ReviewBundle;
 import com.droidenx.clouseau.core.Session;
 import com.droidenx.clouseau.core.SessionStore;
@@ -53,6 +54,9 @@ public final class MainFrame extends JFrame {
     private JMenuItem closeTabItem;
     private JMenuItem reconnectItem;
     private JMenu recentMenu;
+
+    /** The built-in log receiver (UC-20), which File → Open Remote lists after SSH. */
+    private static final NetworkSourceProvider RECEIVER = new NetworkSourceProvider();
 
     private static final String CARD_WELCOME = "welcome";
     private static final String CARD_TABS    = "tabs";
@@ -1137,7 +1141,15 @@ public final class MainFrame extends JFrame {
             }
             case SOURCE -> {
                 String name = t.source().name() != null ? t.source().name() : t.source().provider();
-                insertLogTab(name, null, panel, -1, false);
+                String tooltip = null;
+                if (RECEIVER.getClass().getName().equals(t.source().provider())) {
+                    try {
+                        tooltip = receiverTooltip(t.source().settings());
+                    } catch (IllegalArgumentException e) {
+                        // a damaged port: the tab says so when it opens
+                    }
+                }
+                insertLogTab(name, tooltip, panel, -1, false);
                 panel.restoreState(t, notes, sessionName);
                 panel.deferLoad(() -> openRestoredSource(panel, t, parser));
             }
@@ -1257,8 +1269,7 @@ public final class MainFrame extends JFrame {
      */
     private void openRestoredSource(TabPanel panel, Session.Tab t, Optional<LogParser> parser) {
         Session.PluginSource ps = t.source();
-        Optional<LogSourceProvider> provider = manager.sourceProviders().stream()
-                .filter(p -> p.getClass().getName().equals(ps.provider())).findFirst();
+        Optional<LogSourceProvider> provider = sourceProvider(ps.provider());
         if (provider.isEmpty()) {
             panel.showMessage(MessageFormat.format(Messages.get("session.tab.plugin.missing"),
                     ps.name() != null ? ps.name() : ps.provider()),
@@ -1354,6 +1365,9 @@ public final class MainFrame extends JFrame {
         JMenuItem ssh = menuItem(Messages.get("menu.file.remote.ssh"));
         ssh.addActionListener(e -> openSsh());
         menu.add(ssh);
+        JMenuItem receive = menuItem(Messages.get("menu.file.remote.receive"));
+        receive.addActionListener(e -> openReceiver());
+        menu.add(receive);
         menu.addSeparator();
         for (LogSourceProvider provider : manager.sourceProviders()) {
             String name;
@@ -1396,6 +1410,42 @@ public final class MainFrame extends JFrame {
             // Reconnect asks the provider for a new source from the same values (secrets included).
             panel.loadSource(r.source(), () -> provider.create(r.values()), r.parser());
         });
+    }
+
+    /**
+     * File → Open Remote → TCP/UDP… (UC-20): the receiver's form, then a tab named after
+     * what it listens on ("TCP :5140") that receives into it. A session keeps it like a
+     * plugin source, so it listens again when restored.
+     */
+    private void openReceiver() {
+        LogSourceProvider provider = RECEIVER;
+        new SourceSettingsDialog(this, provider, provider.settings(), parsers(), null,
+                Messages.get("receive.dialog.title"), Messages.get("receive.dialog.open"),
+                Messages.get("receive.dialog.intro"),
+                Messages.get("receive.dialog.caution")).showDialog().ifPresent(r -> {
+            String name = LiveContent.sourceName(r.source());
+            log.info("Receiving logs on {}", name);
+            TabPanel panel = newTabPanel();
+            addLogTab(name, null, panel, receiverTooltip(r.values()));
+            panel.setSessionOrigin(Session.Tab.source(
+                    new Session.PluginSource(provider.getClass().getName(), name, r.sessionValues()),
+                    parserName(r.parser()), null));
+            panel.loadSource(r.source(), () -> provider.create(r.values()), r.parser());
+        });
+    }
+
+    /** "Receiving TCP on port 5140 from this computer only", or "…from other computers too". */
+    static String receiverTooltip(Map<String, String> values) {
+        return MessageFormat.format(Messages.get(
+                        NetworkSourceProvider.listen(values) == NetworkLogSource.Listen.ALL
+                                ? "receive.tab.tooltip.all" : "receive.tab.tooltip.local"),
+                NetworkSourceProvider.protocol(values), String.valueOf(NetworkSourceProvider.port(values)));
+    }
+
+    /** A source provider by class name: the receiver, or one from a plugin. */
+    private Optional<LogSourceProvider> sourceProvider(String className) {
+        if (RECEIVER.getClass().getName().equals(className)) return Optional.of(RECEIVER);
+        return manager.sourceProviders().stream().filter(p -> p.getClass().getName().equals(className)).findFirst();
     }
 
     // ── Tab management ────────────────────────────────────────────────────────

@@ -65,11 +65,13 @@ final class WindowManager {
 
     /**
      * Rebuilds the parser list: JSON-defined parsers (built-in and {@code parsers.json})
-     * first, then plugin parsers (see {@link ParserList}). Called at startup, after
-     * parsers.json is saved, and after a plugin refresh.
+     * first, then the ones written in Java (JSON Lines, Syslog), then plugin parsers (see
+     * {@link ParserList}). Called at startup, after parsers.json is saved, and after a plugin
+     * refresh.
      */
     void reloadParsers() {
-        parsers = ParserList.combine(UserParsersLoader.load(), pluginManager.getExtensions(LogParser.class));
+        parsers = ParserList.combine(ParserList.withBuiltIn(UserParsersLoader.load()),
+                pluginManager.getExtensions(LogParser.class));
         if (lastParserIndex > parsers.size()) lastParserIndex = 0;
         log.info("Loaded {} parser(s): {}", parsers.size(), parsers.stream().map(LogParser::getName).toList());
     }

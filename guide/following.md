@@ -163,6 +163,42 @@ An SSH tab keeps its lines in memory, at most **Max entries per tab** (200,000 b
 in [Settings](settings.md)); past that, the oldest lines are dropped. The status bar shows
 how many were trimmed.
 
+## Receiving logs over the network
+
+Clouseau can also receive logs that a program sends it, instead of reading a file:
+useful for an app that logs to a socket or syslog, a device on your desk, or a container.
+**File → Open Remote → TCP/UDP…** asks for:
+
+- **Protocol**: **TCP** (one message per line, or syslog's length-prefixed frames) or
+  **UDP** (one message per packet).
+- **Port**: 5140 unless you change it. Ports below 1024, such as syslog's 514, usually
+  need administrator rights on Linux and macOS.
+- **Accept from**: **This computer only** (the default) or **Any computer on the
+  network**, for a phone, a test rig or a virtual machine. Your firewall may ask whether
+  to allow it.
+
+Click **Listen**. A tab named after the port (`TCP :5140`) opens and says where it's
+listening until the first line arrives; after that, lines appear as they're sent, from any
+number of senders at once. Clouseau listens only while the tab is open: closing it frees
+the port. If the port is already in use, by another program or another tab, the tab says
+so; choose another port, or free it and click **Reconnect**.
+
+Send text: plain lines, [JSON Lines](parsers.md#json-lines) or [syslog](parsers.md#syslog),
+which are recognized by themselves, or any format you have a parser for. For example:
+
+```
+echo "hello from the shell" | nc localhost 5140
+logger --server localhost --port 5140 --tcp "hello from logger"
+```
+
+Clouseau never accepts Java's serialized log events (the binary ones Log4j's and
+Logback's socket appenders send): reading those could let a sender run code on your
+computer. Use a JSON or syslog appender instead.
+
+Received lines are kept in memory, at the same limit as SSH tabs, and a received tab has
+the same connection dot and **Reconnect**. It is reopened, listening again, with your
+other tabs the next time Clouseau starts.
+
 ## Source plugins
 
 Plugins can bring in lines from other places, such as a log service or a message queue.

@@ -47,7 +47,8 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
                     UpdateCheck, SshSaved, SyntaxLayers, TextMatches, CompactTime,
                     SourceRefs, JetBrainsIde, JetBrainsProjects, SourceFolders, Foreground,
-                    HighlightRule, HighlightRules, HighlightRuleStore
+                    HighlightRule, HighlightRules, HighlightRuleStore, JsonLinesParser, SyslogParser,
+                    NetworkLogSource
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -67,7 +68,9 @@ clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo L
 
 There is no built-in parser plugin module: built-in parsers are regex definitions in
 `clouseau-ui/src/main/resources/.../default-parsers.json`, loaded by `UserParsersLoader`
-(user parsers in `<data>/parsers.json` override them by name).
+(user parsers in `<data>/parsers.json` override them by name). The exceptions are JSON
+Lines and Syslog, which regex can't express: `JsonLinesParser` and `SyslogParser` in core,
+added after the JSON-defined ones by `ParserList.withBuiltIn` (and also overridden by name).
 
 ## Tech stack
 
@@ -157,6 +160,11 @@ release only.
 - `LogSource` (api) — pushes live lines; `ConnectingLogSource` (api) also reports when it is connected (D-20); `LogSourceProvider` (extension point) creates one
   from declared `SourceSetting`s, shown under File → Open Source by `SourceSettingsDialog`.
 - `RegexLogParser` (core) — the parser behind every JSON-defined format.
+- `JsonLinesParser`, `SyslogParser` (core) — the two built-in parsers written in Java (JSON lines of the usual
+  libraries; syslog RFC 5424 and 3164), after the JSON-defined ones (`ParserList.withBuiltIn`); not in the parser editor.
+- `NetworkLogSource` (core), `NetworkSourceProvider` (ui) — UC-20, D-30: File → Open Remote → TCP/UDP…, a
+  TCP/UDP listener on this computer (or every interface, if chosen) while its tab is open. Text only: never
+  deserialize received bytes. A built-in `LogSourceProvider`, so the plugin-source form, Reconnect and sessions apply.
 - `FileTail` (core) — reads complete UTF-8 lines appended to a file, for follow mode.
 - `FileChangeWatcher` (core) — wakes follow mode when the OS reports the file changed.
 - `LogReaders` (core) — opens a plain, `.gz` or `.zip` log as UTF-8 text.

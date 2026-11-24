@@ -4,6 +4,7 @@ import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogParser;
 import com.droidenx.clouseau.api.LogSource;
 import com.droidenx.clouseau.core.LineParser;
+import com.droidenx.clouseau.core.NetworkLogSource;
 import com.droidenx.clouseau.core.SourceConnection;
 import com.droidenx.clouseau.core.SshLogSource;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,8 @@ final class LiveContent implements TabContent {
     private final SourceConnection connection;
     private SwingWorker<Void, LogEntry> worker;
     private boolean closed;
+    /** Whether a line has arrived: until then a receiver shows what it listens on. EDT only. */
+    private boolean gotLines;
 
     LiveContent(TabContext tab, LogSource source, Callable<LogSource> factory,
                 Optional<LogParser> parser, boolean reconnecting) {
@@ -45,7 +48,7 @@ final class LiveContent implements TabContent {
         this.parser = parser;
         this.reconnecting = reconnecting;
         this.name = sourceName(source);
-        this.connection = new SourceConnection(changed -> SwingUtilities.invokeLater(tab::connectionChanged));
+        this.connection = new SourceConnection(changed -> SwingUtilities.invokeLater(this::connectionChanged));
     }
 
     @Override
@@ -78,6 +81,7 @@ final class LiveContent implements TabContent {
                 LogTableView view = tab.tableView();
                 int columnsBefore = model.getColumnCount();
                 model.appendLive(chunk);
+                gotLines = true;
                 if (firstBatch) {
                     // Size columns once the first rows (and their fields) are in, so the
                     // fit uses real content and field columns aren't pushed off-screen.
@@ -107,13 +111,14 @@ final class LiveContent implements TabContent {
                 } catch (ExecutionException ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     log.error("Source error for {}", name, cause);
-                    String message = cause instanceof SshLogSource.UnreadableFileException u
-                            ? MessageFormat.format(Messages.get("ssh.error.unreadable"), u.path())
-                            : cause.getMessage() != null ? cause.getMessage() : cause.toString();
+                    String message = errorMessage(cause);
                     connection.disconnected(message);
                     if (firstBatch) {
                         // Nothing arrived: say why in place of the empty table, with a way to try again.
-                        tab.showMessage(MessageFormat.format(Messages.get("source.failed.card"), name, message),
+                        // A taken port isn't a connection to check: its card says what to do instead.
+                        String card = cause instanceof NetworkLogSource.PortInUseException
+                                ? "receive.failed.card.in.use" : "source.failed.card";
+                        tab.showMessage(MessageFormat.format(Messages.get(card), name, message),
                                 canReconnect() ? Messages.get("source.failed.reconnect") : null,
                                 canReconnect() ? tab::reconnect : null);
                     } else {
@@ -126,6 +131,32 @@ final class LiveContent implements TabContent {
             }
         };
         FollowThreads.start(worker);
+    }
+
+    /**
+     * The connection changed: the tab's dot follows it. A receiver that is listening with
+     * nothing received yet says where it listens in place of the empty table (UC-20), until
+     * the first line replaces the card with rows.
+     */
+    private void connectionChanged() {
+        tab.connectionChanged();
+        if (connection.state() == SourceConnection.State.CONNECTED && !gotLines && !closed
+                && source instanceof NetworkLogSource n) {
+            String where = Messages.get(n.listen() == NetworkLogSource.Listen.ALL
+                    ? "receive.waiting.all" : "receive.waiting.local");
+            tab.showMessage(MessageFormat.format(where, n.protocol().name(), String.valueOf(n.port())), null, null);
+        }
+    }
+
+    /** What went wrong, in words for the user. */
+    private static String errorMessage(Throwable cause) {
+        if (cause instanceof SshLogSource.UnreadableFileException u) {
+            return MessageFormat.format(Messages.get("ssh.error.unreadable"), u.path());
+        }
+        if (cause instanceof NetworkLogSource.PortInUseException p) {
+            return MessageFormat.format(Messages.get("receive.error.in.use"), p.protocol().name(), String.valueOf(p.port()));
+        }
+        return cause.getMessage() != null ? cause.getMessage() : cause.toString();
     }
 
     /** Rows stream in whatever follow mode says; the tab scrolls to them when following. */

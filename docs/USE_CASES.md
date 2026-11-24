@@ -39,6 +39,7 @@ exactly where the field left off.
 | Email | Attachments, often compressed | Saved to disk, then opened as a local file |
 | Local development | Plain files written by the running app, still growing | Opened directly, optionally followed live |
 | Remote hosts | Files on a server reachable over SSH | Streamed via SSH (`tail -F`) |
+| Senders | An app, device, container or VM that sends its log as text (socket appender, syslog) | Received on a local TCP or UDP port while a tab is open (UC-20) |
 | Log aggregators | Loki, CloudWatch, and similar services | Third-party source plugins only, opened from File → Open Remote (UC-11) |
 
 Logs from tickets and email are **local files the user has already saved**. Opening them
@@ -80,6 +81,13 @@ without manual configuration for common formats (Log4j, Logback/Spring Boot, JSO
   user clearly instead of silently dropping lines.
 - *Export bundle:* Opening a review bundle (UC-8) loads the log together with its
   annotations.
+
+**Built-in formats:** Log4j Pattern and Spring Boot (regex definitions), then JSON Lines
+(Logback/Log4j JSON layouts, ECS, Serilog, pino, bunyan, zap, structlog, Python, Docker's
+`json-file`) and Syslog (RFC 5424 and RFC 3164 with their `<PRI>`), written in code. A
+JSON line's other keys become field columns; a stack trace in its own key joins the
+message; a record without a level is INFO, never a continuation line. The parser editor
+lists only the regex ones.
 
 **Current behavior:** Files dragged onto the window open anywhere they're dropped (table,
 detail panel, filter bar, tab strip or welcome screen), each in its own tab with the
@@ -831,6 +839,48 @@ Clouseau brings it forward and a toast names the IDE; that works on Windows and 
 on Linux with `wmctrl` or `xdotool` under X11, not under Wayland. Stack traces of other
 languages (Python, .NET, JavaScript) aren't links yet. Design: DESIGN.md D-28.
 
+### UC-20 · Receive logs sent over the network ✅
+
+**Actor:** Developer, Field engineer
+**Goal:** Watch the log of something that sends its log rather than writing a file Clouseau
+can open: an app with a socket or syslog appender, a device on the desk or the bench, a
+container or a VM.
+
+1. User chooses **File → Open Remote → TCP/UDP…**, picks TCP or UDP, a port (5140 by
+   default) and who may send: **This computer only** (the default) or **Any computer on
+   the network**, and clicks **Listen**.
+2. A tab named after the port (`TCP :5140`) opens and says where it listens until the
+   first line arrives.
+3. The sender is pointed at that port; its lines appear as they arrive, parsed like any
+   live source's (auto-detected, or the parser chosen in the form), from any number of
+   senders at once.
+4. Closing the tab stops listening and frees the port.
+
+**Success:** A developer points an app's JSON or syslog appender at `localhost:5140` and
+sees its entries, in columns, within a second, with nothing else to install.
+
+**Rules:**
+- **Text only.** Lines are read as UTF-8; nothing is ever deserialized. The binary
+  events of Log4j's and Logback's socket appenders (Java serialization) are refused by
+  design: reading them lets a sender run code on the user's computer. Users send JSON
+  lines or syslog instead.
+- **This computer only unless asked.** The default listens on 127.0.0.1 and ::1 only, so
+  nothing on the network can reach it; listening on every interface is a choice in the
+  form, and the tab's tooltip says which one is in force.
+- **Only while the tab is open.** It's a tab, not a service: no listener outlives its tab
+  or runs without a window (see the "not a server" non-goal).
+- **A sender can't exhaust memory.** Received lines count against the per-tab entry limit
+  like SSH lines; a line is cut at 1 MB, and at most 64 TCP senders are connected at once.
+
+**Current behavior:** All of the above. TCP takes one message per line (LF or CRLF) and
+also syslog's octet-counted frames (RFC 6587, `57 <34>1 …`); UDP one message per
+datagram. A message of several lines is split into lines, the later ones continuation
+lines as in a file. The built-in **JSON Lines** and **Syslog** parsers (UC-1) recognize
+those formats by themselves. A port in use, or one the user may not bind (below 1024 on
+Linux and macOS), is shown on the tab's message card with **Reconnect**. A session
+reopens the tab and listens again. Not yet: TLS, filtering by sender, or a column for the
+sender's address. Design: DESIGN.md D-30.
+
 ---
 
 ## 5. Quality goals
@@ -850,6 +900,8 @@ Clouseau is a desktop viewer. It is **not**:
 
 - **A server.** It doesn't run as a service or host a web UI, and it doesn't need any
   backend to work. Collaboration happens by passing files, not through a shared server.
+  Receiving logs (UC-20) is a tab the user opens: it listens only while that tab is open,
+  on this computer only unless the user chooses otherwise, and keeps nothing.
 - **An alerting or monitoring tool.** It doesn't watch logs unattended or send
   notifications, and it has no dashboards or metrics.
 - **A log aggregator.** It doesn't collect, ship, or store logs centrally from many

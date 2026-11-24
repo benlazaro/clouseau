@@ -25,6 +25,22 @@ public final class ParserList {
 
     private ParserList() {}
 
+    /**
+     * {@code jsonParsers} in their order, then the parsers written in Java rather than as
+     * regex definitions ({@link JsonLinesParser}, {@link SyslogParser}) unless a JSON-defined
+     * parser has taken the name. Both only accept lines no regex format would (a JSON object,
+     * a syslog priority), so they go after the regex parsers.
+     */
+    public static List<LogParser> withBuiltIn(List<LogParser> jsonParsers) {
+        List<LogParser> result = new ArrayList<>(jsonParsers);
+        Set<String> names = new HashSet<>();
+        jsonParsers.forEach(p -> names.add(p.getName()));
+        for (LogParser p : List.of(new JsonLinesParser(), new SyslogParser())) {
+            if (names.add(p.getName())) result.add(p);
+        }
+        return result;
+    }
+
     /** JSON-defined parsers in their order, then each uniquely named plugin parser, guarded. */
     public static List<LogParser> combine(List<LogParser> jsonParsers, List<LogParser> pluginParsers) {
         List<LogParser> result = new ArrayList<>(jsonParsers);

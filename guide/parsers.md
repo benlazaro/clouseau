@@ -40,6 +40,51 @@ application name):
 
 The process ID and application name become **pid** and **app** columns.
 
+### JSON Lines
+
+One JSON object per line, as written by Logback's and Log4j's JSON layouts, Elastic Common
+Schema (ECS), Serilog, pino, bunyan, zap, structlog, Python's JSON formatters and Docker's
+`json-file` driver:
+
+```
+{"@timestamp":"2024-01-15T10:30:45.123+01:00","level":"WARN","logger_name":"com.example.Api","thread_name":"main","message":"Slow response","requestId":"r-17"}
+{"level":50,"time":1705311045123,"pid":7,"hostname":"web-1","msg":"Payment failed"}
+{"time":"2024-01-15T10:30:45Z","log":{"level":"error","logger":"db"},"message":"Connection lost"}
+```
+
+Clouseau finds the columns under their usual names, whatever their case: the time in
+`@timestamp`, `timestamp`, `time` or `ts` (as text, or as a number of seconds or
+milliseconds), the level in `level`, `severity` or `@l` (as a name, or pino's numbers),
+the message in `message`, `msg` or `@m`, plus the logger and thread. ECS's nested keys
+(`"log": {"level": …}`) work too. Every other key becomes a column of its own, so
+`requestId` above can be filtered like any field. A stack trace in its own key
+(`stack_trace`, `exception`…) is added to the message, so the detail panel shows it with
+its frames linked to the code; the table shows the message's first line. A line without a
+level is shown as INFO.
+
+A line is read as JSON Lines only if it is a JSON object with a time, level or message.
+
+### Syslog
+
+Syslog messages as they travel over the network, in both the current format (RFC 5424) and
+the older BSD one (RFC 3164):
+
+```
+<34>1 2024-01-15T10:30:45.003Z web-1 sshd 812 ID47 - Failed password for root
+<11>Jan 15 10:30:45 web-1 nginx[812]: upstream timed out
+```
+
+The level comes from the priority at the start (`<34>`): emergency, alert and critical are
+FATAL, notice is INFO. The app name is the logger and its process ID the thread; **host**
+and **facility** are columns, with the message ID and structured data when a message has
+them. A BSD time has no year, so Clouseau uses the current one (or last year's, for a date
+that would be in the future). Lines without a priority, such as those in
+`/var/log/syslog`, aren't read as syslog.
+
+JSON Lines and Syslog are written in code rather than as patterns, so the parser editor
+doesn't list them; you can still choose them in the open dialog. A parser of yours with
+the same name replaces one.
+
 ## The parser editor
 
 **Tools → Parser Editor…** lists the parsers in a sidebar: **Yours** first, then the

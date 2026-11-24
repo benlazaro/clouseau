@@ -466,6 +466,7 @@ dependencies {
     // PF4J is on the runtime classpath via clouseau-plugin; needed here only for compilation
     // because LogParser extends ExtensionPoint
     compileOnly("org.pf4j:pf4j:${rootProject.extra["pf4jVersion"]}")
+    testCompileOnly("org.pf4j:pf4j:${rootProject.extra["pf4jVersion"]}")   // tests that hold a LogSourceProvider
 }
 
 
