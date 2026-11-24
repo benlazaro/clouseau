@@ -48,7 +48,7 @@ class CrashHandlerTest {
         String details = CrashHandler.details("AWT-EventQueue-0",
                 new IllegalStateException("broken", new java.io.IOException("disk full")), "1.0.0");
 
-        assertThat(details).startsWith("Clouseau 1.0.0\nJava ")
+        assertThat(details).startsWith("Clouseau v1.0.0\nPlugin API v" + com.droidenx.clouseau.api.ClouseauApi.VERSION + "\nJava ")
                 .contains("Thread: AWT-EventQueue-0")
                 .contains("java.lang.IllegalStateException: broken")
                 .contains("Caused by: java.io.IOException: disk full")

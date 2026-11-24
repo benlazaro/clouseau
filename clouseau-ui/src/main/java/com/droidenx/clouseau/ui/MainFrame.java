@@ -1,5 +1,6 @@
 package com.droidenx.clouseau.ui;
 
+import com.droidenx.clouseau.api.ClouseauApi;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogParser;
@@ -781,21 +782,39 @@ public final class MainFrame extends JFrame {
         // The version in the theme's dim text color, read now (the box is modal, so no theme switch while it shows).
         Color dim = ClouseauColors.dimForeground();
         String dimHex = dim != null ? String.format("#%06x", dim.getRGB() & 0xFFFFFF) : "gray";
-        // A message box that only informs: Close is the default, Licenses the option. The
-        // default first: OptionPane.isYesLast lays it out last, on the right (DESIGN.md 6.12).
-        Object[] options = { Messages.get("about.close"), Messages.get("about.licenses") };
-        int choice = JOptionPane.showOptionDialog(
-                this,
-                "<html><b>" + Messages.get("about.version") + "</b>"
-                        + "<br><font color='" + dimHex + "'>" + AppPrefs.getAppVersion() + "</font>"
-                        + "<br><br>" + Messages.get("about.description")
-                        + "<br><br>" + Messages.get("about.license") + "</html>",
-                Messages.get("about.title"),
-                JOptionPane.DEFAULT_OPTION,
-                JOptionPane.INFORMATION_MESSAGE,
-                icon64 != null ? new ImageIcon(icon64) : null,
-                options, options[0]);
-        if (choice == 1) LicensesDialog.show(this);
+        String version = AppPrefs.getAppVersion();
+        String message = "<html><b>" + Messages.get("about.version") + "</b>"
+                + "<br><font color='" + dimHex + "'>" + Messages.format("about.appVersion", version)
+                + "<br>" + Messages.format("about.apiVersion", ClouseauApi.VERSION) + "</font>"
+                + "<br><br>" + Messages.get("about.description")
+                + "<br><br>" + Messages.get("about.license") + "</html>";
+        // A message box that only informs: Close is the default, Copy Details and Licenses the
+        // options. The default first: OptionPane.isYesLast lays it out last, on the right
+        // (DESIGN.md 6.12). The options are our own buttons, so Copy Details can leave the box
+        // open; the others close it by setting the pane's value.
+        JButton close = new JButton(Messages.get("about.close"));
+        JButton copy = new JButton(Messages.get("about.copy"));
+        JButton licenses = new JButton(Messages.get("about.licenses"));
+        Object[] options = { close, copy, licenses };
+        JOptionPane pane = new JOptionPane(message, JOptionPane.INFORMATION_MESSAGE, JOptionPane.DEFAULT_OPTION,
+                icon64 != null ? new ImageIcon(icon64) : null, options, close);
+        Toast toast = new Toast();
+        close.addActionListener(e -> pane.setValue(close));
+        licenses.addActionListener(e -> pane.setValue(licenses));
+        copy.addActionListener(e -> {
+            try {
+                Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new java.awt.datatransfer.StringSelection(AppInfo.lines(version) + "\n"), null);
+                toast.show(pane, Messages.get("about.copied"));
+            } catch (Exception ex) {
+                log.warn("Could not copy the About details", ex);
+            }
+        });
+        JDialog dialog = pane.createDialog(this, Messages.get("about.title"));
+        dialog.getRootPane().setDefaultButton(close);
+        dialog.setVisible(true);
+        dialog.dispose();
+        if (pane.getValue() == licenses) LicensesDialog.show(this);
     }
 
     /**

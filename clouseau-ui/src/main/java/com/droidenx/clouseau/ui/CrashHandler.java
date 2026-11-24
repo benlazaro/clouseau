@@ -98,10 +98,7 @@ final class CrashHandler implements Thread.UncaughtExceptionHandler {
     static String details(String thread, Throwable error, String version) {
         StringWriter trace = new StringWriter();
         error.printStackTrace(new PrintWriter(trace));
-        return "Clouseau " + version + "\n"
-                + "Java " + System.getProperty("java.version") + " (" + System.getProperty("java.vendor") + ")\n"
-                + System.getProperty("os.name") + " " + System.getProperty("os.version")
-                + " (" + System.getProperty("os.arch") + ")\n"
+        return AppInfo.lines(version) + "\n"
                 + "Thread: " + thread + "\n\n"
                 + trace.toString().strip() + "\n";
     }

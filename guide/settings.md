@@ -176,8 +176,8 @@ Clouseau's own log, and saved passwords (encrypted) all live in one folder:
 ## When something goes wrong
 
 If Clouseau hits an error it didn't expect, it keeps running and tells you in a
-**Clouseau ran into a problem** window. The window shows the details (Clouseau's version,
-Java, your operating system and where the error happened), and has buttons to:
+**Clouseau ran into a problem** window. The window shows the details (Clouseau's version, the
+plugin API version, Java, your operating system and where the error happened), and has buttons to:
 
 - **Copy Details**: copy them to the clipboard.
 - **Open Log Folder**: open the folder with Clouseau's own log, `logs/clouseau.log` in the
@@ -187,6 +187,12 @@ Java, your operating system and where the error happened), and has buttons to:
 
 If something doesn't look right afterwards, restart Clouseau. The same error shows only
 once per run, so a problem that keeps repeating doesn't flood you with windows.
+
+## About Clouseau
+
+**Help → About Clouseau** shows which version of Clouseau you have and the version of the
+plugin API it supports (a plugin built for a newer API won't load). **Copy Details** copies
+both, with your Java and operating system versions, ready to paste into an issue.
 
 ## Licenses
 

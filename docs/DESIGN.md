@@ -258,8 +258,8 @@ refresh; open tabs keep the list they were created with.
    previews, exports, downloads) keeps using `execute`.
 5. An exception no code catches, on any thread, reaches `CrashHandler`, the default
    uncaught-exception handler (installed right after logging is configured). It logs the
-   error with its thread and shows **Clouseau ran into a problem**: the details (version,
-   Java, OS, thread, stack trace) with Copy Details, Open Log Folder and Report Issue…
+   error with its thread and shows **Clouseau ran into a problem**: the details (`AppInfo`'s
+   versions, Java and OS, then the thread and stack trace) with Copy Details, Open Log Folder and Report Issue…
    (the plain new-issue page; nothing about the error goes into the address, and nothing
    is sent). The EDT survives an exception (AWT starts a new one), so the app keeps
    running. One notice shows at a time, and an error whose type and top stack frames
@@ -816,6 +816,11 @@ that only informs (a development build can't check for updates) defaults to Clos
 the optional action (Open Releases Page) beside it. **Help → Check for Updates…** answers
 every outcome this way, including an available update (Download · Close); only the daily
 check uses the modeless notice.
+
+**Help → About Clouseau** is a message box with three options, Licenses · Copy Details ·
+Close. They are its own `JButton`s rather than strings, so Copy Details can copy `AppInfo`'s
+lines (Clouseau and plugin API versions, Java, OS) and say so with a toast while the box
+stays open; Close and Licenses close it by setting the pane's value.
 
 The one exception: a confirmation that deletes, clears or overwrites something defaults to
 **Cancel**, so a stray or habitual Enter never destroys anything. The action keeps its place
