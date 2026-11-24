@@ -1062,7 +1062,7 @@ doesn't hold, the bundle opens as its first log only.
 
 ## 8. Packaging
 
-Clouseau builds with Gradle 8.8 (Kotlin DSL) on Java 21 (see D-12). The `org.beryx.runtime` plugin
+Clouseau builds with Gradle 8.14.4 (Kotlin DSL) on Java 21 (see D-12). The `org.beryx.runtime` plugin
 produces a jpackage image with a bundled JRE, published as a **portable zip**. The default
 heap is `-Xmx2g`. Icons and the splash image are pre-rendered at build time, so the
 runtime needs no SVG library.

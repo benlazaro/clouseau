@@ -12,10 +12,20 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.imageio.ImageIO
 
+buildscript {
+    // Shadow asks for log4j 2.24.1, which has security advisories (GHSA-qv9r-c865-cp47 and others).
+    dependencies {
+        constraints {
+            classpath("org.apache.logging.log4j:log4j-core:2.25.5")
+            classpath("org.apache.logging.log4j:log4j-api:2.25.5")
+        }
+    }
+}
+
 plugins {
     java
     application
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("com.gradleup.shadow") version "8.3.9"
     id("org.beryx.runtime") version "1.13.1"
 }
 
@@ -453,8 +463,8 @@ dependencies {
     implementation(project(":clouseau-plugin"))
 
     implementation("com.google.code.gson:gson:2.11.0")
-    implementation("org.apache.logging.log4j:log4j-core:2.23.0")
-    runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.0")
+    implementation("org.apache.logging.log4j:log4j-core:2.25.5")
+    runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.25.5")
     implementation("com.formdev:flatlaf:${rootProject.extra["flatlafVersion"]}")
     implementation("com.formdev:flatlaf-intellij-themes:${rootProject.extra["flatlafVersion"]}")
     // Bundled fonts (SIL OFL): Inter for the interface, JetBrains Mono for log text (ClouseauFonts)

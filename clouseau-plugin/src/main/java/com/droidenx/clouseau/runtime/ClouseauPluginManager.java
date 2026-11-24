@@ -41,8 +41,10 @@ public final class ClouseauPluginManager {
     }
 
     private final PluginManager pf4j;
+    private final Path pluginsDir;
 
     public ClouseauPluginManager(Path pluginsDir) {
+        this.pluginsDir = pluginsDir;
         // A plugin's Plugin-Requires is checked against the API's version, not the app's,
         // so a snapshot build still loads plugins written for the API it carries.
         // (PF4J's check reads the protected field, and its setter is deprecated.)
@@ -54,7 +56,7 @@ public final class ClouseauPluginManager {
     }
 
     public Path getPluginsRoot() {
-        return pf4j.getPluginsRoot();
+        return pluginsDir;
     }
 
     /** The loaded plugins, then the files in the plugins folder that didn't load, each by name. */
@@ -242,7 +244,7 @@ public final class ClouseauPluginManager {
     }
 
     public void loadAll() {
-        log.info("Loading plugins from {}", pf4j.getPluginsRoot());
+        log.info("Loading plugins from {}", pluginsDir);
         pf4j.loadPlugins();
         pf4j.startPlugins();
         log.info("Loaded {} plugin(s)", pf4j.getPlugins().size());

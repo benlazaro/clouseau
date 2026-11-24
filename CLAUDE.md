@@ -80,16 +80,16 @@ added after the JSON-defined ones by `ParserList.withBuiltIn` (and also overridd
 | Fonts | Inter 4.1 (interface) and JetBrains Mono 2.304 (log text, code), bundled via FlatLaf's font modules; see `ClouseauFonts` |
 | Layout | MigLayout 11.3 |
 | Detail panel text | RSyntaxTextArea 3.4.0 |
-| Plugins | PF4J 3.12.0 |
-| SSH | sshj 0.38.0 |
+| Plugins | PF4J 3.16.1 |
+| SSH | sshj 0.41.2 |
 | JSON | Gson 2.11 |
 | Logging | SLF4J via Lombok `@Slf4j`, backed by Log4j 2 |
-| Build | Gradle 8.8 (Kotlin DSL), Java 21 toolchain |
+| Build | Gradle 8.14.4 (Kotlin DSL), Java 21 toolchain |
 | Test | JUnit 5 + AssertJ + Mockito |
 
 ## Building and running
 
-Gradle 8.8 can't run on JDK 25, so point `JAVA_HOME` at a JDK 17 or 21 (Temurin 21 is
+Gradle 8.14 can't run on JDK 25, so point `JAVA_HOME` at a JDK 17 or 21 (Temurin 21 is
 the project's JDK) before running `./gradlew`.
 
 ```bash

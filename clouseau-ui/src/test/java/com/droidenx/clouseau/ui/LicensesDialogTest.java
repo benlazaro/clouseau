@@ -28,7 +28,7 @@ class LicensesDialogTest {
         List<LicenseNotices.Tab> tabs = LicensesDialog.tabs();
 
         assertThat(tabs).extracting(LicenseNotices.Tab::label)
-                .containsExactly("Clouseau", "Apache 2.0", "MIT", "OFL 1.1", "BSD 3-Clause", "CC0");
+                .containsExactly("Clouseau", "Apache 2.0", "MIT", "OFL 1.1", "BSD 3-Clause");
         LicenseNotices.Tab clouseau = tabs.get(0);
         assertThat(clouseau.note()).contains("OpenJDK").contains("Classpath Exception");
         assertThat(clouseau.texts()).singleElement().satisfies(t -> assertThat(t.body()).startsWith("MIT License"));

@@ -1,17 +1,17 @@
 buildscript {
     repositories { mavenCentral() }
     dependencies {
-        classpath("org.apache.xmlgraphics:batik-transcoder:1.17")
-        classpath("org.apache.xmlgraphics:batik-codec:1.17")
+        classpath("org.apache.xmlgraphics:batik-transcoder:1.20")
+        classpath("org.apache.xmlgraphics:batik-codec:1.20")
     }
 }
 
-val pf4jVersion      = "3.12.0"
+val pf4jVersion      = "3.16.1"
 val flatlafVersion   = "3.4.1"
 val migLayoutVersion = "11.3"
 val rstaVersion      = "3.4.0"
 val junitVersion     = "5.10.3"
-val assertjVersion   = "3.26.3"
+val assertjVersion   = "3.27.7"
 val mockitoVersion   = "5.12.0"
 val lombokVersion    = "1.18.34"
 val slf4jVersion     = "2.0.13"

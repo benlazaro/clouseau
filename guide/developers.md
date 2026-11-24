@@ -13,7 +13,7 @@ Building Clouseau, how the code is laid out, and writing plugins.
 
 ## Building and running
 
-Clouseau needs Java 21. Gradle 8.8 doesn't run on JDK 25, so point `JAVA_HOME` at a JDK
+Clouseau needs Java 21. Gradle 8.14 doesn't run on JDK 25, so point `JAVA_HOME` at a JDK
 17 or 21.
 
 ```bash
@@ -91,10 +91,10 @@ threading, file formats, decisions and known gaps).
 | Look & feel | FlatLaf 3.4.1 |
 | Layout | MigLayout 11.3 |
 | Log text rendering | RSyntaxTextArea 3.4.0 |
-| Plugin system | PF4J 3.12.0 |
-| SSH | sshj 0.38.0 |
+| Plugin system | PF4J 3.16.1 |
+| SSH | sshj 0.41.2 |
 | JSON | Gson 2.11 |
-| Build | Gradle 8.8 (Kotlin DSL), Java 21 |
+| Build | Gradle 8.14.4 (Kotlin DSL), Java 21 |
 | Tests | JUnit 5, AssertJ, Mockito |
 
 ## Writing a plugin
@@ -107,7 +107,7 @@ The quickest start is to copy **[`clouseau-example-plugin`](https://github.com/b
 complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
 (`time=… level=info msg="…" key=value`). It builds against the released API from Maven Central,
 just as your plugin will. When you copy it out of the Clouseau repository, add
-`repositories { mavenCentral() }` and replace `rootProject.extra["pf4jVersion"]` with `3.12.0`,
+`repositories { mavenCentral() }` and replace `rootProject.extra["pf4jVersion"]` with `3.16.1`,
 since those come from Clouseau's own build. It shows everything a plugin needs:
 
 - **Dependencies:** `clouseau-api` and PF4J as `compileOnly` (the app provides both, so don't
@@ -123,8 +123,8 @@ since those come from Clouseau's own build. It shows everything a plugin needs:
   repositories { mavenCentral() }
   dependencies {
       compileOnly("com.droidenx.clouseau:clouseau-api:0.3.0")
-      compileOnly("org.pf4j:pf4j:3.12.0")
-      annotationProcessor("org.pf4j:pf4j:3.12.0")
+      compileOnly("org.pf4j:pf4j:3.16.1")
+      annotationProcessor("org.pf4j:pf4j:3.16.1")
   }
   java { toolchain { languageVersion.set(JavaLanguageVersion.of(21)) } }
   ```

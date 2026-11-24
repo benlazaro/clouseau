@@ -10,7 +10,7 @@ Open logs of any size, merge the logs of several services into one timeline, fil
 [![Release build](https://github.com/benlazaro/clouseau/actions/workflows/release.yml/badge.svg)](https://github.com/benlazaro/clouseau/actions/workflows/release.yml)
 [![Last commit](https://img.shields.io/github/last-commit/benlazaro/clouseau)](https://github.com/benlazaro/clouseau/commits/main)
 ![Java 21](https://img.shields.io/badge/Java-21-blue)
-![Gradle 8.8](https://img.shields.io/badge/Gradle-8.8-02303A)
+![Gradle 8.14](https://img.shields.io/badge/Gradle-8.14-02303A)
 [![License MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 **[⬇ Download](#download)** · **[User Guide](https://benlazaro.github.io/clouseau/guide/)** · **[For developers](https://benlazaro.github.io/clouseau/guide/developers.html)**

@@ -58,10 +58,6 @@ ASN.One (com.hierynomus:asn-one)
     Apache License 2.0 — Copyright (C) 2016 - Jeroen van Erp
     https://github.com/hierynomus/asn-one
 
-EdDSA-Java (net.i2p.crypto:eddsa)
-    CC0 1.0 Universal (public domain dedication) — str4d
-    https://github.com/str4d/ed25519-java
-
 Bouncy Castle (org.bouncycastle:bcprov-jdk18on, org.bouncycastle:bcpkix-jdk18on,
                org.bouncycastle:bcutil-jdk18on)
     Bouncy Castle License (MIT) — Copyright (c) 2000-2023 The Legion of the Bouncy Castle Inc.
@@ -526,10 +522,3 @@ PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIG
 HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
 CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-================================================================================
-CC0 1.0 Universal — EdDSA-Java
-================================================================================
-
-EdDSA-Java is dedicated to the public domain under CC0 1.0 Universal:
-https://creativecommons.org/publicdomain/zero/1.0/legalcode
