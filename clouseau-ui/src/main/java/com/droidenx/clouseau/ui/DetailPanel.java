@@ -1026,6 +1026,9 @@ final class DetailPanel extends JPanel {
             }
             SimpleAttributeSet spanStyle = new SimpleAttributeSet(baseStyle);
             StyleConstants.setForeground(spanStyle, ClouseauColors.syntaxColor(span.role()));
+            // ACCENT is something to find among the rest (a class name, the app's own frame): bold
+            // as well as colored, so it stands out a little more than its color alone.
+            if (span.role() == LogSyntaxHighlighter.Role.ACCENT) StyleConstants.setBold(spanStyle, true);
             insertText(doc, text.substring(span.start(), span.end()), spanStyle);
             pos = span.end();
         }

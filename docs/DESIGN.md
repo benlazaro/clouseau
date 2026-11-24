@@ -495,7 +495,7 @@ ends a text value only where `key=` follows (any comma, in a list), and brackets
 are balanced. Parsing has a step budget proportional to the message, so unclosed brackets
 can't make it slow. The formatter lays out each structure wider than 72 columns one entry per
 line, indented by depth, in place in the message, and keeps every other character as logged;
-formatting its own output changes nothing. The highlighter marks class names ACCENT (`@hash`
+formatting its own output changes nothing. The highlighter marks class names ACCENT (bold; `@hash`
 MUTED), keys KEY, `=` OPERATOR, brackets and commas PUNCTUATION, and values NUMBER, LITERAL
 (`null`, booleans, enum constants) or STRING. Class names are ACCENT rather than KEYWORD
 because the keyword lavender read too close to KEY's pink beside them, and in the text color the
@@ -2533,7 +2533,9 @@ bytes with an HL7 segment inside got one or the other, in PF4J's load order.
 Now `highlight` returns `Span(start, end, Role)`, where `Role` is one of ten kinds of
 text: KEY, STRING, NUMBER, LITERAL, KEYWORD, OPERATOR, PUNCTUATION, MUTED, ACCENT and
 ERROR. Each theme colors every role (`Clouseau.syntax.<role>`), in hues no level or
-detail label uses, at 4.5:1 or more on the detail pane. Every enabled highlighter that
+detail label uses, at 4.5:1 or more on the detail pane. ACCENT is also drawn bold: it marks
+what to find among the rest (the app's own frames, a `toString()`'s class names), and its
+color alone was only just apart from the others around it. Every enabled highlighter that
 accepts the message marks what it recognizes, and `SyntaxLayers` (core) layers them:
 where spans overlap, the narrower wins, so a token inside a larger region keeps its role
 whichever highlighter found it; among equal widths, the earlier highlighter wins.

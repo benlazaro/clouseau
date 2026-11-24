@@ -43,9 +43,15 @@ class DetailPanelSyntaxTest {
         String text = doc.get().getText(0, doc.get().getLength());
         assertThat(text).contains("Saved Order(\n").contains("\n) in 5ms");
         assertThat(colorAt(doc.get(), text, "Order(")).isEqualTo(ClouseauColors.syntaxColor(Role.ACCENT));
+        assertThat(boldAt(doc.get(), text, "Order(")).isTrue();
+        assertThat(boldAt(doc.get(), text, "id=")).isFalse();
         assertThat(colorAt(doc.get(), text, "id=")).isEqualTo(ClouseauColors.syntaxColor(Role.KEY));
         assertThat(colorAt(doc.get(), text, "12,")).isEqualTo(ClouseauColors.syntaxColor(Role.NUMBER));
         assertThat(colorAt(doc.get(), text, "Bob Smith")).isEqualTo(ClouseauColors.syntaxColor(Role.STRING));
+    }
+
+    private static boolean boldAt(StyledDocument doc, String text, String what) {
+        return StyleConstants.isBold(doc.getCharacterElement(text.indexOf(what)).getAttributes());
     }
 
     private static Color colorAt(StyledDocument doc, String text, String what) {
