@@ -106,6 +106,9 @@ public final class ClouseauColors {
     /** Blue accent used in section headings and logger-tree depth 1. */
     public static Color accentBlue()         { return get("Clouseau.accentBlue",    "Label.foreground"); }
 
+    /** A link in text: a stack frame's file and line in the detail pane (Open in IDE). */
+    public static Color linkColor()          { return get("Clouseau.linkColor", "Component.linkColor"); }
+
     /** Key label color in the detail pane. */
     public static Color detailKeyColor()     { return get("Clouseau.detailKeyColor", "Label.foreground"); }
 

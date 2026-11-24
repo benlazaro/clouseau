@@ -201,6 +201,34 @@ public final class AppPrefs {
         putBool("update.check", value);
     }
 
+    /** The editor stack frames and logger classes open in (Settings → Source Code). */
+    public enum SourceEditor { JETBRAINS, VSCODE, CURSOR }
+
+    /** Where Open in IDE opens source; a running JetBrains IDE unless the user picked another. */
+    public static SourceEditor getSourceEditor() {
+        try {
+            return SourceEditor.valueOf(getString("source.editor", SourceEditor.JETBRAINS.name()));
+        } catch (IllegalArgumentException e) {
+            return SourceEditor.JETBRAINS;
+        }
+    }
+
+    public static void setSourceEditor(SourceEditor editor) {
+        putString("source.editor", editor.name());
+    }
+
+    /**
+     * The folders searched for a stack frame's file, for editors that need its full path
+     * (VS Code, Cursor): projects, or folders of projects. A JetBrains IDE finds the file itself.
+     */
+    public static List<String> getSourceFolders() {
+        return getStringList("source.folders");
+    }
+
+    public static void setSourceFolders(List<String> folders) {
+        putStringList("source.folders", folders);
+    }
+
     /** The version the user chose to skip ("Skip This Version"), or null. */
     public static String getSkippedVersion() {
         return getString("update.skipped", null);

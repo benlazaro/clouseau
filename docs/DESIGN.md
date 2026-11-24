@@ -1,6 +1,6 @@
 # Clouseau Design
 
-> **Status:** Draft · **Last updated:** 2026-11-14
+> **Status:** Draft · **Last updated:** 2026-11-23
 >
 > This document describes *how* Clouseau works and *why* it is built that way. It
 > complements [`USE_CASES.md`](USE_CASES.md), which describes *what* Clouseau is for.
@@ -469,6 +469,21 @@ entry keeps the current match and the scroll. `Ctrl+F` and `F3` are window-wide 
 routed by focus in `SharedTabContext`: focus inside the panel goes to its find, anywhere
 else to the table's find bar.
 
+**Open in IDE (UC-19, D-28).** After each render the pane runs `SourceRefs.frames` (core)
+over the message as drawn and marks each frame's `File.java:42` as a link: underlined, in
+`ClouseauColors.linkColor()` (`Clouseau.linkColor`: the accent blue in Dark, a darker blue in
+Light, both 4.5:1 or more on the pane; FlatLaf's `Component.linkColor` in other themes), over any syntax color. The links' document spans are kept for the
+mouse: the pointer is a hand over one, and a plain left click opens it, unless the press and
+release were at different places (a drag selecting text). The right-click menu starts with
+Open `File.java:42` in IDE for the link under the mouse and Open "Class" in IDE for a logger
+named after its class (`SourceRefs.loggerClass`: the last part capitalized; `.java`, then
+`.kt`). `SourceOpener` (ui) does the opening on a `SwingWorker`, with the editor from
+`AppPrefs.getSourceEditor()`: a JetBrains IDE through `JetBrainsIde` (core), VS Code or
+Cursor by finding the file with `SourceFolders` (core) under `AppPrefs.getSourceFolders()`
+and browsing to its `vscode://file/<path>:<line>` or `cursor://…` link. Success says nothing
+(the editor comes to the front); a file no project has gets a toast over the pane; no IDE,
+a missing plugin or no source folders get a message saying what to do.
+
 **Toasts.** `Toast` (ui) is the brief note in the middle of an area, on the window's popup
 layer for 1.2 s ("Text size 14", "Message copied"): a rounded chip with bold text in a 1px
 frame, inverted against the window (light on Dark, dark on Light) so it never reads as a
@@ -836,7 +851,9 @@ menu"). It holds only what acts on those rows (D-25): actions on the whole tab (
 File or Reconnect, Clear Table…, All Notes…, Clear All Highlights…) are in the File and Edit
 menus, and Clear All Highlights is also on the highlight bar. Show All Loggers sits in the
 logger group with Hide Logger and Show Only Logger, as Show All Times does with the time
-items: each group undoes what it filters.
+items: each group undoes what it filters. With one logger selected that is named after its
+class, the group ends with Open "Class" in IDE (6.5, D-28), after Show All Loggers, its toast
+over the rows' viewport.
 
 The swatch row comes from `RowMenu.swatchRow(header, marked, pick)`, shared with the
 find bar's Highlight popup so the two can't drift: a header label, then a
@@ -2444,6 +2461,38 @@ Rejected: one version for the app and the API (every app release would be an API
 and a plugin's `Plugin-Requires` would break on app releases that changed nothing it uses);
 JitPack (it versions by Git tag, which can't follow a separate API version); GitHub
 Packages (Gradle needs a token even to download from it).
+
+### D-28 · Open in IDE through the IDE's own server, not a plugin of ours · Adopted
+
+A stack frame names a class and a file (`com.acme.OrderService`, `OrderService.java:42`), not
+a path on disk, and the log is often from another machine, so Clouseau can't know where the
+file is. The IDE does: it has the project open. So a frame becomes a path relative to a
+source root (`com/acme/OrderService.java`, the class's package as folders plus the file the
+frame names, which also covers Kotlin's `FooKt` in `Foo.kt`), and the IDE looks it up.
+
+- **JetBrains IDEs** run a built-in web server on `localhost`, port 63342 (the next free
+  one, up to 63352, when several are open). Its `GET /api/file?file=<path>&line=<n>` finds
+  a relative path under any open project's module source and content roots, opens it and
+  answers 200, or 404 if no project has it. `JetBrainsIde` (core) tries every port, so
+  whichever IDE has the project opens it. The request carries `Origin: http://localhost:<port>`:
+  the IDE trusts localhost origins, and asks the user "allow?" on every request that has no
+  origin at all. Since IntelliJ 2026.2 the service is JetBrains' IDE Remote Control plugin
+  (`com.intellij.remoteControl`, on the Marketplace), no longer bundled. An IDE without it
+  answers 404 to everything, so an IDE that answers 404 is asked again with no file: the
+  service answers that with its own error (a missing parameter), the IDE alone with 404,
+  and Clouseau then says to install the plugin.
+- **VS Code and Cursor** take only a full path, through their `vscode://file/<path>:<line>`
+  and `cursor://file/…` links (`Desktop.browse`, so no `code` on the PATH and no shell).
+  `SourceFolders` (core) finds the file under the folders the user listed (Settings →
+  Source Code): the first file whose path ends with the relative path, skipping build
+  output, dependencies and version control folders, at most 24 levels deep.
+
+Rejected: an IDE plugin of our own (one more thing to install and keep working across IDE
+versions, when the IDE's own server does the job); the IDEs' command-line launchers
+(`idea --line 42 <file>`: they need the full path and the launcher's location, which differ
+by install, Toolbox or not); a command template for any editor (quoting and Windows `.cmd`
+launchers make it fragile; easy to add later if asked); turning every `File.java:42` in a
+message into a link (only frames say which package the file is in).
 
 ## 10. Planned features
 

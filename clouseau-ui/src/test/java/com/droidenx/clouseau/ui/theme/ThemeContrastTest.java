@@ -34,6 +34,7 @@ class ThemeContrastTest {
         {"@foreground",                     "@background",                  TEXT},
         {"@disabledForeground",             "@background",                  TEXT},
         {"Clouseau.mutedForeground",        "@background",                  TEXT},
+        {"Clouseau.linkColor",              "TextArea.background",          TEXT},
         {"Button.foreground",               "Button.background",            TEXT},
         {"TextField.foreground",            "TextField.background",         TEXT},
         {"TextField.placeholderForeground", "TextField.background",         TEXT},

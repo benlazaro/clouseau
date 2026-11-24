@@ -45,7 +45,8 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
                     MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
-                    UpdateCheck, SshSaved, SyntaxLayers, TextMatches, CompactTime
+                    UpdateCheck, SshSaved, SyntaxLayers, TextMatches, CompactTime,
+                    SourceRefs, JetBrainsIde, SourceFolders
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -194,6 +195,10 @@ release only.
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
   `DetailFindBar` (ui) is its find strip (Ctrl+F with focus in the pane), matching with `TextMatches` (core).
   `Toast` (ui) is the brief centered note (copy, text size, find wraps) over the pane or the table.
+- `SourceRefs`, `JetBrainsIde`, `SourceFolders` (core), `SourceOpener` (ui) — UC-19, D-28: Open in IDE.
+  `SourceRefs` finds stack frames (`Foo.java:42`) and logger classes as package paths, `JetBrainsIde` opens
+  one through a JetBrains IDE's built-in server, `SourceFolders` finds the file on disk for VS Code and
+  Cursor; `SourceOpener` runs it off the EDT and reports. The detail pane draws frames as links.
   `NoMatchState` (ui) turns a find field red, with one pulse, while its query matches nothing.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows. `BusyIndicator` (ui) is the bar over the rows, and their fade,

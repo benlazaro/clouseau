@@ -58,6 +58,8 @@ defaults, so logs stay readable in any theme.
 | | On startup | **Restore last session** (the default) reopens the windows and tabs you had open; **Start empty** opens one empty window. See [Picking up where you left off](opening-files.md#picking-up-where-you-left-off). |
 | Appearance | Theme | The theme, with a live preview (also in **View → Theme**) |
 | | Show times in | The timezone timestamps are shown in, in every tab. The status bar's timezone popup changes the same setting. See [Timezones](reading-and-filtering.md#timezones). |
+| Source Code | Open source in | Where stack frames and logger classes open: a **JetBrains IDE** (the default), **VS Code** or **Cursor**. See [Jumping to the code](reading-and-filtering.md#jumping-to-the-code). |
+| | Source folders | For VS Code and Cursor: your projects, or folders of projects, searched for a stack frame's file. A JetBrains IDE finds the file itself. |
 | Updates | Tell me when a new version is available | On by default. See [New versions](#new-versions). |
 
 ## New versions

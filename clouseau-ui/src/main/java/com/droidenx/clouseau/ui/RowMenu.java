@@ -4,6 +4,7 @@ import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.core.AnnotationStore;
 import com.droidenx.clouseau.core.MergedEntries;
 import com.droidenx.clouseau.core.Notes;
+import com.droidenx.clouseau.core.SourceRefs;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 
 import javax.swing.*;
@@ -68,6 +69,8 @@ final class RowMenu {
     private final LogTableModel logTableModel;
     private final JTable logTable;
     private final Host host;
+    /** Open in IDE's "No open project has …" over the rows. */
+    private final Toast toast = new Toast();
 
     RowMenu(LogTableModel model, JTable table, Host host) {
         this.logTableModel = model;
@@ -504,6 +507,19 @@ final class RowMenu {
         all.setEnabled(hidden > 0);
         all.addActionListener(e -> filters.showAllLoggers());
         menu.add(all);
+        // A logger named after its class opens that class in the IDE: after Show All Loggers,
+        // which stays next to the filters it undoes.
+        List<SourceRefs.SourceRef> loggerClass = loggers.size() == 1
+                ? SourceRefs.loggerClass(loggers.iterator().next()) : List.of();
+        if (!loggerClass.isEmpty()) {
+            JMenuItem open = new JMenuItem(java.text.MessageFormat.format(
+                    Messages.get("table.context.source.open"), shortLogger(loggers.iterator().next())));
+            open.setToolTipText(Messages.get("source.open.frame.tooltip"));
+            // The toast goes over the rows in view, not the middle of a table taller than the window.
+            JComponent area = logTable.getParent() instanceof JViewport v ? v : logTable;
+            open.addActionListener(e -> SourceOpener.open(area, toast, loggerClass));
+            menu.add(open);
+        }
         menu.addSeparator();
     }
 

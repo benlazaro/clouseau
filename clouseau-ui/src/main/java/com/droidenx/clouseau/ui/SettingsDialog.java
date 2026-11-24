@@ -58,6 +58,10 @@ final class SettingsDialog extends JDialog {
     private final String originalThemeName;
     private final ZoneCombo timezoneCombo;
 
+    // Source code settings (Open in IDE)
+    private final JComboBox<String> sourceEditorCombo;
+    private final DefaultListModel<String> sourceFolders = new DefaultListModel<>();
+
     // Updates settings
     private final JCheckBox updateCheckBox;
 
@@ -86,6 +90,11 @@ final class SettingsDialog extends JDialog {
 
         timezoneCombo = buildTimezoneCombo(AppPrefs.getDisplayTimezone());
         updateCheckBox = new JCheckBox(Messages.get("settings.update.check"), AppPrefs.isUpdateCheck());
+        sourceEditorCombo = new JComboBox<>(new String[] {
+                Messages.get("settings.source.editor.jetbrains"), Messages.get("settings.source.editor.vscode"),
+                Messages.get("settings.source.editor.cursor") });
+        sourceEditorCombo.setSelectedIndex(AppPrefs.getSourceEditor().ordinal());
+        AppPrefs.getSourceFolders().forEach(sourceFolders::addElement);
 
         originalThemeName = AppPrefs.getTheme();
         themeCombo = new JComboBox<>();
@@ -154,6 +163,27 @@ final class SettingsDialog extends JDialog {
         content.add(themeRow, "growx, wrap");
         content.add(new JLabel(Messages.get("settings.timezone")), INDENT);
         content.add(timezoneCombo, "growx, wrap");
+
+        // ── Source code section (Open in IDE) ─────────────────────────────
+        content.add(sectionLabel(Messages.get("settings.section.source")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
+        content.add(new JLabel(Messages.get("settings.source.editor")), INDENT);
+        content.add(sourceEditorCombo, "growx, wrap");
+        JLabel editorHint = hint("");
+        content.add(editorHint, "skip 1, wrap, gaptop 0, wmin 0");
+        JLabel foldersLabel = new JLabel(Messages.get("settings.source.folders"));
+        content.add(foldersLabel, INDENT + ", aligny top, gaptop 4");
+        JComponent folders = buildSourceFolders();
+        content.add(folders, "growx, wrap, wmin 0");
+        Runnable editorChanged = () -> {
+            boolean jetbrains = sourceEditorCombo.getSelectedIndex() == AppPrefs.SourceEditor.JETBRAINS.ordinal();
+            // A JetBrains IDE finds the file itself; the folders are for editors that need a path.
+            editorHint.setText(wrapTo(Messages.get(jetbrains ? "settings.source.jetbrains.hint" : "settings.source.folders.hint"),
+                    timezoneCombo.getPreferredSize().width));
+            foldersLabel.setEnabled(!jetbrains);
+            setEnabledDeep(folders, !jetbrains);
+        };
+        sourceEditorCombo.addActionListener(e -> editorChanged.run());
+        editorChanged.run();
 
         // ── Updates section ───────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.updates")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
@@ -258,7 +288,68 @@ final class SettingsDialog extends JDialog {
             AppPrefs.setDisplayTimezone(timezoneCombo.selectedZone());
         }
         AppPrefs.setUpdateCheck(updateCheckBox.isSelected());
+        AppPrefs.setSourceEditor(AppPrefs.SourceEditor.values()[sourceEditorCombo.getSelectedIndex()]);
+        AppPrefs.setSourceFolders(java.util.Collections.list(sourceFolders.elements()));
         if (onApply != null) onApply.run();
+    }
+
+    // ── Source folders ────────────────────────────────────────────────────────
+
+    /** The source folders: a short list with Add… and Remove beside it. */
+    private JComponent buildSourceFolders() {
+        JList<String> list = new JList<>(sourceFolders);
+        list.setVisibleRowCount(3);
+        list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        JScrollPane scroll = new JScrollPane(list);
+        JButton add = new JButton(Messages.get("settings.source.folders.add"));
+        JButton remove = new JButton(Messages.get("settings.source.folders.remove"));
+        remove.setEnabled(false);
+        list.addListSelectionListener(e -> remove.setEnabled(list.isEnabled() && !list.isSelectionEmpty()));
+        add.addActionListener(e -> {
+            JFileChooser chooser = new RoundedFileChooser();
+            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            chooser.setMultiSelectionEnabled(true);
+            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+            for (java.io.File f : chooser.getSelectedFiles()) {
+                String path = f.getAbsolutePath();
+                if (!sourceFolders.contains(path)) sourceFolders.addElement(path);
+            }
+        });
+        remove.addActionListener(e -> {
+            java.util.List<String> selected = list.getSelectedValuesList();
+            selected.forEach(sourceFolders::removeElement);
+        });
+        JPanel panel = new JPanel(new MigLayout("insets 0, gap 6", "[grow,fill][]", "[top][top]"));
+        panel.setOpaque(false);
+        panel.add(scroll, "spany 2, growx, h 72!");
+        panel.add(add, "sg folderButtons, wrap");
+        panel.add(remove, "sg folderButtons");
+        return panel;
+    }
+
+    /**
+     * {@code text} as HTML that wraps at {@code width} pixels, so a hint under a field stays as
+     * wide as the field instead of widening the dialog.
+     */
+    private static String wrapTo(String text, int width) {
+        String escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return "<html><body style='width: " + width + "px'>" + escaped + "</body></html>";
+    }
+
+    /** A hint under a setting, in the dim text of hints. */
+    private static JLabel hint(String text) {
+        JLabel label = new JLabel(text);
+        ClouseauColors.themedForeground(label, ClouseauColors::mutedForeground);
+        label.setFont(label.getFont().deriveFont(label.getFont().getSize2D() - 1f));
+        return label;
+    }
+
+    /** Enables or disables a component and everything in it. */
+    private static void setEnabledDeep(Component c, boolean enabled) {
+        c.setEnabled(enabled);
+        if (c instanceof Container container) {
+            for (Component child : container.getComponents()) setEnabledDeep(child, enabled);
+        }
     }
 
     // ── Timezone helpers ──────────────────────────────────────────────────────

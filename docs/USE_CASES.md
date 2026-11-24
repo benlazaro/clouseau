@@ -1,6 +1,6 @@
 # Clouseau Use Cases
 
-> **Status:** Draft · **Last updated:** 2026-11-06
+> **Status:** Draft · **Last updated:** 2026-11-23
 >
 > This document describes *what Clouseau is for*: who uses it, what they are trying to
 > accomplish, and what it deliberately does not do. It is the reference reviewers use to
@@ -771,6 +771,41 @@ the notices off sees one.
   list, carrying only Clouseau's version.
 
 **Current behavior:** All of the above works. Design: DESIGN.md D-23.
+
+### UC-19 · Jump from a log line to the code ✅
+
+**Actor:** Developer
+**Goal:** Go from a stack trace or a log line to the code that wrote it, without searching
+the project by hand.
+
+1. User selects an entry with a stack trace. Each frame that names its file and line
+   (`at com.acme.OrderService.place(OrderService.java:42)`) shows `OrderService.java:42` as
+   a link in the detail panel.
+2. User clicks the link, or right-clicks it and chooses **Open OrderService.java:42 in IDE**.
+3. The IDE comes to the front with `OrderService.java` open at line 42.
+4. For an entry whose logger is named after its class (`com.acme.OrderService`), the
+   right-click menus of the table and the detail panel offer **Open "OrderService" in IDE**.
+
+**Success:** One click from a frame to its line, in the project the user already has open,
+with nothing to configure for the usual setup.
+
+**Rules:**
+- **The IDE finds the file.** A frame gives its class's package and file name
+  (`com/acme/OrderService.java`), not a path on disk, so a JetBrains IDE looks it up in its
+  open projects' source roots. VS Code and Cursor need a full path, so for them Clouseau
+  searches the source folders the user listed in Settings.
+- **Nothing is opened silently elsewhere.** If no project has the file (a JDK or library
+  frame, or the project isn't open), a toast says so; if no IDE answers, or it can't open
+  files, a message says what to do.
+- **Clicking a link doesn't get in the way of selecting text.** A drag that selects text
+  opens nothing.
+
+**Current behavior:** All of the above works with JetBrains IDEs, VS Code and Cursor, chosen
+in Settings → Source Code. Frames of Java, Kotlin, Scala, Groovy and Clojure files are
+recognized, with Java 9+ module and class-loader prefixes (`java.base/`, `app//`). IntelliJ
+2026.2 and later need JetBrains' IDE Remote Control plugin, which they no longer include;
+Clouseau recognizes an IDE without it and says to install it. Stack traces of other
+languages (Python, .NET, JavaScript) aren't links yet. Design: DESIGN.md D-28.
 
 ---
 

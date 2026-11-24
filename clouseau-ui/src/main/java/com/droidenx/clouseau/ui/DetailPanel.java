@@ -4,6 +4,7 @@ import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.core.AnnotationStore;
+import com.droidenx.clouseau.core.SourceRefs;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import lombok.extern.slf4j.Slf4j;
@@ -92,6 +93,12 @@ final class DetailPanel extends JPanel {
     private final JScrollPane detailScroll;
     /** Find in this entry: Ctrl+F with focus in the pane, or the header's search button. */
     private final DetailFindBar findBar;
+
+    /**
+     * The stack frames in the message shown, as links (Open in IDE): each one's span in the
+     * document, which is its {@code Foo.java:42}.
+     */
+    private List<SourceRefs.Found> sourceLinks = List.of();
 
     private String  lastFormattedMessage = "";
     private int     messageFieldStart    = -1;
@@ -461,16 +468,48 @@ final class DetailPanel extends JPanel {
     }
 
     /**
-     * Right-click in the pane: Copy for selected text (only when there is some), then the table
-     * menu's three Copy items.
+     * Right-click in the pane: Open in IDE for the stack frame under the mouse, or the logger's
+     * class; Copy for selected text (only when there is some); then the table menu's three
+     * Copy items. A click on a stack frame's link opens it; the pointer is a hand over one.
      */
     private void installContextMenu() {
-        detailArea.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mousePressed(java.awt.event.MouseEvent e)  { maybeShow(e); }
-            @Override public void mouseReleased(java.awt.event.MouseEvent e) { maybeShow(e); }
-            private void maybeShow(java.awt.event.MouseEvent e) {
-                if (!e.isPopupTrigger()) return;
+        java.awt.event.MouseAdapter mouse = new java.awt.event.MouseAdapter() {
+            /** Where the button went down, so a drag that selects text isn't taken for a click. */
+            private int pressedAt = -1;
+
+            @Override public void mousePressed(java.awt.event.MouseEvent e) {
+                pressedAt = detailArea.viewToModel2D(e.getPoint());
+                maybeShow(e);
+            }
+            @Override public void mouseReleased(java.awt.event.MouseEvent e) {
+                if (maybeShow(e)) return;
+                if (!SwingUtilities.isLeftMouseButton(e) || e.getModifiersEx() != 0 || e.getClickCount() != 1) return;
+                SourceRefs.Found link = linkAt(e.getPoint());
+                if (link != null && detailArea.viewToModel2D(e.getPoint()) == pressedAt) openSource(List.of(link.ref()));
+            }
+            @Override public void mouseMoved(java.awt.event.MouseEvent e) {
+                detailArea.setCursor(Cursor.getPredefinedCursor(
+                        linkAt(e.getPoint()) != null ? Cursor.HAND_CURSOR : Cursor.TEXT_CURSOR));
+            }
+            private boolean maybeShow(java.awt.event.MouseEvent e) {
+                if (!e.isPopupTrigger()) return false;
                 JPopupMenu menu = new JPopupMenu();
+                SourceRefs.Found link = linkAt(e.getPoint());
+                if (link != null) {
+                    JMenuItem open = new JMenuItem(java.text.MessageFormat.format(
+                            Messages.get("source.open.frame"), link.ref().label()));
+                    open.addActionListener(a -> openSource(List.of(link.ref())));
+                    menu.add(open);
+                }
+                List<SourceRefs.SourceRef> loggerClass = shown != null
+                        ? SourceRefs.loggerClass(shown.entry().logger()) : List.of();
+                if (!loggerClass.isEmpty()) {
+                    JMenuItem open = new JMenuItem(java.text.MessageFormat.format(
+                            Messages.get("table.context.source.open"), RowMenu.shortLogger(shown.entry().logger())));
+                    open.addActionListener(a -> openSource(loggerClass));
+                    menu.add(open);
+                }
+                if (menu.getComponentCount() > 0) menu.addSeparator();
                 if (detailArea.getSelectedText() != null) {
                     JMenuItem sel = new JMenuItem(Messages.get("detail.copy.selection"));
                     sel.addActionListener(a -> detailArea.copy());
@@ -479,8 +518,71 @@ final class DetailPanel extends JPanel {
                 }
                 addCopyItems(menu);
                 menu.show(detailArea, e.getX(), e.getY());
+                return true;
             }
-        });
+        };
+        detailArea.addMouseListener(mouse);
+        detailArea.addMouseMotionListener(mouse);
+    }
+
+    /** For tests: the stack frame links in the entry shown, as spans of {@link #textPane()}. */
+    List<SourceRefs.Found> sourceLinks() {
+        return sourceLinks;
+    }
+
+    /** For tests: the pane's text. */
+    JTextPane textPane() {
+        return detailArea;
+    }
+
+    /** Opens a stack frame or a logger's class in the editor chosen in Settings (Open in IDE). */
+    private void openSource(List<SourceRefs.SourceRef> candidates) {
+        SourceOpener.open(body, toast, candidates);
+    }
+
+    /**
+     * Marks the message's stack frames as links: their {@code Foo.java:42} underlined in the
+     * theme's link color, over whatever color the syntax highlighters gave them.
+     */
+    private void markSourceLinks(StyledDocument doc) {
+        if (messageFieldStart < 0 || messageFieldEnd <= messageFieldStart) return;
+        String message;
+        try {
+            message = doc.getText(messageFieldStart, messageFieldEnd - messageFieldStart);
+        } catch (BadLocationException e) {
+            return;
+        }
+        List<SourceRefs.Found> found = SourceRefs.frames(message);
+        if (found.isEmpty()) return;
+        SimpleAttributeSet link = new SimpleAttributeSet();
+        StyleConstants.setForeground(link, ClouseauColors.linkColor());
+        StyleConstants.setUnderline(link, true);
+        List<SourceRefs.Found> inDocument = new ArrayList<>(found.size());
+        for (SourceRefs.Found f : found) {
+            SourceRefs.Found at = new SourceRefs.Found(messageFieldStart + f.start(), messageFieldStart + f.end(), f.ref());
+            doc.setCharacterAttributes(at.start(), at.end() - at.start(), link, false);
+            inDocument.add(at);
+        }
+        sourceLinks = List.copyOf(inDocument);
+    }
+
+    /** The stack frame link under {@code p}, or null: on its text, not just nearest to it. */
+    private SourceRefs.Found linkAt(Point p) {
+        if (sourceLinks.isEmpty()) return null;
+        int pos = detailArea.viewToModel2D(p);
+        for (SourceRefs.Found link : sourceLinks) {
+            if (pos < link.start() || pos > link.end()) continue;
+            try {
+                java.awt.geom.Rectangle2D from = detailArea.modelToView2D(link.start());
+                java.awt.geom.Rectangle2D to = detailArea.modelToView2D(link.end());
+                // On one line, the point must be between the link's ends; a wrapped link is taken by position.
+                if (from.getY() != to.getY()) return pos < link.end() ? link : null;
+                if (p.x >= from.getX() && p.x < to.getX() && p.y >= from.getY() && p.y < from.getMaxY()) return link;
+            } catch (BadLocationException e) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /** The entry's lines as the file has them: its raw line and any continuation lines. */
@@ -546,6 +648,7 @@ final class DetailPanel extends JPanel {
         StyleConstants.setForeground(val, ClouseauColors.foreground());
         valueIndent = valueIndent(fontSize);
 
+        sourceLinks = List.of();
         if (entry == null) {
             lastFormattedMessage = "";
             messageFieldStart = messageFieldEnd = -1;
@@ -660,6 +763,7 @@ final class DetailPanel extends JPanel {
         messageFieldEnd = doc.getLength() - 1; // exclude trailing newline
 
         spaceLines(doc);
+        markSourceLinks(doc);
         if (keepView == null) {
             detailArea.setCaretPosition(0);
         } else {

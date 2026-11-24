@@ -92,6 +92,30 @@ searches every row.)
   with what the table's find bar is searching for, or with your last search here, found
   again as it opens.
 
+### Jumping to the code
+
+Every line of a Java (or Kotlin, Scala, Groovy) stack trace that names its file is a link:
+in `at com.acme.OrderService.place(OrderService.java:42)`, **OrderService.java:42** is
+underlined. Click it and your IDE opens `OrderService.java` at line 42. Right-clicking it
+offers **Open OrderService.java:42 in IDE**, and when the entry's logger is named after its
+class (`com.acme.OrderService`), the right-click menus of the panel and the table offer
+**Open "OrderService" in IDE** too.
+
+Choose your editor in **Settings → Source Code**:
+
+- **JetBrains IDE** (the default): IntelliJ IDEA, or any other JetBrains IDE, with the
+  project open. The IDE finds the file in its open projects, so there's nothing to set up
+  in Clouseau. IntelliJ 2026.2 and later need JetBrains' free **IDE Remote Control** plugin
+  (in the IDE: Settings → Plugins → Marketplace); Clouseau tells you if it's missing.
+  Earlier versions have it built in.
+- **VS Code** or **Cursor**: add your projects, or the folder that holds them, under
+  **Source folders**. Clouseau finds the file there (in any module, `src/main/java` or
+  elsewhere) and opens it at the line. The first time, the editor asks whether to let
+  another program open the file.
+
+If no open project has the file, such as a frame in the JDK or a library, a note in the
+middle of the panel says so.
+
 Control characters in a field, such as a NUL byte or the escape that starts a terminal color
 code, are shown dimmed as their symbols (`␀`, `␛`) so you can see they're there. Copying
 still gives you the characters exactly as logged.
