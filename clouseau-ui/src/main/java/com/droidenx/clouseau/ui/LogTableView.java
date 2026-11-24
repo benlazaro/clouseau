@@ -189,7 +189,7 @@ final class LogTableView {
                 super.getTableCellRendererComponent(t, v, sel, foc, r, c);
                 int rowModel = logTable.convertRowIndexToModel(r);
                 LogEntry entry = logTableModel.getEntry(rowModel);
-                Color hl = logTableModel.getHighlight(rowModel);
+                Color hl = logTableModel.getRowColor(rowModel);
                 boolean hlSel = hl != null && sel;
 
                 // Background: a highlight, else the selection, else plain or striped. Find marks

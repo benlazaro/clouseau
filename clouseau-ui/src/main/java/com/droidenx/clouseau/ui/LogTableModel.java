@@ -3,7 +3,9 @@ package com.droidenx.clouseau.ui;
 import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.core.EntryFilter;
 import com.droidenx.clouseau.core.EntryRows;
+import com.droidenx.clouseau.core.HighlightRules;
 import com.droidenx.clouseau.core.IndexedEntries;
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
@@ -108,10 +110,33 @@ public final class LogTableModel extends AbstractTableModel {
     private Future<?>  findFuture;
     private long       findGeneration = 0;
 
-    /** Stops the background filter and find threads. Call when the tab closes. */
+    // Rule highlights (D-29): what the auto-highlight rules mark, worked out as entries arrive,
+    // or in the background when the rules change or a merged view re-merges.
+    private HighlightRules rules = HighlightRules.NONE;
+    /** Ordinals the rules mark, ascending. */
+    private IntList ruleOrds  = new IntList();
+    /** The palette slot of each of {@link #ruleOrds}, at the same position (not ascending). */
+    private IntList ruleSlots = new IntList();
+    /** Matches appended entries; null while a background scan runs (it catches up on them) or with no rules. */
+    private HighlightRules.Scan ruleScan;
+    private final ExecutorService ruleExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "clouseau-rules");
+        t.setDaemon(true);
+        return t;
+    });
+    private Future<?> ruleFuture;
+    private long      ruleGeneration = 0;
+    private Runnable  ruleHitsChanged = () -> {};
+    /** The highlight palette, for rule slots; {@link #refreshPalette} after a theme switch. */
+    private Color[]   palette = ClouseauColors.highlightColors();
+    /** Counts changes to which entries are highlighted (manual or by a rule), for the caches below. */
+    private int       highlightMods = 0;
+
+    /** Stops the background filter, find and rule threads. Call when the tab closes. */
     public void dispose() {
         filterExecutor.shutdownNow();
         findExecutor.shutdownNow();
+        ruleExecutor.shutdownNow();
         closeIndexed();
     }
 
@@ -288,10 +313,31 @@ public final class LogTableModel extends AbstractTableModel {
     }
 
     // ── Highlights ───────────────────────────────────────────────────────────
+    //
+    // A row's highlight is the user's own (manual, saved with the notes, D-15), else the color
+    // of the first auto-highlight rule that marks it (D-29). Manual ones always win. The
+    // "manual" methods below see only the user's; the highlight bar and the renderer see both.
 
+    /** The row's own (manual) highlight, or null. */
     public Color getHighlight(int modelRow) {
         int ord = ordinalAt(modelRow);
         return ord >= 0 ? highlights.get(ord) : null;
+    }
+
+    /** The color the row is painted: its own highlight, else a rule's, else null. */
+    public Color getRowColor(int modelRow) {
+        int ord = ordinalAt(modelRow);
+        if (ord < 0) return null;
+        Color own = highlights.get(ord);
+        return own != null ? own : ruleColorAt(ord);
+    }
+
+    /** The color a rule gives the entry with this ordinal, or null. */
+    Color ruleColorAt(int ordinal) {
+        int i = ruleOrds.binarySearch(ordinal);
+        if (i < 0) return null;
+        int slot = ruleSlots.get(i);
+        return slot >= 0 && slot < palette.length ? palette[slot] : null;
     }
 
     public void setHighlight(int modelRow, Color color) {
@@ -299,6 +345,7 @@ public final class LogTableModel extends AbstractTableModel {
         if (ord < 0) return;
         if (color == null) highlights.remove(ord);
         else highlights.put(ord, color);
+        highlightMods++;
         fireTableRowsUpdated(modelRow, modelRow);
     }
 
@@ -306,62 +353,308 @@ public final class LogTableModel extends AbstractTableModel {
     public void setHighlightAtOrdinal(int ordinal, Color color) {
         if (entryAtOrdinal(ordinal) == null) return;
         highlights.put(ordinal, color);
+        highlightMods++;
         int row = rowOfOrdinal(ordinal);
         if (row >= 0) fireTableRowsUpdated(row, row);
     }
 
+    /** Removes every manual highlight; rule highlights stay. */
     public void clearAllHighlights() {
         if (highlights.isEmpty()) return;
         highlights.clear();
+        highlightMods++;
         if (rows.size() > 0) fireTableRowsUpdated(0, rows.size() - 1);
     }
 
-    /** Ordinals of the entries highlighted with {@code color}, the ones the filters hide included. */
+    /** Ordinals of the entries highlighted with {@code color} by hand, the ones the filters hide included. */
     public List<Integer> highlightOrdinals(Color color) {
         List<Integer> result = new ArrayList<>();
         highlights.forEach((ord, c) -> { if (c.equals(color)) result.add(ord); });
         return result;
     }
 
-    /** Removes {@code color} from every entry that has it, the ones the filters hide included. */
+    /** Removes the manual {@code color} from every entry that has it, the ones the filters hide included. */
     public void clearHighlights(Color color) {
-        if (highlights.values().removeIf(color::equals) && rows.size() > 0) {
-            fireTableRowsUpdated(0, rows.size() - 1);
+        if (highlights.values().removeIf(color::equals)) {
+            highlightMods++;
+            if (rows.size() > 0) fireTableRowsUpdated(0, rows.size() - 1);
         }
     }
 
+    /** True if any entry has a manual highlight. */
     public boolean hasHighlights() {
         return !highlights.isEmpty();
     }
 
-    /**
-     * Model rows of the visible entries highlighted with the given color (null = any color),
-     * in order. Looks up each highlight rather than walking every row.
-     */
-    public List<Integer> getHighlightedModelRows(Color filter) {
-        List<Integer> result = new ArrayList<>();
-        highlights.forEach((ord, c) -> {
-            if (filter != null && !filter.equals(c)) return;
-            int row = rows.binarySearch(ord);
-            if (row >= 0) result.add(row);
-        });
-        result.sort(null);
-        return result;
+    /** True if a rule marks any entry, shown or not. */
+    public boolean hasRuleHighlights() {
+        return ruleOrds.size() > 0;
+    }
+
+    /** True if a rule colors any entry with {@code color}, shown or not. */
+    public boolean hasRuleHighlights(Color color) {
+        for (int i = 0; i < ruleSlots.size(); i++) {
+            int slot = ruleSlots.get(i);
+            if (slot >= 0 && slot < palette.length && palette[slot].equals(color)) return true;
+        }
+        return false;
+    }
+
+    /** True if a rule colors the row (whether or not the user's own highlight covers it). */
+    public boolean isRuleColored(int modelRow) {
+        int ord = ordinalAt(modelRow);
+        return ord >= 0 && ruleColorAt(ord) != null;
     }
 
     /**
-     * Each highlight color in use, with how many entries have it and how many of those the
-     * filters show: {@code color → {highlighted, shown}}. A color whose rows are all
-     * filtered out is still here, with 0 shown.
+     * Model rows of the visible entries painted with the given color (null = any color), in
+     * order, manual and rule highlights alike.
+     */
+    public List<Integer> getHighlightedModelRows(Color filter) {
+        int[] r = highlightedRows(filter);
+        List<Integer> result = new ArrayList<>(r.length);
+        for (int row : r) result.add(row);
+        return result;
+    }
+
+    private int[] cachedRows;
+    private Color cachedRowsColor;
+    private long  cachedRowsVersion = -1;
+    private int   cachedRowsMods = -1;
+
+    /**
+     * Model rows of the visible entries painted with {@code filter} (null = any color),
+     * ascending. Cached until the rows or highlights change, so the highlight bar can ask on
+     * every selection change. EDT only.
+     */
+    int[] highlightedRows(Color filter) {
+        if (cachedRows != null && cachedRowsVersion == rowsVersion() && cachedRowsMods == highlightMods
+                && java.util.Objects.equals(cachedRowsColor, filter)) return cachedRows;
+        IntList out = new IntList();
+        highlights.forEach((ord, c) -> {
+            if (filter != null && !filter.equals(c)) return;
+            int row = rows.binarySearch(ord);
+            if (row >= 0) out.add(row);
+        });
+        boolean manual = out.size() > 0;
+        // Rule hits and rows are both ascending: walk them together.
+        int r = 0;
+        for (int i = 0; i < ruleOrds.size() && r < rows.size(); i++) {
+            int ord = ruleOrds.get(i);
+            if (filter != null && !filter.equals(palette[ruleSlots.get(i)])) continue;
+            while (r < rows.size() && rows.get(r) < ord) r++;
+            if (r < rows.size() && rows.get(r) == ord && !highlights.containsKey(ord)) out.add(r);
+        }
+        if (manual) out.sortFrom(0);
+        cachedRows = out.toArray();
+        cachedRowsColor = filter;
+        cachedRowsVersion = rowsVersion();
+        cachedRowsMods = highlightMods;
+        return cachedRows;
+    }
+
+    private Map<Color, int[]> cachedCounts;
+    private long cachedCountsVersion = -1;
+    private int  cachedCountsMods = -1;
+
+    /**
+     * Each highlight color in use, manual or by a rule, with how many entries have it and how
+     * many of those the filters show, and how many an auto-highlight colors (not the user):
+     * {@code color → {highlighted, shown, byRules}}. A color whose rows
+     * are all filtered out is still here, with 0 shown. Rule hits on entries cleared from the
+     * table don't count. Cached until the rows or highlights change; don't modify it.
      */
     public Map<Color, int[]> highlightCounts() {
+        if (cachedCounts != null && cachedCountsVersion == rowsVersion() && cachedCountsMods == highlightMods)
+            return cachedCounts;
         Map<Color, int[]> counts = new HashMap<>();
         highlights.forEach((ord, c) -> {
-            int[] n = counts.computeIfAbsent(c, k -> new int[2]);
+            int[] n = counts.computeIfAbsent(c, k -> new int[3]);
             n[0]++;
             if (rows.binarySearch(ord) >= 0) n[1]++;
         });
+        int r = 0;
+        for (int i = ruleOrds.countBelow(hiddenBefore); i < ruleOrds.size(); i++) {
+            int ord = ruleOrds.get(i);
+            if (!highlights.isEmpty() && highlights.containsKey(ord)) continue;
+            int slot = ruleSlots.get(i);
+            if (slot < 0 || slot >= palette.length) continue;
+            int[] n = counts.computeIfAbsent(palette[slot], k -> new int[3]);
+            n[0]++;
+            n[2]++;   // by an auto-highlight
+            while (r < rows.size() && rows.get(r) < ord) r++;
+            if (r < rows.size() && rows.get(r) == ord) n[1]++;
+        }
+        cachedCounts = counts;
+        cachedCountsVersion = rowsVersion();
+        cachedCountsMods = highlightMods;
         return counts;
+    }
+
+    // ── Rule highlights (D-29) ───────────────────────────────────────────────
+
+    /** Called on the EDT when a background rule scan has installed its result. */
+    public void setRuleHitsListener(Runnable listener) {
+        this.ruleHitsChanged = listener != null ? listener : () -> {};
+    }
+
+    /** The auto-highlight rules this tab applies. */
+    public HighlightRules highlightRules() { return rules; }
+
+    /**
+     * Applies new auto-highlight rules: every entry is matched again in the background, and
+     * the rows keep their old rule colors until that's done. Must be called on the EDT.
+     */
+    public void setHighlightRules(HighlightRules newRules) {
+        rules = newRules != null ? newRules : HighlightRules.NONE;
+        cancelRuleScan();
+        if (rules.isEmpty() || nextOrdinal() == 0) {
+            boolean had = ruleOrds.size() > 0;
+            ruleOrds = new IntList();
+            ruleSlots = new IntList();
+            ruleScan = rules.isEmpty() ? null : rules.scan();
+            if (had) {
+                highlightMods++;
+                if (rows.size() > 0) fireTableRowsUpdated(0, rows.size() - 1);
+                ruleHitsChanged.run();
+            }
+            return;
+        }
+        submitRuleScan(ruleGeneration, rules, 0);
+    }
+
+    /** The theme changed: rule highlights take the new palette's colors. Must be called on the EDT. */
+    public void refreshPalette() {
+        palette = ClouseauColors.highlightColors();
+        highlightMods++;
+    }
+
+    private void cancelRuleScan() {
+        if (ruleFuture != null) ruleFuture.cancel(true);
+        ruleGeneration++;
+    }
+
+    /** Hits in the order found, as {@code ordinal << 8 | slot}; sorted when a merged view gave several runs. */
+    private static final class RuleHits implements HighlightRules.Hit {
+        long[] data = new long[64];
+        int size;
+
+        @Override public void hit(int ordinal, int slot) {
+            if (size == data.length) data = Arrays.copyOf(data, size * 2);
+            data[size++] = ((long) ordinal << 8) | slot;
+        }
+    }
+
+    /**
+     * Matches entries from {@code from} (an entry, not a continuation line) to the end in the
+     * background, then installs the hits on the EDT: they replace every rule hit if
+     * {@code from} is 0, else the ones from {@code from} on. Entries added meanwhile are
+     * caught up then: on the EDT if few, else by another scan. Must be called on the EDT.
+     */
+    private void submitRuleScan(long generation, HighlightRules r, int from) {
+        ruleScan = null;   // appends wait for this scan, which catches up on them
+        EntryRows indexedSnapshot = indexed;
+        int to = indexedCount;
+        List<LogEntry> snapshot = List.copyOf(allEntries);
+        int base = listBase();
+
+        ruleFuture = ruleExecutor.submit(() -> {
+            HighlightRules.Scan scan = r.scan();
+            RuleHits hits = new RuleHits();
+            int[] runs = {0};
+            if (indexedSnapshot != null && from < to) {
+                indexedSnapshot.scan(from, to, new EntryRows.Visitor() {
+                    @Override public void startRun() {
+                        runs[0]++;
+                        scan.startRun();
+                    }
+                    @Override public boolean wanted(int ordinal, boolean continuation) { return true; }
+                    @Override public void accept(int ordinal, LogEntry e) { scan.accept(ordinal, e, hits); }
+                }, () -> Thread.currentThread().isInterrupted());
+                if (Thread.currentThread().isInterrupted()) return;
+            }
+            if (runs[0] > 1) Arrays.sort(hits.data, 0, hits.size);
+            for (int i = Math.max(0, from - base); i < snapshot.size(); i++) {
+                if ((i & 0xFFF) == 0 && Thread.currentThread().isInterrupted()) return;
+                scan.accept(base + i, snapshot.get(i), hits);
+            }
+            int scannedTo = !snapshot.isEmpty() ? base + snapshot.size() : indexedSnapshot != null ? to : base;
+            SwingUtilities.invokeLater(() -> {
+                if (ruleGeneration != generation || rules != r) return;
+                installRuleHits(from, hits);
+                if (indexed != null && allEntries.isEmpty() && indexedCount - scannedTo > EDT_CATCH_UP_ROWS) {
+                    // Many rows were indexed meanwhile (a load still running): match those in the background too.
+                    submitRuleScan(generation, r, entryStart(scannedTo));
+                } else {
+                    // A few: on the EDT, carrying on from where the scan stopped.
+                    int start = scannedTo >= droppedFrom() && scannedTo < listBase() ? listBase() : scannedTo;
+                    for (int ord = start, end = nextOrdinal(); ord < end; ord++) {
+                        LogEntry e = entryAtOrdinal(ord);
+                        if (e != null) scan.accept(ord, e, this::addRuleHit);
+                    }
+                    ruleScan = scan;
+                }
+                highlightMods++;
+                if (rows.size() > 0) fireTableRowsUpdated(0, rows.size() - 1);
+                ruleHitsChanged.run();
+            });
+        });
+    }
+
+    /** The first ordinal of the entry {@code ordinal} belongs to: it, or the entry its continuation lines follow. */
+    private int entryStart(int ordinal) {
+        int o = ordinal;
+        while (o > 0 && indexed != null && o < indexedCount && indexed.isContinuation(o)) o--;
+        return o;
+    }
+
+    private void installRuleHits(int from, RuleHits hits) {
+        if (from == 0) {
+            ruleOrds = new IntList();
+            ruleSlots = new IntList();
+        } else {
+            int keep = ruleOrds.countBelow(from);
+            ruleOrds.removeRange(keep, ruleOrds.size());
+            ruleSlots.removeRange(keep, ruleSlots.size());
+        }
+        for (int i = 0; i < hits.size; i++) addRuleHit((int) (hits.data[i] >>> 8), (int) (hits.data[i] & 0xFF));
+        dropRuleHits(droppedFrom(), listBase());   // trimmed while the scan ran
+    }
+
+    /** Records a hit; hits come in ascending order, and one at or below the last is skipped. */
+    private void addRuleHit(int ordinal, int slot) {
+        int n = ruleOrds.size();
+        if (n > 0 && ruleOrds.get(n - 1) >= ordinal) return;
+        ruleOrds.add(ordinal);
+        ruleSlots.add(slot);
+    }
+
+    /** Forgets rule hits on ordinals {@code from} (inclusive) to {@code to} (exclusive). */
+    private void dropRuleHits(int from, int to) {
+        if (to <= from || ruleOrds.size() == 0) return;
+        int a = ruleOrds.countBelow(from), b = ruleOrds.countBelow(to);
+        if (b <= a) return;
+        ruleOrds.removeRange(a, b);
+        ruleSlots.removeRange(a, b);
+        highlightMods++;
+    }
+
+    /**
+     * Matches entries just appended (ordinals from {@code first}) against the rules, before
+     * their rows are inserted. A continuation line can mark an entry that's already shown,
+     * which is then repainted. Must be called on the EDT.
+     */
+    private void matchAppended(List<LogEntry> entries, int first) {
+        if (ruleScan == null || entries.isEmpty()) return;
+        int before = ruleOrds.size();
+        for (int i = 0; i < entries.size(); i++) ruleScan.accept(first + i, entries.get(i), this::addRuleHit);
+        if (ruleOrds.size() == before) return;
+        highlightMods++;
+        int earliest = ruleOrds.get(before);
+        if (earliest < first) {
+            int row = rows.binarySearch(earliest);
+            if (row >= 0) fireTableRowsUpdated(row, row);
+        }
     }
 
     /**
@@ -399,6 +692,11 @@ public final class LogTableModel extends AbstractTableModel {
             staticCount  = 0;
             hiddenBefore = 0;
             highlights.clear();
+            cancelRuleScan();
+            ruleOrds = new IntList();
+            ruleSlots = new IntList();
+            ruleScan = rules.isEmpty() ? null : rules.scan();
+            highlightMods++;
             knownFieldKeys.clear();
             customFields = List.of();
             rows = new IntList();
@@ -437,6 +735,7 @@ public final class LogTableModel extends AbstractTableModel {
         customFields = List.copyOf(knownFieldKeys);
         fireTableStructureChanged();
         scheduleReapply();
+        if (!rules.isEmpty()) submitRuleScan(ruleGeneration, rules, 0);
     }
 
     /**
@@ -479,7 +778,16 @@ public final class LogTableModel extends AbstractTableModel {
             return true;
         });
         highlights.putAll(movedHighlights);
+        highlightMods++;
         indexedCount = count;
+        // The tail's rule hits are worked out again from the first entry it touches; until then
+        // the rows before keep theirs.
+        if (!rules.isEmpty()) {
+            cancelRuleScan();
+            int start = entryStart(Math.min(from, count));
+            dropRuleHits(start, Integer.MAX_VALUE);
+            submitRuleScan(ruleGeneration, rules, start);
+        }
         rows.removeRange(rows.countBelow(from), rows.size());
         boolean filtering = filterFuture != null && !filterFuture.isDone();
         int onEdt = indexed.needsText(activeFilter) ? EDT_CATCH_UP_ROWS : EDT_REORDER_ROWS;
@@ -512,6 +820,7 @@ public final class LogTableModel extends AbstractTableModel {
         int ordinal = indexedCount;
         indexedCount += entries.size();
         discoverFields(entries);
+        matchAppended(entries, ordinal);
         int first = rows.size();
         for (LogEntry e : entries) {
             if (indexed.testIndex(activeFilter, ordinal) && activeFilter.test(e)) rows.add(ordinal);
@@ -534,6 +843,7 @@ public final class LogTableModel extends AbstractTableModel {
         int ordinal = nextOrdinal();
         allEntries.addAll(entries);
         discoverFields(entries);
+        matchAppended(entries, ordinal);
         int first = rows.size();
         for (LogEntry e : entries) {
             if (activeFilter.test(e)) rows.add(ordinal);
@@ -567,7 +877,8 @@ public final class LogTableModel extends AbstractTableModel {
         allEntries.subList(0, toRemove).clear();
         trimmedCount += toRemove;
         int gapStart = droppedFrom(), firstKept = listBase();
-        highlights.keySet().removeIf(ord -> ord >= gapStart && ord < firstKept);
+        if (highlights.keySet().removeIf(ord -> ord >= gapStart && ord < firstKept)) highlightMods++;
+        dropRuleHits(gapStart, firstKept);
 
         // rows is ascending, so the dropped entries' rows are one run
         int from = rows.countBelow(gapStart), to = rows.countBelow(firstKept);

@@ -603,6 +603,11 @@ public final class TabPanel extends JPanel {
     /** Rebuilds timestamp formatters from the current preference and refreshes the table and detail panel. */
     public void refreshTimezone() { shared.refreshTimezone(); }
 
+    /** The auto-highlight rules changed (D-29): the tab matches its entries again. */
+    public void setHighlightRules(com.droidenx.clouseau.core.HighlightRules rules) {
+        shared.model().setHighlightRules(rules);
+    }
+
     public void dispose() {
         if (content != null) {
             content.dispose();          // kept, so the closed tab still reports its state

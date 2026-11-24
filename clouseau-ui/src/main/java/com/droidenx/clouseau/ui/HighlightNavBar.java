@@ -26,7 +26,7 @@ final class HighlightNavBar extends JPanel {
     private Color navColor = null;
 
     HighlightNavBar(JTable table, LogTableModel model) {
-        super(new MigLayout("insets 3 8 3 8, gapy 0", "[][]10[]8[]12[][grow]", "[center]"));
+        super(new MigLayout("insets 3 8 3 8, gapy 0, hidemode 3", "[][]10[]8[]12[]6[][grow]", "[center]"));
         this.table = table;
         this.model = model;
         setBorder(new FindBar.BarSeparator());
@@ -71,10 +71,33 @@ final class HighlightNavBar extends JPanel {
         clearAllBtn.setToolTipText(Messages.get("highlight.nav.clear.all.tooltip"));
         clearAllBtn.addActionListener(e -> { if (onClearAll != null) onClearAll.run(); });
         add(clearAllBtn, "aligny center");
+
+        // Rules… opens Highlight Rules (D-29), styled like Clear All, after it.
+        rulesBtn.setFont(rulesBtn.getFont().deriveFont(11f));
+        rulesBtn.setMargin(new Insets(1, 6, 1, 6));
+        rulesBtn.setToolTipText(Messages.get("highlight.nav.rules.tooltip"));
+        rulesBtn.addActionListener(e -> { if (onEditRules != null) onEditRules.run(); });
+        rulesBtn.setVisible(false);
+        add(rulesBtn, "aligny center");
     }
+
+    private final JButton rulesBtn = new JButton(Messages.get("highlight.nav.rules"));
 
     private final JButton clearAllBtn = new JButton(Messages.get("highlight.nav.clear.all"));
     private Runnable onClearAll;
+    private Runnable onEditRules;
+    /** Whether the tab has highlights of the user's own (Clear acts only on those, not on rules'). */
+    private java.util.function.BooleanSupplier manualHighlights = () -> true;
+
+    /** What tells the bar whether there's a manual highlight to clear. */
+    void setManualHighlights(java.util.function.BooleanSupplier manual) {
+        this.manualHighlights = manual;
+    }
+
+    /** What a chip's Highlight Rules… item does: opens the rules (D-29). */
+    void setOnEditRules(Runnable onEditRules) {
+        this.onEditRules = onEditRules;
+    }
     private java.util.function.IntConsumer onClearColor;
 
     /** What a chip's Clear item does: the tab removes that color (a palette slot), asking first. */
@@ -115,6 +138,12 @@ final class HighlightNavBar extends JPanel {
         // If the selected color was removed, fall back to "All"
         if (navColor != null && !counts.containsKey(navColor)) navColor = null;
         clearAllBtn.setText(clearLabel("highlight.nav.clear.all"));
+        // Clear All acts on the user's own highlights only: a rule would paint its rows again.
+        // So it shows only while there's something of the user's to clear (a disabled button
+        // with no reason in sight reads as a bug), and Rules… shows while rules color rows:
+        // turning a rule off is how its colors go.
+        clearAllBtn.setVisible(manualHighlights.getAsBoolean());
+        rulesBtn.setVisible(onEditRules != null && model.hasRuleHighlights());
         if (!isVisible()) {
             setVisible(true);
             repaintBarAbove();
@@ -125,7 +154,7 @@ final class HighlightNavBar extends JPanel {
         Color[] palette = ClouseauColors.highlightColors();
         for (Color c : palette) {
             int[] n = counts.get(c);
-            if (n != null) key.append('|').append(c.getRGB()).append(':').append(n[0]).append('/').append(n[1]);
+            if (n != null) key.append('|').append(c.getRGB()).append(':').append(n[0]).append('/').append(n[1]).append('/').append(n[2]);
         }
         if (!key.toString().equals(shownChips)) {
             shownChips = key.toString();
@@ -191,7 +220,7 @@ final class HighlightNavBar extends JPanel {
             swatch.setBorderPainted(false);
             swatch.setContentAreaFilled(false);
             swatch.setFocusPainted(false);
-            swatch.setToolTipText(chipTip(slot, n[0], n[1]));
+            swatch.setToolTipText(chipTip(slot, n[0], n[1], n[2]));
             swatch.addActionListener(e -> { navColor = c; refresh(); });
             final int chipSlot = slot;
             swatch.setComponentPopupMenu(new JPopupMenu() {
@@ -200,7 +229,13 @@ final class HighlightNavBar extends JPanel {
                     JMenuItem clear = new JMenuItem(clearLabel("highlight.nav.chip.clear")
                             .replace("{0}", Messages.get("highlight.color." + chipSlot)));
                     clear.addActionListener(e -> { if (onClearColor != null) onClearColor.accept(chipSlot); });
+                    clear.setEnabled(!model.highlightOrdinals(c).isEmpty());
                     add(clear);
+                    if (onEditRules != null) {
+                        JMenuItem rules = new JMenuItem(Messages.get("highlight.nav.chip.rules"));
+                        rules.addActionListener(e -> onEditRules.run());
+                        add(rules);
+                    }
                     super.show(invoker, x, y);
                 }
             });
@@ -211,14 +246,21 @@ final class HighlightNavBar extends JPanel {
         swatches.repaint();
     }
 
-    /** "Blue: 4 highlighted", "… (1 hidden by filters)", "… all hidden by filters". */
-    private static String chipTip(int slot, int highlighted, int shown) {
+    /**
+     * "Blue: 4 highlighted", then how many an auto-highlight colors (", 3 by auto-highlights",
+     * ", all by auto-highlights"), then the filters' part ("(1 hidden by filters)", ", all
+     * hidden by filters"). Package-private for tests.
+     */
+    static String chipTip(int slot, int highlighted, int shown, int byRules) {
         String name = Messages.get("highlight.color." + slot);
         int hidden = highlighted - shown;
+        String auto = byRules == 0 ? ""
+                    : byRules == highlighted ? Messages.get("highlight.nav.chip.tooltip.allauto")
+                    : MessageFormat.format(Messages.get("highlight.nav.chip.tooltip.auto"), byRules);
         String key = hidden == 0 ? "highlight.nav.chip.tooltip"
                    : shown == 0  ? "highlight.nav.chip.tooltip.allhidden"
                    : "highlight.nav.chip.tooltip.hidden";
-        return MessageFormat.format(Messages.get(key), name, highlighted, hidden);
+        return MessageFormat.format(Messages.get(key), name, highlighted, hidden, auto);
     }
 
     /**
@@ -239,13 +281,11 @@ final class HighlightNavBar extends JPanel {
             position.setText(MessageFormat.format(Messages.get("highlight.nav.allhidden"), hidden));
             return;
         }
-        List<Integer> highlighted = model.getHighlightedModelRows(navColor);
-        int currentModel = selectedModelRow();
-        int pos = 0;
-        for (int i = 0; i < highlighted.size(); i++) {
-            if (highlighted.get(i) <= currentModel) pos = i + 1;
-        }
-        String at = pos + " / " + highlighted.size();
+        int[] highlighted = model.highlightedRows(navColor);
+        // How many highlighted rows are at or before the selected one (a rule can mark many).
+        int i = java.util.Arrays.binarySearch(highlighted, selectedModelRow());
+        int pos = i >= 0 ? i + 1 : -i - 1;
+        String at = pos + " / " + highlighted.length;
         position.setText(hidden == 0 ? at : MessageFormat.format(Messages.get("highlight.nav.somehidden"), at, hidden));
     }
 
@@ -260,20 +300,17 @@ final class HighlightNavBar extends JPanel {
     }
 
     void navigate(int direction) {
-        List<Integer> highlighted = model.getHighlightedModelRows(navColor);
-        if (highlighted.isEmpty()) return;
+        int[] highlighted = model.highlightedRows(navColor);
+        if (highlighted.length == 0) return;
         int currentModel = selectedModelRow();
+        int i = java.util.Arrays.binarySearch(highlighted, currentModel);
         int targetModel;
         if (direction > 0) {
-            targetModel = highlighted.stream()
-                    .filter(r -> r > currentModel)
-                    .findFirst()
-                    .orElse(highlighted.get(0));
+            int next = i >= 0 ? i + 1 : -i - 1;          // first after the selection, wrapping
+            targetModel = highlighted[next < highlighted.length ? next : 0];
         } else {
-            targetModel = highlighted.stream()
-                    .filter(r -> r < currentModel)
-                    .reduce((a, b) -> b)
-                    .orElse(highlighted.get(highlighted.size() - 1));
+            int prev = i >= 0 ? i - 1 : -i - 2;          // last before the selection, wrapping
+            targetModel = highlighted[prev >= 0 ? prev : highlighted.length - 1];
         }
         int viewRow = table.convertRowIndexToView(targetModel);
         if (viewRow >= 0) {

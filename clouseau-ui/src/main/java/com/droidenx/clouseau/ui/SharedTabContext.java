@@ -208,10 +208,19 @@ final class SharedTabContext {
                 if (rowMenu[0] != null) rowMenu[0].highlightRows(modelRows, slot);
             }
             @Override public Color highlightOf(int modelRow) { return model.getHighlight(modelRow); }
+            @Override public boolean ruleColored(int modelRow) { return model.isRuleColored(modelRow); }
         });
         highlightNavBar = nav[0] = new HighlightNavBar(table, model);
         highlightNavBar.setOnClearAll(() -> { if (rowMenu[0] != null) rowMenu[0].clearAllHighlights(); });
         highlightNavBar.setOnClearColor(slot -> { if (rowMenu[0] != null) rowMenu[0].clearHighlightColor(slot); });
+        highlightNavBar.setManualHighlights(this::hasHighlights);
+        highlightNavBar.setOnEditRules(() -> HighlightRulesDialog.open(window(), null));
+        // Rules apply to every tab (D-29); a background match repaints and refreshes the bar.
+        model.setRuleHitsListener(() -> {
+            highlightNavBar.refresh();
+            refreshDetail();
+        });
+        model.setHighlightRules(HighlightRuleSet.compiled());
         ClouseauColors.onThemeChange(table, this::reapplyHighlightsForTheme);
 
         model.addTableModelListener(e -> {
@@ -537,6 +546,7 @@ final class SharedTabContext {
      * store palette slots (DESIGN.md D-15), so the slots are applied again.
      */
     private void reapplyHighlightsForTheme() {
+        model.refreshPalette();
         model.clearAllHighlights();
         applySavedHighlights();
     }
@@ -622,7 +632,7 @@ final class SharedTabContext {
                 ? merged.offsetMillis(merged.sourceOf(ordinal)) : 0;
         java.time.ZoneId zone = merged != null && ordinal >= 0 && ordinal < merged.size()
                 ? host.zoneOfSource(merged.sourceOf(ordinal)) : timezone;
-        return new DetailPanel.Content(entry, model.getHighlight(modelRow),
+        return new DetailPanel.Content(entry, model.getRowColor(modelRow),
                 notes.at(ordinal), model.getContinuationLines(modelRow), shift, where(modelRow, ordinal, merged), zone);
     }
 

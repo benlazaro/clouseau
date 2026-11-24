@@ -132,13 +132,28 @@ too. A zip that is a review bundle (UC-9) opens its log directly.
 3. User selects a row to see the full entry in the detail panel, with the stack trace
    and any structured payload (such as JSON) formatted and syntax-highlighted.
 4. Optionally, the user applies their own highlight colors to rows and jumps between
-   highlights of a given color.
+   highlights of a given color. For what they always look for (an `OutOfMemoryError`, one
+   service's logger, timeouts at WARN or above), they set up auto-highlights once, and
+   every log colors its matching rows by itself, live rows included.
 5. In a long entry (a pretty-printed JSON payload, an HL7 message), the user finds text in
    the detail panel itself, and keeps that search while moving from row to row.
 
 **Success:** A user can find the first ERROR in a log much faster than in a text editor.
 
-**Current behavior:** Step 5 is the detail panel's own find strip, opened with `Ctrl+F` while
+**Current behavior:** Step 4's auto-highlights (D-29; "highlight rules" in the code) are in
+**Tools → Auto-Highlights…**, or start from a search with the find bar's **Highlight ⌄ →
+New Auto-Highlight…**. One is text (plain or a regular expression, with match case) looked
+for in any column or in the message, logger, thread or one field, an optional lowest level,
+and a color; empty text matches on the level alone. They apply to every tab and are matched
+as rows arrive, and every row is matched again in the background when one changes, so edits
+show as they're typed. The first that matches wins; a matching stack-trace line colors
+itself and its entry. Their colors show in the highlight bar and step like the user's own,
+which always win over them; they aren't saved with notes or bundles, and Clear All leaves
+them (turning one off removes its colors). The bar shows Clear All only while the user has
+highlights of their own, and an **Auto-Highlights…** button while auto-highlights color any
+rows.
+
+Step 5 is the detail panel's own find strip, opened with `Ctrl+F` while
 focus is in the panel or with its header's search button (`Ctrl+F` elsewhere opens the
 table's find bar). It searches the entry as shown, so formatted JSON is searched formatted,
 with **Aa** (match case) and **.\*** (regular expression) toggles. Every match gets Find's

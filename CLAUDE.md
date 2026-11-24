@@ -46,7 +46,8 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
                     MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
                     UpdateCheck, SshSaved, SyntaxLayers, TextMatches, CompactTime,
-                    SourceRefs, JetBrainsIde, JetBrainsProjects, SourceFolders, Foreground
+                    SourceRefs, JetBrainsIde, JetBrainsProjects, SourceFolders, Foreground,
+                    HighlightRule, HighlightRules, HighlightRuleStore
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -203,9 +204,14 @@ release only.
 - `FindBar`, `HighlightNavBar` (ui) — a tab's find bar (Ctrl+F, searched in the background) and the bar
   that steps through highlighted rows. `BusyIndicator` (ui) is the bar over the rows, and their fade,
   while a filter or find reads the file (DESIGN.md 6.16).
-- `DialogFooter`, `NoticeLabel`, `PromptDialog`, `ManagerDialogs` (ui) — the dialog building blocks
+- `HighlightRule`, `HighlightRules`, `HighlightRuleStore` (core), `HighlightRuleSet`, `HighlightRulesDialog` (ui) —
+  UC-3, D-29: highlight rules, called **auto-highlights** in the app (never "rules" in user-facing text). A rule (text, where, lowest level, palette slot), the compiled rules and
+  their in-order `Scan`, `<data>/highlight-rules.json`; the app-wide list every tab gets, and Tools →
+  Auto-Highlights…. The model keeps rule hits apart from manual highlights: `getRowColor` is what's
+  painted, `getHighlight` only the user's own.
+- `DialogFooter`, `NoticeLabel`, `PromptDialog`, `ManagerDialogs`, `ConfirmText` (ui) — the dialog building blocks
   (DESIGN.md 6.12): the footer with its hairline, the "Still needed: …" / result notice line, a small
-  modal form (never a form inside a `JOptionPane`), and the managers' shared list, actions and sizes.
+  modal form (never a form inside a `JOptionPane`), the managers' shared list, actions and sizes, and a confirmation's text (bold question, dim notes).
 - `SshRemote` (core), `SshConnectionDialog`, `RemoteFileDialog` (ui) — the SSH Connections window: Connect
   checks first (sign in and check the file) and Browse… picks the file over SFTP; `SshRemote` also holds the
   sign-in `SshLogSource` uses. `SshSaved` (core) is its saved connections (D-24): sign-ins (user, host, port,

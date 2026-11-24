@@ -83,6 +83,8 @@ final class FindBar extends JPanel {
     interface Highlighter {
         void highlight(List<Integer> modelRows, Integer slot);
         Color highlightOf(int modelRow);
+        /** True if a highlight rule colors the row, which None leaves as it is (D-29). */
+        default boolean ruleColored(int modelRow) { return false; }
     }
 
     private Highlighter highlighter;
@@ -188,6 +190,14 @@ final class FindBar extends JPanel {
             if (slot == RowMenu.NONE) clearHighlights(rows);
             else highlighter.highlight(rows, slot);
         }));
+        // Or keep coloring what this search finds, in every log and in rows still to come (D-29).
+        popup.addSeparator();
+        JMenuItem rule = new JMenuItem(Messages.get("find.highlight.rule"));
+        String query = field.getText().strip();
+        rule.addActionListener(e -> HighlightRulesDialog.open(SwingUtilities.getWindowAncestor(this),
+                new com.droidenx.clouseau.core.HighlightRule(true, com.droidenx.clouseau.core.HighlightRule.Column.ANY,
+                        null, query, false, false, null, 0)));
+        popup.add(rule);
         // Right-aligned with the button: it sits at the window's right edge.
         popup.show(highlightBtn, highlightBtn.getWidth() - popup.getPreferredSize().width, highlightBtn.getHeight());
     }
@@ -198,7 +208,8 @@ final class FindBar extends JPanel {
         if (colored == 0) return;
         if (colored >= 2 && AppPrefs.isHighlightClearAllConfirm()) {
             int confirm = JOptionPane.showConfirmDialog(SwingUtilities.getWindowAncestor(this),
-                    MessageFormat.format(Messages.get("find.highlight.clear.confirm.message"), colored),
+                    ConfirmText.of(MessageFormat.format(Messages.get("find.highlight.clear.confirm.message"), colored),
+                            rows.stream().anyMatch(highlighter::ruleColored) ? Messages.get("highlight.rules.note") : null),
                     Messages.get("find.highlight.clear.confirm.title"),
                     JOptionPane.YES_NO_OPTION);
             if (confirm != JOptionPane.YES_OPTION) return;

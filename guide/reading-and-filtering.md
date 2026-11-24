@@ -243,11 +243,43 @@ Highlights mark rows you want to come back to.
 Filters don't remove highlights, they only hide them. The bar stays while any row is
 highlighted and says how many the filters hide: **2 / 4 · 3 hidden**, or **3 hidden by
 filters** when none show (▲ and ▼ then have nowhere to go). A color whose rows are all
-hidden shows a faded chip; point at a chip for its count.
+hidden shows a faded chip; point at a chip for its count, which also says how many are [auto-highlights](#auto-highlights).
 
 Highlights are saved with the file's [notes](annotations-and-review.md), so they're back
 when you open the file again, and they travel in review bundles. Each color follows the
 current theme.
+
+### Auto-highlights
+
+An auto-highlight colors every row that matches it, in every log you open and in new rows
+as they arrive while you follow a log. Use them for what you always want to spot:
+`OutOfMemoryError` in red, a payment service's logger in blue, every warning about
+timeouts in amber.
+
+1. Open **Tools → Auto-Highlights…**, or, with a search in the [find bar](#find),
+   **Highlight ⌄ → New Auto-Highlight…** to start from what you searched for.
+2. Click **New Auto-Highlight** and fill it in:
+   - **Text**: what to look for. **Aa** matches case, **.\*** reads it as a regular
+     expression. Leave it empty to match on the level alone.
+   - **Look in**: any column, or only the message, logger, thread or one field.
+   - **Level**: only entries at this level or above (for example **WARN and above**).
+   - **Color**: one of the eight highlight colors.
+3. Rows change color as you type. Untick an auto-highlight in the list (or its **On** box)
+   to turn it off without deleting it. Point at an auto-highlight in the list for its
+   **Duplicate** and **Delete** (trash can) buttons; right-click it to move it up or down.
+
+The first auto-highlight that matches a row gives it its color, so order matters:
+right-click one to move it up or down, or press `Alt+↑` and `Alt+↓`. A line of a stack
+trace that matches is colored, and so is the entry it belongs to, so you find the entry
+even when its trace is filtered out.
+
+Auto-highlight colors appear in the **Highlights** bar like your own, so ▲ and ▼ step
+through them. Your own highlight on a row always wins. Auto-highlights aren't saved with
+the file's notes or put in review bundles, and **Clear All** (shown while you have
+highlights of your own) doesn't remove them: turn the auto-highlight off instead. While
+auto-highlights color any rows, the bar has an **Auto-Highlights…** button that opens
+them; so does **Edit Auto-Highlights…** in a chip's right-click menu. They're saved in
+`highlight-rules.json` in the [data folder](settings.md#the-data-folder).
 
 ## Columns
 

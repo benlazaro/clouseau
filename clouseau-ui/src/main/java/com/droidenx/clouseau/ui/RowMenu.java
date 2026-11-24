@@ -202,12 +202,21 @@ final class RowMenu {
      * Removes every highlight in the tab, the ones the filters hide too, after asking (unless
      * the user turned that off), and saves. Edit → Clear All Highlights… and the highlight bar's Clear All.
      */
+    /**
+     * Clear All's question. With rules coloring rows too, "all" alone read as the rules' colors
+     * as well, so a note says they stay.
+     */
+    static String clearAllQuestion(boolean rulesColorRows) {
+        return ConfirmText.of(Messages.get("highlight.clear.all.confirm.message"),
+                rulesColorRows ? Messages.get("highlight.rules.note") : null);
+    }
+
     void clearAllHighlights() {
         if (!logTableModel.hasHighlights() && host.notes().highlights().isEmpty()) return;
         if (AppPrefs.isHighlightClearAllConfirm()) {
             int confirm = JOptionPane.showConfirmDialog(
                     SwingUtilities.getWindowAncestor(logTable),
-                    Messages.get("highlight.clear.all.confirm.message"),
+                    clearAllQuestion(logTableModel.hasRuleHighlights()),
                     Messages.get("highlight.clear.all.confirm.title"),
                     JOptionPane.YES_NO_OPTION);
             if (confirm != JOptionPane.YES_OPTION) return;
@@ -231,8 +240,10 @@ final class RowMenu {
         if (AppPrefs.isHighlightClearAllConfirm()) {
             int confirm = JOptionPane.showConfirmDialog(
                     SwingUtilities.getWindowAncestor(logTable),
-                    java.text.MessageFormat.format(Messages.get("highlight.clear.color.confirm.message"),
-                            Messages.get("highlight.color." + slot), ordinals.size()),
+                    ConfirmText.of(java.text.MessageFormat.format(Messages.get("highlight.clear.color.confirm.message"),
+                                    Messages.get("highlight.color." + slot), ordinals.size()),
+                            Messages.get("highlight.clear.color.confirm.hidden"),
+                            logTableModel.hasRuleHighlights(color) ? Messages.get("highlight.rules.note") : null),
                     Messages.get("highlight.clear.color.confirm.title"),
                     JOptionPane.YES_NO_OPTION);
             if (confirm != JOptionPane.YES_OPTION) return;

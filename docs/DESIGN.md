@@ -221,6 +221,7 @@ refresh; open tabs keep the list they were created with.
 | **Load worker** (`SwingWorker`, one per tab) | Read and parse the file; `publish` entries in chunks. |
 | **Tail worker** (`SwingWorker` on a `clouseau-follow-N` thread, D-22; one per followed tab, per followed file of a merged view, and per followed plain-text view) | Wait for the file to change, then read new lines while following; on an indexed tab, add them to the index. Holds the tab's tail lock, so a cancelled worker finishes before the next one starts. |
 | **Filter executor** (`clouseau-filter`, one per tab) | Re-run the active filter over all entries; a generation counter discards stale results. |
+| **Rule executor** (`clouseau-rules`, one per tab) | Match every entry against the highlight rules when they change, a merged view loads or a tail re-merges (D-29); a generation counter discards stale results. Appends are matched on the EDT. |
 | **Source worker** (`SwingWorker` on a `clouseau-follow-N` thread, D-22; one per live-source tab) | Run `LogSource.open` (SSH or a plugin source), which blocks while it pushes lines; parse and `publish` them. Marks the tab's `SourceConnection` connected; its changes reach the tab's dot through `invokeLater`. |
 | **Source close** (`source-close`, a daemon thread per close) | Run `LogSource.close` when a live tab is closed or reloaded. Closing can wait on the network or a plugin, so it never runs on the EDT (issue #1). |
 
@@ -785,6 +786,13 @@ the optional action (Open Releases Page) beside it. **Help → Check for Updates
 every outcome this way, including an available update (Download · Close); only the daily
 check uses the modeless notice.
 
+A confirmation's text is its question alone, or, when there's something to add (what else
+it reaches, what stays as it is), the question in **bold**, read first, then each note on its
+own line in `dimForeground`, read next (`ConfirmText`). A note is shown only when it applies:
+"Rows colored by auto-highlights won't be affected." appears on Clear All, a color's Clear and
+the find bar's None only when a rule colors rows they reach (D-29), and the plain question
+stays plain. A note never repeats the question or names the button.
+
 A message box holds a sentence, never a form. A small form (a file's time offset, a merged
 file's timezone or parser) is a `PromptDialog`: a modal dialog with `DialogFooter`
 (Cancel · OK, OK default, Esc cancels), whose problems show in place rather than in a box
@@ -826,6 +834,9 @@ connections, the parser editor's parsers) follows the same rules, so they read a
   - **Parser editor:** your parsers have Duplicate and the trash can; built-in parsers have
     Duplicate only. **New Parser** and **Duplicate** (the selected parser) are on the footer's left (6.12),
     not in the form; the right-click menu has Duplicate, then Move Up, Move Down and Delete… on yours.
+  - **Auto-Highlights:** Duplicate and the trash can, as on your parsers, with **New
+    Auto-Highlight** and **Duplicate** on the footer's left; a row's check box (left edge)
+    turns it on or off without selecting it.
   - **Favorites:** the trash can only.
 - **Tool colors light up on hover, selected or not.** The tool under the mouse must always
   look different from the idle ones:
@@ -844,7 +855,10 @@ connections, the parser editor's parsers) follows the same rules, so they read a
 - **Nothing selected:** the pane beside the list shows an empty state, as the detail pane
   does: what to do in `dimForeground`, then what you'll get in smaller `mutedForeground`
   text, centered. The parser editor opens this way (except from **Create a Parser…**,
-  which opens on the new parser), so it never picks a parser for you.
+  which opens on the new parser), so it never picks a parser for you. The Auto-Highlights
+  dialog is the exception: it opens on the first auto-highlight (or the new one, from
+  **New Auto-Highlight…**), since showing one changes nothing and its form explains the
+  feature better than an empty state; it shows the empty state only when there are none.
 
 A `JTree` sizes its rows from the renderer's preferred size and caches them, so a tree
 (the SSH list) works the width out itself: the renderer's preferred width is the viewport's
@@ -929,6 +943,7 @@ All state lives in a single **data folder** resolved by `AppDirs`:
 |---|---|
 | `settings.json` | Preferences (`AppPrefs`) |
 | `parsers.json` | User-defined parsers |
+| `highlight-rules.json` | Highlight rules (D-29, `HighlightRuleStore`): `{"version": 1, "rules": [{"enabled", "in" (any, message, logger, thread, field), "field", "text", "matchCase", "regex", "minLevel", "color"}]}`, in order. A file that can't be read is moved to `highlight-rules.json.bad`. |
 | `plugins/` | Installed plugin JARs |
 | `keystore.p12`, `machine-id` | Key material for encrypted credentials (`CredentialStore`, AES-256-GCM) |
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`) and highlighter colors with `Clouseau.syntax.<role>` keys (for example `Clouseau.syntax.keyword`); missing keys fall back to built-in defaults. |
@@ -2547,6 +2562,57 @@ versions, when the IDE's own server does the job); the IDEs' command-line launch
 by install, Toolbox or not); a command template for any editor (quoting and Windows `.cmd`
 launchers make it fragile; easy to add later if asked); turning every `File.java:42` in a
 message into a link (only frames say which package the file is in).
+
+### D-29 · Auto-highlights (highlight rules) are global, derived, and matched as rows arrive · Adopted
+
+UC-3 step 4: a user who always looks for the same things (an `OutOfMemoryError`, one
+service's logger, timeouts at WARN or above) colors them once, as rules, instead of
+searching and highlighting in every log. The app calls them **auto-highlights** (Tools → Auto-Highlights…), a name that says what they do; the code calls one a highlight rule.
+
+- **Model.** A `HighlightRule` (core) is text (plain or a regular expression, match case
+  or not), where to look (any column, the message, logger, thread, or one field), an
+  optional lowest level and a palette slot (D-15), and can be turned off. Empty text matches
+  on the level alone; a rule with neither, a bad pattern or a field with no name doesn't
+  apply. `HighlightRules` (core) is the rules that apply, compiled; the first that matches an
+  entry gives its slot. A continuation line is matched as text (Any or Message only) against
+  its entry's level, colors itself, and colors its entry if no rule colored the entry
+  itself, so the entry is found even when the filters hide its trace. `HighlightRules.Scan`
+  applies this to entries in ordinal order, emitting hits in ascending order.
+- **Global.** One list for the whole app, in `<data>/highlight-rules.json`
+  (`HighlightRuleStore`, core; read and written by `HighlightRuleSet`, ui), like themes and
+  parsers rather than notes: rules describe what the user looks for, not one file. A change
+  goes to every tab through `WindowManager`, only when what matches changed (not for a rule
+  still incomplete as it's typed).
+- **Derived, not saved per file.** Rule hits live in the tab's `LogTableModel`: an ascending
+  list of ordinals with each one's slot, 8 bytes a hit, beside the manual highlights' map.
+  They aren't written to the notes sidecar or review bundles: a colleague has their own
+  rules, and saving would freeze an old rule's result into the file. The painted color is
+  the manual highlight, else the rule's (`getRowColor`); the row menu, the find bar's
+  swatches and Clear act on manual highlights only (`getHighlight`), so Clear All doesn't
+  remove what a rule would paint again.
+- **Matched as rows arrive.** Every load, follow and live append already hands its entries
+  to the model on the EDT, so the model feeds them to its `Scan` there (as cheap as the
+  filter test it does on them already); a continuation line in a later batch repaints its
+  entry. A whole-tab match runs in the background on the model's own `clouseau-rules`
+  thread (reading an indexed file through `EntryRows.scan`, sequentially, like Find) when the
+  rules change, when a merged view loads, and from the first entry a re-merged tail touches
+  (D-17); rows keep their old rule colors until it installs. While it runs, appends wait for
+  it; it then catches up on rows added meanwhile, on the EDT if few, else with another
+  scan. Trimmed live entries take their hits with them.
+- **The highlight bar** counts and steps through rule hits like manual ones, per color. The
+  model caches its counts and the highlighted rows (an `int[]`, binary-searched for the
+  position and the next row) until the rows or highlights change, since a rule can mark a
+  large part of a big file. Clear All shows only while the tab has manual highlights (a
+  disabled button with no reason in sight read as a bug), and **Auto-Highlights…** shows while rules
+  color any rows, opening the Auto-Highlights window, as a chip's menu does (**Edit Auto-Highlights…**): turning a rule off is how
+  its colors go. A chip's Clear item is disabled when the color is only a rule's.
+
+Rejected: applying rules as ordinary saved highlights (they'd fill sidecars, travel in
+bundles, and couldn't be turned off cleanly); painting at render time only (fast, but the
+highlight bar couldn't count or step through rows not yet drawn); per-parser rules (more
+UI, and a text rule rarely depends on the format; can be added as an optional condition);
+reusing the filter bar's conditions as rules (a filter's conditions combine differently
+from "the first rule wins", and most rules are one text).
 
 ## 10. Planned features
 

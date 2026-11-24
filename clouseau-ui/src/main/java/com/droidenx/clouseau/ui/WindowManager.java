@@ -45,6 +45,8 @@ final class WindowManager {
     WindowManager(ClouseauPluginManager pluginManager) {
         this.pluginManager = pluginManager;
         reloadExtensions();
+        // Auto-highlight rules are global (D-29): every open tab matches again when they change.
+        HighlightRuleSet.onChange(rules -> allPanels().forEach(p -> p.setHighlightRules(rules)));
     }
 
     ClouseauPluginManager pluginManager() { return pluginManager; }

@@ -176,8 +176,8 @@ class LogTableModelTest {
         }
 
         java.util.Map<java.awt.Color, int[]> counts = model.highlightCounts();
-        assertThat(counts.get(java.awt.Color.RED)).containsExactly(2, 1);    // one of two shown
-        assertThat(counts.get(java.awt.Color.BLUE)).containsExactly(1, 0);   // all hidden, still counted
+        assertThat(counts.get(java.awt.Color.RED)).containsExactly(2, 1, 0);    // one of two shown
+        assertThat(counts.get(java.awt.Color.BLUE)).containsExactly(1, 0, 0);   // all hidden, still counted
         assertThat(model.getHighlightedModelRows(null)).containsExactly(0);
         assertThat(model.getHighlightedModelRows(java.awt.Color.BLUE)).isEmpty();
     }

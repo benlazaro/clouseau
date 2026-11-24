@@ -369,7 +369,7 @@ class IndexedLogTableModelTest {
             assertThat(model.getRowCount()).isEqualTo(3);
             assertThat(model.ordinalAt(0)).isEqualTo(50);
             // The cleared row's highlight is kept, though no row shows it.
-            assertThat(model.highlightCounts().get(java.awt.Color.RED)).containsExactly(1, 0);
+            assertThat(model.highlightCounts().get(java.awt.Color.RED)).containsExactly(1, 0, 0);
 
             model.clear();   // a reload starts again with nothing hidden
             assertThat(model.hiddenBefore()).isZero();

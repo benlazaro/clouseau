@@ -463,6 +463,9 @@ public final class MainFrame extends JFrame {
         parsersItem.addActionListener(e ->
                 new ParserEditorDialog(this, manager::reloadParsers).setVisible(true));
         toolsMenu.add(parsersItem);
+        JMenuItem rulesItem = menuItem(Messages.get("menu.tools.highlight.rules"));
+        rulesItem.addActionListener(e -> HighlightRulesDialog.open(this, null));
+        toolsMenu.add(rulesItem);
         JMenuItem pluginsItem = menuItem(Messages.get("menu.tools.plugins"));
         pluginsItem.setToolTipText(Messages.get("toolbar.plugins.tooltip"));
         pluginsItem.addActionListener(e ->
