@@ -103,18 +103,27 @@ class (`com.acme.OrderService`), the right-click menus of the panel and the tabl
 
 Choose your editor in **Settings → Source Code**:
 
-- **JetBrains IDE** (the default): IntelliJ IDEA, or any other JetBrains IDE, with the
-  project open. The IDE finds the file in its open projects, so there's nothing to set up
-  in Clouseau. IntelliJ 2026.2 and later need JetBrains' free **IDE Remote Control** plugin
-  (in the IDE: Settings → Plugins → Marketplace); Clouseau tells you if it's missing.
-  Earlier versions have it built in.
-- **VS Code** or **Cursor**: add your projects, or the folder that holds them, under
-  **Source folders**. Clouseau finds the file there (in any module, `src/main/java` or
-  elsewhere) and opens it at the line. The first time, the editor asks whether to let
-  another program open the file.
+- **JetBrains IDE** (the default): IntelliJ IDEA, or any other JetBrains IDE. Clouseau
+  finds the file in your source folders and the IDE opens it at the line; a file that isn't
+  in your source folders, the IDE looks for in its open projects. If the file's project
+  isn't open in the IDE, Clouseau says which project to open first, since the IDE can't
+  navigate a file outside an open project; **Open File Anyway** opens it regardless, and
+  brings the IDE to the front (on Linux that needs `wmctrl` or `xdotool` and an X11
+  session). IntelliJ 2026.2 and later need JetBrains' free **IDE Remote Control** plugin (in the IDE:
+  Settings → Plugins → Marketplace); Clouseau tells you if it's missing. Earlier versions
+  have it built in.
+- **VS Code** or **Cursor**: Clouseau finds the file in your source folders and opens it at
+  the line. The first time, the editor asks whether to let another program open the file.
 
-If no open project has the file, such as a frame in the JDK or a library, a note in the
-middle of the panel says so.
+**Source folders** are where Clouseau looks for your code. If you keep your projects in one
+of the usual places in your home folder, such as `git`, `src`, `repos` or `IdeaProjects`,
+there's nothing to set up: Clouseau searches those, in every project and module
+(`src/main/java` or elsewhere). Settings → Source Code shows which folders it found. To
+search somewhere else, add your projects, or the folders that hold them, there; then only
+those are searched.
+
+If your source folders don't have the file, such as a frame in the JDK or a library, a note
+in the middle of the panel says so.
 
 Control characters in a field, such as a NUL byte or the escape that starts a terminal color
 code, are shown dimmed as their symbols (`␀`, `␛`) so you can see they're there. Copying

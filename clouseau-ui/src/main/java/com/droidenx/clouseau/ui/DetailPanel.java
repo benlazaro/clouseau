@@ -564,6 +564,7 @@ final class DetailPanel extends JPanel {
             inDocument.add(at);
         }
         sourceLinks = List.copyOf(inDocument);
+        SourceOpener.prepare();   // index the source folders now, so a click opens at once
     }
 
     /** The stack frame link under {@code p}, or null: on its text, not just nearest to it. */

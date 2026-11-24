@@ -50,6 +50,12 @@ class JetBrainsIdeTest {
             exchange.sendResponseHeaders(status, -1);
             exchange.close();
         });
+        server.createContext("/api/about", exchange -> {
+            byte[] body = ("{\"name\" : \"Fake IDE " + port + "\", \"productName\" : \"IDEA\", \"buildNumber\" : \"263.1\"}").getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
         server.start();
         servers.add(server);
     }
@@ -80,6 +86,20 @@ class JetBrainsIdeTest {
         assertThat(requests).containsExactly(
                 base + " file=com/acme/Foo.java&line=42 origin=http://localhost:" + base,
                 (base + 2) + " file=com/acme/Foo.java&line=42 origin=http://localhost:" + (base + 2));
+    }
+
+    @Test
+    void remembersWhichIdeOpenedItAndItsName() throws Exception {
+        int base = freePorts();
+        ide(base + 1, "com/acme/Foo.java");
+        JetBrainsIde ides = new JetBrainsIde("127.0.0.1", base, 3);
+        assertThat(ides.openedPort()).isEmpty();
+
+        assertThat(ides.open(new SourceRef("com/acme/Foo.java", 1))).isEqualTo(Result.OPENED);
+        assertThat(ides.openedPort()).hasValue(base + 1);
+        assertThat(ides.about(base + 1)).contains(new JetBrainsIde.About(base + 1, "Fake IDE " + (base + 1), "IDEA", "263.1"));
+        assertThat(ides.about()).map(JetBrainsIde.About::port).contains(base + 1);
+        assertThat(ides.about(base)).as("nothing listening").isEmpty();
     }
 
     @Test

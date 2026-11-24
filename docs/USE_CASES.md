@@ -790,13 +790,16 @@ the project by hand.
 with nothing to configure for the usual setup.
 
 **Rules:**
-- **The IDE finds the file.** A frame gives its class's package and file name
-  (`com/acme/OrderService.java`), not a path on disk, so a JetBrains IDE looks it up in its
-  open projects' source roots. VS Code and Cursor need a full path, so for them Clouseau
-  searches the source folders the user listed in Settings.
-- **Nothing is opened silently elsewhere.** If no project has the file (a JDK or library
-  frame, or the project isn't open), a toast says so; if no IDE answers, or it can't open
-  files, a message says what to do.
+- **Clouseau finds the file.** A frame gives its class's package and file name
+  (`com/acme/OrderService.java`), not a path on disk, so Clouseau finds it in the user's
+  source folders: those listed in Settings, or by default the usual project folders in the
+  home folder (`~/git`, `~/IdeaProjects`, …), and the editor opens that file. A user with
+  dozens of projects under one folder sets nothing up, and the project needn't be open in
+  the IDE. A file the folders don't have is left to a JetBrains IDE to look up in its open
+  projects.
+- **Nothing is opened silently elsewhere.** If the source folders don't have the file (a
+  JDK or library frame), a toast says so; if no IDE answers, or it can't open files, a
+  message says what to do.
 - **Clicking a link doesn't get in the way of selecting text.** A drag that selects text
   opens nothing.
 
@@ -804,7 +807,12 @@ with nothing to configure for the usual setup.
 in Settings → Source Code. Frames of Java, Kotlin, Scala, Groovy and Clojure files are
 recognized, with Java 9+ module and class-loader prefixes (`java.base/`, `app//`). IntelliJ
 2026.2 and later need JetBrains' IDE Remote Control plugin, which they no longer include;
-Clouseau recognizes an IDE without it and says to install it. Stack traces of other
+Clouseau recognizes an IDE without it and says to install it. A file whose project isn't
+open in the JetBrains IDE isn't opened: a message says which project to open there, since a
+file outside its project gets none of the IDE's navigation, with Open File Anyway. A file
+opened that way opens in the IDE's current window, without the IDE coming to the front, so
+Clouseau brings it forward and a toast names the IDE; that works on Windows and macOS, and
+on Linux with `wmctrl` or `xdotool` under X11, not under Wayland. Stack traces of other
 languages (Python, .NET, JavaScript) aren't links yet. Design: DESIGN.md D-28.
 
 ---

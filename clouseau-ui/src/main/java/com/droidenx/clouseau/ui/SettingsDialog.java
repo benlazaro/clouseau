@@ -174,16 +174,32 @@ final class SettingsDialog extends JDialog {
         content.add(foldersLabel, INDENT + ", aligny top, gaptop 4");
         JComponent folders = buildSourceFolders();
         content.add(folders, "growx, wrap, wmin 0");
+        JLabel foldersHint = hint("");
+        content.add(foldersHint, "skip 1, wrap, gaptop 2, wmin 0");
+        int hintWidth = timezoneCombo.getPreferredSize().width;
         Runnable editorChanged = () -> {
             boolean jetbrains = sourceEditorCombo.getSelectedIndex() == AppPrefs.SourceEditor.JETBRAINS.ordinal();
-            // A JetBrains IDE finds the file itself; the folders are for editors that need a path.
-            editorHint.setText(wrapTo(Messages.get(jetbrains ? "settings.source.jetbrains.hint" : "settings.source.folders.hint"),
-                    timezoneCombo.getPreferredSize().width));
-            foldersLabel.setEnabled(!jetbrains);
-            setEnabledDeep(folders, !jetbrains);
+            editorHint.setText(wrapTo(Messages.get(jetbrains ? "settings.source.jetbrains.hint" : "settings.source.path.hint"),
+                    hintWidth));
         };
         sourceEditorCombo.addActionListener(e -> editorChanged.run());
         editorChanged.run();
+        // With no folders chosen, say which ones are searched instead.
+        java.util.List<java.nio.file.Path> usual = com.droidenx.clouseau.core.SourceFolders.usualRoots(java.nio.file.Path.of(System.getProperty("user.home")));
+        Runnable foldersChanged = () -> {
+            String text;
+            if (!sourceFolders.isEmpty()) text = Messages.get("settings.source.folders.hint");
+            else if (usual.isEmpty()) text = Messages.get("settings.source.folders.none");
+            else text = java.text.MessageFormat.format(Messages.get("settings.source.folders.auto"),
+                    String.join(", ", usual.stream().map(String::valueOf).toList()));
+            foldersHint.setText(wrapTo(text, hintWidth));
+        };
+        sourceFolders.addListDataListener(new javax.swing.event.ListDataListener() {
+            @Override public void intervalAdded(javax.swing.event.ListDataEvent e) { foldersChanged.run(); }
+            @Override public void intervalRemoved(javax.swing.event.ListDataEvent e) { foldersChanged.run(); }
+            @Override public void contentsChanged(javax.swing.event.ListDataEvent e) { foldersChanged.run(); }
+        });
+        foldersChanged.run();
 
         // ── Updates section ───────────────────────────────────────────────
         content.add(sectionLabel(Messages.get("settings.section.updates")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
@@ -342,14 +358,6 @@ final class SettingsDialog extends JDialog {
         ClouseauColors.themedForeground(label, ClouseauColors::mutedForeground);
         label.setFont(label.getFont().deriveFont(label.getFont().getSize2D() - 1f));
         return label;
-    }
-
-    /** Enables or disables a component and everything in it. */
-    private static void setEnabledDeep(Component c, boolean enabled) {
-        c.setEnabled(enabled);
-        if (c instanceof Container container) {
-            for (Component child : container.getComponents()) setEnabledDeep(child, enabled);
-        }
     }
 
     // ── Timezone helpers ──────────────────────────────────────────────────────

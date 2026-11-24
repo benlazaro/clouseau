@@ -7,7 +7,7 @@ import java.awt.*;
 
 /**
  * A short note ("Text size 14", "Message copied", "Back to the first match") shown for about
- * a second in the middle of an area of the window, so an action has visible feedback where
+ * a second (a longer one for longer, to be read) in the middle of an area of the window, so an action has visible feedback where
  * the eye is: not in a corner it would be missed in. A framed chip, inverted against the
  * window, on its popup layer, over the area and covering nothing else.
  * <p>
@@ -17,7 +17,13 @@ import java.awt.*;
  */
 final class Toast {
 
+    /** How long a short note stays; a longer one stays longer, to be read ({@link #shownMs}). */
     private static final int SHOWN_MS = 1200;
+    /** Notes up to this long are read at a glance. */
+    private static final int GLANCE_CHARS = 20;
+    /** Time added for each character past {@link #GLANCE_CHARS}: a slow reading pace. */
+    private static final int MS_PER_CHAR = 70;
+    private static final int MAX_SHOWN_MS = 6000;
     /** Room kept between the toast and the rectangle it keeps clear. */
     private static final int CLEAR_GAP = 8;
 
@@ -57,7 +63,14 @@ final class Toast {
         Rectangle clear = keepClear != null ? SwingUtilities.convertRectangle(area, keepClear, layers) : null;
         label.setBounds(place(box, d, clear));
         label.setVisible(true);
+        timer.setInitialDelay(shownMs(text));
         timer.restart();
+    }
+
+    /** How long {@code text} stays up: 1.2 s for a few words, more for a sentence, at most 6 s. */
+    static int shownMs(String text) {
+        int extra = Math.max(0, text.length() - GLANCE_CHARS) * MS_PER_CHAR;
+        return Math.min(MAX_SHOWN_MS, SHOWN_MS + extra);
     }
 
     /**

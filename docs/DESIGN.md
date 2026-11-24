@@ -478,14 +478,23 @@ release were at different places (a drag selecting text). The right-click menu s
 Open `File.java:42` in IDE for the link under the mouse and Open "Class" in IDE for a logger
 named after its class (`SourceRefs.loggerClass`: the last part capitalized; `.java`, then
 `.kt`). `SourceOpener` (ui) does the opening on a `SwingWorker`, with the editor from
-`AppPrefs.getSourceEditor()`: a JetBrains IDE through `JetBrainsIde` (core), VS Code or
-Cursor by finding the file with `SourceFolders` (core) under `AppPrefs.getSourceFolders()`
-and browsing to its `vscode://file/<path>:<line>` or `cursor://…` link. Success says nothing
-(the editor comes to the front); a file no project has gets a toast over the pane; no IDE,
+`AppPrefs.getSourceEditor()`: a JetBrains IDE through `JetBrainsIde` (core), by the full path
+`SourceFolders` (core) finds, or by the relative path when the folders don't have the file;
+VS Code or Cursor by finding the file with `SourceFolders` and browsing to its
+`vscode://file/<path>:<line>` or `cursor://…` link. The source folders are
+`AppPrefs.getSourceFolders()`, or with none chosen the usual project folders in the home
+folder (`SourceFolders.usualRoots`: `git`, `src`, `repos`, `IdeaProjects`, …). One
+`SourceFolders` index is shared, built on a background thread the first time the pane shows
+a frame (`SourceOpener.prepare`) and replaced when the folders change. VS Code and Cursor
+come to the front, so their success says nothing; a JetBrains IDE is brought forward by
+`Foreground` (core) and named in a toast ("Opened DataBits.java:7 in IntelliJ IDEA 2026.3"),
+which is what's left to see where it can't be brought forward. A file no project has gets a
+toast over the pane; no IDE,
 a missing plugin or no source folders get a message saying what to do.
 
 **Toasts.** `Toast` (ui) is the brief note in the middle of an area, on the window's popup
-layer for 1.2 s ("Text size 14", "Message copied"): a rounded chip with bold text in a 1px
+layer for 1.2 s ("Text size 14", "Message copied"), longer for a longer note, 70 ms a
+character past 20, up to 6 s (`Toast.shownMs`), so a sentence can be read: a rounded chip with bold text in a 1px
 frame, inverted against the window (light on Dark, dark on Light) so it never reads as a
 find mark or a row. Its colors are the theme's `Clouseau.toast.background`, `.foreground`
 and `.border`, read when shown and painted, so it follows a theme switch. Given a rectangle to keep
@@ -2480,12 +2489,57 @@ frame names, which also covers Kotlin's `FooKt` in `Foo.kt`), and the IDE looks 
   (`com.intellij.remoteControl`, on the Marketplace), no longer bundled. An IDE without it
   answers 404 to everything, so an IDE that answers 404 is asked again with no file: the
   service answers that with its own error (a missing parameter), the IDE alone with 404,
-  and Clouseau then says to install the plugin.
+  and Clouseau then says to install the plugin. The same request also takes a full path,
+  and opens it even when no open project has the file. The plugin, unlike the built-in
+  service before it, answers 200 at once whether or not it finds a relative path (checked
+  against IntelliJ 2026.3: a path no project has gets 200 and nothing opens), so a 200 to a
+  relative path proves nothing and only the first IDE is asked. So the file is looked up in
+  the source folders (below) first and sent by its full path, which opens reliably and
+  needn't have its project open: a user with dozens of projects sets nothing up. Only a
+  file the folders don't have goes by its relative path, and gets a toast saying the IDE
+  was asked, since Clouseau can't tell whether it found it.
+
+  A file whose project isn't open in the IDE opens there as a loose file, with none of the
+  IDE's navigation, search or highlighting: no better than a text editor. So before sending
+  a full path, Clouseau checks that the file's project is open, and if it isn't, says which
+  project to open (the IDE's recent project that holds the file, else the nearest folder
+  with `.idea` or `.git`) and offers Open File Anyway. The IDE's server can't say which
+  projects are open (it answers 200 to any file, and its static file server needs a token),
+  so `JetBrainsProjects` (core) reads the IDE's own `options/recentProjects.xml`: each
+  project's folder, with `opened="true"` on those open now. The IDE writes it as projects
+  open, close and are activated. `opened` also stays set after the IDE exits (to reopen
+  them), so only the running IDE's file counts: the config folder for the version its
+  `/api/about` gives, and of those the one naming its build (`IU-263.7307.200`), else its
+  product. A file that can't be found or read (a custom `idea.config.path`) means "can't
+  tell", and the file is opened.
+
+  The IDE comes to the front for a file in one of its open projects, but a file whose
+  project isn't open (opened anyway) it opens in its last window without asking for the
+  foreground (its taskbar button doesn't even flash). So after a 200 to a full path, `Foreground` (core)
+  brings it forward: the IDE's process is the one listening on the port that answered
+  (`netstat -ano` on Windows, `lsof` elsewhere), and a short helper process raises it,
+  started by Clouseau, which is in front when the user clicks and so may pass the foreground
+  on. Windows: PowerShell calling user32's `SetForegroundWindow` on the process's main window (about 0.7 s, most of it compiling the call; `WScript.Shell.AppActivate(<pid>)` finds no window for the IDE's process). macOS:
+  `open -a <bundle>`, the `.app` the process runs from. Linux: `wmctrl`, else `xdotool`, if
+  installed, on X11 or XWayland; Wayland desktops don't let one app raise another's window,
+  so there the toast is all. The IDE's name for the toast is from its `/api/about`. Rejected:
+  `jetbrains://…/navigate` links (the JetBrains Daemon that IntelliJ 2026.3 installs for them
+  only forwards them to the Toolbox App, so they do nothing without it); the IDE's command
+  line (`idea64 <project> --line N <file>`, which would also open the project in its own
+  window, failed to reach the running IDE in testing); a native call
+  (`AllowSetForegroundWindow`) needs JNA or Java 22's FFM.
 - **VS Code and Cursor** take only a full path, through their `vscode://file/<path>:<line>`
   and `cursor://file/…` links (`Desktop.browse`, so no `code` on the PATH and no shell).
-  `SourceFolders` (core) finds the file under the folders the user listed (Settings →
-  Source Code): the first file whose path ends with the relative path, skipping build
-  output, dependencies and version control folders, at most 24 levels deep.
+- **The source folders** are those listed in Settings → Source Code, or, when the list is
+  empty, the usual places people keep projects that exist in the home folder (`~/git`,
+  `~/src`, `~/repos`, `~/IdeaProjects`, …), so a typical setup needs nothing. `SourceFolders`
+  (core) walks them once (skipping build output, dependencies and version control folders,
+  at most 24 levels deep) into an index of source files by name, and a lookup takes the
+  first file whose path ends with the relative path: an earlier folder first, then a main
+  source before a test's, then the shallower. A miss, or a file deleted since, walks again,
+  at most every 30 s, so new files are found without walking on every click for a JDK
+  frame. The index is in memory only: a folder of a few dozen projects walks in well under
+  a second.
 
 Rejected: an IDE plugin of our own (one more thing to install and keep working across IDE
 versions, when the IDE's own server does the job); the IDEs' command-line launchers

@@ -46,4 +46,12 @@ class ToastTest {
         Rectangle row = new Rectangle(0, 290, 600, 24);
         assertThat(Toast.place(AREA, SIZE, row).x).isEqualTo(200);
     }
+
+    @Test
+    void aLongerNoteStaysLongerToBeRead() {
+        assertThat(Toast.shownMs("Message copied")).isEqualTo(1200);
+        int sentence = Toast.shownMs("Opened DataBits.java:7 in IntelliJ IDEA 2026.3");
+        assertThat(sentence).isBetween(2500, 4000);
+        assertThat(Toast.shownMs("x".repeat(500))).isEqualTo(6000);
+    }
 }
