@@ -61,6 +61,11 @@ hidden: **Log entry · file line 41**, **Log entry · db.log, line 41** in a mer
   from the JDK and common frameworks (Spring, Tomcat, Netty, Hibernate and the like) are
   dimmed, while the class and method of each frame from your own code are colored, so they're easy to spot. Released, the trace is shown in
   plain text.
+- **toString** appears when the message holds an object's `toString()`: the
+  `Order(id=12, items=[Item(sku=A, qty=2)])` of Lombok's `@ToString` and Kotlin data classes,
+  `Point[x=1, y=2]` of records, `User{id=1, name='Bob'}`, and maps like `{user=bob, trace=abc}`.
+  Pressed (the default), class names, keys and values are colored, and one too long for a line
+  is spread over several, an entry per line, indented by depth. Released, it's shown as logged.
 - **Wrap Lines** wraps long lines to the panel's width instead of scrolling sideways (the same
   setting as in Settings).
 - **Aa** opens the text size: **−** and **+** around the current size, and **Reset**. With

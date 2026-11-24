@@ -8,6 +8,8 @@ import com.droidenx.clouseau.core.ParserList;
 import com.droidenx.clouseau.core.Session;
 import com.droidenx.clouseau.core.SessionStore;
 import com.droidenx.clouseau.core.StackTraceHighlighter;
+import com.droidenx.clouseau.core.ToStringFormatter;
+import com.droidenx.clouseau.core.ToStringHighlighter;
 import com.droidenx.clouseau.runtime.ClouseauPluginManager;
 import lombok.extern.slf4j.Slf4j;
 
@@ -90,6 +92,7 @@ final class WindowManager {
 
         List<LogFormatter> f = new ArrayList<>();
         f.add(new JsonMessageFormatter());
+        f.add(new ToStringFormatter());
         f.addAll(pluginManager.getExtensions(LogFormatter.class));
         formatters = List.copyOf(f);
         log.info("Loaded {} formatter(s): {}", formatters.size(), formatters.stream().map(LogFormatter::getName).toList());
@@ -97,6 +100,7 @@ final class WindowManager {
         List<LogSyntaxHighlighter> h = new ArrayList<>();
         h.add(new JsonSyntaxHighlighter());
         h.add(new StackTraceHighlighter());
+        h.add(new ToStringHighlighter());
         h.addAll(pluginManager.getExtensions(LogSyntaxHighlighter.class));
         syntaxHighlighters = List.copyOf(h);
         log.info("Loaded {} syntax highlighter(s): {}", syntaxHighlighters.size(),

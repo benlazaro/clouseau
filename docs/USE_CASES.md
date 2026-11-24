@@ -168,6 +168,12 @@ runners, generated proxies…) are dimmed, and the application's own frames show
 color, so they're easy to find. The list of framework packages is built in; it can't be changed yet. The header's
 **Stack Trace** button turns it off. Frames aren't folded away (DESIGN.md section 10).
 
+Objects logged with their `toString()` (Lombok `@ToString`, Kotlin data classes, records,
+`Name{k=v}`, Apache's `ToStringBuilder`, maps and lists, nested) are colored too: class names,
+keys, and values by kind (numbers, `null` and enum constants, text). One too wide for a line is
+laid out one entry per line, indented by depth, where it stands in the message. The header's
+**toString** button shows it as logged.
+
 Step 5 is the detail panel's own find strip, opened with `Ctrl+F` while
 focus is in the panel or with its header's search button (`Ctrl+F` elsewhere opens the
 table's find bar). It searches the entry as shown, so formatted JSON is searched formatted,

@@ -130,8 +130,8 @@ ending in `Z`) whenever the source timezone wasn't the system's.
 | Interface | Purpose | Discovered from plugins? | Built-in implementations |
 |---|---|---|---|
 | `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the built-in ones (section 5.1) | `RegexLogParser`, configured from JSON; `JsonLinesParser` and `SyslogParser`, written in Java |
-| `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
-| `LogSyntaxHighlighter` | Mark spans of the detail panel's message with a role (key, string, keyword, muted, …) that the theme colors (D-26) | Yes; every one that applies is layered | `JsonSyntaxHighlighter` (ui); `StackTraceHighlighter` (core), JVM stack traces |
+| `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` (ui); `ToStringFormatter` (core), objects' `toString()` |
+| `LogSyntaxHighlighter` | Mark spans of the detail panel's message with a role (key, string, keyword, muted, …) that the theme colors (D-26) | Yes; every one that applies is layered | `JsonSyntaxHighlighter` (ui); `StackTraceHighlighter` (core), JVM stack traces; `ToStringHighlighter` (core), objects' `toString()` |
 | `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed in the File menu as "Open <name>…", after the built-in Open items (section 6.3) | `NetworkSourceProvider` (ui, not a PF4J extension), the log receiver (D-30). SSH has its own dialog and creates `SshLogSource` directly, so a session keeps SSH and plugin tabs as different kinds |
 
 **Contract notes:**
@@ -483,6 +483,23 @@ type (and can't be darker, D-26's 4.5:1), so the app's frames are lifted rather 
 rest dimmed. While it's on, a framework frame's Open in IDE link (UC-19) is
 only underlined, keeping its dimmed color. `StackTrace` is kept apart from the highlighter so
 a fold of framework frames can use the same lines (section 10).
+
+The built-in **toString** formatter and highlighter (`ToStringFormatter`, `ToStringHighlighter`,
+core) share `ToStringFormat` (core), which finds the `toString()` of objects in a message:
+Lombok `@ToString` and Kotlin data classes `Name(k=v, …)`, records `Name[k=v]`, hand-written
+and Guava `Name{k=v}`, Apache `Name@hash[k=v]`, maps `{k=v}` and lists `[a, b]`, nested. A
+structure counts only when its simple name is capitalized (or it's a bare `{`), it closes, and
+it holds a `key=value`, so `[main]`, `call(x)` and stack frames aren't one; text in double
+quotes before it (a JSON string) is skipped. Values aren't quoted in these formats, so a comma
+ends a text value only where `key=` follows (any comma, in a list), and brackets inside text
+are balanced. Parsing has a step budget proportional to the message, so unclosed brackets
+can't make it slow. The formatter lays out each structure wider than 72 columns one entry per
+line, indented by depth, in place in the message, and keeps every other character as logged;
+formatting its own output changes nothing. The highlighter marks class names ACCENT (`@hash`
+MUTED), keys KEY, `=` OPERATOR, brackets and commas PUNCTUATION, and values NUMBER, LITERAL
+(`null`, booleans, enum constants) or STRING. Class names are ACCENT rather than KEYWORD
+because the keyword lavender read too close to KEY's pink beside them, and in the text color the
+outermost name was lost in the message around it.
 
 Text is drawn in `ClouseauFonts.mono`'s composite font, so characters JetBrains Mono lacks
 (CJK, many symbols) come from the system's fallback fonts. Control characters other than
