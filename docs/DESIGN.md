@@ -1232,7 +1232,7 @@ Java 25 alone made no difference. Compact headers saved only about 3% of heap, b
 memory is mostly line text. The AOT cache saved about 12%, but it adds roughly 61 MB per
 platform, is tied to the exact JVM build and paths, and was measured before Batik was
 removed from startup (which already cut much of the class loading it speeds up). Gradle
-8.8 also can't run on JDK 25.
+8.14, the build's version, also can't run on JDK 25 (Gradle 9.1 and later can).
 
 Revisit when Java 21 nears the end of its free updates, or if a Java 25 feature becomes
 compelling. Re-measure first.
