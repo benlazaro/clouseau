@@ -22,8 +22,12 @@ public final class SourceRefs {
     public record SourceRef(String path, int line) {
         /** The file's name, with the line if there is one: {@code Foo.java:42}. */
         public String label() {
-            String name = path.substring(path.lastIndexOf('/') + 1);
-            return line > 0 ? name + ":" + line : name;
+            return line > 0 ? fileName() + ":" + line : fileName();
+        }
+
+        /** The file's name alone: {@code Foo.java}. */
+        public String fileName() {
+            return path.substring(path.lastIndexOf('/') + 1);
         }
     }
 

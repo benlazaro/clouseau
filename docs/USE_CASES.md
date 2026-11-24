@@ -813,8 +813,9 @@ with nothing to configure for the usual setup.
   the IDE. A file the folders don't have is looked for in the projects open in a JetBrains
   IDE, wherever they are.
 - **Nothing is opened silently elsewhere.** If neither has the file (a JDK or library
-  frame), a toast says it isn't in the user's projects, rather than a promise that nothing
-  keeps; if no IDE answers, or it can't open files, a message says what to do.
+  frame), a toast says it can't be opened, then why: it isn't in the user's projects. It
+  leads with the outcome, so a toast that only gave the reason isn't read as a bug. If no
+  IDE answers, or it can't open files, a message says what to do.
 - **Clicking a link doesn't get in the way of selecting text.** A drag that selects text
   opens nothing.
 

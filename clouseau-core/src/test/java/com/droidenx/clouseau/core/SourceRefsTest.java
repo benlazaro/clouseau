@@ -31,6 +31,7 @@ class SourceRefsTest {
         Found first = found.get(0);
         assertThat(trace.substring(first.start(), first.end())).isEqualTo("OrderService.java:42");
         assertThat(first.ref().label()).isEqualTo("OrderService.java:42");
+        assertThat(first.ref().fileName()).isEqualTo("OrderService.java");
     }
 
     @Test

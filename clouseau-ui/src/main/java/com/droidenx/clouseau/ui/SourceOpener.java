@@ -231,11 +231,12 @@ final class SourceOpener {
                             result.ide() != null ? result.ide() : Messages.get("source.open.opened.ide")));
                 }
             }
-            case ASKED -> toast.show(area, java.text.MessageFormat.format(Messages.get("source.open.asked.ide"), name));
+            // A file that didn't open is named without its line, which only matters once it's open.
+            case ASKED -> toast.show(area, java.text.MessageFormat.format(Messages.get("source.open.asked.ide"), ref.fileName()));
             case NOT_OPEN -> askToOpenProject(area, toast, ref, result);
             case NOT_FOUND -> toast.show(area, java.text.MessageFormat.format(Messages.get(
                     editor == AppPrefs.SourceEditor.JETBRAINS ? "source.open.not.found.ide" : "source.open.not.found.folders"),
-                    name));
+                    ref.fileName()));
             case NO_PLUGIN -> message(area, "source.open.no.plugin");
             case NO_IDE -> message(area, "source.open.no.ide");
             case NO_FOLDERS -> message(area, "source.open.no.folders");
