@@ -39,12 +39,17 @@ public final class ManagerDialogs {
     }
 
     /** Asks before removing something: Delete / Cancel, true for Delete. */
-    public static boolean confirmDelete(Component parent, String title, String message) {
+    public static boolean confirmDelete(Component parent, String title, Object message) {
         return confirm(parent, title, message, Messages.get("manager.delete.confirm"));
     }
 
-    /** Asks before removing something: {@code action} / Cancel, Cancel the default; true for {@code action}. */
-    public static boolean confirm(Component parent, String title, String message, String action) {
+    /**
+     * Asks before deleting, clearing or overwriting something: {@code action} / Cancel, Cancel
+     * the default so Enter never destroys anything (DESIGN.md 6.12); true for {@code action}.
+     * {@code message} is what a message box takes: text, or an array such as the question and a
+     * "Don't ask again" check box.
+     */
+    public static boolean confirm(Component parent, String title, Object message, String action) {
         String cancel = Messages.get("settings.button.cancel");
         int answer = JOptionPane.showOptionDialog(parent, message, title, JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE, null, new Object[]{ action, cancel }, cancel);

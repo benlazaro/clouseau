@@ -784,8 +784,8 @@ public class SshConnectionDialog extends JDialog {
     }
 
     private boolean confirmForget(String message) {
-        return JOptionPane.showConfirmDialog(this, message, Messages.get("ssh.dialog.saved.forget.title"),
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.OK_OPTION;
+        return ManagerDialogs.confirm(this, Messages.get("ssh.dialog.saved.forget.title"), message,
+                Messages.get("confirm.forget"));
     }
 
     /** Replaces the saved connection with key {@code key} by {@code change} applied to it (not saved yet). */

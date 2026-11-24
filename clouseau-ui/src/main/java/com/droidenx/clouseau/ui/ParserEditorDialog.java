@@ -979,11 +979,8 @@ public final class ParserEditorDialog extends JDialog {
     private void delete(ParserDef def) {
         int idx = indexInMine(def);
         if (idx < 0) return;
-        int confirm = JOptionPane.showConfirmDialog(this,
-                MessageFormat.format(Messages.get("parsereditor.delete.confirm.message"), def.name()),
-                Messages.get("parsereditor.delete.confirm.title"),
-                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (confirm != JOptionPane.YES_OPTION) return;
+        if (!ManagerDialogs.confirmDelete(this, Messages.get("parsereditor.delete.confirm.title"),
+                MessageFormat.format(Messages.get("parsereditor.delete.confirm.message"), def.name()))) return;
         mine.remove(idx);
         rebuildList(mine.isEmpty() ? null : mine.get(Math.min(idx, mine.size() - 1)));
     }

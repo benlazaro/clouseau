@@ -214,12 +214,10 @@ final class RowMenu {
     void clearAllHighlights() {
         if (!logTableModel.hasHighlights() && host.notes().highlights().isEmpty()) return;
         if (AppPrefs.isHighlightClearAllConfirm()) {
-            int confirm = JOptionPane.showConfirmDialog(
-                    SwingUtilities.getWindowAncestor(logTable),
-                    clearAllQuestion(logTableModel.hasRuleHighlights()),
+            if (!ManagerDialogs.confirm(SwingUtilities.getWindowAncestor(logTable),
                     Messages.get("highlight.clear.all.confirm.title"),
-                    JOptionPane.YES_NO_OPTION);
-            if (confirm != JOptionPane.YES_OPTION) return;
+                    clearAllQuestion(logTableModel.hasRuleHighlights()),
+                    Messages.get("confirm.clear"))) return;
         }
         logTableModel.clearAllHighlights();
         host.notesSaved(host.notes().clearHighlights());
@@ -238,15 +236,13 @@ final class RowMenu {
         for (int ord : logTableModel.highlightOrdinals(color)) ordinals.put(ord, "");
         if (ordinals.isEmpty()) return;
         if (AppPrefs.isHighlightClearAllConfirm()) {
-            int confirm = JOptionPane.showConfirmDialog(
-                    SwingUtilities.getWindowAncestor(logTable),
+            if (!ManagerDialogs.confirm(SwingUtilities.getWindowAncestor(logTable),
+                    Messages.get("highlight.clear.color.confirm.title"),
                     ConfirmText.of(java.text.MessageFormat.format(Messages.get("highlight.clear.color.confirm.message"),
                                     Messages.get("highlight.color." + slot), ordinals.size()),
                             Messages.get("highlight.clear.color.confirm.hidden"),
                             logTableModel.hasRuleHighlights(color) ? Messages.get("highlight.rules.note") : null),
-                    Messages.get("highlight.clear.color.confirm.title"),
-                    JOptionPane.YES_NO_OPTION);
-            if (confirm != JOptionPane.YES_OPTION) return;
+                    Messages.get("confirm.clear"))) return;
         }
         logTableModel.clearHighlights(color);
         // A null slot clears: the raw lines aren't read.

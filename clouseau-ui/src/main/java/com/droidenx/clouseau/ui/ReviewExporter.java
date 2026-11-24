@@ -126,10 +126,9 @@ final class ReviewExporter {
                         Messages.get("export.review.title"), JOptionPane.WARNING_MESSAGE);
                 continue;
             }
-            if (Files.exists(dest) && JOptionPane.showConfirmDialog(parent,
+            if (Files.exists(dest) && !ManagerDialogs.confirm(parent, Messages.get("export.review.title"),
                     MessageFormat.format(Messages.get("export.review.overwrite"), dest.getFileName()),
-                    Messages.get("export.review.title"), JOptionPane.YES_NO_OPTION,
-                    JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION) {
+                    Messages.get("confirm.replace"))) {
                 continue;
             }
             return dest;

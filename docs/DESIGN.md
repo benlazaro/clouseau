@@ -795,6 +795,14 @@ the optional action (Open Releases Page) beside it. **Help → Check for Updates
 every outcome this way, including an available update (Download · Close); only the daily
 check uses the modeless notice.
 
+The one exception: a confirmation that deletes, clears or overwrites something defaults to
+**Cancel**, so a stray or habitual Enter never destroys anything. The action keeps its place
+on the right (Cancel · Delete); only the default moves to Cancel. `ManagerDialogs.confirm` and
+`confirmDelete` do this, so ask through them rather than building the option pane by hand
+(`showConfirmDialog` defaults to Yes). The action's button says what it does: **Delete**,
+**Clear**, **Replace** or **Forget**, never Yes or OK. A "Don't ask again" check box goes in
+the message, after the question (deleting a note).
+
 A confirmation's text is its question alone, or, when there's something to add (what else
 it reaches, what stays as it is), the question in **bold**, read first, then each note on its
 own line in `dimForeground`, read next (`ConfirmText`). A note is shown only when it applies:

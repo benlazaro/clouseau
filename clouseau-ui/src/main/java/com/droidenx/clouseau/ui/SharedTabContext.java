@@ -506,11 +506,8 @@ final class SharedTabContext {
      */
     void clearTable() {
         if (!canClearTable()) return;
-        int confirm = JOptionPane.showConfirmDialog(window(),
-                Messages.get("table.clear.confirm.message"),
-                Messages.get("table.clear.confirm.title"),
-                JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) return;
+        if (!ManagerDialogs.confirm(window(), Messages.get("table.clear.confirm.title"),
+                Messages.get("table.clear.confirm.message"), Messages.get("confirm.clear"))) return;
         TabContent content = host.content();
         if (content instanceof FileContent) {
             // Followed rows are appended on the EDT, so none slips in between.

@@ -98,10 +98,9 @@ final class SessionManager {
         name = name.strip();
         var existing = SessionStore.find(sessionsDir(), name);
         if (existing.isPresent() && !existing.get().name().equalsIgnoreCase(String.valueOf(active))) {
-            int answer = JOptionPane.showConfirmDialog(owner,
+            if (!ManagerDialogs.confirm(owner, Messages.get("session.save.as.title"),
                     MessageFormat.format(Messages.get("session.save.replace.message"), existing.get().name()),
-                    Messages.get("session.save.as.title"), JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-            if (answer != JOptionPane.YES_OPTION) return;
+                    Messages.get("confirm.replace"))) return;
         }
         if (saveNamed(owner, name)) setActive(name);
     }

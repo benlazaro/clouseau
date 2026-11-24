@@ -210,12 +210,11 @@ final class FindBar extends JPanel {
         long colored = rows.stream().filter(r -> highlighter.highlightOf(r) != null).count();
         if (colored == 0) return;
         if (colored >= 2 && AppPrefs.isHighlightClearAllConfirm()) {
-            int confirm = JOptionPane.showConfirmDialog(SwingUtilities.getWindowAncestor(this),
+            if (!ManagerDialogs.confirm(SwingUtilities.getWindowAncestor(this),
+                    Messages.get("find.highlight.clear.confirm.title"),
                     ConfirmText.of(MessageFormat.format(Messages.get("find.highlight.clear.confirm.message"), colored),
                             rows.stream().anyMatch(highlighter::ruleColored) ? Messages.get("highlight.rules.note") : null),
-                    Messages.get("find.highlight.clear.confirm.title"),
-                    JOptionPane.YES_NO_OPTION);
-            if (confirm != JOptionPane.YES_OPTION) return;
+                    Messages.get("confirm.clear"))) return;
         }
         highlighter.highlight(rows, null);
     }

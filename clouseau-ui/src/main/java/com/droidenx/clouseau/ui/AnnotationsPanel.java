@@ -297,14 +297,12 @@ public final class AnnotationsPanel extends JPanel {
         if (sel < 0 || sel >= rowKeys.size()) return;
         if (AppPrefs.isAnnotationDeleteConfirm()) {
             JCheckBox dontAsk = new JCheckBox(Messages.get("annotation.delete.dontask"));
-            int result = JOptionPane.showConfirmDialog(
+            boolean delete = ManagerDialogs.confirmDelete(
                     SwingUtilities.getWindowAncestor(this),
-                    new Object[]{Messages.get("annotation.delete.confirm.message"), dontAsk},
                     Messages.get("annotation.delete.confirm.title"),
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.QUESTION_MESSAGE);
+                    new Object[]{Messages.get("annotation.delete.confirm.message"), dontAsk});
             if (dontAsk.isSelected()) AppPrefs.setAnnotationDeleteConfirm(false);
-            if (result != JOptionPane.YES_OPTION) return;
+            if (!delete) return;
         }
         Notes store = storeSupplier.get();
         boolean saved = rowKeys.get(sel) instanceof Integer ordinal

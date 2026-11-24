@@ -196,11 +196,8 @@ public final class PluginManagerDialog extends JDialog {
 
     private void delete(PluginInfo p) {
         if (p == null) return;
-        int confirm = JOptionPane.showConfirmDialog(this,
-                Messages.get("plugins.dialog.delete.confirm.message").formatted(p.name()),
-                Messages.get("plugins.dialog.delete.confirm.title"),
-                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (confirm != JOptionPane.YES_OPTION) return;
+        if (!ManagerDialogs.confirmDelete(this, Messages.get("plugins.dialog.delete.confirm.title"),
+                Messages.get("plugins.dialog.delete.confirm.message").formatted(p.name()))) return;
         // A file that never loaded isn't a plugin PF4J knows; delete the file itself.
         if (!pluginManager.deletePlugin(p.id())) pluginManager.deleteUnloadedFile(p.file());
         onRefresh.run();

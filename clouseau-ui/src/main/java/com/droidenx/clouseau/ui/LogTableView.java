@@ -933,12 +933,10 @@ final class LogTableView {
         List<AppPrefs.ColumnLayout> layouts = new ArrayList<>(AppPrefs.getColumnLayouts());
         final String finalName = name;
         if (layouts.stream().anyMatch(l -> l.name().equals(finalName))) {
-            int confirm = JOptionPane.showConfirmDialog(
-                    SwingUtilities.getWindowAncestor(logTable),
-                    java.text.MessageFormat.format(Messages.get("table.columns.layout.overwrite.message"), finalName),
+            if (!ManagerDialogs.confirm(SwingUtilities.getWindowAncestor(logTable),
                     Messages.get("table.columns.layout.overwrite.title"),
-                    JOptionPane.YES_NO_OPTION);
-            if (confirm != JOptionPane.YES_OPTION) return;
+                    java.text.MessageFormat.format(Messages.get("table.columns.layout.overwrite.message"), finalName),
+                    Messages.get("confirm.replace"))) return;
             layouts.removeIf(l -> l.name().equals(finalName));
         }
         layouts.add(captureLayout(finalName));
