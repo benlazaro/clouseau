@@ -52,7 +52,7 @@ Clouseau keeps your rows when the log is rotated:
 
 ## Remote logs over SSH
 
-**File → Open SSH…** opens **SSH Connections**: your saved connections on the left,
+**File → Open via SSH…** opens **SSH Connections**: your saved connections on the left,
 and on the right a form for whatever you pick there. A *connection* is one way of signing in
 to a machine (a user, a host and a port, and a password or key), with an optional name and
 the logs you've saved on it. Two accounts on the same machine, such as `deploy` and `root`,

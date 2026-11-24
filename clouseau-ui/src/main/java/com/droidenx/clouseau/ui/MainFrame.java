@@ -61,7 +61,7 @@ public final class MainFrame extends JFrame {
     private final List<Component> sourceItems = new ArrayList<>();
     private final List<Component> recentItems = new ArrayList<>();
 
-    /** The built-in log receiver (UC-20), which the File menu lists after Open SSH…. */
+    /** The built-in log receiver (UC-20), which the File menu lists after Open via SSH…. */
     private static final NetworkSourceProvider RECEIVER = new NetworkSourceProvider();
 
     private static final String CARD_WELCOME = "welcome";

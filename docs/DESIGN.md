@@ -404,7 +404,7 @@ starting state.
   prints is skipped, and fields are NUL-separated, so any name survives. Readability here
   is `test -r`'s, so ACLs count. Only when the shell can't list either is it
   `Reason.NO_SFTP`. The fallback is logged, not shown: the dialog looks the same.
-- **Plugin sources (D-14):** the File menu lists every `LogSourceProvider` as **Open <name>…**, after Open File…, Open SSH… and Open TCP/UDP Listener…;
+- **Plugin sources (D-14):** the File menu lists every `LogSourceProvider` as **Open <name>…**, after Open File…, Open via SSH… and Open TCP/UDP Listener…;
   put back each time the menu opens (`MainFrame.refreshSourceItems`). Plugins are found under Tools → Plugins…. Choosing one opens `SourceSettingsDialog`, a form
   with one field per `SourceSetting` plus the parser. On Open, `SourceSettings.check`
   (core) trims values, drops empty optional ones, and checks required values, numbers
@@ -2684,7 +2684,7 @@ UC-20: apps, devices and containers that send their log instead of writing a fil
   values, the connection dot, Reconnect, the entry limit and sessions (`Kind.SOURCE` with
   the provider's class name; `MainFrame.sourceProvider` finds the built-in one first) all
   come from the plugin-source path (D-14, D-20), with no new session kind and no API
-  change. It has its own item, File → Open TCP/UDP Listener…, after Open SSH…, and isn't
+  change. It has its own item, File → Open TCP/UDP Listener…, after Open via SSH…, and isn't
   listed with plugin sources. Its tab is named after the source (`TCP :5140`), not the provider.
 - **Text only, never Java serialization.** Log4j's `SocketAppender`/`SerializedLayout` and
   Logback's `SocketAppender` send serialized Java objects; deserializing untrusted bytes is
