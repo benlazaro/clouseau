@@ -119,6 +119,11 @@ window, and act on that window.
 
 The shortcuts use `Ctrl` on every platform, including macOS.
 
+The menus work from the keyboard too: `Alt` plus a menu's underlined letter opens it
+(`Alt+F` for File, `Alt+E` for Edit, `Alt+V` for View, `Alt+T` for Tools, `Alt+H` for
+Help), then an item's underlined letter picks it, so `Alt+F`, `O` is Open. The letters are
+underlined while `Alt` is held.
+
 ## Plugins
 
 **Tools → Plugins…** opens the Plugin Manager. Plugins add parsers, message formatters,

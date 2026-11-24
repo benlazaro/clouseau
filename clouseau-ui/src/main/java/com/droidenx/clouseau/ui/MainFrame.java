@@ -298,11 +298,13 @@ public final class MainFrame extends JFrame {
 
         JMenuItem save = menuItem(active == null ? Messages.get("menu.file.sessions.save")
                 : MessageFormat.format(Messages.get("menu.file.sessions.save.named"), active));
+        Mnemonics.set(save, 'S');
         save.setEnabled(active != null && anyTabs);
         save.addActionListener(e -> sessions.saveActive(this));
         menu.add(save);
 
         JMenuItem saveAs = menuItem(Messages.get("menu.file.sessions.save.as"));
+        Mnemonics.set(saveAs, 'A');
         saveAs.setEnabled(anyTabs);
         saveAs.addActionListener(e -> sessions.saveAs(this));
         menu.add(saveAs);
@@ -310,6 +312,7 @@ public final class MainFrame extends JFrame {
         // Leaves the session: files opened afterwards aren't part of it.
         JMenuItem close = menuItem(active == null ? Messages.get("menu.file.sessions.close")
                 : MessageFormat.format(Messages.get("menu.file.sessions.close.named"), active));
+        Mnemonics.set(close, 'C');
         close.setEnabled(active != null);
         close.addActionListener(e -> manager.closeNamedSession(this));
         menu.add(close);
@@ -330,6 +333,7 @@ public final class MainFrame extends JFrame {
         menu.addSeparator();
 
         JMenuItem manage = menuItem(Messages.get("menu.file.sessions.manage"));
+        Mnemonics.set(manage, 'M');
         manage.setEnabled(!named.isEmpty());
         manage.addActionListener(e -> new ManageSessionsDialog(this, manager).setVisible(true));
         menu.add(manage);
@@ -342,8 +346,10 @@ public final class MainFrame extends JFrame {
         menuBar.setBorder(BorderFactory.createEmptyBorder(5, 1, 2, 0));
 
         JMenu fileMenu = new JMenu(Messages.get("menu.file"));
+        Mnemonics.set(fileMenu, 'F');
 
         JMenuItem newWindowItem = menuItem(Messages.get("menu.file.new.window"));
+        Mnemonics.set(newWindowItem, 'N');
         newWindowItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N,
                 java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         newWindowItem.addActionListener(e -> manager.newWindow(this));
@@ -351,6 +357,7 @@ public final class MainFrame extends JFrame {
         fileMenu.addSeparator();
 
         JMenuItem openItem = menuItem(Messages.get("menu.file.open"));
+        Mnemonics.set(openItem, 'O');
         openItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O,
                 java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         openItem.addActionListener(e -> openFile());
@@ -359,6 +366,7 @@ public final class MainFrame extends JFrame {
         // SSH, then the sources plugins add, under their own names. Rebuilt each time it
         // opens, so sources from newly installed plugins appear.
         JMenu remoteMenu = new JMenu(Messages.get("menu.file.remote"));
+        Mnemonics.set(remoteMenu, 'M');
         remoteMenu.setMargin(menuMargin());
         remoteMenu.addMenuListener(new javax.swing.event.MenuListener() {
             @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildRemoteMenu(remoteMenu); }
@@ -371,6 +379,7 @@ public final class MainFrame extends JFrame {
         // Disabled when no recent file exists any more. Rebuilt each time the File menu opens,
         // so files deleted or moved since, and a new limit in Settings, show at once.
         recentMenu = new JMenu(Messages.get("menu.file.recent"));
+        Mnemonics.set(recentMenu, 'F');
         recentMenu.setMargin(menuMargin());
         fileMenu.add(recentMenu);
         refreshRecentMenu();
@@ -384,6 +393,7 @@ public final class MainFrame extends JFrame {
         // One item for the active tab: Reload File on a file, Reconnect on a live source
         // (issue #4). Ctrl+R does whichever applies.
         reconnectItem = menuItem(Messages.get("menu.file.reload"));
+        Mnemonics.set(reconnectItem, 'R');
         reconnectItem.setEnabled(false);
         reconnectItem.setAccelerator(reconnectKey());
         reconnectItem.addActionListener(e -> {
@@ -398,6 +408,7 @@ public final class MainFrame extends JFrame {
 
         // Named sessions (UC-17); rebuilt each time it opens.
         JMenu sessionsMenu = new JMenu(Messages.get("menu.file.sessions"));
+        Mnemonics.set(sessionsMenu, 'S');
         sessionsMenu.setMargin(menuMargin());
         sessionsMenu.addMenuListener(new javax.swing.event.MenuListener() {
             @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildSessionsMenu(sessionsMenu); }
@@ -407,6 +418,7 @@ public final class MainFrame extends JFrame {
         fileMenu.add(sessionsMenu);
 
         JMenuItem exportReviewItem = menuItem(Messages.get("menu.file.export.review"));
+        Mnemonics.set(exportReviewItem, 'E');
         exportReviewItem.addActionListener(e -> {
             TabPanel active = activeTabPanel();
             if (active != null) ReviewExporter.export(this, active);
@@ -421,6 +433,7 @@ public final class MainFrame extends JFrame {
         int shortcutMask = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
         String modName = (shortcutMask & java.awt.event.InputEvent.META_DOWN_MASK) != 0 ? "meta" : "ctrl";
         JMenuItem settingsItem = menuItem(Messages.get("menu.file.settings"));
+        Mnemonics.set(settingsItem, 'T');
         settingsItem.setAccelerator(KeyStroke.getKeyStroke(modName + " typed ,"));
         settingsItem.addActionListener(e -> openSettings());
         fileMenu.add(settingsItem);
@@ -428,6 +441,7 @@ public final class MainFrame extends JFrame {
         fileMenu.addSeparator();
 
         closeTabItem = menuItem(Messages.get("menu.file.close.tab"));
+        Mnemonics.set(closeTabItem, 'C');
         closeTabItem.setEnabled(false);
         closeTabItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W,
                 java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
@@ -435,6 +449,7 @@ public final class MainFrame extends JFrame {
         fileMenu.add(closeTabItem);
 
         JMenuItem exitItem = menuItem(Messages.get("menu.file.exit"));
+        Mnemonics.set(exitItem, 'X');
         exitItem.addActionListener(e -> manager.exit());
         fileMenu.add(exitItem);
 
@@ -447,10 +462,12 @@ public final class MainFrame extends JFrame {
         menuBar.add(buildEditMenu());
 
         JMenu viewMenu = new JMenu(Messages.get("menu.view"));
+        Mnemonics.set(viewMenu, 'V');
         addTabViewItems(viewMenu);
         // Rebuilt each time it opens, so newly installed themes and a theme picked in
         // Settings show up.
         JMenu themeMenu = new JMenu(Messages.get("menu.view.theme"));
+        Mnemonics.set(themeMenu, 'T');
         themeMenu.setMargin(menuMargin());
         themeMenu.addMenuListener(new javax.swing.event.MenuListener() {
             @Override public void menuSelected(javax.swing.event.MenuEvent e) { rebuildThemeMenu(themeMenu); }
@@ -463,14 +480,18 @@ public final class MainFrame extends JFrame {
         menuBar.add(viewMenu);
 
         JMenu toolsMenu = new JMenu(Messages.get("menu.tools"));
+        Mnemonics.set(toolsMenu, 'T');
         JMenuItem parsersItem = menuItem(Messages.get("menu.tools.parsers"));
+        Mnemonics.set(parsersItem, 'E');
         parsersItem.addActionListener(e ->
                 new ParserEditorDialog(this, manager::reloadParsers).setVisible(true));
         toolsMenu.add(parsersItem);
         JMenuItem rulesItem = menuItem(Messages.get("menu.tools.highlight.rules"));
+        Mnemonics.set(rulesItem, 'A');
         rulesItem.addActionListener(e -> HighlightRulesDialog.open(this, null));
         toolsMenu.add(rulesItem);
         JMenuItem pluginsItem = menuItem(Messages.get("menu.tools.plugins"));
+        Mnemonics.set(pluginsItem, 'P');
         pluginsItem.setToolTipText(Messages.get("toolbar.plugins.tooltip"));
         pluginsItem.addActionListener(e ->
                 new PluginManagerDialog(this, pluginManager, manager::reloadExtensions).setVisible(true));
@@ -478,8 +499,10 @@ public final class MainFrame extends JFrame {
         menuBar.add(toolsMenu);
 
         JMenu helpMenu = new JMenu(Messages.get("menu.help"));
+        Mnemonics.set(helpMenu, 'H');
 
         JMenuItem docsItem = menuItem(Messages.get("menu.help.docs"));
+        Mnemonics.set(docsItem, 'D');
         docsItem.addActionListener(e -> {
             try {
                 Desktop.getDesktop().browse(new java.net.URI("https://benlazaro.github.io/clouseau/guide/"));
@@ -490,6 +513,7 @@ public final class MainFrame extends JFrame {
         helpMenu.add(docsItem);
 
         JMenuItem shortcutsItem = menuItem(Messages.get("menu.help.shortcuts"));
+        Mnemonics.set(shortcutsItem, 'K');
         shortcutsItem.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_SLASH,
                 java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() | java.awt.event.InputEvent.SHIFT_DOWN_MASK));
         shortcutsItem.addActionListener(e -> openShortcuts());
@@ -498,10 +522,12 @@ public final class MainFrame extends JFrame {
         helpMenu.addSeparator();
 
         JMenuItem updatesItem = menuItem(Messages.get("menu.help.updates"));
+        Mnemonics.set(updatesItem, 'U');
         updatesItem.addActionListener(e -> manager.updates().checkNow(this));
         helpMenu.add(updatesItem);
 
         JMenuItem aboutItem = menuItem(Messages.get("menu.help.about"));
+        Mnemonics.set(aboutItem, 'A');
         aboutItem.addActionListener(e -> openAbout());
         helpMenu.add(aboutItem);
 
@@ -517,28 +543,29 @@ public final class MainFrame extends JFrame {
      */
     private JMenu buildEditMenu() {
         JMenu edit = new JMenu(Messages.get("menu.edit"));
+        Mnemonics.set(edit, 'E');
         int ctrl = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
 
-        JMenuItem copyMessage = tabItem(edit, "menu.edit.copy.message",
+        JMenuItem copyMessage = tabItem(edit, "menu.edit.copy.message", 'M',
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, ctrl), SharedTabContext::copyMessage);
-        JMenuItem copyRaw = tabItem(edit, "menu.edit.copy.raw", DetailPanel.COPY_RAW_KEY, SharedTabContext::copyRaw);
-        JMenuItem copyEntry = tabItem(edit, "menu.edit.copy.entry", DetailPanel.COPY_ENTRY_KEY, SharedTabContext::copyEntry);
+        JMenuItem copyRaw = tabItem(edit, "menu.edit.copy.raw", 'R', DetailPanel.COPY_RAW_KEY, SharedTabContext::copyRaw);
+        JMenuItem copyEntry = tabItem(edit, "menu.edit.copy.entry", 'E', DetailPanel.COPY_ENTRY_KEY, SharedTabContext::copyEntry);
         edit.addSeparator();
-        JMenuItem find = tabItem(edit, "menu.edit.find",
+        JMenuItem find = tabItem(edit, "menu.edit.find", 'F',
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F, ctrl), SharedTabContext::openFind);
-        JMenuItem findNext = tabItem(edit, "menu.edit.find.next",
+        JMenuItem findNext = tabItem(edit, "menu.edit.find.next", 'N',
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F3, 0), t -> t.findStep(1));
-        JMenuItem findPrev = tabItem(edit, "menu.edit.find.prev",
+        JMenuItem findPrev = tabItem(edit, "menu.edit.find.prev", 'P',
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F3, java.awt.event.InputEvent.SHIFT_DOWN_MASK),
                 t -> t.findStep(-1));
         edit.addSeparator();
-        JMenuItem note = tabItem(edit, "menu.edit.note.add", null, SharedTabContext::editNote);
-        JMenuItem notes = tabItem(edit, "menu.edit.notes",
+        JMenuItem note = tabItem(edit, "menu.edit.note.add", 'O', null, SharedTabContext::editNote);
+        JMenuItem notes = tabItem(edit, "menu.edit.notes", 'A',
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, ctrl | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
                 SharedTabContext::showAnnotationsDialog);
         // On the whole tab, so here and on the highlight bar rather than in the row menu (D-25).
-        JMenuItem clearHighlights = tabItem(edit, "highlight.clear.all", null, SharedTabContext::clearAllHighlights);
-        JMenuItem clearTable = tabItem(edit, "menu.edit.clear.table",
+        JMenuItem clearHighlights = tabItem(edit, "highlight.clear.all", 'H', null, SharedTabContext::clearAllHighlights);
+        JMenuItem clearTable = tabItem(edit, "menu.edit.clear.table", 'T',
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_K, ctrl | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
                 SharedTabContext::clearTable);
 
@@ -567,6 +594,7 @@ public final class MainFrame extends JFrame {
     private void addTabViewItems(JMenu view) {
         int ctrl = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
         JCheckBoxMenuItem follow = new JCheckBoxMenuItem(Messages.get("menu.view.follow"));
+        Mnemonics.set(follow, 'F');
         follow.setMargin(menuMargin());
         follow.addActionListener(e -> {
             TabPanel active = activeTabPanel();
@@ -577,27 +605,30 @@ public final class MainFrame extends JFrame {
         // Wrap and text size only change the detail pane, so they sit in a submenu named
         // after it, matching the pane header's Wrap and Aa buttons.
         JMenu pane = new JMenu(Messages.get("menu.view.detail"));
+        Mnemonics.set(pane, 'D');
         pane.setMargin(menuMargin());
         JCheckBoxMenuItem wrap = new JCheckBoxMenuItem(Messages.get("menu.view.wrap"));
+        Mnemonics.set(wrap, 'W');
         wrap.setMargin(menuMargin());
         wrap.addActionListener(e -> { SharedTabContext t = activeActions(); if (t != null) t.toggleWrap(); });
         pane.add(wrap);
         pane.addSeparator();
         // Shown as "Ctrl+=" and "Ctrl+-"; the keys themselves are bound on the root pane.
         String mod = (ctrl & java.awt.event.InputEvent.META_DOWN_MASK) != 0 ? "meta" : "ctrl";
-        tabItem(pane, "menu.view.text.bigger", KeyStroke.getKeyStroke(mod + " typed ="), t -> t.changeTextSize(1));
-        tabItem(pane, "menu.view.text.smaller", KeyStroke.getKeyStroke(mod + " typed -"), t -> t.changeTextSize(-1));
-        JMenuItem reset = tabItem(pane, "menu.view.text.reset", null, t -> t.changeTextSize(0));
+        tabItem(pane, "menu.view.text.bigger", 'B', KeyStroke.getKeyStroke(mod + " typed ="), t -> t.changeTextSize(1));
+        tabItem(pane, "menu.view.text.smaller", 'S', KeyStroke.getKeyStroke(mod + " typed -"), t -> t.changeTextSize(-1));
+        JMenuItem reset = tabItem(pane, "menu.view.text.reset", 'D', null, t -> t.changeTextSize(0));
         view.add(pane);
         view.addSeparator();
 
         JMenuItem zone = menuItem(Messages.get("menu.view.timezone"));
+        Mnemonics.set(zone, 'Z');
         zone.addActionListener(e -> {
             TabPanel active = activeTabPanel();
             if (active != null) active.showSourceTimezoneDialog(this);
         });
         view.add(zone);
-        JMenuItem clearFilters = tabItem(view, "menu.view.clear.filters", null, SharedTabContext::clearFilters);
+        JMenuItem clearFilters = tabItem(view, "menu.view.clear.filters", 'C', null, SharedTabContext::clearFilters);
 
         whenOpened(view, () -> {
             TabPanel active = activeTabPanel();
@@ -619,9 +650,10 @@ public final class MainFrame extends JFrame {
     }
 
     /** A menu item acting on the active tab, if there is one. */
-    private JMenuItem tabItem(JMenu menu, String key, KeyStroke accelerator,
+    private JMenuItem tabItem(JMenu menu, String key, char mnemonic, KeyStroke accelerator,
                               java.util.function.Consumer<SharedTabContext> action) {
         JMenuItem item = menuItem(Messages.get(key));
+        Mnemonics.set(item, mnemonic);
         if (accelerator != null) item.setAccelerator(accelerator);
         item.addActionListener(e -> { SharedTabContext t = activeActions(); if (t != null) action.accept(t); });
         menu.add(item);
@@ -664,6 +696,7 @@ public final class MainFrame extends JFrame {
         }
         menu.addSeparator();
         JMenuItem manage = menuItem(Messages.get("menu.view.theme.manage"));
+        Mnemonics.set(manage, 'M');
         manage.addActionListener(e -> new ThemeManagerDialog(this).setVisible(true));
         menu.add(manage);
     }
@@ -805,6 +838,7 @@ public final class MainFrame extends JFrame {
         if (!recents.isEmpty()) {
             recentMenu.addSeparator();
             JMenuItem clear = menuItem(Messages.get("menu.file.recent.clear"));
+            Mnemonics.set(clear, 'C');
             clear.addActionListener(e -> { AppPrefs.clearRecentFiles(); manager.refreshRecentMenus(); });
             recentMenu.add(clear);
         }
@@ -1363,9 +1397,11 @@ public final class MainFrame extends JFrame {
     private void rebuildRemoteMenu(JMenu menu) {
         menu.removeAll();
         JMenuItem ssh = menuItem(Messages.get("menu.file.remote.ssh"));
+        Mnemonics.set(ssh, 'S');
         ssh.addActionListener(e -> openSsh());
         menu.add(ssh);
         JMenuItem receive = menuItem(Messages.get("menu.file.remote.receive"));
+        Mnemonics.set(receive, 'T');
         receive.addActionListener(e -> openReceiver());
         menu.add(receive);
         menu.addSeparator();
@@ -1383,6 +1419,7 @@ public final class MainFrame extends JFrame {
         }
         if (!manager.sourceProviders().isEmpty()) menu.addSeparator();
         JMenuItem more = menuItem(Messages.get("menu.file.remote.more"));
+        Mnemonics.set(more, 'B');
         more.addActionListener(e ->
                 new PluginManagerDialog(this, pluginManager, manager::reloadExtensions).browsing().setVisible(true));
         menu.add(more);

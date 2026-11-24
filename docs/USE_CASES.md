@@ -618,7 +618,10 @@ opening the same file twice.
 **Current behavior:** All of the above works, including the keyboard shortcuts, which
 apply wherever focus is in the main window (not in dialogs) and are listed in Help →
 Keyboard Shortcuts. `Ctrl+1` to `Ctrl+8` past the last open tab do nothing. The
-shortcuts use `Ctrl` on every platform, including macOS.
+shortcuts use `Ctrl` on every platform, including macOS. The menu bar's menus and their
+items have mnemonics (`Alt+F` opens File, then a letter picks an item), set in code by
+`Mnemonics` rather than in `messages.properties`, since some labels are shared with menus
+that have none.
 
 ### UC-16 · Spread logs across several windows ✅
 
