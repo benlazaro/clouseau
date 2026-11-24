@@ -197,6 +197,8 @@ both, with your Java and operating system versions, ready to paste into an issue
 ## Licenses
 
 Clouseau is free and open source under the MIT License. **Help → About Clouseau →
-Licenses** shows its license and the licenses of the libraries and fonts it includes. The
+Licenses** shows its license and the licenses of the libraries and fonts it includes, one
+tab per license: each tab lists the libraries under that license, with their copyright and
+website, and then the license text. The
 release zips also have them as files, in a `legal` folder: next to `Clouseau.exe` on
 Windows, `Clouseau.app/Contents/legal` on macOS and `lib/legal` on Linux.

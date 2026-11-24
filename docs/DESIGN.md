@@ -1072,7 +1072,15 @@ lists every library and font the app ships, by Maven coordinates, with its licen
 copyright and website, followed by the full text of each license; the JRE's own notices
 stay in the runtime's `legal` folder. The build copies the root `LICENSE` beside it as
 `LICENSE.txt`, so both are in the jar for Help → About → Licenses (`LicensesDialog`) and in
-the Edge jar. `stageLegal` puts both in a `legal` folder that jpackage adds with
+the Edge jar. The dialog shows one tab per license family (Clouseau, then Apache 2.0, MIT, …,
+most components first), each listing its components and then the license text or texts.
+`LicenseNotices` splits the file by its layout, so keep it when editing: a component entry is
+`Name (group:module, …)` at the margin, then indented lines `License name — copyright`, the
+website, and any notes; each license text sits under a header between two 80-character `=`
+rules, whose first line starts with the license name (`MIT License — SLF4J`). A component and a
+text share a tab when `LicenseNotices.family` maps their license names to the same label; a new
+family gets a tab named after its license. `LicensesDialogTest` fails if a module or a license
+text doesn't reach a tab. If the file can't be split, the dialog shows it as one text. `stageLegal` puts both in a `legal` folder that jpackage adds with
 `--app-content` (next to `Clouseau.exe` on Windows, `lib/legal` on Linux,
 `Clouseau.app/Contents/legal` on macOS), before macOS signs the app, so the files don't
 break its signature. `checkThirdPartyNotices`, part of `check`, fails the build when a

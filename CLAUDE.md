@@ -250,8 +250,9 @@ release only.
   releases list, and the daily check, notice and Help → Check for Updates… (`WindowManager.updates()`).
 - `CrashHandler` (ui) — the default uncaught-exception handler: logs, then shows "Clouseau ran into a
   problem" with Copy Details, Open Log Folder and Report Issue… (DESIGN.md 6.1, rule 5).
-- `LicensesDialog` (ui) — Help → About → Licenses. `legal/THIRD-PARTY-NOTICES.txt` lists every shipped
-  library; `checkThirdPartyNotices` (part of `check`) fails if a runtime dependency is missing from it, so
+- `LicensesDialog`, `LicenseNotices` (ui) — Help → About → Licenses, one tab per license family, split from
+  `legal/THIRD-PARTY-NOTICES.txt`, which lists every shipped library; keep its layout (DESIGN.md 8).
+  `checkThirdPartyNotices` (part of `check`) fails if a runtime dependency is missing from it, so
   add an entry with any new dependency. The release image gets it in a `legal` folder (DESIGN.md 8).
 - `FilterBar`, `ParserEditorDialog`, `ThemeManager`, `AppPrefs`, `AppDirs` (ui) — filters,
   parser editor, themes, settings, data folder. `FilterBar`'s time range sits behind its

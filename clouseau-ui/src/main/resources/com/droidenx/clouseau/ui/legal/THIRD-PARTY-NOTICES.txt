@@ -64,8 +64,8 @@ EdDSA-Java (net.i2p.crypto:eddsa)
 
 Bouncy Castle (org.bouncycastle:bcprov-jdk18on, org.bouncycastle:bcpkix-jdk18on,
                org.bouncycastle:bcutil-jdk18on)
-    Bouncy Castle License (MIT) — Copyright (c) 2000-2023 The Legion of the Bouncy
-    Castle Inc. (https://www.bouncycastle.org)
+    Bouncy Castle License (MIT) — Copyright (c) 2000-2023 The Legion of the Bouncy Castle Inc.
+    https://www.bouncycastle.org
 
 Gson (com.google.code.gson:gson)
     Apache License 2.0 — Copyright 2008 Google Inc.
