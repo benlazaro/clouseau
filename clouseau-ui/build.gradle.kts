@@ -26,7 +26,7 @@ plugins {
     java
     application
     id("com.gradleup.shadow") version "8.3.9"
-    id("org.beryx.runtime") version "1.13.1"
+    id("org.beryx.runtime") version "2.0.1"
 }
 
 application {
