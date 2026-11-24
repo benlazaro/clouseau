@@ -161,6 +161,13 @@ them (turning one off removes its colors). The bar shows Clear All only while th
 highlights of their own, and an **Auto-Highlights…** button while auto-highlights color any
 rows.
 
+In step 3, a JVM stack trace (Java, Kotlin, Scala, Groovy) is highlighted: each exception's
+class and its `Caused by:` / `Suppressed:` chain stand out, while frames of the JDK and of
+common frameworks and servers (Spring, Tomcat, Jetty, Netty, Hibernate, Jackson, test
+runners, generated proxies…) are dimmed, and the application's own frames show their class and method in an accent
+color, so they're easy to find. The list of framework packages is built in; it can't be changed yet. The header's
+**Stack Trace** button turns it off. Frames aren't folded away (DESIGN.md section 10).
+
 Step 5 is the detail panel's own find strip, opened with `Ctrl+F` while
 focus is in the panel or with its header's search button (`Ctrl+F` elsewhere opens the
 table's find bar). It searches the entry as shown, so formatted JSON is searched formatted,

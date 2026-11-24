@@ -5,6 +5,8 @@ import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.core.AnnotationStore;
 import com.droidenx.clouseau.core.SourceRefs;
+import com.droidenx.clouseau.core.StackTrace;
+import com.droidenx.clouseau.core.StackTraceHighlighter;
 import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import com.droidenx.clouseau.ui.theme.ClouseauFonts;
 import lombok.extern.slf4j.Slf4j;
@@ -542,9 +544,10 @@ final class DetailPanel extends JPanel {
 
     /**
      * Marks the message's stack frames as links: their {@code Foo.java:42} underlined in the
-     * theme's link color, over whatever color the syntax highlighters gave them.
+     * theme's link color, over whatever color the syntax highlighters gave them. With the stack
+     * trace highlighter on, a framework frame's link is only underlined, so it stays dimmed.
      */
-    private void markSourceLinks(StyledDocument doc) {
+    private void markSourceLinks(StyledDocument doc, boolean dimFramework) {
         if (messageFieldStart < 0 || messageFieldEnd <= messageFieldStart) return;
         String message;
         try {
@@ -557,10 +560,13 @@ final class DetailPanel extends JPanel {
         SimpleAttributeSet link = new SimpleAttributeSet();
         StyleConstants.setForeground(link, ClouseauColors.linkColor());
         StyleConstants.setUnderline(link, true);
+        SimpleAttributeSet underline = new SimpleAttributeSet();
+        StyleConstants.setUnderline(underline, true);
         List<SourceRefs.Found> inDocument = new ArrayList<>(found.size());
         for (SourceRefs.Found f : found) {
             SourceRefs.Found at = new SourceRefs.Found(messageFieldStart + f.start(), messageFieldStart + f.end(), f.ref());
-            doc.setCharacterAttributes(at.start(), at.end() - at.start(), link, false);
+            boolean framework = dimFramework && StackTrace.isFramework(f.ref().path().replace('/', '.'));
+            doc.setCharacterAttributes(at.start(), at.end() - at.start(), framework ? underline : link, false);
             inDocument.add(at);
         }
         sourceLinks = List.copyOf(inDocument);
@@ -766,7 +772,7 @@ final class DetailPanel extends JPanel {
         messageFieldEnd = doc.getLength() - 1; // exclude trailing newline
 
         spaceLines(doc);
-        markSourceLinks(doc);
+        markSourceLinks(doc, colorizers.stream().anyMatch(h -> h instanceof StackTraceHighlighter));
         if (keepView == null) {
             detailArea.setCaretPosition(0);
         } else {

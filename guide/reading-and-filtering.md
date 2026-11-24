@@ -56,6 +56,11 @@ hidden: **Log entry · file line 41**, **Log entry · db.log, line 41** in a mer
 - **JSON** appears when the message is JSON. Pressed (the default), the message is
   pretty-printed and colored; released, it's shown exactly as logged. Plugin formats get a
   button of their own in the same way.
+- **Stack Trace** appears when the entry has a Java (or Kotlin, Scala, Groovy) stack trace.
+  Pressed (the default), each exception and its **Caused by:** chain stand out, and frames
+  from the JDK and common frameworks (Spring, Tomcat, Netty, Hibernate and the like) are
+  dimmed, while the class and method of each frame from your own code are colored, so they're easy to spot. Released, the trace is shown in
+  plain text.
 - **Wrap Lines** wraps long lines to the panel's width instead of scrolling sideways (the same
   setting as in Settings).
 - **Aa** opens the text size: **−** and **+** around the current size, and **Reset**. With

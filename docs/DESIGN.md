@@ -131,7 +131,7 @@ ending in `Z`) whenever the source timezone wasn't the system's.
 |---|---|---|---|
 | `LogParser` | Turn a raw line into a `LogEntry` | Yes, after the built-in ones (section 5.1) | `RegexLogParser`, configured from JSON; `JsonLinesParser` and `SyslogParser`, written in Java |
 | `LogFormatter` | Reformat a message for the detail panel (for example, pretty-print JSON) | Yes | `JsonMessageFormatter` |
-| `LogSyntaxHighlighter` | Mark spans of the detail panel's message with a role (key, string, keyword, muted, …) that the theme colors (D-26) | Yes; every one that applies is layered | `JsonSyntaxHighlighter` |
+| `LogSyntaxHighlighter` | Mark spans of the detail panel's message with a role (key, string, keyword, muted, …) that the theme colors (D-26) | Yes; every one that applies is layered | `JsonSyntaxHighlighter` (ui); `StackTraceHighlighter` (core), JVM stack traces |
 | `LogSourceProvider` | Create a `LogSource` (live lines from somewhere) from settings the user fills in | Yes; listed in the File menu as "Open <name>…", after the built-in Open items (section 6.3) | `NetworkSourceProvider` (ui, not a PF4J extension), the log receiver (D-30). SSH has its own dialog and creates `SshLogSource` directly, so a session keeps SSH and plugin tabs as different kinds |
 
 **Contract notes:**
@@ -469,6 +469,20 @@ equal widths the earlier highlighter. Each role's color is the theme's
 `Clouseau.syntax.<role>` key (D-26). A highlighter that throws, or was built for an older
 API, is skipped and logged once. The detail toolbar can turn individual formatters and
 highlighters on or off.
+
+The built-in **Stack Trace** highlighter (`StackTraceHighlighter`, core) reads the message
+with `StackTrace` (core), which classifies each line of a JVM trace: the exception, each
+`Caused by:` / `Suppressed:`, the application's frames, framework frames and `... N more`. An
+exception line counts only when a trace line follows it, so a message that names a class
+isn't one. Exception classes are ERROR and their prefixes KEYWORD; framework frames (a fixed
+list of packages: the JDK, Kotlin and Scala runtimes, Spring, servlet containers, Netty,
+Hibernate, Jackson, test runners…, plus generated `$$` and `$Proxy` classes) are MUTED as a
+whole, and so are every `at` and jar suffix (`~[app.jar:1.0]`). The application's frames get
+their `Class.method` as ACCENT: MUTED alone is too close to plain text in thin monospaced
+type (and can't be darker, D-26's 4.5:1), so the app's frames are lifted rather than only the
+rest dimmed. While it's on, a framework frame's Open in IDE link (UC-19) is
+only underlined, keeping its dimmed color. `StackTrace` is kept apart from the highlighter so
+a fold of framework frames can use the same lines (section 10).
 
 Text is drawn in `ClouseauFonts.mono`'s composite font, so characters JetBrains Mono lacks
 (CJK, many symbols) come from the system's fallback fonts. Control characters other than
@@ -2724,6 +2738,12 @@ notices, are built).
 **Ideas, not yet accepted.** Kept for later, until a user asks for one or the need shows
 up in practice; each needs a use case before it is built.
 
+- **Folding in the detail panel:** collapse a run of framework frames (with its `... N
+  more`) into one line such as `▸ 37 framework frames`, and a JSON payload's objects and
+  arrays the same way, each opened with a click. `StackTrace.lines` (core) already gives the
+  runs of `FRAMEWORK_FRAME` lines. Folding hides text, so it needs its own decision on what
+  find, copy and Open in IDE do with folded text, and on whether it's a formatter, a
+  highlighter role or a new extension point plugins can use (an HL7 segment could fold too).
 - **Same file twice:** open one file in two tabs with different filters (for example
   errors only next to everything). Needs an exception to "one tab per file" (UC-15).
 - **Synchronized selection:** selecting an entry in one tab moves other tabs to the same

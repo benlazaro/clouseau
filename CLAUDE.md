@@ -45,7 +45,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     EntryFilter, CombinedFilter, LogCache, CopyingInputStream, ReviewBundle,
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
                     MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
-                    UpdateCheck, SshSaved, SyntaxLayers, TextMatches, CompactTime,
+                    UpdateCheck, SshSaved, SyntaxLayers, StackTrace, StackTraceHighlighter, TextMatches, CompactTime,
                     SourceRefs, JetBrainsIde, JetBrainsProjects, SourceFolders, Foreground,
                     HighlightRule, HighlightRules, HighlightRuleStore, JsonLinesParser, SyslogParser,
                     NetworkLogSource
@@ -154,7 +154,8 @@ release only.
 - `LogParser` / `LogFormatter` / `LogSyntaxHighlighter` (api) — PF4J extension points. Core calls
   `LogParser.parse(rawLine, writtenIn)`, so the parser reads zoneless times in the log's timezone. A highlighter
   returns spans with a `Role`, never a color; the theme's `Clouseau.syntax.<role>` keys color them, and
-  `SyntaxLayers` (core) layers every highlighter that applies (D-26).
+  `SyntaxLayers` (core) layers every highlighter that applies (D-26). Built in: `JsonSyntaxHighlighter` (ui) and
+  `StackTraceHighlighter` (core), which reads lines with `StackTrace` (core: exceptions, causes, app and framework frames).
 - `ClouseauApi` (api) — `VERSION`, the plugin API's own version, which PF4J checks `Plugin-Requires`
   against. Bump it with any API change (minor while 0.x if it breaks plugins), and note it in its javadoc.
 - `LogSource` (api) — pushes live lines; `ConnectingLogSource` (api) also reports when it is connected (D-20); `LogSourceProvider` (extension point) creates one
