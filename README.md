@@ -76,8 +76,11 @@ Each release's zip is portable and brings its own Java runtime: unzip it and run
 launcher (`Clouseau.exe` on Windows). Clouseau isn't signed with a paid certificate, so
 Windows and macOS warn you the first time you start it:
 [Installing](https://benlazaro.github.io/clouseau/guide/installing.html) shows how to allow it
-once, and how to upgrade without losing your settings. Releases are pre-releases while the
-plugin API settles. The Edge build is a single jar for trying the newest changes; run it with
+once, and how to upgrade without losing your settings. Releases before 1.0 are
+pre-releases; from 1.0 on, upgrades keep your settings, sessions and notes, and the files
+Clouseau writes stay readable. The plugin API has its own version, still 0.x, and may change
+before its own 1.0; each API release says what changed
+([For developers](https://benlazaro.github.io/clouseau/guide/developers.html)). The Edge build is a single jar for trying the newest changes; run it with
 `java -jar clouseau-edge.jar` on Java 21 or later. Clouseau tells you when a new release
 is out; [Settings → Updates](https://benlazaro.github.io/clouseau/guide/settings.html#new-versions)
 turns that off.

@@ -62,9 +62,10 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
 
 ## 3. Release plumbing and wording
 
-- [ ] README: "Releases are pre-releases while the plugin API settles" no longer holds.
-      Replace it with: the app is stable at 1.0; the plugin API keeps its own 0.x version
-      (D-27) and may still change, with notes per `api-v*` release.
+- [x] README (2026-11-24): "Releases are pre-releases while the plugin API settles" is
+      replaced by text that holds both before and after 1.0: pre-releases until 1.0, then
+      upgrades keep the data; the plugin API keeps its own 0.x version (D-27) and may still
+      change, with notes per `api-v*` release.
 - [x] Update check (UC-18, D-23): someone on 0.18.0-alpha is offered `1.0.0-rc.1` and then
       `1.0.0`; someone on `1.0.0` isn't offered a later `-rc`. Already true;
       `UpdateCheckTest.theRoadToOnePointOh` covers it.
