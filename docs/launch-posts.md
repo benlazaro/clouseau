@@ -1,9 +1,9 @@
-# Launch posts for 1.0.0-rc.1
+# Launch posts for 1.0.0-rc.2
 
-Drafts, not committed. Post once the rc.1 release is up with all three zips. Attach or link
+Drafts. Post once the rc.2 release is up with all three zips. Attach or link
 `docs/screenshots/main-view.png` (and `merged-view.png` where images are allowed).
 
-Release link: https://github.com/benlazaro/clouseau/releases/tag/v1.0.0-rc.1
+Release link: https://github.com/benlazaro/clouseau/releases/tag/v1.0.0-rc.2
 
 ---
 
@@ -21,7 +21,7 @@ I spend a lot of time reading application logs: a support bundle with a dozen ro
 three services that each saw part of one request, a 2 GB `.gz` someone attached to a ticket.
 Text editors choke on the big ones, `grep` loses the context, and the hosted log platforms
 don't help when all you have is a zip of files. So I built a desktop viewer for that work.
-It's free and MIT-licensed, and this is the first release candidate for 1.0.
+It's free and MIT-licensed, and this is the second release candidate for 1.0.
 
 What it does:
 
@@ -41,12 +41,15 @@ What it does:
   one zip for a colleague, who opens it like any log.
 - Makes stack traces readable: framework frames are dimmed, your own frames stand out, and
   clicking a frame opens that line in IntelliJ, VS Code or Cursor.
+- Lays out JSON payloads and logged objects one field per line, and folds the big ones so
+  you can open them a level at a time.
 
 It's written in Java 21 with Swing and FlatLaf. I picked Swing on purpose: it starts fast,
 renders a virtual table of millions of rows without trouble, and works the same on Windows,
 macOS and Linux. Each zip bundles its own Java runtime, so there's nothing to install.
 Parsers, formatters and live sources are plugins (PF4J), with the API published on Maven
-Central.
+Central. The app finds plugins on Maven Central or your company's Nexus, and tells you when
+one you have has an update.
 
 The builds aren't signed with a paid certificate yet, so Windows and macOS warn you the
 first time. The install guide shows how to get past that:
@@ -65,11 +68,11 @@ from a format it gets wrong are the most useful bug report there is.
 
 **Post** (text post; add the screenshot as an image or link it):
 
-I've been building a desktop log viewer for the logs Java services write, and the first
+I've been building a desktop log viewer for the logs Java services write, and the second
 release candidate for 1.0 is out. It's MIT-licensed, runs on Windows, macOS and Linux, and
 each download bundles its own JRE.
 
-Release: https://github.com/benlazaro/clouseau/releases/tag/v1.0.0-rc.1 · Guide:
+Release: https://github.com/benlazaro/clouseau/releases/tag/v1.0.0-rc.2 · Guide:
 https://benlazaro.github.io/clouseau/
 
 **For reading JVM logs:**
@@ -82,7 +85,8 @@ https://benlazaro.github.io/clouseau/
   folders, so the project doesn't need to be open.
 - **Logged objects:** objects logged with `toString()` (Lombok `@ToString`, records, Kotlin
   data classes, `ToStringBuilder`, maps and lists) are laid out one field per line and
-  colored. JSON payloads are pretty-printed.
+  colored. JSON payloads are pretty-printed. A big payload folds into one line and opens a
+  level at a time, and copying always gives you the full text.
 - **Formats:** Log4j 2 and Logback pattern layouts, Spring Boot's default format, and the
   JSON layouts (Logback's, Log4j's, ECS) are recognized on open. MDC
   values become columns you can filter on.
@@ -101,7 +105,9 @@ https://benlazaro.github.io/clouseau/
   `WatchService`.
 - Plugins use PF4J. `clouseau-api` is on Maven Central (`com.droidenx.clouseau:clouseau-api`) with
   its own version, and CI runs japicmp against the last release, so a plugin built for an
-  older API keeps loading.
+  older API keeps loading. The Plugin Manager lists the plugins on Maven Central or a Nexus
+  (named `<name>-clouseau-plugin`) and checks once a day for updates, which you install
+  yourself.
 - UI: Swing with FlatLaf, MigLayout and RSyntaxTextArea; Inter and JetBrains Mono are
   bundled. Built with Gradle on Java 21, packaged with jlink.
 
