@@ -166,6 +166,17 @@ final class PluginRepoManagerDialog extends JDialog {
         return i >= 0 && i < options.length ? options[i][1] : fallback;
     }
 
+    private static final int EDIT_MIN_WIDTH = 440;
+
+    /** Sets the edit dialog's height (and least height) to what its form needs, keeping a wider width the user chose. */
+    private static void fitHeight(Window dlg) {
+        dlg.setMinimumSize(null);
+        Dimension pref = dlg.getPreferredSize();
+        dlg.setMinimumSize(new Dimension(EDIT_MIN_WIDTH, pref.height));
+        dlg.setSize(Math.max(dlg.getWidth(), pref.width), pref.height);
+        dlg.validate();
+    }
+
     /** Edits {@code existing} (at {@code index} in the list), or a new repository when null. */
     private AppPrefs.PluginRepo showEditDialog(AppPrefs.PluginRepo existing, int index) {
         JTextField nameField = new JTextField(existing != null ? existing.name() : "", 22);
@@ -198,6 +209,10 @@ final class PluginRepoManagerDialog extends JDialog {
             credLabel.setText(isToken
                     ? Messages.get("plugins.repos.edit.credential.usertoken")
                     : Messages.get("plugins.repos.edit.credential"));
+            // The sign-in fields come and go with the choice, so fit the open dialog's
+            // height to them: growing shows them, shrinking leaves no empty space.
+            Window open = SwingUtilities.getWindowAncestor(authCombo);
+            if (open != null && open.isDisplayable()) fitHeight(open);
         };
         authCombo.addActionListener(e -> syncAuth.run());
         syncAuth.run();
@@ -273,7 +288,7 @@ final class PluginRepoManagerDialog extends JDialog {
         okBtn.addActionListener(e -> { confirmed[0] = true; dlg.dispose(); });
         cancelBtn.addActionListener(e -> dlg.dispose());
         dlg.pack();
-        dlg.setMinimumSize(new Dimension(440, dlg.getHeight()));
+        dlg.setMinimumSize(new Dimension(EDIT_MIN_WIDTH, dlg.getHeight()));
         dlg.setResizable(true);
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
