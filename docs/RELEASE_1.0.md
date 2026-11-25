@@ -25,6 +25,18 @@ Delete this file once 1.0 ships.
 - [ ] Smoke-test each platform's zip from a clean account: unzip, launch, open
       `samples/sample.log`, follow a file, SSH, merge two files, export and reopen a review
       bundle, quit and relaunch (session restore).
+      - [x] **Windows 11** (2026-11-25, rc.1 zip, portable with an empty `data` folder rather
+            than a new account): launch with two files (asked merged or separate), a BOM'd
+            file parsed, follow mode live and through a rename rotation without a lost or
+            doubled line, stack trace colors and links, a second launch handing its files to
+            the running window, `*-service.log` typed in Open File merged, a note, Export
+            for Review and the bundle reopened from another folder with its note, Exit left
+            no process, and the relaunch restored all six tabs, maximized, still following.
+            `clouseau.log` clean apart from PF4J's "no plugins root". **SSH not covered**
+            (no server on this machine). Noted: files handed over by a second launch always
+            open in separate tabs, without the merge question (`WindowManager.handOver`).
+      - [ ] macOS
+      - [ ] Linux
 
 ## 2. Data that must survive upgrades
 
