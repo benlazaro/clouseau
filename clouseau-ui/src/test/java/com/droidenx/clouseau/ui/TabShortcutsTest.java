@@ -8,8 +8,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class TabShortcutsTest {
 
+    /** As on Windows and Linux, where the shortcut key is Ctrl, whatever the machine running the tests. */
     private static int target(int key, int mods, int selected, int count) {
-        return TabShortcuts.targetIndex(key, mods, selected, count);
+        return TabShortcuts.targetIndex(key, mods, selected, count, CTRL_DOWN_MASK);
     }
 
     @Test

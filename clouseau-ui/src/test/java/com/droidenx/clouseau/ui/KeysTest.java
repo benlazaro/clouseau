@@ -2,6 +2,7 @@ package com.droidenx.clouseau.ui;
 
 import org.junit.jupiter.api.Test;
 
+import java.awt.GraphicsEnvironment;
 import java.awt.event.InputEvent;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,9 +10,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class KeysTest {
 
     @Test
-    void headlessTheShortcutKeyIsCtrl() {
-        assertThat(Keys.MENU).isEqualTo(InputEvent.CTRL_DOWN_MASK);
-        assertThat(Keys.label("Duplicate (Ctrl+D)")).isEqualTo("Duplicate (Ctrl+D)");
+    void theShortcutKeyIsCmdOnlyOnAMacWithADisplay() {
+        // CI runs these on macOS with a display, where the toolkit says Cmd; elsewhere, or headless, Ctrl.
+        boolean cmd = System.getProperty("os.name", "").startsWith("Mac") && !GraphicsEnvironment.isHeadless();
+        assertThat(Keys.MENU).isEqualTo(cmd ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK);
+        assertThat(Keys.label("Duplicate (Ctrl+D)")).isEqualTo(cmd ? "Duplicate (Cmd+D)" : "Duplicate (Ctrl+D)");
     }
 
     @Test
