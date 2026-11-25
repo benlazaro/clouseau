@@ -67,9 +67,9 @@ Open logs of any size, merge the logs of several services into one timeline, fil
 
 | | |
 |---|---|
-| **Windows** | [Latest release](https://github.com/benlazaro/clouseau/releases) → `clouseau-<version>-windows.zip` |
-| **macOS** | [Latest release](https://github.com/benlazaro/clouseau/releases) → `clouseau-<version>-macos.zip` |
-| **Linux** | [Latest release](https://github.com/benlazaro/clouseau/releases) → `clouseau-<version>-linux.zip` |
+| **Windows** | [Latest release](https://github.com/benlazaro/clouseau/releases/latest) → `clouseau-<version>-windows.zip` |
+| **macOS** | [Latest release](https://github.com/benlazaro/clouseau/releases/latest) → `clouseau-<version>-macos.zip` |
+| **Linux** | [Latest release](https://github.com/benlazaro/clouseau/releases/latest) → `clouseau-<version>-linux.zip` |
 | **Edge** | [⬇ clouseau-edge.jar](https://github.com/benlazaro/clouseau/releases/download/edge/clouseau-edge.jar), built from the latest commit on `main` |
 
 Each release's zip is portable and brings its own Java runtime: unzip it and run the

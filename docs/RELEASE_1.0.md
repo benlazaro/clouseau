@@ -69,8 +69,11 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
 - [x] Update check (UC-18, D-23): someone on 0.18.0-alpha is offered `1.0.0-rc.1` and then
       `1.0.0`; someone on `1.0.0` isn't offered a later `-rc`. Already true;
       `UpdateCheckTest.theRoadToOnePointOh` covers it.
-- [ ] `release.yml`: `v1.0.0` (no suffix) is created as a normal release and becomes
-      GitHub's Latest; check that the README's "Latest release" links then land on it.
+- [x] `release.yml` (2026-11-24): a tag with no suffix (`v1.0.0`) is created as a normal
+      release with `--latest`, rather than GitHub's automatic choice; a suffixed tag stays a
+      pre-release, and `api-v*` releases pass `--latest=false`. The README's and
+      `guide/installing.md`'s download links go to `/releases/latest`, which falls back to the
+      releases list while there is no Latest. After tagging `v1.0.0`, confirm the links land on it.
 - [ ] `docs/releases/v1.0.0-rc.1.md` and `docs/releases/v1.0.0.md`, written for users: what
       1.0 means, the highlights since the first alpha, how to upgrade.
 - [ ] Guide pass: every page matches the current app (menu names such as *Open via SSH…*,

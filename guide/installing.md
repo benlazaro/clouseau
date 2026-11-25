@@ -7,7 +7,7 @@ nav_order: 0
 # Installing
 
 Download the zip for your system from the
-[latest release](https://github.com/benlazaro/clouseau/releases): `clouseau-<version>-windows.zip`,
+[latest release](https://github.com/benlazaro/clouseau/releases/latest): `clouseau-<version>-windows.zip`,
 `-macos.zip` or `-linux.zip`. Each zip brings its own Java runtime, so there's nothing else
 to install. Unzip it and start Clouseau:
 
