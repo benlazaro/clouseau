@@ -1,0 +1,48 @@
+name: Log format request
+description: A log that Clouseau doesn't recognize, or reads into the wrong columns.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Clouseau recognizes a format from its lines, so sample lines are what matters most.
+        You can often add a format yourself in Tools → Parser Editor… (see the
+        [Parsers](https://benlazaro.github.io/clouseau/guide/parsers.html) guide); if you
+        did, say so, and it may become a built-in format.
+  - type: input
+    id: producer
+    attributes:
+      label: What writes this log
+      description: The library, layout or product, with its version if you know it.
+      placeholder: Logback 1.5 with a custom pattern, nginx access log, Kafka broker
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample lines
+      description: |
+        At least five consecutive lines as they are in the file, including a multi-line entry
+        (a stack trace) if the log has them. Replace anything private with made-up values,
+        keeping the layout and spacing exactly.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: pattern
+    attributes:
+      label: Layout pattern
+      description: The pattern or config that writes the lines, if you have it (for example Logback's `%d %-5level [%thread] %logger - %msg%n`).
+      render: text
+  - type: textarea
+    id: now
+    attributes:
+      label: What Clouseau does with it now
+      description: Opens as plain text, picks the wrong format, puts the level in the message column, …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Clouseau version
+      description: Help → About Clouseau shows it.

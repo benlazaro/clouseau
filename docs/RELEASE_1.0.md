@@ -95,8 +95,10 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
 - [ ] Post the release candidate where JVM developers and support engineers will see it
       (r/java, Hacker News "Show HN", the Spring and Quarkus communities), with a screenshot
       and the one-paragraph pitch from the README.
-- [ ] Issue templates for bugs and format requests (`.github/ISSUE_TEMPLATE/`), asking for
-      the OS, version, and a sample line for format problems.
+- [x] Issue templates (2026-11-25): `.github/ISSUE_TEMPLATE/` has a bug report (version,
+      OS, where the log came from, sample lines, Copy Details and `clouseau.log`) and a log
+      format request (what writes it, sample lines, layout pattern). Blank issues stay on, so
+      the crash window's Report Issue… still lands on a plain new issue.
 - [ ] Triage what comes back: crashes and data loss block 1.0; feature requests go to
       USE_CASES.md / DESIGN.md 10 as ideas.
 

@@ -1,0 +1,73 @@
+name: Bug report
+description: Something crashed, lost data, or doesn't work the way the guide says.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. If Clouseau showed a **Clouseau ran into a problem** window,
+        its **Copy Details** button has most of what's asked below: paste it in the last box.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+      placeholder: |
+        1. Opened a 2 GB .gz log
+        2. Typed "timeout" in the find bar
+        3. The table stayed empty, and the status bar said ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Clouseau version
+      description: Help → About Clouseau shows it (for example 1.0.0-rc.1, or "edge").
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: Windows 11 24H2, macOS 15.2, Ubuntu 24.04
+  - type: dropdown
+    id: source
+    attributes:
+      label: Where the log came from
+      multiple: true
+      options:
+        - Local file
+        - Compressed file (.gz or .zip)
+        - Merged files
+        - SSH
+        - TCP/UDP listener
+        - Plugin source
+        - Review bundle
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample lines
+      description: |
+        A few lines from the log that show the problem, if it depends on the log. Replace
+        anything private (hosts, names, tokens) with made-up values, keeping the layout.
+      render: text
+  - type: textarea
+    id: details
+    attributes:
+      label: Details and Clouseau's own log
+      description: |
+        The text from **Copy Details** (in the problem window or Help → About Clouseau), and
+        any errors from `logs/clouseau.log` in the data folder (File → Settings… → Data Folder).
+      render: text
