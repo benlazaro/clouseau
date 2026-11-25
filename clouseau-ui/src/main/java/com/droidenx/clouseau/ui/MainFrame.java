@@ -1916,7 +1916,7 @@ public final class MainFrame extends JFrame {
         }
     }
 
-    private static List<Image> loadAppIcons() {
+    static List<Image> loadAppIcons() {
         return Stream.of("app-256.png", "app-64.png", "app-16.png")
                 .map(MainFrame::loadIconImage)
                 .filter(Objects::nonNull)

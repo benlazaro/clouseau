@@ -200,11 +200,35 @@ public final class ClouseauApp {
                 : Messages.format("app.instance.older.version.message", version);
     }
 
+    /**
+     * Shows the message in a dialog of its own, with a taskbar button and in front. Not
+     * {@code JOptionPane.showMessageDialog(null, …)}: its dialog belongs to Swing's hidden
+     * shared frame, so on Windows it has no taskbar button and can open behind other
+     * windows, and the launch then waits unseen for an OK that never comes.
+     */
     private static void showInstanceMessage(String message, int type) {
         applyTheme();
         try {
             SwingUtilities.invokeAndWait(() -> {
-                JOptionPane.showMessageDialog(null, message, Messages.get("app.instance.unreachable.title"), type);
+                JOptionPane pane = new JOptionPane(message, type);
+                JDialog dialog = new JDialog((java.awt.Window) null,
+                        Messages.get("app.instance.unreachable.title"), java.awt.Dialog.ModalityType.APPLICATION_MODAL);
+                dialog.setIconImages(MainFrame.loadAppIcons());
+                dialog.setContentPane(pane);
+                dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+                pane.addPropertyChangeListener(JOptionPane.VALUE_PROPERTY, e -> dialog.dispose());
+                dialog.pack();
+                dialog.setLocationRelativeTo(null);
+                // Started from Explorer, the launch may not be allowed to take the focus; on top,
+                // the message is seen anyway. Dropped once shown, so it doesn't stay over everything.
+                dialog.setAlwaysOnTop(true);
+                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                        dialog.toFront();
+                        dialog.setAlwaysOnTop(false);
+                    }
+                });
+                dialog.setVisible(true);   // modal: returns once the user closes it
             });
         } catch (Exception e) {
             log.error("Could not show the message about the running instance", e);

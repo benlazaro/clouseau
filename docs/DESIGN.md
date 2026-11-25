@@ -642,7 +642,11 @@ window of its own and finishes quickly.
   drops that launch), says which version is running and to close it, and exits. A running
   instance from before the greeting (0.11.2 and older) sends nothing; after
   `GREETING_TIMEOUT_MS` (2 s) the launch takes it for an older version, says so, and
-  closes the connection empty, which raises that old window. The startup log line names
+  closes the connection empty, which raises that old window. These messages (and the one
+  for a running instance that doesn't answer) are dialogs with no owner, so on Windows they
+  have their own taskbar button and open in front; a `JOptionPane` with a null parent
+  belongs to Swing's hidden shared frame, has no taskbar button and can open behind other
+  windows, leaving the launch waiting unseen. The startup log line names
   the version, Java and OS, so a log shows which build ran.
 - **Bringing the window forward:** after each launch the running instance restores the
   window used last if it's minimized (maximized again if it was) and raises it
@@ -661,6 +665,12 @@ window of its own and finishes quickly.
   excludedportrange protocol=tcp`). The launch then starts as a normal window without
   single-instance support, so later launches open their own windows. It leaves the unpacked
   copies in `<data>/cache/` alone, since another such instance may be using them.
+- **Exiting:** File → Exit or closing the last window saves the session and calls
+  `System.exit`, which runs the shutdown hooks (plugins stop, `cache/` is emptied) after
+  the windows are gone. A hook that hung would leave a process with no window that still
+  holds the port, so every later launch would hand its files to it and show nothing. A
+  daemon watchdog ends the process with `Runtime.halt` if exiting takes over 10 s
+  (`WindowManager.EXIT_TIMEOUT_MS`).
 
 ### 6.8.1 Colors across theme switches
 

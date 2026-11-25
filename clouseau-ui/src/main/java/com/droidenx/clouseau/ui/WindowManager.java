@@ -188,7 +188,31 @@ final class WindowManager {
     private void quit(Session instead) {
         log.info("Exiting");
         if (session != null) session.saveNow(instead);
+        startExitWatchdog();
         System.exit(0);
+    }
+
+    /** How long the shutdown hooks may run before {@link #startExitWatchdog} ends the process. */
+    static final long EXIT_TIMEOUT_MS = 10_000;
+
+    /**
+     * Ends the process if exiting takes longer than {@link #EXIT_TIMEOUT_MS}. The windows are
+     * gone by now, so a shutdown hook that hangs (a plugin's stop, the cache cleanup) would
+     * leave Clouseau running with no window, still holding the single-instance port, and
+     * every later launch would hand its files to it and show nothing.
+     */
+    private static void startExitWatchdog() {
+        Thread watchdog = new Thread(() -> {
+            try {
+                Thread.sleep(EXIT_TIMEOUT_MS);
+            } catch (InterruptedException e) {
+                return;
+            }
+            log.warn("Exiting took longer than {} ms; ending the process", EXIT_TIMEOUT_MS);
+            Runtime.getRuntime().halt(0);
+        }, "exit-watchdog");
+        watchdog.setDaemon(true);   // daemon threads keep running while the shutdown hooks do
+        watchdog.start();
     }
 
     /** What the user chose when asked to save a named session whose tabs changed. */
