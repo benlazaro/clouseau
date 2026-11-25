@@ -67,8 +67,18 @@ final class DetailPanel extends JPanel {
     static final KeyStroke COPY_ENTRY_KEY = KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C,
             Keys.MENU | java.awt.event.InputEvent.SHIFT_DOWN_MASK);
 
-    private final List<LogFormatter> formatters;
-    private final List<LogSyntaxHighlighter> syntaxHighlighters;
+    /**
+     * The app's formatters and highlighters now. Read again before each entry is drawn, never
+     * kept: a plugin removed or turned off in the Plugin Manager is unloaded, and calling its
+     * code afterwards throws {@code NoClassDefFoundError}.
+     */
+    private final Supplier<List<LogFormatter>> formattersNow;
+    private final Supplier<List<LogSyntaxHighlighter>> highlightersNow;
+    /** The lists the format toggles were made for; replaced when the app's lists change. */
+    private List<LogFormatter> formatters = List.of();
+    private List<LogSyntaxHighlighter> syntaxHighlighters = List.of();
+    /** The header's tools; the format toggles come first. */
+    private JPanel tools;
     /** Returns what to show now, or null when nothing is selected. */
     private final Supplier<Content> current;
 
@@ -127,11 +137,18 @@ final class DetailPanel extends JPanel {
     private boolean wrapLines            = AppPrefs.isDetailWrapLines();
     private DateTimeFormatter tsFmt      = timestampFormatter();
 
+    /** A pane with fixed formatters and highlighters (tests). */
     DetailPanel(List<LogFormatter> formatters, List<LogSyntaxHighlighter> syntaxHighlighters,
                 Supplier<Content> current) {
+        this(() -> formatters, () -> syntaxHighlighters, current);
+    }
+
+    /** A pane that uses the app's formatters and highlighters as they are when it draws an entry. */
+    DetailPanel(Supplier<List<LogFormatter>> formatters, Supplier<List<LogSyntaxHighlighter>> syntaxHighlighters,
+                Supplier<Content> current) {
         super(new BorderLayout());
-        this.formatters = formatters;
-        this.syntaxHighlighters = syntaxHighlighters;
+        this.formattersNow = formatters;
+        this.highlightersNow = syntaxHighlighters;
         this.current = current;
         // The text is colored when an entry is drawn (labels, values, level, JSON), so a theme
         // switch must draw it again, or it keeps the old theme's colors until the next selection.
@@ -265,25 +282,9 @@ final class DetailPanel extends JPanel {
         title.setFont(title.getFont().deriveFont(Font.PLAIN, 12f));
         bar.add(title);
 
-        JPanel tools = new JPanel(new net.miginfocom.swing.MigLayout("insets 0, gapx 6, hidemode 3, aligny center"));
+        tools = new JPanel(new net.miginfocom.swing.MigLayout("insets 0, gapx 6, hidemode 3, aligny center"));
         tools.setOpaque(false);
-
-        // One toggle per format: pressed shows the message formatted and colored, released as logged.
-        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
-        formatters.forEach(f -> names.add(f.getName()));
-        syntaxHighlighters.forEach(h -> names.add(h.getName()));
-        for (String name : names) {
-            JToggleButton btn = new JToggleButton(name, true);
-            btn.setToolTipText(java.text.MessageFormat.format(Messages.get("detail.format.tooltip"), name));
-            FilterBar.applyToggleStyle(btn);
-            btn.setVisible(false);
-            btn.addActionListener(e -> {
-                if (btn.isSelected()) disabledFormats.remove(name); else disabledFormats.add(name);
-                refresh();
-            });
-            formatToggles.put(name, btn);
-            tools.add(btn);
-        }
+        syncFormats();
 
         wrapToggle = new JToggleButton(Messages.get("detail.wrap"), wrapLines);
         wrapToggle.setToolTipText(Messages.get("detail.wrap.tooltip"));
@@ -698,7 +699,42 @@ final class DetailPanel extends JPanel {
         return result;
     }
 
+    /**
+     * Takes the app's formatters and highlighters as they are now and, when they changed (a
+     * plugin installed, removed, turned on or off), makes the header's toggles again: one per
+     * format, pressed to show the message formatted and colored, released to show it as logged.
+     * A format the user switched off stays off under its name.
+     */
+    private void syncFormats() {
+        List<LogFormatter> f = formattersNow.get();
+        List<LogSyntaxHighlighter> h = highlightersNow.get();
+        if (f == formatters && h == syntaxHighlighters) return;
+        formatters = f;
+        syntaxHighlighters = h;
+        formatToggles.values().forEach(tools::remove);
+        formatToggles.clear();
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        formatters.forEach(x -> names.add(x.getName()));
+        syntaxHighlighters.forEach(x -> names.add(x.getName()));
+        int at = 0;
+        for (String name : names) {
+            JToggleButton btn = new JToggleButton(name, !disabledFormats.contains(name));
+            btn.setToolTipText(java.text.MessageFormat.format(Messages.get("detail.format.tooltip"), name));
+            FilterBar.applyToggleStyle(btn);
+            btn.setVisible(false);
+            btn.addActionListener(e -> {
+                if (btn.isSelected()) disabledFormats.remove(name); else disabledFormats.add(name);
+                refresh();
+            });
+            formatToggles.put(name, btn);
+            tools.add(btn, "", at++);
+        }
+        tools.revalidate();
+        tools.repaint();
+    }
+
     private void render(Content content) {
+        syncFormats();
         LogEntry entry = content != null ? content.entry() : null;
         // Drawing the same entry again (a note, a theme, a continuation line that arrived)
         // keeps where the user had scrolled to and what they had selected.

@@ -99,8 +99,10 @@ final class SharedTabContext {
     /** The plain-text view shown instead of the rows (UC-13), or null. Its content owns it. */
     private PlainTextView plainView;
 
+    /** {@code formatters} and {@code highlighters} give the app's lists as they are now (see {@link DetailPanel}). */
     SharedTabContext(JComponent tab, Host host, List<LogParser> parsers,
-                     List<LogFormatter> formatters, List<LogSyntaxHighlighter> highlighters) {
+                     java.util.function.Supplier<List<LogFormatter>> formatters,
+                     java.util.function.Supplier<List<LogSyntaxHighlighter>> highlighters) {
         this.tab = tab;
         this.host = host;
         this.parsers = parsers;

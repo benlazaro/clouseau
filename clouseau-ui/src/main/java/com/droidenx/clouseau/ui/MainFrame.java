@@ -236,7 +236,7 @@ public final class MainFrame extends JFrame {
     private List<LogSyntaxHighlighter> syntaxHighlighters() { return manager.syntaxHighlighters(); }
 
     private TabPanel newTabPanel() {
-        return new TabPanel(parsers(), formatters(), syntaxHighlighters());
+        return new TabPanel(parsers(), this::formatters, this::syntaxHighlighters);
     }
 
     /** This window's log tabs, in tab order. */

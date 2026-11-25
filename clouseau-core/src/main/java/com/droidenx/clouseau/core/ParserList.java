@@ -50,7 +50,7 @@ public final class ParserList {
             String name;
             try {
                 name = p.getName();
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | LinkageError e) {   // LinkageError: its plugin was removed
                 log.warn("Skipping plugin parser {}: getName() failed", p.getClass().getName(), e);
                 continue;
             }
@@ -67,7 +67,8 @@ public final class ParserList {
     }
 
     /**
-     * Wraps a plugin parser so its exceptions don't escape: a failing {@code canParse}
+     * Wraps a plugin parser so its exceptions don't escape, nor the {@code NoClassDefFoundError}
+     * an open tab gets from a parser whose plugin was removed: a failing {@code canParse}
      * counts as "no", and a failing {@code parse} turns the line into an UNKNOWN entry.
      * The first failure of each kind is logged with its stack trace.
      */
@@ -92,7 +93,7 @@ public final class ParserList {
         public boolean canParse(String rawLine) {
             try {
                 return delegate.canParse(rawLine);
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | LinkageError e) {   // LinkageError: its plugin was removed
                 if (canParseFailed.compareAndSet(false, true))
                     log.warn("Plugin parser '{}' failed in canParse; treating as no match", name, e);
                 return false;
@@ -105,7 +106,7 @@ public final class ParserList {
                 LogEntry entry = delegate.parse(rawLine);
                 if (entry != null) return entry;
                 throw new IllegalStateException("parse returned null");
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | LinkageError e) {   // LinkageError: its plugin was removed
                 if (parseFailed.compareAndSet(false, true))
                     log.warn("Plugin parser '{}' failed in parse; showing the line as UNKNOWN", name, e);
                 return new LogEntry(null, LogEntry.LogLevel.UNKNOWN, null, null, rawLine, rawLine, Map.of());
@@ -118,7 +119,7 @@ public final class ParserList {
                 LogEntry entry = delegate.parse(rawLine, writtenIn);
                 if (entry != null) return entry;
                 throw new IllegalStateException("parse returned null");
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | LinkageError e) {   // LinkageError: its plugin was removed
                 if (parseFailed.compareAndSet(false, true))
                     log.warn("Plugin parser '{}' failed in parse; showing the line as UNKNOWN", name, e);
                 return new LogEntry(null, LogEntry.LogLevel.UNKNOWN, null, null, rawLine, rawLine, Map.of());
@@ -130,7 +131,7 @@ public final class ParserList {
             try {
                 List<String> fields = delegate.customFields();
                 return fields != null ? fields : List.of();
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | LinkageError e) {   // LinkageError: its plugin was removed
                 log.warn("Plugin parser '{}' failed in customFields", name, e);
                 return List.of();
             }

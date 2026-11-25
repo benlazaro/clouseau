@@ -64,7 +64,17 @@ public final class TabPanel extends JPanel {
     /** Closes this tab; set by the window. */
     private Runnable closeAction = () -> {};
 
+    /** A tab with fixed formatters and highlighters (tests). */
     public TabPanel(List<LogParser> parsers, List<LogFormatter> formatters, List<LogSyntaxHighlighter> syntaxHighlighters) {
+        this(parsers, () -> formatters, () -> syntaxHighlighters);
+    }
+
+    /**
+     * A tab whose detail pane uses the app's formatters and highlighters as they are when it draws
+     * an entry, so a plugin removed in the Plugin Manager is never called again.
+     */
+    public TabPanel(List<LogParser> parsers, java.util.function.Supplier<List<LogFormatter>> formatters,
+                    java.util.function.Supplier<List<LogSyntaxHighlighter>> syntaxHighlighters) {
         super(new MigLayout("fill, insets 0, gapy 0", "[grow]", ""));
         mergedSettings = new MergedFileSettings(new MergedFileSettings.Host() {
             @Override public List<MergeLoad.File> files() { return getMergedFiles(); }

@@ -85,6 +85,20 @@ class ParserListTest {
     }
 
     @Test
+    void aParserWhosePluginWasRemovedReadsLinesAsUnknown() {
+        // An open tab still holds the parser; its plugin's classes are gone.
+        LogParser guarded = ParserList.guard(new LogParser() {
+            @Override public String getName() { return "Removed"; }
+            @Override public boolean canParse(String rawLine) { throw new NoClassDefFoundError("com/example/Parser"); }
+            @Override public LogEntry parse(String rawLine) { throw new NoClassDefFoundError("com/example/Parser"); }
+        }, "Removed");
+
+        assertThat(guarded.canParse("x")).isFalse();
+        assertThat(guarded.parse("x").level()).isEqualTo(LogEntry.LogLevel.UNKNOWN);
+        assertThat(guarded.parse("x", java.time.ZoneOffset.UTC).level()).isEqualTo(LogEntry.LogLevel.UNKNOWN);
+    }
+
+    @Test
     void nullFromParseBecomesUnknown() {
         LogParser guarded = ParserList.guard(new LogParser() {
             @Override public String getName() { return "Null"; }

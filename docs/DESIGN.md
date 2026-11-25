@@ -225,7 +225,9 @@ parser whose name is already used, or that has no name, is skipped with a warnin
 exceptions can't abort a load: a throwing `canParse` counts as no match, and a throwing
 (or `null`-returning) `parse` yields an UNKNOWN entry; the first failure of each kind is
 logged. The list is rebuilt at startup, when `parsers.json` is saved, and after a plugin
-refresh; open tabs keep the list they were created with.
+refresh; open tabs keep the list they were created with. A tab still holding a removed
+plugin's parser gets `NoClassDefFoundError` from it, which the wrapper also catches: its
+lines read as UNKNOWN.
 
 ## 6. Runtime behavior
 
@@ -665,8 +667,10 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   didn't load, as Failed with the reason (`whyNotLoaded`: not a JAR, no `Plugin-Id`, a
   duplicate ID). PF4J only logs these, so without this a dropped file just doesn't appear.
 - After a refresh, `MainFrame.reloadExtensions()` fetches formatters and highlighters
-  again. **Tabs that are already open keep the extensions they started with**; only new
-  tabs see the change.
+  again. An open tab's detail pane reads those two lists each time it draws an entry, and
+  makes its format toggles again when they changed, so a plugin removed or turned off is
+  never called again: its classes are unloaded, and calling one throws
+  `NoClassDefFoundError`. Parsers and live sources stay as the tab started with them.
 
 ### 6.8 Startup and single instance
 
