@@ -1022,6 +1022,26 @@ its find progress (`setFindProgressListener`: 0 when a find starts, -1 when it e
 cancelled, `clear()` included, so the bar never outlives its find). `PlainTextView` feeds its
 own from its line scan.
 
+### 6.17 Sortable tables
+
+**Rule:** every table whose rows sort by a header click goes round the same three steps:
+
+1. The first click on a column's header sorts by it **ascending**.
+2. The second click sorts it **descending**.
+3. The third click **clears the sort**: the rows go back to the table's own order (file
+   order in the log table, the repository's order in plugin search, archive order in the
+   zip picker), and the header's arrow goes away.
+
+A click on another column starts that one at ascending. A table sorts by one column at a
+time. A column that doesn't sort ignores the click.
+
+`SortCycle.next` is the rule, and every sorter uses it: `SortCycle.TableSorter` (Swing's
+`TableRowSorter` with its header click replaced; plugin search, zip picker) and
+`LogRowSorter`. A new sortable table uses `SortCycle.TableSorter`, never a bare
+`TableRowSorter`, whose clicks only flip between ascending and descending, so there's no
+way back to unsorted. A table that remembers its sort (plugin search, `plugins.browse.sort`)
+forgets it when it's cleared.
+
 ## 7. Persistence
 
 All state lives in a single **data folder** resolved by `AppDirs`:
@@ -1510,7 +1530,7 @@ orders them by the view.
 
 The generation counter and cancellation in section 6.1 are unchanged.
 
-**Sorting.** Only # and Timestamp sort, either way. `LogRowSorter` (ui) replaces Swing's
+**Sorting.** Only # and Timestamp sort, either way; a third click goes back to file order (section 6.17). `LogRowSorter` (ui) replaces Swing's
 `TableRowSorter`, which compared cell values on the EDT and so read the whole file (and,
 in a merged view, froze the window for as long). It never reads an entry: # ascending is
 the model's order and descending its reverse, with no arrays. For Timestamp, the rows'

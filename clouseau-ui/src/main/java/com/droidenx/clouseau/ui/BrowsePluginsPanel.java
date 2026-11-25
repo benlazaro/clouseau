@@ -162,9 +162,9 @@ final class BrowsePluginsPanel extends JPanel {
             }
         });
 
-        // Clicking a header sorts by it (again reverses). Versions sort as versions; a result
-        // without a date or a size sorts before those with one.
-        javax.swing.table.TableRowSorter<ResultsModel> sorter = new javax.swing.table.TableRowSorter<>(tableModel);
+        // Clicking a header sorts by it: ascending, descending, then unsorted (SortCycle).
+        // Versions sort as versions; a result without a date or a size sorts before those with one.
+        SortCycle.TableSorter<ResultsModel> sorter = new SortCycle.TableSorter<>(tableModel);
         sorter.setComparator(ResultsModel.COL_ARTIFACT, String.CASE_INSENSITIVE_ORDER);
         sorter.setComparator(ResultsModel.COL_VERSION, (a, b) -> compareVersions((String) a, (String) b));
         table.setRowSorter(sorter);

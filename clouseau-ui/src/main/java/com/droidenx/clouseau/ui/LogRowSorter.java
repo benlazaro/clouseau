@@ -77,13 +77,11 @@ final class LogRowSorter extends RowSorter<LogTableModel> {
 
     @Override public List<? extends SortKey> getSortKeys() { return keys; }
 
-    /** First click sorts ascending, then each click flips it, as Swing's sorter does. */
+    /** Ascending, descending, then back to the model's order, as every table does ({@link SortCycle}). */
     @Override
     public void toggleSortOrder(int column) {
         if (!isSortable(column)) return;
-        SortOrder order = !keys.isEmpty() && keys.get(0).getColumn() == column
-                && keys.get(0).getSortOrder() == SortOrder.ASCENDING ? SortOrder.DESCENDING : SortOrder.ASCENDING;
-        setSortKeys(List.of(new SortKey(column, order)));
+        setSortKeys(SortCycle.next(keys, column));
     }
 
     @Override

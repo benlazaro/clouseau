@@ -310,7 +310,8 @@ Drag a column header to move the column. Columns size themselves to their conten
 file opens.
 
 Click the **#** or **Timestamp** header to sort by it; click again to reverse it (newest
-first). Sorting is instant even on a huge file or merged view. On a file whose times are out
+first), and a third time to go back to file order. Every table in Clouseau that sorts by
+its headers works the same way. Sorting is instant even on a huge file or merged view. On a file whose times are out
 of order, the rows settle into time order a moment after the click while the window stays
 usable. A stack trace stays under its entry. The other columns don't sort: the filters
 answer "only errors" or "only this thread" without losing the timeline.

@@ -30,7 +30,7 @@ final class ZipPickerDialog extends JDialog {
     private final boolean[] ticked;
     private final EntryModel model;
     private final JTable table;
-    private final TableRowSorter<EntryModel> sorter;
+    private final TableRowSorter<EntryModel> sorter;      // a SortCycle.TableSorter
     private final JTextField filterField = new JTextField(24);
     private final JCheckBox selectAll = new JCheckBox(Messages.get("zip.picker.select.all"));
     private final JButton openButton = new JButton();
@@ -47,7 +47,7 @@ final class ZipPickerDialog extends JDialog {
         this.ticked = new boolean[entries.size()];
         this.model  = new EntryModel();
         this.table  = new JTable(model);
-        this.sorter = new TableRowSorter<>(model);
+        this.sorter = new SortCycle.TableSorter<>(model);
         setContentPane(buildContent());
         getRootPane().registerKeyboardAction(e -> dispose(),
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),

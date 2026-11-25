@@ -94,7 +94,7 @@ class LogRowSorterTest {
     }
 
     @Test
-    void toggleStartsAscendingThenFlips() throws Exception {
+    void toggleGoesAscendingDescendingThenUnsorted() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             sorter.toggleSortOrder(1);
             assertThat(sorter.getSortKeys().get(0).getSortOrder()).isEqualTo(SortOrder.ASCENDING);
@@ -102,6 +102,9 @@ class LogRowSorterTest {
             assertThat(sorter.getSortKeys().get(0).getSortOrder()).isEqualTo(SortOrder.DESCENDING);
             sorter.toggleSortOrder(3);   // Level isn't sortable
             assertThat(sorter.getSortKeys().get(0).getColumn()).isEqualTo(1);
+            sorter.toggleSortOrder(1);
+            assertThat(sorter.getSortKeys()).isEmpty();
+            assertThat(sorter.newestFirst()).isFalse();
         });
     }
 
