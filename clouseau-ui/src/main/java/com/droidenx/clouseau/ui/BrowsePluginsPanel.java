@@ -139,8 +139,6 @@ final class BrowsePluginsPanel extends JPanel {
         left.setHorizontalAlignment(SwingConstants.LEADING);
         ((DefaultTableCellRenderer) table.getTableHeader().getDefaultRenderer())
                 .setHorizontalAlignment(SwingConstants.LEADING);
-        DefaultTableCellRenderer right = new DefaultTableCellRenderer();
-        right.setHorizontalAlignment(SwingConstants.TRAILING);
         // Every column can be dragged wider or narrower; Artifact takes what's left at first.
         table.getTableHeader().setResizingAllowed(true);
         table.getTableHeader().setReorderingAllowed(false);
@@ -150,7 +148,25 @@ final class BrowsePluginsPanel extends JPanel {
             table.getColumnModel().getColumn(c).setMinWidth(least[c]);
             table.getColumnModel().getColumn(c).setPreferredWidth(start[c]);
         }
-        table.getColumnModel().getColumn(ResultsModel.COL_SIZE).setCellRenderer(right);
+        // The model gives dates and sizes as values, so they sort as such; these show them.
+        table.getColumnModel().getColumn(ResultsModel.COL_SIZE).setCellRenderer(new DefaultTableCellRenderer() {
+            { setHorizontalAlignment(SwingConstants.TRAILING); }
+            @Override protected void setValue(Object v) {
+                setText(v instanceof Long n ? formatBytes(n) : "—");
+            }
+        });
+        table.getColumnModel().getColumn(ResultsModel.COL_DATE).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override protected void setValue(Object v) {
+                setText(v instanceof java.time.Instant t ? ResultsModel.DAY.format(t) : "—");
+            }
+        });
+
+        // Clicking a header sorts by it (again reverses). Versions sort as versions; a result
+        // without a date or a size sorts before those with one.
+        javax.swing.table.TableRowSorter<ResultsModel> sorter = new javax.swing.table.TableRowSorter<>(tableModel);
+        sorter.setComparator(ResultsModel.COL_ARTIFACT, String.CASE_INSENSITIVE_ORDER);
+        sorter.setComparator(ResultsModel.COL_VERSION, (a, b) -> compareVersions((String) a, (String) b));
+        table.setRowSorter(sorter);
         table.getSelectionModel().addListSelectionListener(
                 e -> installBtn.setEnabled(table.getSelectedRow() >= 0));
         table.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -237,7 +253,7 @@ final class BrowsePluginsPanel extends JPanel {
         if (searchWorker != null) cancelSearch();
         tableModel.setResults(List.of());
         status.setToolTipText(null);
-        say(Messages.get("plugins.download.searching"), false);
+        say(" ", false);      // the loader says it's searching; the line is for the outcome
         startLoader(repo.getName());
 
         searchWorker = new SwingWorker<List<PluginRepository.Asset>, Void>() {
@@ -314,8 +330,9 @@ final class BrowsePluginsPanel extends JPanel {
     }
 
     private void doInstall() {
-        int row = table.getSelectedRow();
-        if (row < 0) return;
+        int view = table.getSelectedRow();
+        if (view < 0) return;
+        int row = table.convertRowIndexToModel(view);      // the table may be sorted
         PluginRepository       repo  = (PluginRepository) repoCombo.getSelectedItem();
         PluginRepository.Asset asset = tableModel.getAsset(row);
 
@@ -381,7 +398,7 @@ final class BrowsePluginsPanel extends JPanel {
         };
 
         /** The day the repository got the artifact, in this computer's timezone. */
-        private static final java.time.format.DateTimeFormatter DAY =
+        static final java.time.format.DateTimeFormatter DAY =
                 java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.withZone(java.time.ZoneId.systemDefault());
 
         private List<PluginRepository.Asset> rows = new ArrayList<>();
@@ -404,10 +421,50 @@ final class BrowsePluginsPanel extends JPanel {
                 case COL_ARTIFACT -> a.groupId().isBlank() ? a.artifactId()
                                                            : a.groupId() + ":" + a.artifactId();
                 case COL_VERSION  -> a.version();
-                case COL_DATE     -> a.published() != null ? DAY.format(a.published()) : "—";
-                case COL_SIZE     -> a.sizeBytes() > 0 ? formatBytes(a.sizeBytes()) : "—";
+                case COL_DATE     -> a.published();                              // null if unknown
+                case COL_SIZE     -> a.sizeBytes() > 0 ? a.sizeBytes() : null;   // null if unknown
                 default -> null;
             };
         }
+
+        @Override
+        public Class<?> getColumnClass(int col) {
+            return switch (col) {
+                case COL_DATE -> java.time.Instant.class;
+                case COL_SIZE -> Long.class;
+                default       -> String.class;
+            };
+        }
+    }
+
+    /**
+     * Orders two versions: as Semantic Versioning does when both are ({@code 1.9.0} before
+     * {@code 1.10.0}, {@code 2.0.0-rc.1} before {@code 2.0.0}); otherwise part by part, with
+     * runs of digits compared as numbers ({@code 1.0.9.Final} before {@code 1.0.10.Final}).
+     */
+    static int compareVersions(String a, String b) {
+        var va = com.droidenx.clouseau.core.UpdateCheck.Version.parse(a);
+        var vb = com.droidenx.clouseau.core.UpdateCheck.Version.parse(b);
+        if (va != null && vb != null) {
+            int c = va.compareTo(vb);
+            if (c != 0) return c;
+        }
+        int i = 0, j = 0;
+        while (i < a.length() && j < b.length()) {
+            char ca = a.charAt(i), cb = b.charAt(j);
+            if (Character.isDigit(ca) && Character.isDigit(cb)) {
+                int si = i, sj = j;
+                while (i < a.length() && Character.isDigit(a.charAt(i))) i++;
+                while (j < b.length() && Character.isDigit(b.charAt(j))) j++;
+                int c = new java.math.BigInteger(a.substring(si, i)).compareTo(new java.math.BigInteger(b.substring(sj, j)));
+                if (c != 0) return c;
+            } else {
+                int c = Character.compare(Character.toLowerCase(ca), Character.toLowerCase(cb));
+                if (c != 0) return c;
+                i++;
+                j++;
+            }
+        }
+        return Integer.compare(a.length() - i, b.length() - j);
     }
 }
