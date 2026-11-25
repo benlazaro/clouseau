@@ -1,6 +1,7 @@
 package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
+import com.droidenx.clouseau.core.Folds;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -12,7 +13,7 @@ import java.util.List;
  * Produces VS Code-inspired token colors for keys, string values,
  * numbers, booleans, nulls, and punctuation.
  */
-final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
+final class JsonSyntaxHighlighter implements LogSyntaxHighlighter, Folds.Source {
 
     // Names roles only; the theme colors them (ClouseauColors.syntaxColor).
 
@@ -30,6 +31,12 @@ final class JsonSyntaxHighlighter implements LogSyntaxHighlighter {
         int jsonStart = findJsonStart(input);
         if (jsonStart < 0) return List.of();
         return tokenize(input, jsonStart);
+    }
+
+    /** Its objects and arrays, for the detail pane to collapse (D-34). */
+    @Override
+    public List<Folds.Fold> folds(String input) {
+        return input == null ? List.of() : Folds.json(input, findJsonStart(input));
     }
 
     /**

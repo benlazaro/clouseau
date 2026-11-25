@@ -22,7 +22,7 @@ import java.util.List;
 
 /**
  * The detail pane's find strip (UC-3): finds text in the entry as the pane shows it, so a
- * formatted JSON or HL7 message is searched as you read it. Every match gets Find's light
+ * formatted JSON or HL7 message is searched as you read it, collapsed parts included (D-34). Every match gets Find's light
  * mark; the current one an amber box, kept in view. The query stays as the selection moves,
  * so stepping through rows shows the same value in each entry.
  * <p>
@@ -52,7 +52,27 @@ final class DetailFindBar extends JPanel {
     private boolean open;
     private boolean hasEntry = true;
 
+    /**
+     * Text the pane has collapsed (D-34). Find searches the whole text, collapsed parts included,
+     * so they count; a match in one is marked once it shows, and going to it opens what hides it.
+     * Null: nothing collapses, and the document's text is the whole text.
+     */
+    interface Folding {
+        /** The whole text: the document's, with every collapsed part as it is. */
+        String fullText();
+
+        /** Where {@code [start, end)} of the whole text is in the document, or null while it's collapsed. */
+        TextMatches.Range toDocument(int start, int end);
+
+        /** Opens what's collapsed over {@code [start, end)} of the whole text, drawing the text again. */
+        void open(int start, int end);
+    }
+    private Folding folding;
+
+    /** The matches, as ranges of the whole text (see {@link Folding}). */
     private List<TextMatches.Range> matches = List.of();
+    /** Each match's range in the document, or null while it's collapsed; in step with {@link #matches}. */
+    private List<TextMatches.Range> shownAt = List.of();
     private final List<Object> tags = new ArrayList<>();
     private int cursor = -1;
     private Timer debounce;
@@ -145,6 +165,7 @@ final class DetailFindBar extends JPanel {
         if (debounce != null) debounce.stop();
         clearMarks();
         matches = List.of();
+        shownAt = List.of();
         cursor = -1;
         counter.setText("");
         stepNote = null;
@@ -241,21 +262,21 @@ final class DetailFindBar extends JPanel {
         }
     }
 
-    /** Finds the query again; {@code jump} goes to the first match, else the current one stays. */
+    /** Set by the pane, which collapses parts of a message: see {@link Folding}. */
+    void setFolding(Folding folding) { this.folding = folding; }
+
+    /**
+     * Finds the query again; {@code jump} goes to the first match, else the current one stays.
+     * Only going to a match opens what's collapsed over it: the same entry drawn again doesn't,
+     * so a part the user collapses stays collapsed, its matches counted but not marked.
+     */
     private void research(boolean jump) {
         String query = field.getText();
         stepNote = null;      // finding again is never a step
-        TextMatches.Result result = TextMatches.find(documentText(), query,
+        TextMatches.Result result = TextMatches.find(folding != null ? folding.fullText() : documentText(), query,
                 caseToggle.isSelected(), regexToggle.isSelected());
-        clearMarks();
         matches = result.matches();
-        Highlighter hl = text.getHighlighter();
-        for (int i = 0; i < matches.size(); i++) {
-            TextMatches.Range r = matches.get(i);
-            try {
-                tags.add(hl.addHighlight(r.start(), r.end(), new MarkPainter(i)));
-            } catch (BadLocationException ignored) {}
-        }
+        mark();
         patternError = result.error();
         enableArrows(!matches.isEmpty());
         noMatch.set(!query.isEmpty() && matches.isEmpty());   // an invalid pattern finds nothing too
@@ -288,10 +309,34 @@ final class DetailFindBar extends JPanel {
     /** Whether the previous / next buttons are enabled; for tests. */
     boolean arrowsEnabled() { return next.isEnabled(); }
 
+    /** Marks every match the document shows, after working out where each one is in it. */
+    private void mark() {
+        clearMarks();
+        List<TextMatches.Range> at = new ArrayList<>(matches.size());
+        Highlighter hl = text.getHighlighter();
+        for (int i = 0; i < matches.size(); i++) {
+            TextMatches.Range m = matches.get(i);
+            TextMatches.Range r = folding != null ? folding.toDocument(m.start(), m.end()) : m;
+            at.add(r);
+            if (r == null) continue;
+            try {
+                tags.add(hl.addHighlight(r.start(), r.end(), new MarkPainter(i)));
+            } catch (BadLocationException ignored) {}
+        }
+        shownAt = at;
+    }
+
     private void showCurrent() {
         showCount(position(), false);
+        if (shownAt.get(cursor) == null && folding != null) {
+            // Collapsed: open what hides it. The text is drawn again, so every mark moves.
+            TextMatches.Range m = matches.get(cursor);
+            folding.open(m.start(), m.end());
+            mark();
+        }
         text.repaint();
-        TextMatches.Range r = matches.get(cursor);
+        TextMatches.Range r = shownAt.get(cursor);
+        if (r == null) return;
         // The caret goes to the match: a new entry's caret reset scrolls to the caret later on
         // (DefaultCaret does it in an invokeLater), which would otherwise undo this scroll.
         text.setCaretPosition(r.start());

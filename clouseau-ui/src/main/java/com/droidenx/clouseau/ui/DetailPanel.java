@@ -4,6 +4,7 @@ import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogFormatter;
 import com.droidenx.clouseau.api.LogSyntaxHighlighter;
 import com.droidenx.clouseau.core.AnnotationStore;
+import com.droidenx.clouseau.core.Folds;
 import com.droidenx.clouseau.core.SourceRefs;
 import com.droidenx.clouseau.core.StackTrace;
 import com.droidenx.clouseau.core.StackTraceHighlighter;
@@ -102,6 +103,22 @@ final class DetailPanel extends JPanel {
      */
     private List<SourceRefs.Found> sourceLinks = List.of();
 
+    /** The message's collapsible structures (D-34), as offsets in {@link #lastFormattedMessage}. */
+    private List<Folds.Fold> folds = List.of();
+    /** The opening brackets (offsets in the message) of the structures collapsed; kept while the entry is. */
+    private final Set<Integer> collapsed = new HashSet<>();
+    /** A chevron: the fold it opens or closes, and the document offset where its first line starts. */
+    private record FoldMark(Folds.Fold fold, int lineStart, boolean collapsed) {}
+    private List<FoldMark> foldMarks = List.of();
+    /** A collapsed structure's "… 3 keys": its span in the document, and the text it stands for. */
+    private record Placeholder(Folds.Fold fold, int start, int end, String hidden) {}
+    private List<Placeholder> placeholders = List.of();
+    private final List<Object> placeholderTags = new ArrayList<>();
+    /** The chevron under the mouse, drawn brighter; null for none. */
+    private FoldMark hoverMark;
+    /** True while a find opens collapsed text and draws the entry again: that drawing doesn't search again. */
+    private boolean revealing;
+
     private String  lastFormattedMessage = "";
     private int     messageFieldStart    = -1;
     /** Where values start, in pixels at the current text size: the hanging indent of every field. */
@@ -132,7 +149,30 @@ final class DetailPanel extends JPanel {
             public boolean getScrollableTracksViewportHeight() {
                 return getParent() != null && getUI().getPreferredSize(this).height <= getParent().getHeight();
             }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                paintFoldMarks((Graphics2D) g);
+            }
+
+            /** A selection over a collapsed structure copies what it stands for, not "… 3 keys". */
+            @Override
+            public void copy() {
+                String text = expandedText(getSelectionStart(), getSelectionEnd());
+                if (text == null) super.copy();
+                else Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new java.awt.datatransfer.StringSelection(text), null);
+            }
+
+            @Override
+            public String getToolTipText(java.awt.event.MouseEvent e) {
+                FoldMark mark = markAt(e.getPoint());
+                if (mark != null) return Messages.get(mark.collapsed() ? "detail.fold.expand.tooltip" : "detail.fold.collapse.tooltip");
+                return placeholderAt(e.getPoint()) != null ? Messages.get("detail.fold.expand.tooltip") : null;
+            }
         };
+        ToolTipManager.sharedInstance().registerComponent(detailArea);
         detailArea.setEditorKit(new WrapAnywhereKit());
         detailArea.setEditable(false);
         ClouseauColors.themedBackground(detailArea, ClouseauColors::detailBackground);
@@ -140,6 +180,7 @@ final class DetailPanel extends JPanel {
         detailArea.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
         findBar = new DetailFindBar(detailArea, toast, detailArea::requestFocusInWindow);
+        findBar.setFolding(findFolding);
         JPanel top = new JPanel(new BorderLayout());
         top.setOpaque(false);
         top.add(buildHeader(), BorderLayout.NORTH);
@@ -341,6 +382,14 @@ final class DetailPanel extends JPanel {
         in.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_SUBTRACT, ctrl), "detail.smaller");
         getActionMap().put("detail.bigger",  action(() -> stepFont(1)));
         getActionMap().put("detail.smaller", action(() -> stepFont(-1)));
+        // Collapse All and Expand All: the text-size keys with Shift, as in JetBrains IDEs.
+        int shift = java.awt.event.InputEvent.SHIFT_DOWN_MASK;
+        for (int vk : new int[] {java.awt.event.KeyEvent.VK_MINUS, java.awt.event.KeyEvent.VK_SUBTRACT})
+            in.put(KeyStroke.getKeyStroke(vk, ctrl | shift), "detail.collapseAll");
+        for (int vk : new int[] {java.awt.event.KeyEvent.VK_EQUALS, java.awt.event.KeyEvent.VK_ADD, java.awt.event.KeyEvent.VK_PLUS})
+            in.put(KeyStroke.getKeyStroke(vk, ctrl | shift), "detail.expandAll");
+        getActionMap().put("detail.collapseAll", action(this::collapseAll));
+        getActionMap().put("detail.expandAll",   action(this::expandAll));
 
         detailArea.getInputMap().put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, ctrl), "detail.copy");
         detailArea.getActionMap().put("detail.copy", action(() -> {
@@ -457,7 +506,8 @@ final class DetailPanel extends JPanel {
 
     /** Every field, as shown: the whole entry flashes. */
     void copyEntry() {
-        if (!toClipboard(detailArea.getText().stripTrailing())) return;
+        String expanded = expandedText(0, detailArea.getDocument().getLength());
+        if (!toClipboard((expanded != null ? expanded : detailArea.getText()).stripTrailing())) return;
         flash(0, detailArea.getDocument().getLength());
         showToast(Messages.get("detail.copied.entry"));
     }
@@ -486,12 +536,22 @@ final class DetailPanel extends JPanel {
             @Override public void mouseReleased(java.awt.event.MouseEvent e) {
                 if (maybeShow(e)) return;
                 if (!SwingUtilities.isLeftMouseButton(e) || e.getModifiersEx() != 0 || e.getClickCount() != 1) return;
+                if (detailArea.viewToModel2D(e.getPoint()) != pressedAt) return;
+                FoldMark mark = markAt(e.getPoint());
+                if (mark != null) { toggleFold(mark.fold()); return; }
+                Placeholder placeholder = placeholderAt(e.getPoint());
+                if (placeholder != null) { toggleFold(placeholder.fold()); return; }
                 SourceRefs.Found link = linkAt(e.getPoint());
-                if (link != null && detailArea.viewToModel2D(e.getPoint()) == pressedAt) openSource(List.of(link.ref()));
+                if (link != null) openSource(List.of(link.ref()));
             }
             @Override public void mouseMoved(java.awt.event.MouseEvent e) {
-                detailArea.setCursor(Cursor.getPredefinedCursor(
-                        linkAt(e.getPoint()) != null ? Cursor.HAND_CURSOR : Cursor.TEXT_CURSOR));
+                FoldMark mark = markAt(e.getPoint());
+                boolean clickable = mark != null || placeholderAt(e.getPoint()) != null || linkAt(e.getPoint()) != null;
+                detailArea.setCursor(Cursor.getPredefinedCursor(clickable ? Cursor.HAND_CURSOR : Cursor.TEXT_CURSOR));
+                setHoverMark(markOnRow(e.getPoint()));
+            }
+            @Override public void mouseExited(java.awt.event.MouseEvent e) {
+                setHoverMark(null);
             }
             private boolean maybeShow(java.awt.event.MouseEvent e) {
                 if (!e.isPopupTrigger()) return false;
@@ -519,6 +579,21 @@ final class DetailPanel extends JPanel {
                     menu.addSeparator();
                 }
                 addCopyItems(menu);
+                if (!folds.isEmpty()) {
+                    menu.addSeparator();
+                    JMenuItem expand = new JMenuItem(Messages.get("detail.fold.expand.all"));
+                    expand.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_EQUALS,
+                            Keys.MENU | java.awt.event.InputEvent.SHIFT_DOWN_MASK));
+                    expand.setEnabled(!collapsed.isEmpty());
+                    expand.addActionListener(a -> expandAll());
+                    JMenuItem collapse = new JMenuItem(Messages.get("detail.fold.collapse.all"));
+                    collapse.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_MINUS,
+                            Keys.MENU | java.awt.event.InputEvent.SHIFT_DOWN_MASK));
+                    collapse.setEnabled(collapsed.size() < folds.size());
+                    collapse.addActionListener(a -> collapseAll());
+                    menu.add(expand);
+                    menu.add(collapse);
+                }
                 menu.show(detailArea, e.getX(), e.getY());
                 return true;
             }
@@ -631,6 +706,13 @@ final class DetailPanel extends JPanel {
                 && java.util.Objects.equals(content.where(), shown.where());
         Point keepView = sameEntry ? detailScroll.getViewport().getViewPosition() : null;
         int keepStart = detailArea.getSelectionStart(), keepEnd = detailArea.getSelectionEnd();
+        if (!sameEntry) collapsed.clear();     // a new entry opens with everything expanded
+        for (Object tag : placeholderTags) detailArea.getHighlighter().removeHighlight(tag);
+        placeholderTags.clear();
+        folds = List.of();
+        foldMarks = List.of();
+        placeholders = List.of();
+        hoverMark = null;
         shown = entry != null ? content : null;
         updateFontSizeLabel();
         // "Log entry", then where it is: "· file line 41", "· db.log, line 41" or "· #1042 since connecting".
@@ -765,6 +847,20 @@ final class DetailPanel extends JPanel {
         String msgLabel = String.format("%-12s ", Messages.get("table.col.message") + ":");
         messageFieldStart = doc.getLength() + msgLabel.length();
         if (!colorizers.isEmpty()) {
+            // What can collapse comes from the highlighters that know their format's structures.
+            List<List<Folds.Fold>> foldLayers = new ArrayList<>();
+            for (LogSyntaxHighlighter h : colorizers) {
+                if (!(h instanceof Folds.Source source)) continue;
+                try {
+                    foldLayers.add(source.folds(messageText));
+                } catch (RuntimeException e) {
+                    warnOnce(h, e);
+                }
+            }
+            folds = Folds.merge(messageText, foldLayers);
+            Set<Integer> opens = new HashSet<>();
+            for (Folds.Fold f : folds) opens.add(f.open());
+            collapsed.retainAll(opens);
             renderSyntaxHighlightedField(doc, key, val, Messages.get("table.col.message"), messageText, colorizers);
         } else {
             appendField(doc, key, val, Messages.get("table.col.message"), messageText);
@@ -788,7 +884,8 @@ final class DetailPanel extends JPanel {
                     Math.max(0, Math.min(keepView.y, view.height - extent.height))));
         }
         // The find strip's marks were on the old text: find again, from the first match on a new entry.
-        findBar.textChanged(keepView == null);
+        // Not while a find is opening collapsed text: that find goes on with the new text itself.
+        if (!revealing) findBar.textChanged(keepView == null);
     }
 
     /**
@@ -1019,24 +1116,339 @@ final class DetailPanel extends JPanel {
                 warnOnce(h, e);
             }
         }
+        Folded out = new Folded(doc, text, baseStyle);
         int pos = 0;
         for (LogSyntaxHighlighter.Span span : com.droidenx.clouseau.core.SyntaxLayers.resolve(text.length(), layers)) {
             if (span.start() > pos) {
-                insertText(doc, text.substring(pos, span.start()), baseStyle);
+                out.insert(pos, span.start(), baseStyle);
             }
             SimpleAttributeSet spanStyle = new SimpleAttributeSet(baseStyle);
             StyleConstants.setForeground(spanStyle, ClouseauColors.syntaxColor(span.role()));
             // ACCENT is something to find among the rest (a class name, the app's own frame): bold
             // as well as colored, so it stands out a little more than its color alone.
             if (span.role() == LogSyntaxHighlighter.Role.ACCENT) StyleConstants.setBold(spanStyle, true);
-            insertText(doc, text.substring(span.start(), span.end()), spanStyle);
+            out.insert(span.start(), span.end(), spanStyle);
             pos = span.end();
         }
         if (pos < text.length()) {
-            insertText(doc, text.substring(pos), baseStyle);
+            out.insert(pos, text.length(), baseStyle);
         }
         insertText(doc, "\n", baseStyle);
         hang(doc, start);
+        out.finish();
+    }
+
+    /**
+     * Writes the message into the document with its collapsed structures (D-34) hidden: what's
+     * between a collapsed structure's brackets becomes one "… 3 keys" placeholder. Text is given
+     * as ranges of the message, in order; it notes where each fold's chevron and placeholder land.
+     */
+    private final class Folded {
+        private final StyledDocument doc;
+        private final String text;
+        private final SimpleAttributeSet baseStyle;
+        private final List<Folds.Fold> hidden;
+        private int nextHidden;
+        /** Each fold's opening bracket in the document, or -1 while not written (or hidden). */
+        private final int[] openAt;
+        private final List<Placeholder> written = new ArrayList<>();
+
+        Folded(StyledDocument doc, String text, SimpleAttributeSet baseStyle) {
+            this.doc = doc;
+            this.text = text;
+            this.baseStyle = baseStyle;
+            this.hidden = Folds.hidden(folds, collapsed);
+            this.openAt = new int[folds.size()];
+            java.util.Arrays.fill(openAt, -1);
+        }
+
+        /** Writes the message's {@code [from, to)} in {@code style}, leaving out what's collapsed. */
+        void insert(int from, int to, SimpleAttributeSet style) {
+            int pos = from;
+            while (pos < to) {
+                Folds.Fold h = nextHidden < hidden.size() ? hidden.get(nextHidden) : null;
+                if (h != null && pos >= h.hiddenEnd()) { nextHidden++; continue; }
+                if (h != null && pos >= h.hiddenStart()) {
+                    if (pos == h.hiddenStart()) placeholder(h);
+                    pos = Math.min(to, h.hiddenEnd());
+                    if (pos == h.hiddenEnd()) nextHidden++;
+                    continue;
+                }
+                int end = h != null ? Math.min(to, h.hiddenStart()) : to;
+                int at = doc.getLength();
+                for (int i = 0; i < folds.size(); i++) {
+                    int open = folds.get(i).open();
+                    if (open >= pos && open < end) openAt[i] = at + open - pos;
+                }
+                insertText(doc, text.substring(pos, end), style);
+                pos = end;
+            }
+        }
+
+        private void placeholder(Folds.Fold f) {
+            String key = switch (f.kind()) {
+                case KEYS -> "detail.fold.keys";
+                case FIELDS -> "detail.fold.fields";
+                case ITEMS -> "detail.fold.items";
+            };
+            String label = " … " + java.text.MessageFormat.format(Messages.get(key), f.count()) + " ";
+            SimpleAttributeSet style = new SimpleAttributeSet(baseStyle);
+            StyleConstants.setForeground(style, ClouseauColors.dimForeground());
+            style.addAttribute(WrapAnywhereKit.NO_BREAK, Boolean.TRUE);
+            int at = doc.getLength();
+            insertText(doc, label, style);
+            written.add(new Placeholder(f, at, at + label.length(), text.substring(f.hiddenStart(), f.hiddenEnd())));
+        }
+
+        /** Keeps the chevrons (one per line, the outermost) and placeholders, and outlines the placeholders. */
+        void finish() {
+            String docText;
+            try {
+                docText = doc.getText(0, doc.getLength());
+            } catch (BadLocationException e) {
+                return;
+            }
+            List<FoldMark> marks = new ArrayList<>();
+            Set<Integer> lines = new HashSet<>();
+            for (int i = 0; i < folds.size(); i++) {
+                if (openAt[i] < 0) continue;
+                int lineStart = docText.lastIndexOf('\n', openAt[i] - 1) + 1;
+                if (!lines.add(lineStart)) continue;   // in order, so the outermost on the line has it
+                Folds.Fold f = folds.get(i);
+                marks.add(new FoldMark(f, lineStart, collapsed.contains(f.open())));
+            }
+            foldMarks = List.copyOf(marks);
+            placeholders = List.copyOf(written);
+            for (Placeholder p : placeholders) {
+                try {
+                    placeholderTags.add(detailArea.getHighlighter().addHighlight(p.start(), p.end(), PLACEHOLDER_PAINTER));
+                } catch (BadLocationException ignored) {}
+            }
+        }
+    }
+
+    // ── Folds (D-34) ─────────────────────────────────────────────────────────
+
+    /** A rounded outline around a placeholder, in the key badges' colors, so it reads as something to press. */
+    private static final Highlighter.HighlightPainter PLACEHOLDER_PAINTER = (g, p0, p1, bounds, c) -> {
+        try {
+            java.awt.geom.Rectangle2D a = c.modelToView2D(p0), b = c.modelToView2D(p1);
+            if (a == null || b == null) return;
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            // On one line from a to b; wrapped, from a to the line's end.
+            double right = a.getY() == b.getY() ? b.getX() : c.getWidth() - c.getInsets().right;
+            java.awt.geom.RoundRectangle2D r = new java.awt.geom.RoundRectangle2D.Double(
+                    a.getX(), a.getY() + 1, right - a.getX(), a.getHeight() - 2, 6, 6);
+            g2.setColor(ClouseauColors.keyBadgeFill());
+            g2.fill(r);
+            g2.setColor(ClouseauColors.keyBadgeBorder());
+            g2.draw(r);
+            g2.dispose();
+        } catch (BadLocationException ignored) {}
+    };
+
+    /** Collapses the fold if it's open, else opens it, and draws the entry again where it was. */
+    private void toggleFold(Folds.Fold fold) {
+        if (!collapsed.remove(fold.open())) collapsed.add(fold.open());
+        refresh();
+    }
+
+    /** Collapses every structure in the message (opening one then shows its parts collapsed). */
+    void collapseAll() {
+        if (folds.isEmpty()) return;
+        for (Folds.Fold f : folds) collapsed.add(f.open());
+        refresh();
+    }
+
+    /** Opens every collapsed structure in the message. */
+    void expandAll() {
+        if (collapsed.isEmpty()) return;
+        collapsed.clear();
+        refresh();
+    }
+
+    /**
+     * What find searches and where it lands (D-34): the whole text, every placeholder replaced by
+     * what it stands for. Only the message has placeholders, and nothing before it is hidden, so
+     * the whole text and the document agree up to the message's start.
+     */
+    private final DetailFindBar.Folding findFolding = new DetailFindBar.Folding() {
+        @Override
+        public String fullText() {
+            javax.swing.text.Document doc = detailArea.getDocument();
+            String expanded = expandedText(0, doc.getLength());
+            if (expanded != null) return expanded;
+            try {
+                return doc.getText(0, doc.getLength());
+            } catch (BadLocationException e) {
+                return "";
+            }
+        }
+
+        @Override
+        public com.droidenx.clouseau.core.TextMatches.Range toDocument(int start, int end) {
+            int extra = 0;     // how much longer the whole text is than the document, so far
+            for (Placeholder p : placeholders) {
+                int from = p.start() + extra, to = from + p.hidden().length();
+                if (end <= from) break;
+                if (start < to) return null;      // over hidden text
+                extra += p.hidden().length() - (p.end() - p.start());
+            }
+            return new com.droidenx.clouseau.core.TextMatches.Range(start - extra, end - extra);
+        }
+
+        @Override
+        public void open(int start, int end) {
+            if (messageFieldStart < 0) return;
+            int from = start - messageFieldStart, to = end - messageFieldStart;
+            boolean opened = false;
+            for (Folds.Fold f : folds) {
+                if (collapsed.contains(f.open()) && from < f.hiddenEnd() && to > f.hiddenStart()) {
+                    collapsed.remove(f.open());
+                    opened = true;
+                }
+            }
+            if (!opened) return;
+            revealing = true;      // the find goes on with the new text itself
+            try {
+                refresh();
+            } finally {
+                revealing = false;
+            }
+        }
+    };
+
+    /**
+     * The text from {@code start} to {@code end} with every placeholder in it replaced by what it
+     * stands for, or null when no placeholder is in the range (the caller copies as usual).
+     */
+    String expandedText(int start, int end) {
+        if (end <= start) return null;
+        StringBuilder sb = null;
+        int pos = start;
+        try {
+            for (Placeholder p : placeholders) {
+                if (p.end() <= start || p.start() >= end) continue;
+                if (sb == null) sb = new StringBuilder();
+                if (p.start() > pos) sb.append(detailArea.getDocument().getText(pos, p.start() - pos));
+                sb.append(p.hidden());
+                pos = Math.max(pos, p.end());
+            }
+            if (sb == null) return null;
+            if (pos < end) sb.append(detailArea.getDocument().getText(pos, end - pos));
+        } catch (BadLocationException e) {
+            return null;
+        }
+        return sb.toString();
+    }
+
+    /** Where chevrons are drawn: the column just left of where the message's text starts. */
+    private java.awt.geom.Rectangle2D chevronBox(FoldMark mark) {
+        try {
+            java.awt.geom.Rectangle2D row = detailArea.modelToView2D(mark.lineStart());
+            java.awt.geom.Rectangle2D value = detailArea.modelToView2D(messageFieldStart);
+            if (row == null || value == null) return null;
+            int fontSize = AppPrefs.getDetailFontSize();
+            double cw = detailArea.getFontMetrics(ClouseauFonts.mono(Font.PLAIN, fontSize)).charWidth(' ');
+            double size = Math.max(cw * 1.6, 12);
+            // The row's text line, without the line spacing below it.
+            double textHeight = detailArea.getFontMetrics(ClouseauFonts.mono(Font.PLAIN, fontSize)).getHeight();
+            return new java.awt.geom.Rectangle2D.Double(value.getX() - size - cw * 0.3,
+                    row.getY() + (Math.min(row.getHeight(), textHeight) - size) / 2, size, size);
+        } catch (BadLocationException e) {
+            return null;
+        }
+    }
+
+    private void paintFoldMarks(Graphics2D g) {
+        if (foldMarks.isEmpty()) return;
+        Rectangle clip = g.getClipBounds();
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        for (FoldMark mark : foldMarks) {
+            java.awt.geom.Rectangle2D box = chevronBox(mark);
+            if (box == null || (clip != null && !box.intersects(clip))) continue;
+            // Collapsed ones always stand out a little; open ones stay faint until pointed at.
+            boolean hover = mark.equals(hoverMark);
+            g2.setColor(hover ? ClouseauColors.foreground()
+                      : mark.collapsed() ? ClouseauColors.dimForeground() : ClouseauColors.mutedForeground());
+            double s = box.getWidth() * 0.42, cx = box.getCenterX(), cy = box.getCenterY();
+            java.awt.geom.Path2D.Double path = new java.awt.geom.Path2D.Double();
+            if (mark.collapsed()) {     // ›
+                path.moveTo(cx - s / 3, cy - s / 1.5);
+                path.lineTo(cx + s / 3, cy);
+                path.lineTo(cx - s / 3, cy + s / 1.5);
+            } else {                    // ⌄
+                path.moveTo(cx - s / 1.5, cy - s / 3);
+                path.lineTo(cx, cy + s / 3);
+                path.lineTo(cx + s / 1.5, cy - s / 3);
+            }
+            g2.setStroke(new BasicStroke((float) Math.max(1.2, box.getWidth() / 9),
+                    BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.draw(path);
+        }
+        g2.dispose();
+    }
+
+    /** The chevron under {@code p}, with some room around it to make it easy to hit; or null. */
+    private FoldMark markAt(Point p) {
+        for (FoldMark mark : foldMarks) {
+            java.awt.geom.Rectangle2D box = chevronBox(mark);
+            if (box == null) continue;
+            double pad = box.getWidth() * 0.3;
+            if (p.x >= box.getX() - pad && p.x < box.getMaxX() + pad
+                    && p.y >= box.getY() - pad && p.y < box.getMaxY() + pad) return mark;
+        }
+        return null;
+    }
+
+    /** The chevron on the line under {@code p}, wherever on the line; or null. */
+    private FoldMark markOnRow(Point p) {
+        for (FoldMark mark : foldMarks) {
+            try {
+                java.awt.geom.Rectangle2D row = detailArea.modelToView2D(mark.lineStart());
+                if (row != null && p.y >= row.getY() && p.y < row.getMaxY()) return mark;
+            } catch (BadLocationException ignored) {}
+        }
+        return null;
+    }
+
+    private void setHoverMark(FoldMark mark) {
+        if (java.util.Objects.equals(mark, hoverMark)) return;
+        hoverMark = mark;
+        detailArea.repaint();
+    }
+
+    /** The placeholder under {@code p}, on its text; or null. */
+    private Placeholder placeholderAt(Point p) {
+        for (Placeholder ph : placeholders) {
+            if (onSpan(p, ph.start(), ph.end())) return ph;
+        }
+        return null;
+    }
+
+    /** Whether {@code p} is on the text from {@code start} to {@code end}, not just nearest to it. */
+    private boolean onSpan(Point p, int start, int end) {
+        int pos = detailArea.viewToModel2D(p);
+        if (pos < start || pos > end) return false;
+        try {
+            java.awt.geom.Rectangle2D from = detailArea.modelToView2D(start);
+            java.awt.geom.Rectangle2D to = detailArea.modelToView2D(end);
+            // On one line, the point must be between the ends; a wrapped span is taken by position.
+            if (from.getY() != to.getY()) return pos < end;
+            return p.x >= from.getX() && p.x < to.getX() && p.y >= from.getY() && p.y < from.getMaxY();
+        } catch (BadLocationException e) {
+            return false;
+        }
+    }
+
+    /** For tests: the openings (in the formatted message) of the structures that can collapse, and those collapsed. */
+    List<Integer> foldOpens() { return folds.stream().map(Folds.Fold::open).toList(); }
+    Set<Integer> collapsedOpens() { return Set.copyOf(collapsed); }
+    void toggleFoldAt(int open) {
+        for (Folds.Fold f : folds) if (f.open() == open) { toggleFold(f); return; }
     }
 
     /**

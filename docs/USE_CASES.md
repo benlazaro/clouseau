@@ -174,6 +174,17 @@ keys, and values by kind (numbers, `null` and enum constants, text). One too wid
 laid out one entry per line, indented by depth, where it stands in the message. The header's
 **toString** button shows it as logged.
 
+A JSON object or array, or an object's `toString()`, spread over several lines can be
+collapsed: a chevron beside the line where it opens folds it into one line such as
+`"user": { … 3 keys },`, and clicking the chevron or the placeholder opens it again. The
+right-click menu has **Expand All** and **Collapse All** (`Ctrl+Shift+=` / `Ctrl+Shift+-`);
+after Collapse All, opening a structure shows its parts still collapsed, to open level by
+level. Collapsed parts stay so while the entry is shown (a live tail adding lines to it
+included), and the next entry opens in full. Copying copies what's collapsed in full. Find
+counts matches in collapsed parts too, and going to one (`Enter`, `F3`, or a new search's
+first match) opens the parts around it, and only those. Plugin formats can't collapse yet
+(DESIGN.md D-34).
+
 Step 5 is the detail panel's own find strip, opened with `Ctrl+F` while
 focus is in the panel or with its header's search button (`Ctrl+F` elsewhere opens the
 table's find bar). It searches the entry as shown, so formatted JSON is searched formatted,

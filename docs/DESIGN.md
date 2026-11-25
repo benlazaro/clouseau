@@ -1,6 +1,6 @@
 # Clouseau Design
 
-> **Status:** Draft · **Last updated:** 2026-11-23
+> **Status:** Draft · **Last updated:** 2026-11-25
 >
 > This document describes *how* Clouseau works and *why* it is built that way. It
 > complements [`USE_CASES.md`](USE_CASES.md), which describes *what* Clouseau is for.
@@ -500,6 +500,29 @@ MUTED), keys KEY, `=` OPERATOR, brackets and commas PUNCTUATION, and values NUMB
 (`null`, booleans, enum constants) or STRING. Class names are ACCENT rather than KEYWORD
 because the keyword lavender read too close to KEY's pink beside them, and in the text color the
 outermost name was lost in the message around it.
+
+**Collapsing (D-34).** A JSON object or array, or an object's `toString()`, that the formatters
+spread over several lines can be collapsed. The built-in highlighters that know those formats
+(`JsonSyntaxHighlighter`, `ToStringHighlighter`) also implement `Folds.Source` (core) and say
+where each structure's brackets are; `Folds.merge` keeps those over more than one line, drops
+any that cross another, and `Folds.hidden` picks the outermost collapsed ones. `DetailPanel`
+writes the message without the text between a collapsed structure's brackets, putting a dim
+`… 3 keys` (keys, fields or items) in a rounded outline there instead, and draws a chevron (▾
+open, › collapsed) in the column just left of the message's text, on the line where each
+structure opens (one per line, the outermost). Open chevrons are faint until the mouse is on
+their line. Clicking a chevron or a placeholder toggles the structure; the right-click menu
+has Expand All and Collapse All (`Ctrl+Shift+=` / `Ctrl+Shift+-`). What's collapsed is kept,
+by each structure's opening bracket in the formatted message, while the same entry is drawn
+again (a live tail's continuation lines, a note, a theme switch) and cleared for a new entry.
+Copying a selection over a placeholder, and Copy Entry, copy what it stands for; Copy Message
+always copies the whole message. Find searches the whole text, collapsed parts included, through
+`DetailFindBar.Folding`: the pane gives it the document's text with each placeholder replaced by
+what it stands for, says where a match is in the document (or that it's collapsed), and opens
+what's collapsed over a match. Every match counts in **2 / 5**; only those shown are marked.
+Going to a match (the first of a new search, or a step) opens the structures over it and no
+others; the same entry drawn again doesn't, so collapsing one while the strip is open sticks,
+its matches still counted. The whole text doesn't change as structures open and close, so the
+matches keep their places. Plugins can't report structures yet (D-34).
 
 Text is drawn in `ClouseauFonts.mono`'s composite font, so characters JetBrains Mono lacks
 (CJK, many symbols) come from the system's fallback fonts. Control characters other than
@@ -2907,6 +2930,38 @@ UC-18 tells the user about a new Clouseau; plugins get the same, through the sam
 Rejected: updating automatically (see above); a notice per plugin (several updates would stack
 windows); saving the found updates between runs (a check at startup is cheap and can't go stale).
 
+### D-34 · Formatted JSON and toString() collapse; the structures come from the highlighters · Adopted
+
+A pretty-printed payload can run to hundreds of lines, most of them not what the user is
+looking for. Section 6.5 describes the behavior; the choices behind it:
+
+- **The highlighter says where the structures are**, not the formatter and not a scan for
+  brackets in any text. Formatters run one after another, so offsets from an earlier one are
+  wrong once a later one has changed the text; highlighters already read the final text and
+  are layered. Only a format's own parser knows which brackets are structure (a `(` in a log
+  line usually isn't), and turning a format's button off takes its chevrons with it.
+- **Drawn without the hidden text**, rather than hidden inside the `JTextPane` (zero-width
+  views): the document then holds what's on screen, so find marks, source links, selection and
+  wrapping work unchanged, and only copying needs to put the hidden text back.
+- **Chevrons painted in the label column**, not a row header beside the scroll pane: the
+  message's hanging indent leaves that column empty on every line but the first, where the
+  padded label leaves room, so nothing moves when a message can collapse.
+- **Remembered by opening bracket, for the entry shown.** Carrying folds to the next row by
+  path (`$.payload.items`) was considered and left out: rows of one stream usually differ in
+  shape, and a new entry opening in full is predictable.
+- **Find counts hidden matches and opens one when it goes to it**, as IDEs do. It searches the
+  whole text, which stays the same as structures open and close, and maps a match to the
+  document only to mark it. Opening every structure that holds a match when a search starts
+  (the first version) opened far more than the user looks at; opening on every redraw would
+  undo the user's own collapse.
+- **Built in only, for now.** `Folds` (core) is internal; the plugin API gets it (section 10)
+  once a release has shown the shape is right, since an API version on Maven Central is
+  permanent.
+
+Rejected: collapsing big messages by default (a log line is read once, and hiding part of it
+by default would hide what someone came to see); a fold for every multi-line bracket in any
+text (stack frames' `(Foo.java:42)` and prose would get chevrons).
+
 ## 10. Planned features
 
 Accepted in the use cases: none at the moment (UC-17, sessions, and UC-18, new-version
@@ -2915,20 +2970,14 @@ notices, are built).
 **Ideas, not yet accepted.** Kept for later, until a user asks for one or the need shows
 up in practice; each needs a use case before it is built.
 
-- **Folding in the detail panel:** collapse a run of framework frames (with its `... N
-  more`) into one line such as `▸ 37 framework frames`, and a JSON payload's objects and
-  arrays the same way, each opened with a click. `StackTrace.lines` (core) already gives the
-  runs of `FRAMEWORK_FRAME` lines. Folding hides text, so it needs its own decision on what
-  find, copy and Open in IDE do with folded text, and on whether it's a formatter, a
-  highlighter role or a new extension point plugins can use (an HL7 segment could fold too).
-  A likely shape for JSON (asked for 2026-11-25): a core class finds fold ranges in the
-  formatted message (a `{`/`[` ending a line to its match, skipping strings), which also
-  covers multi-line `toString()` output; `DetailPanel.render` draws a collapsed range as a
-  dim `{ … 12 keys }` rather than hiding text in the `JTextPane`, and remembers folds by
-  path (`$.payload.items`) so they survive a redraw and can carry to the next row; the
-  control is a gutter of ▾/▸ arrows as the scroll pane's row header, plus Collapse All /
-  Expand All in the context menu. Find searches the full text and opens the fold around a
-  match; Copy Message copies the full text.
+- **Folding framework frames:** collapse a run of framework frames (with its `... N more`)
+  into one line such as `› 37 framework frames`, opened with a click. JSON and `toString()`
+  structures collapse already (D-34), so this is one more `Folds.Source`, from the runs of
+  `FRAMEWORK_FRAME` lines `StackTrace.lines` (core) gives; but a fold of lines rather than of
+  brackets, and what Open in IDE does with a hidden frame, need deciding first.
+- **Folds for plugins:** a `LogSyntaxHighlighter.folds(String)` default method and a `Fold`
+  class in the API (minor version bump, not breaking), so a plugin's format (an HL7 segment
+  group, XML) can collapse too. Waits until D-34's shape has been used in a release.
 - **Same file twice:** open one file in two tabs with different filters (for example
   errors only next to everything). Needs an exception to "one tab per file" (UC-15).
 - **Synchronized selection:** selecting an entry in one tab moves other tabs to the same

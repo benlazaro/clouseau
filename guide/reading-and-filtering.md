@@ -66,6 +66,15 @@ hidden: **Log entry · file line 41**, **Log entry · db.log, line 41** in a mer
   `Point[x=1, y=2]` of records, `User{id=1, name='Bob'}`, and maps like `{user=bob, trace=abc}`.
   Pressed (the default), class names, keys and values are colored, and one too long for a line
   is spread over several, an entry per line, indented by depth. Released, it's shown as logged.
+- **Collapsing.** A JSON object or array, or an object's `toString()`, that's spread over
+  several lines has a small **▾** beside the line where it starts. Click it to fold the whole
+  thing into one line, such as `"items": [ … 12 items ],`, and click the **›** or the
+  `… 12 items` to open it again. Right-click the panel for **Collapse All** and **Expand
+  All** (`Ctrl+Shift+-` and `Ctrl+Shift+=`). After Collapse All, opening an object shows
+  what's inside it still collapsed, so you can open a big payload one level at a time. What
+  you collapse stays collapsed while the entry is selected, even as a live log adds lines to
+  it; the next entry you select opens in full. Copying always gives you the full text, never
+  the `…`, and [Find in the entry](#find-in-the-entry) searches collapsed parts too.
 - **Wrap Lines** wraps long lines to the panel's width instead of scrolling sideways (the same
   setting as in Settings).
 - **Aa** opens the text size: **−** and **+** around the current size, and **Reset**. With
@@ -84,6 +93,8 @@ searches every row.)
 
 - It searches the entry as you see it: a pretty-printed JSON message is searched
   pretty-printed, and the field lines above the message are searched too.
+- Matches inside a [collapsed](#the-detail-panel) object or list count too. Going to one
+  opens it, and only it, so the rest of what you collapsed stays out of the way.
 - Every match is marked, and the current one is boxed in amber and scrolled into view. The
   count shows which one it is, such as **2 / 5**.
 - `Enter` or `F3` goes to the next match, `Shift+Enter` or `Shift+F3` to the previous one

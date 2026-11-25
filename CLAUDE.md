@@ -46,7 +46,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     LogSniffer, TextLines, MergeOrder, EntryRows, MergedEntries, MergeLoad,
                     MergedFollow, TimeOffset, FilePattern, Session, SessionStore, SourceConnection,
                     UpdateCheck, SshSaved, SyntaxLayers, StackTrace, StackTraceHighlighter, ToStringFormat,
-                    ToStringFormatter, ToStringHighlighter, TextMatches, CompactTime,
+                    ToStringFormatter, ToStringHighlighter, Folds, TextMatches, CompactTime,
                     SourceRefs, JetBrainsIde, JetBrainsProjects, SourceFolders, Foreground,
                     HighlightRule, HighlightRules, HighlightRuleStore, JsonLinesParser, SyslogParser,
                     NetworkLogSource, PluginCatalog
@@ -217,6 +217,8 @@ release only.
   deferred load and "filters restored" strip (D-19).
 - `DetailPanel` (ui) — the selected entry's fields and formatted message, under the table.
   `DetailFindBar` (ui) is its find strip (Ctrl+F with focus in the pane), matching with `TextMatches` (core).
+  `Folds` (core) is what can collapse in a formatted message (D-34): the JSON and toString highlighters implement
+  `Folds.Source`, and the pane draws the chevrons and `… 3 keys` placeholders. Built in only; not in the plugin API yet.
   `Toast` (ui) is the brief centered note (copy, text size, find wraps) over the pane or the table.
 - `SourceRefs`, `JetBrainsIde`, `JetBrainsProjects`, `SourceFolders`, `Foreground` (core), `SourceOpener` (ui) — UC-19, D-28: Open in IDE.
   `SourceRefs` finds stack frames (`Foo.java:42`) and logger classes as package paths, `JetBrainsIde` opens

@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * names as an accent (an Apache {@code @hash} muted), keys, {@code =}, brackets and commas, and
  * values as numbers, literals ({@code null}, {@code true}, {@code false}, enum constants) or strings.
  * Unquoted text is a string too, since these formats don't quote them. */
-public final class ToStringHighlighter implements LogSyntaxHighlighter {
+public final class ToStringHighlighter implements LogSyntaxHighlighter, Folds.Source {
 
     /** The name on the detail panel's toggle, shared with {@link ToStringFormatter}. */
     public static final String NAME = "toString";
@@ -36,6 +36,11 @@ public final class ToStringHighlighter implements LogSyntaxHighlighter {
         List<Span> spans = new ArrayList<>();
         for (Struct s : ToStringFormat.find(input)) mark(input, s, spans);
         return spans;
+    }
+
+    @Override
+    public List<Folds.Fold> folds(String text) {
+        return Folds.toStrings(text);
     }
 
     private static void mark(String text, Node node, List<Span> spans) {
