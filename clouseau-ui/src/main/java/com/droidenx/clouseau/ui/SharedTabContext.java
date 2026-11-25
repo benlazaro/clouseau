@@ -183,7 +183,7 @@ final class SharedTabContext {
         // what was copied. Ctrl+C is bound on the table itself, ahead of its row copy (tab-joined
         // cells), so the pane keeps its own Ctrl+C for selected text.
         table.getInputMap(JComponent.WHEN_FOCUSED).put(
-                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_DOWN_MASK), "copyMessage");
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Keys.MENU), "copyMessage");
         table.getActionMap().put("copyMessage", new AbstractAction() {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) { detailPanel.copyMessage(); }
         });

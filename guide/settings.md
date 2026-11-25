@@ -118,7 +118,9 @@ window, and act on that window.
 | `Ctrl+Shift+N` | All notes |
 | `Ctrl+Shift+K` | Clear the table |
 
-The shortcuts use `Ctrl` on every platform, including macOS.
+On macOS, use `Cmd` wherever this guide says `Ctrl`, except for switching tabs with
+`Ctrl+Tab` and `Ctrl+PageDown` / `Ctrl+PageUp`, which stay `Ctrl` as in other Mac apps. The
+app's own menus, tooltips and shortcut list show `Cmd` there.
 
 The menus work from the keyboard too: `Alt` plus a menu's underlined letter opens it
 (`Alt+F` for File, `Alt+E` for Edit, `Alt+V` for View, `Alt+T` for Tools, `Alt+H` for

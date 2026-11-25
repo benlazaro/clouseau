@@ -9,7 +9,8 @@ import java.awt.event.KeyEvent;
  * Tab switching from the keyboard (UC-15): {@code Ctrl+Tab} / {@code Ctrl+Shift+Tab} and
  * {@code Ctrl+PageDown} / {@code Ctrl+PageUp} go to the next / previous tab with
  * wrap-around, {@code Ctrl+1}…{@code Ctrl+8} jump to that tab and {@code Ctrl+9} to the
- * last one.
+ * last one. The digits use the shortcut key ({@link Keys#MENU}), so they are Cmd on macOS,
+ * as in browsers; Tab and PageUp/PageDown stay Ctrl there too.
  *
  * <p>A {@link KeyEventDispatcher} rather than key bindings, because {@code Ctrl+Tab} is a
  * focus-traversal key (consumed before any binding runs) and {@code JTable} binds
@@ -53,6 +54,11 @@ final class TabShortcuts implements KeyEventDispatcher {
      * @param count     the number of tabs
      */
     static int targetIndex(int keyCode, int modifiers, int selected, int count) {
+        return targetIndex(keyCode, modifiers, selected, count, Keys.MENU);
+    }
+
+    /** As {@link #targetIndex(int, int, int, int)}, with the digits on {@code menuKey} (Ctrl, or Cmd on macOS). */
+    static int targetIndex(int keyCode, int modifiers, int selected, int count, int menuKey) {
         if (count <= 0) return -1;
         int mods = modifiers & MODIFIERS;
         // With no selection, "next" goes to the first tab and "previous" to the last.
@@ -63,14 +69,14 @@ final class TabShortcuts implements KeyEventDispatcher {
             switch (keyCode) {
                 case KeyEvent.VK_TAB, KeyEvent.VK_PAGE_DOWN -> { return next; }
                 case KeyEvent.VK_PAGE_UP -> { return prev; }
-                case KeyEvent.VK_9 -> { return count - 1; }
-                default -> {
-                    if (keyCode >= KeyEvent.VK_1 && keyCode <= KeyEvent.VK_8) {
-                        int idx = keyCode - KeyEvent.VK_1;
-                        return idx < count ? idx : -1;
-                    }
-                    return -1;
-                }
+                default -> { }
+            }
+        }
+        if (mods == menuKey) {
+            if (keyCode == KeyEvent.VK_9) return count - 1;
+            if (keyCode >= KeyEvent.VK_1 && keyCode <= KeyEvent.VK_8) {
+                int idx = keyCode - KeyEvent.VK_1;
+                return idx < count ? idx : -1;
             }
         }
         if (mods == CTRL_SHIFT && keyCode == KeyEvent.VK_TAB) return prev;

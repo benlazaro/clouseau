@@ -116,7 +116,7 @@ final class HighlightRulesDialog extends JDialog {
         list.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showSelected(); });
         ManagerDialogs.onDeleteKey(list, this::deleteSelected);
         list.registerKeyboardAction(e -> { int i = list.getSelectedIndex(); if (i >= 0) insert(rules.get(i)); },
-                KeyStroke.getKeyStroke(KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_FOCUSED);
+                KeyStroke.getKeyStroke(KeyEvent.VK_D, Keys.MENU), JComponent.WHEN_FOCUSED);
         list.registerKeyboardAction(e -> move(-1),
                 KeyStroke.getKeyStroke(KeyEvent.VK_UP, java.awt.event.InputEvent.ALT_DOWN_MASK), JComponent.WHEN_FOCUSED);
         list.registerKeyboardAction(e -> move(+1),
@@ -154,7 +154,7 @@ final class HighlightRulesDialog extends JDialog {
     private JPopupMenu rowMenu() {
         int i = list.getSelectedIndex();
         JPopupMenu menu = new JPopupMenu();
-        int ctrl = java.awt.event.InputEvent.CTRL_DOWN_MASK, alt = java.awt.event.InputEvent.ALT_DOWN_MASK;
+        int ctrl = Keys.MENU, alt = java.awt.event.InputEvent.ALT_DOWN_MASK;
         JMenuItem duplicate = new JMenuItem(Messages.get("rules.duplicate"));
         duplicate.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrl));
         duplicate.addActionListener(e -> insert(rules.get(i)));

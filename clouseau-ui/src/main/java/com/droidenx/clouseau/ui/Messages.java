@@ -18,12 +18,13 @@ public final class Messages {
 
     /**
      * Returns the localized string for {@code key}.
+     * On macOS, "Ctrl" in it reads "Cmd" ({@link Keys#label}).
      * Falls back to {@code "??key??"} rather than throwing, so a missing
      * translation never crashes the UI.
      */
     public static String get(String key) {
         try {
-            return BUNDLE.getString(key);
+            return Keys.label(BUNDLE.getString(key));
         } catch (MissingResourceException e) {
             return "??" + key + "??";
         }

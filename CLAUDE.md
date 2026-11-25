@@ -283,6 +283,9 @@ release only.
   `ClouseauColors.themedForeground`/`themedBackground`, not `setForeground`, or the color
   is lost on a live theme switch (DESIGN.md 6.8.1). State that holds theme colors itself
   (a table model's highlights) refreshes in `ClouseauColors.onThemeChange`.
+- Keyboard shortcuts use `Keys.MENU` (Cmd on macOS, Ctrl elsewhere), never `CTRL_DOWN_MASK`;
+  only `Ctrl+Tab` and `Ctrl+PageUp/PageDown` are Ctrl everywhere. Write "Ctrl" in
+  `messages.properties`: `Messages.get` shows it as "Cmd" on macOS.
 - New persistent files go in the data folder (`AppDirs.dataDir()`); credentials only
   through `CredentialStore`.
 - Read text files as UTF-8 with malformed input replaced and a leading BOM skipped

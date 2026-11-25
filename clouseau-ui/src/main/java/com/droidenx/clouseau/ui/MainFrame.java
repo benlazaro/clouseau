@@ -1861,7 +1861,7 @@ public final class MainFrame extends JFrame {
         JPanel badgeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         badgeRow.setOpaque(false);
 
-        String[] alternatives = shortcut.split(" / ");
+        String[] alternatives = Keys.label(shortcut).split(" / ");   // Cmd on macOS
         for (int a = 0; a < alternatives.length; a++) {
             if (a > 0) badgeRow.add(separator("/"));
             String[] keys = alternatives[a].split("\\+", -1);

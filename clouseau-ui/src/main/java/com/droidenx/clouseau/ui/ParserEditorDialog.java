@@ -304,7 +304,7 @@ public final class ParserEditorDialog extends JDialog {
         parserList.registerKeyboardAction(e -> deleteSelected(),
                 KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), JComponent.WHEN_FOCUSED);
         parserList.registerKeyboardAction(e -> duplicate(selectedDef()),
-                KeyStroke.getKeyStroke(KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_FOCUSED);
+                KeyStroke.getKeyStroke(KeyEvent.VK_D, Keys.MENU), JComponent.WHEN_FOCUSED);
         parserList.registerKeyboardAction(e -> move(-1),
                 KeyStroke.getKeyStroke(KeyEvent.VK_UP, java.awt.event.InputEvent.ALT_DOWN_MASK), JComponent.WHEN_FOCUSED);
         parserList.registerKeyboardAction(e -> move(+1),
@@ -1149,7 +1149,7 @@ public final class ParserEditorDialog extends JDialog {
             setSelectedIndex(row);
             JPopupMenu menu = new JPopupMenu();
             menu.add(menuItem("parsereditor.menu.duplicate",
-                    KeyStroke.getKeyStroke(KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK), true,
+                    KeyStroke.getKeyStroke(KeyEvent.VK_D, Keys.MENU), true,
                     () -> duplicate(def)));
             int at = indexInMine(def);
             if (at >= 0) {

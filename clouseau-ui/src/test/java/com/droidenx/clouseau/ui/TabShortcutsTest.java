@@ -44,6 +44,16 @@ class TabShortcutsTest {
     }
 
     @Test
+    void onMacOsDigitsUseCmdAndTabStaysCtrl() {
+        assertThat(TabShortcuts.targetIndex(VK_2, META_DOWN_MASK, 0, 5, META_DOWN_MASK)).isEqualTo(1);
+        assertThat(TabShortcuts.targetIndex(VK_9, META_DOWN_MASK, 0, 5, META_DOWN_MASK)).isEqualTo(4);
+        assertThat(TabShortcuts.targetIndex(VK_2, CTRL_DOWN_MASK, 0, 5, META_DOWN_MASK)).isEqualTo(-1);
+        assertThat(TabShortcuts.targetIndex(VK_TAB, CTRL_DOWN_MASK, 0, 5, META_DOWN_MASK)).isEqualTo(1);
+        assertThat(TabShortcuts.targetIndex(VK_PAGE_UP, CTRL_DOWN_MASK, 0, 5, META_DOWN_MASK)).isEqualTo(4);
+        assertThat(TabShortcuts.targetIndex(VK_TAB, META_DOWN_MASK, 0, 5, META_DOWN_MASK)).isEqualTo(-1);
+    }
+
+    @Test
     void ctrlDigitBeyondLastTabIsNotHandled() {
         assertThat(target(VK_6, CTRL_DOWN_MASK, 0, 5)).isEqualTo(-1);
     }

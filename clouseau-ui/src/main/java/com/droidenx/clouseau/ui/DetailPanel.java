@@ -62,9 +62,9 @@ final class DetailPanel extends JPanel {
 
     /** Copy Raw Line and Copy Entry; the tab binds them so they work from the table too. */
     static final KeyStroke COPY_RAW_KEY = KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C,
-            java.awt.event.InputEvent.CTRL_DOWN_MASK | java.awt.event.InputEvent.ALT_DOWN_MASK);
+            Keys.MENU | java.awt.event.InputEvent.ALT_DOWN_MASK);
     static final KeyStroke COPY_ENTRY_KEY = KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C,
-            java.awt.event.InputEvent.CTRL_DOWN_MASK | java.awt.event.InputEvent.SHIFT_DOWN_MASK);
+            Keys.MENU | java.awt.event.InputEvent.SHIFT_DOWN_MASK);
 
     private final List<LogFormatter> formatters;
     private final List<LogSyntaxHighlighter> syntaxHighlighters;
@@ -326,7 +326,7 @@ final class DetailPanel extends JPanel {
     /** Ctrl+wheel, Ctrl+Plus and Ctrl+Minus change the text size; Ctrl+C with nothing selected copies the message. */
     private void installKeys() {
         detailArea.addMouseWheelListener(e -> {
-            if (e.isControlDown()) { stepFont(e.getWheelRotation() < 0 ? 1 : -1); e.consume(); }
+            if (Keys.menuDown(e.getModifiersEx())) { stepFont(e.getWheelRotation() < 0 ? 1 : -1); e.consume(); }
             else {
                 // Without Ctrl, scroll as usual: hand the wheel to the scroll pane.
                 Container sp = SwingUtilities.getAncestorOfClass(JScrollPane.class, detailArea);
@@ -334,7 +334,7 @@ final class DetailPanel extends JPanel {
             }
         });
         InputMap in = getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        int ctrl = java.awt.event.InputEvent.CTRL_DOWN_MASK;   // as elsewhere in the app; also safe headless
+        int ctrl = Keys.MENU;   // Cmd on macOS; Ctrl elsewhere and headless
         in.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_EQUALS, ctrl), "detail.bigger");
         in.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ADD, ctrl), "detail.bigger");
         in.put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_MINUS, ctrl), "detail.smaller");
@@ -428,7 +428,7 @@ final class DetailPanel extends JPanel {
     private void addCopyItems(JPopupMenu menu) {
         String keys = "menu.edit.copy.";
         JMenuItem msg = new JMenuItem(Messages.get(keys + "message"));
-        msg.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        msg.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Keys.MENU));
         msg.addActionListener(a -> copyMessage());
         JMenuItem raw = new JMenuItem(Messages.get(keys + "raw"));
         raw.setAccelerator(COPY_RAW_KEY);

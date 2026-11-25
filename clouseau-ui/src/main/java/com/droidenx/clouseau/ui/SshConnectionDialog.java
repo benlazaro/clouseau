@@ -174,11 +174,11 @@ public class SshConnectionDialog extends JDialog {
         // Ctrl+S saves what the form holds without connecting: a connection, a log, or a new one.
         getRootPane().registerKeyboardAction(
                 e -> saveWithoutConnecting(),
-                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, java.awt.event.InputEvent.CTRL_DOWN_MASK),
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, Keys.MENU),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
         getRootPane().registerKeyboardAction(
                 e -> newConnection(),
-                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, java.awt.event.InputEvent.CTRL_DOWN_MASK),
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, Keys.MENU),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new java.awt.event.WindowAdapter() {
@@ -544,7 +544,7 @@ public class SshConnectionDialog extends JDialog {
         savedTree.registerKeyboardAction(e -> {
                     if (selectedObject() instanceof LogNode ln) duplicate(ln);
                 },
-                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK),
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, Keys.MENU),
                 JComponent.WHEN_FOCUSED);
         savedTree.addTreeSelectionListener(e -> {
             if (rebuilding) return;
@@ -851,7 +851,7 @@ public class SshConnectionDialog extends JDialog {
             menu.addSeparator();
         } else if (o instanceof LogNode ln) {
             JMenuItem dup = new JMenuItem(Messages.get("ssh.dialog.saved.menu.duplicate"));
-            dup.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+            dup.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, Keys.MENU));
             dup.addActionListener(a -> duplicate(ln));
             menu.add(dup);
             menu.addSeparator();

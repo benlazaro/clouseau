@@ -115,14 +115,14 @@ public final class TabPanel extends JPanel {
 
         // Ctrl+F: show find bar and focus the field
         getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK), "showFind");
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_F, Keys.MENU), "showFind");
         getActionMap().put("showFind", new AbstractAction() {
             @Override public void actionPerformed(ActionEvent e) { shared.openFind(); }
         });
 
         // Ctrl+Shift+N: open the annotations panel
         getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK), "showAnnotations");
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_N, Keys.MENU | InputEvent.SHIFT_DOWN_MASK), "showAnnotations");
         getActionMap().put("showAnnotations", new AbstractAction() {
             @Override public void actionPerformed(ActionEvent e) { showAnnotationsDialog(); }
         });

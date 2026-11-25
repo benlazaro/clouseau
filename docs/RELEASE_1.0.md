@@ -79,10 +79,11 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
 - [x] Guide pass (2026-11-25): every menu path and bold UI name in the README and guide checked
       against `messages.properties`; the shortcut table gained the copy shortcuts and `F3`; the
       screenshots and the social preview retaken.
-- [ ] macOS shortcuts: menu commands use Cmd (the menu shortcut key), but Find, the copy
-      shortcuts, All Notes, tab switching and first/last row are bound to Ctrl, so
-      `guide/settings.md` ("`Ctrl` on every platform, including macOS") is wrong. Bind them all
-      to the menu shortcut key (keeping `Ctrl+Tab`), then say "Cmd for Ctrl on macOS".
+- [x] macOS shortcuts (2026-11-25): Find, the copy shortcuts, All Notes, tab digits, first/last
+      row, text size and the dialogs' Ctrl+D/N/S were bound to Ctrl while the menus used Cmd.
+      Now every shortcut uses the shortcut key (`Keys.MENU`) except `Ctrl+Tab` and
+      `Ctrl+PageUp/PageDown`, and on macOS "Ctrl" in the app's text reads "Cmd"
+      (`Messages.get`, the shortcut list). Not yet tried on a Mac: do it with the rc.1 zip.
 - [ ] Clean up stale local branches (`claude/*`, `design-system-sync`, `row-menu-alignment`,
       `toggle-off-border-contrast`); keep `shelf/command-source`.
 

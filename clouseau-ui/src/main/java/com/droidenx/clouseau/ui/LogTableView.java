@@ -144,9 +144,9 @@ final class LogTableView {
         ClouseauColors.themedBackground(logTable, ClouseauColors::tableBackground);
         logTable.setFont(ClouseauFonts.mono(Font.PLAIN, 13));
         logTable.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_HOME, InputEvent.CTRL_DOWN_MASK), "scrollToTop");
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_HOME, Keys.MENU), "scrollToTop");
         logTable.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_END, InputEvent.CTRL_DOWN_MASK), "scrollToBottom");
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_END, Keys.MENU), "scrollToBottom");
         logTable.getActionMap().put("scrollToTop",    new AbstractAction() {
             public void actionPerformed(java.awt.event.ActionEvent e) { scrollToTop(); }
         });

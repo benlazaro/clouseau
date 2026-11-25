@@ -85,7 +85,7 @@ final class RowMenu {
         if (!entries.isEmpty()) {
             // ── Copy, named and keyed as in the Edit menu ─────────────────────────
             menu.add(copyItem("menu.edit.copy.message",
-                    KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK), host::copyMessage));
+                    KeyStroke.getKeyStroke(KeyEvent.VK_C, Keys.MENU), host::copyMessage));
             menu.add(copyItem("menu.edit.copy.raw", DetailPanel.COPY_RAW_KEY, host::copyRaw));
             menu.add(copyItem("menu.edit.copy.entry", DetailPanel.COPY_ENTRY_KEY, host::copyEntry));
             menu.addSeparator();
