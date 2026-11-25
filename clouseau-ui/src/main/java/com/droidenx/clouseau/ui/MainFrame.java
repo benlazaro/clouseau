@@ -880,6 +880,7 @@ public final class MainFrame extends JFrame {
             item.addActionListener(e -> openFile(p));
             recentItems.add(item);
         }
+        recentItems.add(new JPopupMenu.Separator());
         JMenuItem clear = menuItem(Messages.get("menu.file.recent.clear"));
         clear.addActionListener(e -> { AppPrefs.clearRecentFiles(); manager.refreshRecentMenus(); });
         recentItems.add(clear);
