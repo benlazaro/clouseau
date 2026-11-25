@@ -74,8 +74,11 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
       pre-release, and `api-v*` releases pass `--latest=false`. The README's and
       `guide/installing.md`'s download links go to `/releases/latest`, which falls back to the
       releases list while there is no Latest. After tagging `v1.0.0`, confirm the links land on it.
-- [ ] `docs/releases/v1.0.0-rc.1.md` and `docs/releases/v1.0.0.md`, written for users: what
-      1.0 means, the highlights since the first alpha, how to upgrade.
+- [x] `docs/releases/v1.0.0-rc.1.md` and `docs/releases/v1.0.0.md` (2026-11-25): what 1.0
+      means, what's new since 0.18 (rc.1) and what Clouseau does (1.0), how to upgrade. If
+      more lands before rc.1 is tagged, add it to its notes.
+- [ ] Before tagging `v1.0.0`: fill in the comment in `docs/releases/v1.0.0.md` with what
+      changed since the last `-rc` (or delete it), and add notes for any later `-rc.N`.
 - [x] Guide pass (2026-11-25): every menu path and bold UI name in the README and guide checked
       against `messages.properties`; the shortcut table gained the copy shortcuts and `F3`; the
       screenshots and the social preview retaken.
