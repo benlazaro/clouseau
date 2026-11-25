@@ -1,8 +1,8 @@
 # Road to 1.0
 
 What has to be true before tagging `v1.0.0`. Features are not the blocker: every use case
-is ✅ and the only known gap, G-15 (Browse finds any artifact, not just Clouseau plugins),
-matters only once there are third-party plugins. 1.0 is a promise to users: it installs
+is ✅, and the last known gap, G-15 (plugin discovery), was closed after rc.1 (D-32), along with
+plugin update notices (D-33), which go out in rc.2. 1.0 is a promise to users: it installs
 cleanly, upgrades never lose their data, and the files it writes stay readable.
 
 Plan: finish sections 1–3, tag `v1.0.0-rc.1` (the Release workflow marks it a
@@ -117,5 +117,4 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
 ## Not needed for 1.0
 
 - Plugin API 1.0. It is versioned on its own (D-27); freeze it once outside plugins exist.
-- G-15, plugin discovery. Same reason.
 - Native installers (exe, dmg, deb). The portable zips are the supported way to install.
