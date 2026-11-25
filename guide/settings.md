@@ -102,7 +102,8 @@ stays open, and each time you open the Plugin Manager. When one has a newer vers
 - **Tools → Plugins…** says how many updates there are, and so does the Plugin Manager's
   **Installed** tab.
 - In **Installed**, the plugin has an arrow and the new version after its own. Select it
-  and click **Update to …** in its details. The new version replaces the old one.
+  and click **Update to …** in its details. The new version replaces the old one, and a
+  note over the list says which plugin was updated and from which version to which.
 
 A plugin is checked against the repository you installed it from in **Browse**. A plugin
 you put in the `plugins` folder yourself is checked only if it's on Clouseau's plugin
@@ -165,7 +166,7 @@ syntax highlighters and [live sources](following.md#source-plugins).
   - Type to filter the plugins by name, description or what they add: `source` shows
     every source plugin.
   - Double-click a plugin, or select it and click **Install**. The new plugin is then
-    selected in Installed.
+    selected in Installed, with a note saying what was installed (or updated) and its version.
   - **Installed** shows the version you have. When the repository has a newer one, it
     says *update* next to it and the button says **Update**, which replaces your version
     with the new one. A plugin you already have at the latest version says

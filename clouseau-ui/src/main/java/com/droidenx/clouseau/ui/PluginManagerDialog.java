@@ -43,6 +43,8 @@ public final class PluginManagerDialog extends JDialog {
     private final PluginList list = new PluginList(model);
     private final CardLayout listCards = new CardLayout();
     private final JPanel listHolder = new JPanel(listCards);
+    /** Says what was just installed or updated, over the list. */
+    private final Toast toast = new Toast();
     private final JPanel details = new JPanel(new MigLayout("insets 10 4 0 4, gapy 4, hidemode 3", "[]16[grow]"));
     private final JTabbedPane tabs = new JTabbedPane();
     private BrowsePluginsPanel browse;
@@ -192,9 +194,11 @@ public final class PluginManagerDialog extends JDialog {
      */
     private Path install(Path downloaded, Path replaces) throws IOException {
         Path root = pluginManager.getPluginsRoot();
+        String oldVersion = null;
         if (replaces != null) {
             PluginInfo old = pluginManager.getPluginInfos().stream()
                     .filter(p -> samePath(p.file(), replaces)).findFirst().orElse(null);
+            if (old != null && !old.failed()) oldVersion = old.version();
             if (old == null || !pluginManager.deletePlugin(old.id())) pluginManager.deleteUnloadedFile(replaces);
             if (Files.exists(replaces))
                 throw new IOException(Messages.get("plugins.download.update.locked").formatted(replaces.getFileName()));
@@ -202,14 +206,37 @@ public final class PluginManagerDialog extends JDialog {
         Files.createDirectories(root);
         Path target = root.resolve(downloaded.getFileName().toString());
         Files.move(downloaded, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        installed(target);
+        installed(target, replaces != null, oldVersion);
         return target;
     }
 
-    private void installed(Path file) {
+    /**
+     * The new JAR is in the folder: reload, show it selected in Installed, and say in a toast over
+     * the list what was installed or updated, and to which version. One that didn't load says so;
+     * its details tell why.
+     */
+    private void installed(Path file, boolean update, String oldVersion) {
         reloadPlugins(file);
         tabs.setSelectedIndex(0);
         list.requestFocusInWindow();
+        PluginInfo p = list.getSelectedValue();
+        if (p == null || !samePath(p.file(), file)) return;
+        String text = installedToast(p.name(), p.version(), p.failed(), update, oldVersion);
+        int index = list.getSelectedIndex();
+        // After the tab switch is laid out, so the toast finds the list on screen and keeps clear of the row.
+        SwingUtilities.invokeLater(() -> {
+            Rectangle row = list.getCellBounds(index, index);
+            toast.show(listHolder, text, row == null ? null : SwingUtilities.convertRectangle(list, row, listHolder));
+        });
+    }
+
+    /** "Updated Foo to 1.2.0 (was 1.1.0)", "Installed Foo 1.2.0", or that it didn't load. */
+    static String installedToast(String name, String version, boolean failed, boolean update, String oldVersion) {
+        if (failed) return java.text.MessageFormat.format(Messages.get("plugins.installed.toast.failed"), name);
+        if (!update) return java.text.MessageFormat.format(Messages.get("plugins.installed.toast"), name, version);
+        return oldVersion == null || oldVersion.equals(version)
+                ? java.text.MessageFormat.format(Messages.get("plugins.updated.toast"), name, version)
+                : java.text.MessageFormat.format(Messages.get("plugins.updated.toast.from"), name, version, oldVersion);
     }
 
     private static boolean samePath(Path a, Path b) {

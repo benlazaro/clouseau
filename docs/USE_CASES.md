@@ -840,7 +840,8 @@ Central for a hand-installed plugin on the plugin list. A newer version shows as
   out;
 - a count on **Tools → Plugins…** and on the Plugin Manager's **Installed** tab;
 - on the plugin's row in Installed, an arrow and the new version, and **Update to …** in its
-  details, which replaces the installed version.
+  details, which replaces the installed version; a toast over the list then names the plugin
+  and its new and old versions (also after Browse installs or updates one).
 The same setting turns the plugin notice off. Plugins never update by themselves.
 
 **Current behavior:** All of the above works. Design: DESIGN.md D-23, and D-33 for plugins.
