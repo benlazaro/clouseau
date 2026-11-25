@@ -386,6 +386,17 @@ public final class AppPrefs {
         }
     }
 
+    /** The plugin search results' column widths, as {@code column:width,…}; null before the first drag. */
+    public static String getPluginSearchWidths() { return getString("plugins.browse.widths", null); }
+
+    public static void setPluginSearchWidths(String widths) {
+        if (widths == null) {
+            if (ROOT.remove("plugins.browse.widths") != null) save();
+        } else if (!widths.equals(getPluginSearchWidths())) {
+            putString("plugins.browse.widths", widths);
+        }
+    }
+
     /** Where an installed plugin came from: the repository's name as Browse lists it, and its group. */
     public record PluginOrigin(String repository, String groupId) {}
 

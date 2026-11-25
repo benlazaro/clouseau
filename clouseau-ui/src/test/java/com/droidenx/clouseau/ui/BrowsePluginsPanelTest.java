@@ -53,6 +53,24 @@ class BrowsePluginsPanelTest {
     }
 
     @Test
+    void theWidthsAreSavedByColumnNameAndReadBack() {
+        int[] widths = { 240, 100, 80, 130, 90, 70 };
+
+        String text = BrowsePluginsPanel.widthsText(widths);
+
+        assertThat(text).isEqualTo("artifact:240,adds:100,version:80,installed:130,date:90,size:70");
+        assertThat(BrowsePluginsPanel.parseWidths(text)).containsExactly(widths);
+    }
+
+    @Test
+    void aColumnTheSavedWidthsDontNameKeepsItsUsualWidth() {
+        assertThat(BrowsePluginsPanel.parseWidths(null)).containsOnly(0);
+        assertThat(BrowsePluginsPanel.parseWidths("size:70,downloads:50,date:wide,version:-3,artifact"))
+                .containsExactly(0, 0, 0, 0, 0, 70);
+        assertThat(BrowsePluginsPanel.widthsText(new int[0])).isNull();
+    }
+
+    @Test
     void equalVersionsAreEqual() {
         assertThat(BrowsePluginsPanel.compareVersions("1.0.0-SNAPSHOT", "1.0.0-SNAPSHOT")).isZero();
     }

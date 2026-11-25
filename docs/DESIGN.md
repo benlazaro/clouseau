@@ -1083,7 +1083,8 @@ image a hint says how to switch.
 | `themes/` | User-installed FlatLaf themes (`ThemeManager`). A theme sets level colors with `Clouseau.level.<LEVEL>` keys (for example `Clouseau.level.ERROR`) and highlighter colors with `Clouseau.syntax.<role>` keys (for example `Clouseau.syntax.keyword`); missing keys fall back to built-in defaults. |
 | `settings.json` → `ssh.connections` | Saved SSH connections (D-24): each a sign-in (`name`, `host`, `port`, `user`, `authType`, encrypted `password` / `keyPassphrase`, `keyFilePath`) with its `logs` (`remotePath`, `parserName`). `ssh.favorites` and `ssh.hostNames` are the earlier format, read once to convert and then left alone. |
 | `settings.json` → `update.*` | The new-version check (D-23): `update.check` (on/off), `update.skipped` (a version the user skipped), `update.last.check` (epoch milliseconds). |
-| `settings.json` → `plugins.browse.sort` | The plugin search results' sort, `column:order` (`artifact`, `version`, `date` or `size`; `ascending` or `descending`); missing when unsorted. |
+| `settings.json` → `plugins.browse.sort` | The plugin search results' sort, `column:order` (`artifact`, `adds`, `version`, `installed`, `date` or `size`; `ascending` or `descending`); missing when unsorted. |
+| `settings.json` → `plugins.browse.widths` | The plugin search results' column widths after the user last dragged one, `column:width,…` by the same column names; a column it doesn't name keeps its usual width. |
 | `settings.json` → `plugins.origins` | Where each plugin Browse installed came from, by artifact name: `{"repository": "<name in Browse>", "groupId": "…"}` (D-33). |
 | `settings.json` → `plugins.update.notified` | The newest version of each plugin the plugin-update notice has named, by artifact name (D-33). |
 | `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |

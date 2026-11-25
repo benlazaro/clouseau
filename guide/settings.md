@@ -177,7 +177,7 @@ syntax highlighters and [live sources](following.md#source-plugins).
     field to go back to the plugins.
   - Click a column's header to sort by it, again to reverse it, and a third time to go back
     to the repository's order; Clouseau keeps the sort. Drag a column's edge to make it
-    wider.
+    wider; Clouseau keeps the widths too.
   - While a slow repository answers, the results area shows what it's waiting for and for
     how long; **Cancel** (where Search was) stops it. A repository that doesn't answer
     within a minute stops with a note saying so.

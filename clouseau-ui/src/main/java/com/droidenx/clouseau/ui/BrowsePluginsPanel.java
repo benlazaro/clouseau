@@ -192,14 +192,28 @@ final class BrowsePluginsPanel extends JPanel {
         ((DefaultTableCellRenderer) table.getTableHeader().getDefaultRenderer())
                 .setHorizontalAlignment(SwingConstants.LEADING);
         // Every column can be dragged wider or narrower; Plugin takes what's left at first.
+        // The widths the user leaves are saved, and the next Plugin Manager starts with them.
         table.getTableHeader().setResizingAllowed(true);
         table.getTableHeader().setReorderingAllowed(false);
         int[] start = { 240, 100, 80, 130, 90, 70 };
         int[] least = { 120,  50, 50,  60, 60, 50 };
+        int[] savedWidths = parseWidths(AppPrefs.getPluginSearchWidths());
         for (int c = 0; c < start.length; c++) {
             table.getColumnModel().getColumn(c).setMinWidth(least[c]);
-            table.getColumnModel().getColumn(c).setPreferredWidth(start[c]);
+            table.getColumnModel().getColumn(c).setPreferredWidth(Math.max(least[c], savedWidths[c] > 0 ? savedWidths[c] : start[c]));
         }
+        // Saved when a press on the header ends with other widths, which only a drag does: not on
+        // every width change, since resizing the window changes them too.
+        table.getTableHeader().addMouseListener(new java.awt.event.MouseAdapter() {
+            private int[] before;
+            @Override public void mousePressed(java.awt.event.MouseEvent e) { before = columnWidths(); }
+            @Override public void mouseReleased(java.awt.event.MouseEvent e) {
+                int[] after = columnWidths();
+                if (before != null && !java.util.Arrays.equals(before, after))
+                    AppPrefs.setPluginSearchWidths(widthsText(after));
+                before = null;
+            }
+        });
         // A plugin from the list has its coordinates and description in its tooltip.
         table.getColumnModel().getColumn(ResultsModel.COL_PLUGIN).setCellRenderer(new DefaultTableCellRenderer() {
             @Override public Component getTableCellRendererComponent(
@@ -702,15 +716,54 @@ final class BrowsePluginsPanel extends JPanel {
         }
     }
 
-    /** The columns' names in the saved sort, by index; saved by name so a new column can't shift them. */
-    private static final String[] SORT_NAMES = { "artifact", "adds", "version", "installed", "date", "size" };
+    /** The columns' names in the saved sort and widths, by index; saved by name so a new column can't shift them. */
+    private static final String[] COLUMN_NAMES = { "artifact", "adds", "version", "installed", "date", "size" };
 
     /** The first sort key as {@code column:order}, such as {@code date:descending}; null when unsorted. */
     static String sortText(List<? extends SortKey> keys) {
         if (keys.isEmpty()) return null;
         SortKey k = keys.get(0);
-        if (k.getColumn() < 0 || k.getColumn() >= SORT_NAMES.length || k.getSortOrder() == SortOrder.UNSORTED) return null;
-        return SORT_NAMES[k.getColumn()] + ":" + k.getSortOrder().name().toLowerCase(java.util.Locale.ROOT);
+        if (k.getColumn() < 0 || k.getColumn() >= COLUMN_NAMES.length || k.getSortOrder() == SortOrder.UNSORTED) return null;
+        return COLUMN_NAMES[k.getColumn()] + ":" + k.getSortOrder().name().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** The table's column widths now, by model column (columns can't be moved here). */
+    private int[] columnWidths() {
+        int[] widths = new int[table.getColumnCount()];
+        for (int c = 0; c < widths.length; c++) widths[c] = table.getColumnModel().getColumn(c).getWidth();
+        return widths;
+    }
+
+    /** Each column's width by name, such as {@code artifact:240,adds:100}, in column order. */
+    static String widthsText(int[] widths) {
+        StringBuilder out = new StringBuilder();
+        for (int c = 0; c < Math.min(widths.length, COLUMN_NAMES.length); c++) {
+            if (widths[c] <= 0) continue;
+            if (!out.isEmpty()) out.append(',');
+            out.append(COLUMN_NAMES[c]).append(':').append(widths[c]);
+        }
+        return out.isEmpty() ? null : out.toString();
+    }
+
+    /**
+     * The widths {@link #widthsText} wrote, one per column, 0 for a column it doesn't name
+     * (one added since, or a damaged value): that column keeps its usual width.
+     */
+    static int[] parseWidths(String text) {
+        int[] widths = new int[COLUMN_NAMES.length];
+        if (text == null) return widths;
+        for (String part : text.split(",")) {
+            String[] p = part.trim().split(":");
+            if (p.length != 2) continue;
+            int col = java.util.Arrays.asList(COLUMN_NAMES).indexOf(p[0].trim());
+            try {
+                int w = Integer.parseInt(p[1].trim());
+                if (col >= 0 && w > 0) widths[col] = w;
+            } catch (NumberFormatException ignored) {
+                // that column keeps its usual width
+            }
+        }
+        return widths;
     }
 
     /** The sort key {@link #sortText} wrote, or null for anything else (an old or hand-edited value). */
@@ -718,7 +771,7 @@ final class BrowsePluginsPanel extends JPanel {
         if (text == null) return null;
         String[] p = text.trim().split(":");
         if (p.length != 2) return null;
-        int col = java.util.Arrays.asList(SORT_NAMES).indexOf(p[0]);
+        int col = java.util.Arrays.asList(COLUMN_NAMES).indexOf(p[0]);
         SortOrder order = switch (p[1]) {
             case "ascending"  -> SortOrder.ASCENDING;
             case "descending" -> SortOrder.DESCENDING;
