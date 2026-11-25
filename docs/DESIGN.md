@@ -631,6 +631,11 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   JAR, and the Plugin Manager moves it in. An update first deletes the installed version
   through PF4J (stopped and unloaded, which releases the JAR on Windows; two versions of
   one ID would clash) and stops with a message if the old file is still there.
+- Plugin updates (D-33): `PluginUpdates` (one per app, in `WindowManager`) asks each plugin's
+  repository for its latest version, `PluginRepository.latest(group, artifact)`, and tells its
+  listeners on the EDT: Tools → Plugins…, the Installed tab and its rows. `UpdateNotifier` runs it
+  5 s after startup and daily; the Plugin Manager runs it when it opens, and every install, update
+  or delete drops the updates that no longer apply (`folderChanged`) without asking again.
   While it's open it also calls `refresh()` when `folderStamp()` (the folder's names, sizes
   and times) changes, so a JAR dropped in or removed shows up without a Refresh button.
 - `getPluginInfos()` lists the loaded plugins, then each JAR or ZIP in the folder that
@@ -1079,6 +1084,8 @@ image a hint says how to switch.
 | `settings.json` → `ssh.connections` | Saved SSH connections (D-24): each a sign-in (`name`, `host`, `port`, `user`, `authType`, encrypted `password` / `keyPassphrase`, `keyFilePath`) with its `logs` (`remotePath`, `parserName`). `ssh.favorites` and `ssh.hostNames` are the earlier format, read once to convert and then left alone. |
 | `settings.json` → `update.*` | The new-version check (D-23): `update.check` (on/off), `update.skipped` (a version the user skipped), `update.last.check` (epoch milliseconds). |
 | `settings.json` → `plugins.browse.sort` | The plugin search results' sort, `column:order` (`artifact`, `version`, `date` or `size`; `ascending` or `descending`); missing when unsorted. |
+| `settings.json` → `plugins.origins` | Where each plugin Browse installed came from, by artifact name: `{"repository": "<name in Browse>", "groupId": "…"}` (D-33). |
+| `settings.json` → `plugins.update.notified` | The newest version of each plugin the plugin-update notice has named, by artifact name (D-33). |
 | `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |
 | `sessions/` | Named sessions (D-19), one `<name>.json` each, in the `session.json` format. |
 | `<logfile>.clouseau` | **Next to the log, not in the data folder.** Annotations for that file. |
@@ -2873,6 +2880,31 @@ Rejected: checking each candidate's POM for a `clouseau-api` dependency (Gradle 
 write `compileOnly` dependencies to the POM, so a plugin built like the example would
 fail it); a shared group for every plugin (authors publish under their own); reading every
 candidate JAR's manifest (a download per result).
+
+### D-33 · Plugin updates are found where each plugin came from, and offered, never applied · Adopted
+
+UC-18 tells the user about a new Clouseau; plugins get the same, through the same setting.
+
+- **Where to look.** A JAR doesn't say which repository it came from, so Browse records it on
+  install: `plugins.origins` in the settings, by artifact name, with the repository's name
+  and the group. A plugin put in the folder by hand is checked against Maven Central only if
+  `plugins.json` names it; anything else isn't checked (a guess could offer someone else's
+  artifact under the same name). The installed version is read from the file name, as Browse
+  does (D-32).
+- **When.** 5 s after startup and then daily (`UpdateNotifier`'s timers, but its own clock,
+  kept in memory: a restart checks again, which costs one request per installed plugin), and
+  whenever the Plugin Manager opens. Development builds check too, unlike Clouseau's own
+  check, because a plugin's versions don't depend on the build. Off with UC-18's setting.
+- **How it shows, quiet to loud.** The row in Installed (an arrow and the new version) with
+  **Update to …** in its details; a count on Tools → Plugins… and on the Installed tab; and one
+  notice for all plugins at once, shown only when a version is newer than the one the last
+  notice named (`plugins.update.notified`), so Later means "until there's something new".
+- **Never applied by itself.** A plugin is code running in Clouseau, and a new version may
+  need a newer plugin API; the user always clicks Update, which swaps the JAR as Browse's
+  Update does (the old one unloaded and deleted first).
+
+Rejected: updating automatically (see above); a notice per plugin (several updates would stack
+windows); saving the found updates between runs (a check at startup is cheap and can't go stale).
 
 ## 10. Planned features
 

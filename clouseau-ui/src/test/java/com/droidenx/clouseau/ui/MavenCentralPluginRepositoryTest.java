@@ -141,4 +141,13 @@ class MavenCentralPluginRepositoryTest {
 
         assertThat(repo.listPlugins()).extracting(PluginRepository.Asset::version).containsExactly("2.0");
     }
+
+    @Test
+    void latestFindsOnePluginsNewestVersion() throws Exception {
+        publish("io.example", "logfmt-clouseau-plugin", "1.3.0", "abc");
+        var latest = repo().latest("io.example", "logfmt-clouseau-plugin");
+        assertThat(latest.version()).isEqualTo("1.3.0");
+        assertThat(latest.listing()).isNull();
+        assertThat(repo().latest("io.example", "gone-clouseau-plugin")).isNull();
+    }
 }

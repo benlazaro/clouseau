@@ -4,13 +4,17 @@ import com.droidenx.clouseau.core.UpdateCheck;
 import com.droidenx.clouseau.core.UpdateCheck.Release;
 import com.droidenx.clouseau.core.UpdateCheck.Result;
 import com.droidenx.clouseau.core.UpdateCheck.Version;
+import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import lombok.extern.slf4j.Slf4j;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
 import java.awt.*;
 import java.text.MessageFormat;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Tells the user when a new Clouseau is released (UC-18).
@@ -36,6 +40,9 @@ final class UpdateNotifier {
     private final WindowManager windows;
     private boolean checking;
     private JDialog notice;
+    private JDialog pluginNotice;
+    /** When this run last checked the plugins (epoch milliseconds): at startup, then daily. */
+    private long lastPluginCheck;
 
     UpdateNotifier(WindowManager windows) {
         this.windows = windows;
@@ -43,10 +50,10 @@ final class UpdateNotifier {
 
     /** Starts the automatic checks. Call on the EDT once the windows are shown. */
     void start() {
-        Timer first = new Timer(FIRST_CHECK_DELAY_MS, e -> autoCheck());
+        Timer first = new Timer(FIRST_CHECK_DELAY_MS, e -> { autoCheck(); autoCheckPlugins(); });
         first.setRepeats(false);
         first.start();
-        new Timer(TICK_MS, e -> autoCheck()).start();
+        new Timer(TICK_MS, e -> { autoCheck(); autoCheckPlugins(); }).start();
     }
 
     private void autoCheck() {
@@ -203,5 +210,108 @@ final class UpdateNotifier {
         } catch (Exception e) {
             log.warn("Could not open {}", url, e);
         }
+    }
+
+    // ── Plugins (D-33) ────────────────────────────────────────────────────────
+
+    /**
+     * Checks the installed plugins shortly after startup, then once a day, unless new-version
+     * notices are off. Unlike Clouseau's own check, development builds check too: a plugin's
+     * versions mean the same whatever build runs it.
+     */
+    private void autoCheckPlugins() {
+        if (!AppPrefs.isUpdateCheck()) return;
+        long now = System.currentTimeMillis();
+        if (lastPluginCheck != 0 && now - lastPluginCheck < DAY_MS) return;
+        lastPluginCheck = now;
+        windows.pluginUpdates().check(this::maybeNotifyPlugins);
+    }
+
+    /**
+     * Shows the plugin notice when an update is newer than what it last told about, so Later
+     * means "not until there's something new": one notice per new version, for all plugins at once.
+     */
+    private void maybeNotifyPlugins(List<PluginUpdates.Update> updates) {
+        if (!AppPrefs.isUpdateCheck() || updates.isEmpty()) return;
+        Map<String, String> told = AppPrefs.getNotifiedPluginUpdates();
+        boolean news = updates.stream().anyMatch(u -> {
+            String was = told.get(u.artifactId());
+            return was == null || BrowsePluginsPanel.compareVersions(was, u.latest().version()) < 0;
+        });
+        if (!news) return;
+        updates.forEach(u -> told.put(u.artifactId(), u.latest().version()));
+        AppPrefs.setNotifiedPluginUpdates(told);
+        showPluginNotice(updates);
+    }
+
+    /** The plugin notice: which plugins have a new version, and Later · Open Plugins. Doesn't block the window. */
+    private void showPluginNotice(List<PluginUpdates.Update> updates) {
+        if (pluginNotice != null) pluginNotice.dispose();
+        MainFrame owner = windows.lastActive();
+        JDialog dialog = new JDialog(owner, Messages.get("plugins.update.title"), Dialog.ModalityType.MODELESS);
+        pluginNotice = dialog;
+
+        JLabel headline = new JLabel(MessageFormat.format(Messages.get("plugins.update.headline"), updates.size()));
+        headline.setFont(headline.getFont().deriveFont(Font.BOLD, 14f));
+        JPanel body = new JPanel(new MigLayout("insets 20 24 16 24, wrap 2, gapy 6, gapx 16", "[][grow]"));
+        body.add(headline, "span 2, wrap, gapbottom 4");
+        int shown = Math.min(updates.size(), MAX_LISTED);
+        for (PluginUpdates.Update u : updates.subList(0, shown)) {
+            JLabel name = new JLabel(pluginName(u));
+            JLabel versions = new JLabel(MessageFormat.format(Messages.get("plugins.update.versions"),
+                    u.installed(), u.latest().version()));
+            ClouseauColors.themedForeground(versions, ClouseauColors::dimForeground);
+            body.add(name);
+            body.add(versions);
+        }
+        if (updates.size() > shown) {
+            JLabel more = new JLabel(MessageFormat.format(Messages.get("plugins.update.more"), updates.size() - shown));
+            ClouseauColors.themedForeground(more, ClouseauColors::dimForeground);
+            body.add(more, "span 2");
+        }
+
+        JCheckBox notify = new JCheckBox(Messages.get("update.notify"), AppPrefs.isUpdateCheck());
+        notify.addActionListener(e -> AppPrefs.setUpdateCheck(notify.isSelected()));
+        JButton later = new JButton(Messages.get("update.button.later"));
+        JButton open = new JButton(Messages.get("plugins.update.open"));
+        later.addActionListener(e -> dialog.dispose());
+        open.addActionListener(e -> {
+            dialog.dispose();
+            MainFrame frame = windows.lastActive();
+            if (frame != null) frame.openPluginManager();
+        });
+
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(body, BorderLayout.CENTER);
+        root.add(DialogFooter.of(new JComponent[] { notify }, later, open), BorderLayout.SOUTH);
+        dialog.setContentPane(root);
+        dialog.getRootPane().setDefaultButton(open);
+        dialog.getRootPane().registerKeyboardAction(e -> dialog.dispose(),
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                if (pluginNotice == dialog) pluginNotice = null;
+            }
+        });
+        dialog.pack();
+        dialog.setSize(dialog.getWidth() + 48, dialog.getHeight());
+        dialog.setResizable(false);
+        dialog.setLocationRelativeTo(owner);
+        dialog.setVisible(true);
+        log.info("Plugin updates available: {}", updates.stream()
+                .map(u -> u.artifactId() + " " + u.installed() + " -> " + u.latest().version()).toList());
+    }
+
+    /** How many plugins the notice names; the rest are counted. */
+    private static final int MAX_LISTED = 5;
+
+    /** The plugin's name as the Plugin Manager shows it, or its artifact name. */
+    private String pluginName(PluginUpdates.Update u) {
+        Path f = u.file().toAbsolutePath().normalize();
+        return windows.pluginManager().getPluginInfos().stream()
+                .filter(p -> p.file() != null && p.file().toAbsolutePath().normalize().equals(f) && !p.failed())
+                .map(com.droidenx.clouseau.runtime.ClouseauPluginManager.PluginInfo::name)
+                .findFirst().orElse(u.artifactId());
     }
 }

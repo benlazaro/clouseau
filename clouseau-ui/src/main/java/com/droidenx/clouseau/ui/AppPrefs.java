@@ -386,6 +386,53 @@ public final class AppPrefs {
         }
     }
 
+    /** Where an installed plugin came from: the repository's name as Browse lists it, and its group. */
+    public record PluginOrigin(String repository, String groupId) {}
+
+    /** Each plugin Browse installed, by artifact name: where to look for its updates (D-33). */
+    public static java.util.Map<String, PluginOrigin> getPluginOrigins() {
+        java.util.Map<String, PluginOrigin> out = new java.util.LinkedHashMap<>();
+        JsonObject o = object(ROOT, "plugins.origins");
+        if (o == null) return out;
+        for (var e : o.entrySet()) {
+            if (!e.getValue().isJsonObject()) continue;
+            JsonObject v = e.getValue().getAsJsonObject();
+            String repo = jsonString(v, "repository", null), group = jsonString(v, "groupId", null);
+            if (repo != null && group != null) out.put(e.getKey(), new PluginOrigin(repo, group));
+        }
+        return out;
+    }
+
+    public static void setPluginOrigin(String artifactId, PluginOrigin origin) {
+        JsonObject o = object(ROOT, "plugins.origins");
+        if (o == null) {
+            o = new JsonObject();
+            ROOT.add("plugins.origins", o);
+        }
+        JsonObject v = new JsonObject();
+        v.addProperty("repository", origin.repository());
+        v.addProperty("groupId", origin.groupId());
+        o.add(artifactId, v);
+        save();
+    }
+
+    /** The newest version of each plugin the update notice has told about, by artifact name. */
+    public static java.util.Map<String, String> getNotifiedPluginUpdates() {
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        JsonObject o = object(ROOT, "plugins.update.notified");
+        if (o == null) return out;
+        for (var e : o.entrySet())
+            if (e.getValue().isJsonPrimitive()) out.put(e.getKey(), e.getValue().getAsString());
+        return out;
+    }
+
+    public static void setNotifiedPluginUpdates(java.util.Map<String, String> notified) {
+        JsonObject o = new JsonObject();
+        notified.forEach(o::addProperty);
+        ROOT.add("plugins.update.notified", o);
+        save();
+    }
+
     /** A manager dialog's size, by its id: {@link #getWindowSize}, for {@link ManagerDialogs#rememberSize}. */
     public static java.awt.Dimension getDialogSize(String id) { return getWindowSize(id); }
 

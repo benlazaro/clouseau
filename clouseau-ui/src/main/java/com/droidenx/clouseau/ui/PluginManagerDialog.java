@@ -23,6 +23,9 @@ import java.util.List;
  * the left and a trash can on the row under the mouse. A file in the plugins folder that
  * didn't load is listed too, marked Failed, with the reason. The list follows the folder: a
  * JAR dropped in or removed while the window is open shows up without a Refresh button.
+ *
+ * <p>A plugin with a newer version in its repository (D-33) has an update mark on its row and an
+ * Update button in its details; opening the window checks again.
  */
 public final class PluginManagerDialog extends JDialog {
 
@@ -31,6 +34,10 @@ public final class PluginManagerDialog extends JDialog {
 
     private final ClouseauPluginManager pluginManager;
     private final Runnable onRefresh;
+    private final PluginUpdates updates;
+    private final Runnable updatesListener = this::updatesChanged;
+    /** The plugin being updated from the details, or null. */
+    private Path updating;
 
     private final DefaultListModel<PluginInfo> model = new DefaultListModel<>();
     private final PluginList list = new PluginList(model);
@@ -42,13 +49,20 @@ public final class PluginManagerDialog extends JDialog {
     private String folderStamp;
     private final Timer folderWatch;
 
-    public PluginManagerDialog(JFrame owner, ClouseauPluginManager pluginManager, Runnable onRefresh) {
+    public PluginManagerDialog(JFrame owner, ClouseauPluginManager pluginManager, PluginUpdates updates, Runnable onRefresh) {
         super(owner, Messages.get("plugins.dialog.title"), true);
         this.pluginManager = pluginManager;
+        this.updates       = updates;
         this.onRefresh     = onRefresh;
         buildUI();
         reload(null);
         if (!model.isEmpty()) list.setSelectedIndex(0);
+        showUpdateCount();
+
+        // What has an update: known from the last check at once, then asked again.
+        updates.addListener(updatesListener);
+        updates.folderChanged();
+        updates.check(null);
 
         // The folder is the source of truth: reload when what's in it changes.
         folderStamp = pluginManager.folderStamp();
@@ -61,7 +75,7 @@ public final class PluginManagerDialog extends JDialog {
         });
         folderWatch.start();
         addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override public void windowClosed(java.awt.event.WindowEvent e) { folderWatch.stop(); }
+            @Override public void windowClosed(java.awt.event.WindowEvent e) { folderWatch.stop(); updates.removeListener(updatesListener); }
         });
 
         ManagerDialogs.rememberSize(this, "plugins", new Dimension(760, 540), new Dimension(600, 420));
@@ -77,7 +91,7 @@ public final class PluginManagerDialog extends JDialog {
 
     private void buildUI() {
         // ── Installed ─────────────────────────────────────────────────────────
-        list.setCellRenderer(new PluginRenderer());
+        list.setCellRenderer(new PluginRenderer(p -> updates.forFile(p.file())));
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showDetails(list.getSelectedValue()); });
         list.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "toggle");
@@ -167,6 +181,7 @@ public final class PluginManagerDialog extends JDialog {
         pluginManager.refresh();
         onRefresh.run();
         folderStamp = pluginManager.folderStamp();
+        updates.folderChanged();
         reload(select);
     }
 
@@ -220,7 +235,68 @@ public final class PluginManagerDialog extends JDialog {
         if (!pluginManager.deletePlugin(p.id())) pluginManager.deleteUnloadedFile(p.file());
         onRefresh.run();
         folderStamp = pluginManager.folderStamp();
+        updates.folderChanged();
         reload(null);
+    }
+
+    // ── Updates (D-33) ────────────────────────────────────────────────────────
+
+    /** The updates changed: the rows' marks, the tab's count and the details. */
+    private void updatesChanged() {
+        list.repaint();
+        showUpdateCount();
+        if (updating == null) showDetails(list.getSelectedValue());
+    }
+
+    /** The Installed tab says how many plugins have an update. */
+    private void showUpdateCount() {
+        int n = updates.current().size();
+        tabs.setTitleAt(0, n == 0 ? Messages.get("plugins.tab.installed")
+                : java.text.MessageFormat.format(Messages.get("plugins.tab.installed.updates"), n));
+    }
+
+    /**
+     * Updates {@code p} from its details: downloads the new version from the repository the
+     * update came from, in the background, then swaps it in as Browse's Update does.
+     */
+    private void runUpdate(PluginInfo p, PluginUpdates.Update u, JButton button) {
+        PluginRepository repo = PluginRepository.configured().stream()
+                .filter(r -> r.getName().equals(u.repository())).findFirst().orElse(null);
+        if (repo == null) return;
+        updating = u.file();
+        button.setEnabled(false);
+        button.setText(Messages.get("plugins.update.running"));
+        new SwingWorker<Path, Void>() {
+            private Path tempDir;
+            @Override protected Path doInBackground() throws Exception {
+                tempDir = Files.createTempDirectory("clouseau-plugin");
+                return repo.download(u.latest(), tempDir, bytes -> {});
+            }
+            @Override protected void done() {
+                updating = null;
+                try {
+                    install(get(), u.file());
+                } catch (Exception ex) {
+                    Throwable cause = ex instanceof java.util.concurrent.ExecutionException && ex.getCause() != null
+                            ? ex.getCause() : ex;
+                    JOptionPane.showMessageDialog(PluginManagerDialog.this,
+                            Messages.get("plugins.update.failed").formatted(p.name(), cause.getMessage()),
+                            Messages.get("plugins.download.install.error.title"), JOptionPane.WARNING_MESSAGE);
+                    showDetails(list.getSelectedValue());
+                } finally {
+                    deleteQuietly(tempDir);
+                }
+            }
+        }.execute();
+    }
+
+    private static void deleteQuietly(Path dir) {
+        if (dir == null) return;
+        try (java.util.stream.Stream<Path> files = Files.walk(dir)) {
+            files.sorted(java.util.Comparator.reverseOrder()).forEach(f -> {
+                try { Files.deleteIfExists(f); } catch (IOException ignored) { /* temp: the OS cleans it */ }
+            });
+        } catch (IOException ignored) { /* temp: the OS cleans it */ }
     }
 
     // ── Details ───────────────────────────────────────────────────────────────
@@ -249,6 +325,20 @@ public final class PluginManagerDialog extends JDialog {
                 row(Messages.get("plugins.detail.id"), new JLabel(p.id()));
                 if (!p.provider().isEmpty()) row(Messages.get("plugins.detail.author"), new JLabel(p.provider()));
                 if (!p.license().isEmpty())  row(Messages.get("plugins.detail.license"), new JLabel(p.license()));
+            }
+            PluginUpdates.Update u = updates.forFile(p.file());
+            if (u != null) {
+                JButton update = new JButton(java.text.MessageFormat.format(
+                        Messages.get("plugins.update.button"), u.latest().version()));
+                if (updating != null && updating.equals(u.file())) {
+                    update.setEnabled(false);
+                    update.setText(Messages.get("plugins.update.running"));
+                }
+                update.addActionListener(e -> runUpdate(p, u, update));
+                JLabel k = new JLabel(Messages.get("plugins.detail.update"));
+                k.setForeground(ClouseauColors.dimForeground());
+                details.add(k);
+                details.add(update, "wrap");
             }
             if (p.file() != null) {
                 JLabel file = new JLabel(p.file().getFileName().toString());
@@ -348,6 +438,8 @@ public final class PluginManagerDialog extends JDialog {
             if (e.getX() >= getWidth() - TRASH) return Messages.get("plugins.row.delete.tooltip");
             PluginInfo p = getModel().getElementAt(row);
             if (e.getX() < BOX && !p.failed()) return Messages.get("plugins.row.toggle.tooltip");
+            PluginUpdates.Update u = updates.forFile(p.file());
+            if (u != null) return java.text.MessageFormat.format(Messages.get("plugins.row.update.tooltip"), u.latest().version(), u.installed());
             return null;
         }
 
@@ -368,9 +460,24 @@ public final class PluginManagerDialog extends JDialog {
     /**
      * A plugin's row: the on/off box (or a Failed mark), its name in bold with the version
      * dimmed after it, and what it adds on the right; its description (or why it failed) below.
-     * A plugin that's off reads dimmed.
+     * A plugin that's off reads dimmed. One with a newer version has an update mark (an arrow
+     * and the new version, in the accent color) after its version.
      */
     private static final class PluginRenderer extends ListRowPanel implements ListCellRenderer<PluginInfo> {
+        private final java.util.function.Function<PluginInfo, PluginUpdates.Update> updateOf;
+        private final JLabel update = new JLabel();
+        private Color updateColor;
+        /** The update mark's arrow, in {@link #updateColor}. */
+        private final Icon updateIcon = new Icon() {
+            @Override public int getIconWidth()  { return 12; }
+            @Override public int getIconHeight() { return 12; }
+            @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                ToolIcons.paintUpdate(g2, x, y, updateColor);
+                g2.dispose();
+            }
+        };
         private final JCheckBox box = new JCheckBox();
         private final JLabel failedMark = new JLabel("!", SwingConstants.CENTER);
         private final JLabel name = new JLabel();
@@ -378,10 +485,12 @@ public final class PluginManagerDialog extends JDialog {
         private final JLabel types = new JLabel();
         private final JLabel description = new JLabel();
 
-        PluginRenderer() {
+        PluginRenderer(java.util.function.Function<PluginInfo, PluginUpdates.Update> updateOf) {
             // 12px on the left: 8px inside the selection, which is inset 4px (List.selectionInsets).
             super(new MigLayout("insets 7 12 7 " + TRASH + ", gapx 8, gapy 2, hidemode 3",
-                    "[" + (BOX - 16) + "!][][grow][]", "[][]"));
+                    "[" + (BOX - 16) + "!][][][grow][]", "[][]"));
+            this.updateOf = updateOf;
+            update.setIconTextGap(4);
             box.setOpaque(false);
             box.setContentAreaFilled(false);
             failedMark.setFont(failedMark.getFont().deriveFont(Font.BOLD));
@@ -389,9 +498,10 @@ public final class PluginManagerDialog extends JDialog {
             add(box, "spany 2, aligny top, gaptop 1");
             add(failedMark, "spany 2, aligny top, gaptop 1, w 16!");
             add(name);
-            add(version, "growx");
+            add(version);
+            add(update, "growx");
             add(types, "wrap");
-            add(description, "span 3, growx, wmin 0");
+            add(description, "span 4, growx, wmin 0");
         }
 
         @Override
@@ -411,6 +521,15 @@ public final class PluginManagerDialog extends JDialog {
             name.setForeground(p.enabled() || p.failed() ? fg : dim);
             version.setText(p.version());
             version.setForeground(dim);
+            PluginUpdates.Update u = updateOf.apply(p);
+            // Always there, empty when there's no update: it's the cell that stretches, which keeps
+            // what the plugin adds (or Failed) on the right.
+            update.setIcon(u != null ? updateIcon : null);
+            update.setText(u != null ? u.latest().version() : "");
+            if (u != null) {
+                updateColor = selected ? list.getSelectionForeground() : ClouseauColors.accentBlue();
+                update.setForeground(updateColor);
+            }
             if (p.failed()) {
                 types.setText(Messages.get("plugins.state.failed"));
                 types.setForeground(error);

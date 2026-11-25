@@ -38,6 +38,7 @@ final class WindowManager {
     private final List<MainFrame> windows = new ArrayList<>();
     private MainFrame lastActive;
     private final UpdateNotifier updates = new UpdateNotifier(this);
+    private final PluginUpdates pluginUpdates;
 
     private List<LogParser> parsers = List.of();
     private List<LogFormatter> formatters = List.of();
@@ -47,6 +48,7 @@ final class WindowManager {
 
     WindowManager(ClouseauPluginManager pluginManager) {
         this.pluginManager = pluginManager;
+        this.pluginUpdates = new PluginUpdates(pluginManager.getPluginsRoot());
         reloadExtensions();
         // Auto-highlight rules are global (D-29): every open tab matches again when they change.
         HighlightRuleSet.onChange(rules -> allPanels().forEach(p -> p.setHighlightRules(rules)));
@@ -56,6 +58,9 @@ final class WindowManager {
 
     /** Tells the user about new versions (UC-18); Help → Check for Updates… uses it too. */
     UpdateNotifier updates() { return updates; }
+
+    /** Which installed plugins have a newer version (D-33). */
+    PluginUpdates pluginUpdates() { return pluginUpdates; }
 
     // ── Extensions ────────────────────────────────────────────────────────────
 

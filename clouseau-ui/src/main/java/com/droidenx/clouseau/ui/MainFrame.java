@@ -58,6 +58,9 @@ public final class MainFrame extends JFrame {
     private JMenu fileMenu;
     private JMenuItem lastOpenItem;
     private JMenuItem exitItem;
+    /** Tools → Plugins…, which counts the plugin updates (D-33). */
+    private JMenuItem pluginsItem;
+    private final Runnable pluginUpdatesListener = this::showPluginUpdateCount;
     private final List<Component> sourceItems = new ArrayList<>();
     private final List<Component> recentItems = new ArrayList<>();
 
@@ -125,11 +128,13 @@ public final class MainFrame extends JFrame {
         // window has its own, active only while that window is.
         KeyEventDispatcher tabShortcuts = new TabShortcuts(this, tabbedPane);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(tabShortcuts);
+        manager.pluginUpdates().addListener(pluginUpdatesListener);
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override public void windowActivated(java.awt.event.WindowEvent e) { manager.activated(MainFrame.this); }
             @Override public void windowClosing(java.awt.event.WindowEvent e) { requestClose(); }
             @Override public void windowClosed(java.awt.event.WindowEvent e) {
                 KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(tabShortcuts);
+                manager.pluginUpdates().removeListener(pluginUpdatesListener);
             }
         });
         addWindowStateListener(e -> manager.sessionChanged());
@@ -495,11 +500,11 @@ public final class MainFrame extends JFrame {
         Mnemonics.set(rulesItem, 'A');
         rulesItem.addActionListener(e -> HighlightRulesDialog.open(this, null));
         toolsMenu.add(rulesItem);
-        JMenuItem pluginsItem = menuItem(Messages.get("menu.tools.plugins"));
+        pluginsItem = menuItem(Messages.get("menu.tools.plugins"));
         Mnemonics.set(pluginsItem, 'P');
         pluginsItem.setToolTipText(Messages.get("toolbar.plugins.tooltip"));
-        pluginsItem.addActionListener(e ->
-                new PluginManagerDialog(this, pluginManager, manager::reloadExtensions).setVisible(true));
+        pluginsItem.addActionListener(e -> openPluginManager());
+        showPluginUpdateCount();
         toolsMenu.add(pluginsItem);
         menuBar.add(toolsMenu);
 
@@ -837,6 +842,18 @@ public final class MainFrame extends JFrame {
         JMenuItem item = new JMenuItem(text);
         item.setMargin(menuMargin());
         return item;
+    }
+
+    /** Tools → Plugins…: the Plugin Manager, on Installed. */
+    void openPluginManager() {
+        new PluginManagerDialog(this, pluginManager, manager.pluginUpdates(), manager::reloadExtensions).setVisible(true);
+    }
+
+    /** Tools → Plugins… says how many plugins have an update, when any do. */
+    private void showPluginUpdateCount() {
+        int n = manager.pluginUpdates().current().size();
+        pluginsItem.setText(n == 0 ? Messages.get("menu.tools.plugins")
+                : java.text.MessageFormat.format(Messages.get("menu.tools.plugins.updates"), n));
     }
 
     private void openSettings() {

@@ -91,6 +91,25 @@ works when they're off.
 The edge build (`clouseau-edge.jar`) and Clouseau run from source never check by
 themselves: they're ahead of the latest release.
 
+### Plugin updates
+
+Clouseau also checks your plugins a few seconds after it starts, then once a day while it
+stays open, and each time you open the Plugin Manager. When one has a newer version:
+
+- A small window lists the plugins with updates (*logfmt 1.2.0 → 1.3.0*). **Open Plugins**
+  opens the Plugin Manager; **Later** closes the notice, and you won't hear about those
+  versions again, only about newer ones.
+- **Tools → Plugins…** says how many updates there are, and so does the Plugin Manager's
+  **Installed** tab.
+- In **Installed**, the plugin has an arrow and the new version after its own. Select it
+  and click **Update to …** in its details. The new version replaces the old one.
+
+A plugin is checked against the repository you installed it from in **Browse**. A plugin
+you put in the `plugins` folder yourself is checked only if it's on Clouseau's plugin
+list, against Maven Central. The check asks each repository for the plugin's latest
+version and sends nothing else. Plugins never update by themselves. The same **Tell me
+about new versions** setting turns these notices off.
+
 ## Keyboard shortcuts
 
 **Help → Keyboard Shortcuts** lists them in the app. They work anywhere in a Clouseau

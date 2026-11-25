@@ -115,10 +115,7 @@ final class BrowsePluginsPanel extends JPanel {
         try {
             PluginRepository selected = (PluginRepository) repoCombo.getSelectedItem();
             repoModel.removeAllElements();
-            repoModel.addElement(new MavenCentralPluginRepository());
-            for (AppPrefs.PluginRepo r : AppPrefs.getPluginRepos()) {
-                if ("nexus3".equals(r.type())) repoModel.addElement(new NexusPluginRepository(r));
-            }
+            PluginRepository.configured().forEach(repoModel::addElement);
             if (selected != null) {
                 for (int i = 0; i < repoModel.getSize(); i++) {
                     if (repoModel.getElementAt(i).getName().equals(selected.getName())) {
@@ -607,6 +604,9 @@ final class BrowsePluginsPanel extends JPanel {
                 searchBtn.setEnabled(true);
                 try {
                     Path file = installer.install(get(), replaces);
+                    // Where it came from, so the update check knows where to look (D-33).
+                    if (!asset.groupId().isBlank())
+                        AppPrefs.setPluginOrigin(asset.artifactId(), new AppPrefs.PluginOrigin(repo.getName(), asset.groupId()));
                     pluginFiles = readPluginFiles();
                     tableModel.fireTableDataChanged();
                     say(" ", false);

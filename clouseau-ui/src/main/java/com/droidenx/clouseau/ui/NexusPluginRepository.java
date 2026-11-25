@@ -89,6 +89,22 @@ final class NexusPluginRepository implements PluginRepository {
         return latest;
     }
 
+    /**
+     * The newest {@code groupId:artifactId} on the server, by a name search (exact, so no
+     * wildcard is needed); null if it has none.
+     */
+    @Override
+    public Asset latest(String groupId, String artifactId) throws IOException, InterruptedException {
+        Map<String, Asset> found = new LinkedHashMap<>();
+        collect("name", artifactId, found, true);
+        Asset newest = null;
+        for (Asset a : found.values()) {
+            if (!a.groupId().equals(groupId) || !a.artifactId().equals(artifactId)) continue;
+            if (newest == null || BrowsePluginsPanel.compareVersions(a.version(), newest.version()) > 0) newest = a;
+        }
+        return newest;
+    }
+
     /** The conventionally named plugins among {@code assets}, newest version of each, in the order first seen. */
     static List<Asset> latestOfEach(java.util.Collection<Asset> assets) {
         Map<String, Asset> newest = new LinkedHashMap<>();

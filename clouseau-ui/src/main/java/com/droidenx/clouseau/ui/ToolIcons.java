@@ -137,4 +137,17 @@ final class ToolIcons {
         g.drawLine(x + 6, y + 6, x + 6, y + 12);
         g.drawLine(x + 3, y + 9, x + 9, y + 9);
     }
+
+    /**
+     * An update: an arrow pointing up in an 11×11 circle, the mark on an installed plugin that has
+     * a newer version (D-33). Drawn in the accent color, as content, not as a row tool.
+     */
+    static void paintUpdate(Graphics2D g, int x, int y, Color c) {
+        g.setColor(c);
+        g.setStroke(rowToolStroke(g));
+        g.draw(new java.awt.geom.Ellipse2D.Float(x + 0.5f, y + 0.5f, 11, 11));
+        g.drawLine(x + 6, y + 3, x + 6, y + 9);                    // shaft
+        g.drawLine(x + 3, y + 6, x + 6, y + 3);                    // head
+        g.drawLine(x + 9, y + 6, x + 6, y + 3);
+    }
 }

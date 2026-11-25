@@ -191,6 +191,9 @@ release only.
   `<name>-clouseau-plugin` (`clouseau-<name>-plugin` is the project's own); Nexus lists them by name, Maven
   Central from `plugins.json` at the repository root (entries added by pull request), each at the version
   in its `maven-metadata.xml`. `-Dclouseau.pluginCatalog=<file or URL>` reads another list.
+- `PluginUpdates` (ui) — D-33: which installed plugins have a newer version, from the repository Browse
+  installed each from (`plugins.origins` in the settings). Checked at startup, daily (`UpdateNotifier`) and when
+  the Plugin Manager opens; shown on Installed rows, on Tools → Plugins… and in one notice. Never applied by itself.
 - `WindowManager` (ui) — UC-16, D-18: every window, the one used last, and what they share
   (parser/formatter/highlighter/source lists, "one tab per file" across windows).
 - `MainFrame` (ui) — one window: its menus and tabs, and moving tabs between windows.

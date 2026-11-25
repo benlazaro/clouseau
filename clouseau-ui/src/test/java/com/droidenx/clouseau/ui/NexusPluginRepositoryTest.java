@@ -172,4 +172,18 @@ class NexusPluginRepositoryTest {
         assertThat(repo(null).listPlugins()).extracting(PluginRepository.Asset::artifactId)
                 .containsExactly("logfmt-clouseau-plugin");
     }
+
+    @Test
+    void latestPicksTheNewestOfThatGroupAndName() throws Exception {
+        keywordBody = "{\"items\":[]}";
+        nameBody = "{\"items\":[" + item("audit-clouseau-plugin", "1.2.0", null, null) + ","
+                + item("audit-clouseau-plugin", "1.10.0", null, null) + ","
+                + item("audit-clouseau-plugin-extras", "9.0", null, null) + "]}";
+
+        var latest = repo(null).latest("com.example", "audit-clouseau-plugin");
+
+        assertThat(queries).containsExactly("name=audit-clouseau-plugin");
+        assertThat(latest.version()).isEqualTo("1.10.0");
+        assertThat(repo(null).latest("org.other", "audit-clouseau-plugin")).isNull();
+    }
 }

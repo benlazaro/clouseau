@@ -115,16 +115,11 @@ final class MavenCentralPluginRepository implements PluginRepository {
      */
     @Override
     public List<Asset> listPlugins() throws IOException, InterruptedException {
-        List<PluginCatalog.Entry> entries;
-        try {
-            entries = PluginCatalog.parse(readCatalog());
-        } catch (IllegalArgumentException e) {
-            throw new IOException(e.getMessage(), e);
-        }
+        List<PluginCatalog.Entry> entries = catalog();
         log.info("Plugin list has {} plugin(s)", entries.size());
 
         List<CompletableFuture<Asset>> pending = new ArrayList<>();
-        for (PluginCatalog.Entry e : entries) pending.add(latest(e));
+        for (PluginCatalog.Entry e : entries) pending.add(latest(e.groupId(), e.artifactId(), e));
         List<Asset> out = new ArrayList<>();
         Throwable lastFailure = null;
         try {
@@ -146,6 +141,34 @@ final class MavenCentralPluginRepository implements PluginRepository {
         return out;
     }
 
+    /** The plugins on the plugin list. */
+    List<PluginCatalog.Entry> catalog() throws IOException, InterruptedException {
+        try {
+            return PluginCatalog.parse(readCatalog());
+        } catch (IllegalArgumentException e) {
+            throw new IOException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * The latest version of {@code groupId:artifactId} on Central, from its {@code maven-metadata.xml};
+     * null if Central doesn't have it.
+     */
+    @Override
+    public Asset latest(String groupId, String artifactId) throws IOException, InterruptedException {
+        try {
+            return latest(groupId, artifactId, null).get();
+        } catch (java.util.concurrent.ExecutionException e) {
+            if (e.getCause() instanceof NotOnCentral) return null;
+            throw e.getCause() instanceof IOException io ? io : new IOException(e.getCause().getMessage(), e.getCause());
+        }
+    }
+
+    /** Central has no {@code maven-metadata.xml} for the artifact. */
+    private static final class NotOnCentral extends IOException {
+        NotOnCentral(String message) { super(message); }
+    }
+
     /** The plugin list's text, from {@link #catalogUrl}: an http(s) URL, a {@code file:} URL or a path. */
     private String readCatalog() throws IOException, InterruptedException {
         String where = catalogUrl.strip();
@@ -163,21 +186,22 @@ final class MavenCentralPluginRepository implements PluginRepository {
     }
 
     /**
-     * {@code entry} at its latest version: the version from its {@code maven-metadata.xml}, then
+     * {@code groupId:artifactId} at its latest version (with {@code entry}, its place on the list, or null):
+     * the version from its {@code maven-metadata.xml}, then
      * the JAR's size and date from a HEAD request (a JAR that doesn't answer still lists, without them).
      */
-    private CompletableFuture<Asset> latest(PluginCatalog.Entry entry) {
+    private CompletableFuture<Asset> latest(String groupId, String artifactId, PluginCatalog.Entry entry) {
         HttpRequest meta = HttpRequest.newBuilder()
-                .uri(URI.create(artifactDir(entry.groupId(), entry.artifactId()) + "/maven-metadata.xml"))
+                .uri(URI.create(artifactDir(groupId, artifactId) + "/maven-metadata.xml"))
                 .timeout(SEARCH_TIMEOUT).GET().build();
         return http.sendAsync(meta, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                 .thenCompose(resp -> {
                     String version = resp.statusCode() == 200 ? PluginCatalog.latestVersion(resp.body()) : null;
                     if (version == null)
-                        return CompletableFuture.failedFuture(new IOException(resp.statusCode() == 404
-                                ? "Maven Central doesn't have " + entry.groupId() + ":" + entry.artifactId()
-                                : "Maven Central returned HTTP " + resp.statusCode() + " for " + entry.artifactId()));
-                    String jar = jarUrl(entry.groupId(), entry.artifactId(), version);
+                        return CompletableFuture.failedFuture(resp.statusCode() == 404
+                                ? new NotOnCentral("Maven Central doesn't have " + groupId + ":" + artifactId)
+                                : new IOException("Maven Central returned HTTP " + resp.statusCode() + " for " + artifactId));
+                    String jar = jarUrl(groupId, artifactId, version);
                     HttpRequest head = HttpRequest.newBuilder().uri(URI.create(jar)).timeout(SEARCH_TIMEOUT)
                             .method("HEAD", HttpRequest.BodyPublishers.noBody()).build();
                     return http.sendAsync(head, HttpResponse.BodyHandlers.discarding())
@@ -189,7 +213,7 @@ final class MavenCentralPluginRepository implements PluginRepository {
                                     published = h.headers().firstValue("Last-Modified")
                                             .map(MavenCentralPluginRepository::httpDate).orElse(null);
                                 }
-                                return new Asset(entry.groupId(), entry.artifactId(), version, jar, size, published, entry);
+                                return new Asset(groupId, artifactId, version, jar, size, published, entry);
                             });
                 });
     }

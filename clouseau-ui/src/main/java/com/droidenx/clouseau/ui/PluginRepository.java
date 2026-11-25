@@ -74,6 +74,21 @@ interface PluginRepository {
     List<Asset> listPlugins() throws IOException, InterruptedException;
 
     /**
+     * The latest version of {@code groupId:artifactId} here, or null if the repository doesn't
+     * have it: what the plugin update check asks (D-33). Must be called on a worker thread.
+     */
+    Asset latest(String groupId, String artifactId) throws IOException, InterruptedException;
+
+    /** Maven Central, then each Nexus repository in the settings, as Browse lists them. */
+    static List<PluginRepository> configured() {
+        List<PluginRepository> out = new java.util.ArrayList<>();
+        out.add(new MavenCentralPluginRepository());
+        for (AppPrefs.PluginRepo r : AppPrefs.getPluginRepos())
+            if ("nexus3".equals(r.type())) out.add(new NexusPluginRepository(r));
+        return out;
+    }
+
+    /**
      * Download {@code asset} into {@code destDir}.
      * {@code onBytesRead} is called periodically with cumulative bytes received.
      * Must be called on a worker thread, never on the EDT.

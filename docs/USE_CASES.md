@@ -820,7 +820,19 @@ the notices off sees one.
 - **Nothing about the user is sent.** The check is one request to GitHub's public releases
   list, carrying only Clouseau's version.
 
-**Current behavior:** All of the above works. Design: DESIGN.md D-23.
+**Plugins, too.** Installed plugins are checked a few seconds after startup, then daily,
+and each time the Plugin Manager opens (development builds included: a plugin's versions
+don't depend on the build), against the repository Browse installed each from, or Maven
+Central for a hand-installed plugin on the plugin list. A newer version shows as:
+- one notice listing every plugin with an update (*logfmt 1.2.0 → 1.3.0*), with **Open
+  Plugins** · **Later**, shown again only when a version newer than the ones it named comes
+  out;
+- a count on **Tools → Plugins…** and on the Plugin Manager's **Installed** tab;
+- on the plugin's row in Installed, an arrow and the new version, and **Update to …** in its
+  details, which replaces the installed version.
+The same setting turns the plugin notice off. Plugins never update by themselves.
+
+**Current behavior:** All of the above works. Design: DESIGN.md D-23, and D-33 for plugins.
 
 ### UC-19 · Jump from a log line to the code ✅
 
