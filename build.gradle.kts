@@ -28,8 +28,9 @@ subprojects {
     apply(plugin = "java")
 
     group   = "com.droidenx.clouseau"
-    // Releases pass -PappVersion=<tag>. Anything else (the IDE, gradlew run, the Edge jar) is
-    // 0.0.0-SNAPSHOT, so a development build is plain to see, and never compared with releases.
+    // Releases pass -PappVersion=<tag>, and the Edge workflow -PappVersion=edge. Anything else
+    // (the IDE, gradlew run) is 0.0.0-SNAPSHOT, so a development build is plain to see, and
+    // never compared with releases.
     version = findProperty("appVersion") as String? ?: "0.0.0-SNAPSHOT"
 
     repositories {

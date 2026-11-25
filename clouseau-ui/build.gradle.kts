@@ -13,11 +13,14 @@ import java.nio.ByteOrder
 import javax.imageio.ImageIO
 
 buildscript {
-    // Shadow asks for log4j 2.24.1, which has security advisories (GHSA-qv9r-c865-cp47 and others).
+    // Shadow asks for log4j 2.24.1, which has security advisories (GHSA-qv9r-c865-cp47 and others),
+    // and plexus-utils 4.0.2, which has a directory traversal in extractFile (fixed in 4.0.3).
+    // Build-time only: neither ships in Clouseau.
     dependencies {
         constraints {
             classpath("org.apache.logging.log4j:log4j-core:2.25.5")
             classpath("org.apache.logging.log4j:log4j-api:2.25.5")
+            classpath("org.codehaus.plexus:plexus-utils:4.0.3")
         }
     }
 }
