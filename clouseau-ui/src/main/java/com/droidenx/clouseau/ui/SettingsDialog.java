@@ -12,6 +12,7 @@ import java.time.ZoneId;
 /**
  * Modal application settings / user preferences dialog.
  */
+@lombok.extern.slf4j.Slf4j
 final class SettingsDialog extends JDialog {
 
     /** One width for every spinner, wide enough for "2,000,000" plus the arrows. */
@@ -205,6 +206,27 @@ final class SettingsDialog extends JDialog {
         content.add(sectionLabel(Messages.get("settings.section.updates")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
         content.add(updateCheckBox, "span 3, wrap, " + INDENT);
 
+        // ── Data folder section ───────────────────────────────────────────
+        // Where settings, sessions and parsers live. Read-only: a data folder next to
+        // Clouseau.exe is what makes a Windows install portable (DESIGN.md 7).
+        content.add(sectionLabel(Messages.get("settings.section.data")), "span 3, growx, wrap, gaptop 24, gapbottom 8");
+        JTextField dataPath = new JTextField(AppDirs.dataDir().toString(), 1);
+        dataPath.setEditable(false);
+        dataPath.setCaretPosition(0);
+        JButton openData = new JButton(Messages.get("settings.data.open"));
+        openData.addActionListener(e -> openFolder(AppDirs.dataDir()));
+        JPanel dataRow = new JPanel(new MigLayout("insets 0", "[grow,fill][]"));
+        dataRow.add(dataPath, "wmin 0");
+        dataRow.add(openData);
+        content.add(new JLabel(Messages.get("settings.data.location")), INDENT);
+        content.add(dataRow, "growx, wrap, wmin 0");
+        if (AppDirs.canBePortable()) {
+            String text = AppDirs.isPortable()
+                    ? java.text.MessageFormat.format(Messages.get("settings.data.portable.hint"), AppDirs.homeDataDir().toString())
+                    : Messages.get("settings.data.home.hint");
+            content.add(hint(wrapTo(text, hintWidth)), "skip 1, wrap, gaptop 0, wmin 0");
+        }
+
         // ── Buttons ──────────────────────────────────────────────────────
         JButton ok     = new JButton(Messages.get("settings.button.ok"));
         JButton cancel = new JButton(Messages.get("settings.button.cancel"));
@@ -345,11 +367,23 @@ final class SettingsDialog extends JDialog {
 
     /**
      * {@code text} as HTML that wraps at {@code width} pixels, so a hint under a field stays as
-     * wide as the field instead of widening the dialog.
+     * wide as the field instead of widening the dialog. Swing's line breaking may break after a
+     * typographic apostrophe ("IDE’" / "s"), so a word with one is kept whole.
      */
-    private static String wrapTo(String text, int width) {
-        String escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    static String wrapTo(String text, int width) {
+        String escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replaceAll("(\\S*’\\S*)", "<nobr>$1</nobr>");
         return "<html><body style='width: " + width + "px'>" + escaped + "</body></html>";
+    }
+
+    /** Shows a folder in the system's file manager, creating it first if it isn't there yet. */
+    private static void openFolder(java.nio.file.Path folder) {
+        try {
+            java.nio.file.Files.createDirectories(folder);
+            Desktop.getDesktop().open(folder.toFile());
+        } catch (Exception e) {
+            log.warn("Could not open {}", folder, e);
+        }
     }
 
     /** A hint under a setting, in the dim text of hints. */

@@ -61,6 +61,7 @@ defaults, so logs stay readable in any theme.
 | Source Code | Open source in | Where stack frames and logger classes open: a **JetBrains IDE** (the default), **VS Code** or **Cursor**. See [Jumping to the code](reading-and-filtering.md#jumping-to-the-code). |
 | | Source folders | Your projects, or folders of projects, searched for a stack frame's file, for every editor. A file that isn't in them, a JetBrains IDE looks for in its open projects. Leave it empty to search the usual places (`~/git`, `~/src`, `~/repos`, `~/IdeaProjects`, …); the hint underneath shows which were found. |
 | Updates | Tell me when a new version is available | On by default. See [New versions](#new-versions). |
+| Data Folder | Location | Where your settings, sessions and parsers are kept, with **Open Folder**. Shown, not changed here. See [The data folder](#the-data-folder). |
 
 ## New versions
 
@@ -74,7 +75,7 @@ after Clouseau starts. It doesn't block what you're doing:
 - **Skip This Version** closes it for good for that version; you'll hear about the next one.
 
 To install a new version over an old one, close Clouseau first and follow
-[Upgrading](installing.md#upgrading). On Windows, keep the old version's `data` folder.
+[Upgrading](installing.md#upgrading).
 
 Clouseau checks at most once a day, and again each day it stays open. If it can't reach
 GitHub (no network, a proxy), it says nothing. The check only asks GitHub for the list of
@@ -165,10 +166,14 @@ Clouseau's own log, and saved passwords (encrypted) all live in one folder:
 
 | How you run Clouseau | Data folder |
 |---|---|
-| Windows release zip | `data` next to `Clouseau.exe` (so extract it somewhere you can write to, not `C:\Program Files`) |
+| Windows release zip | `.clouseau` in your home folder (`C:\Users\<you>\.clouseau`), or, if there is a `data` folder next to `Clouseau.exe`, that folder ([portable](installing.md#portable-on-windows)) |
 | macOS and Linux | `~/.clouseau/` |
 | The Edge jar, or from source | `data` in the folder you start it from |
 | With `-Dclouseau.data.dir=<path>` | `<path>` |
+
+**File → Settings… → Data Folder** shows the folder in use, with **Open Folder** to show it
+in your file manager. On Windows, the hint under it says how to switch between portable and
+your home folder.
 
 ## When something goes wrong
 

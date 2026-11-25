@@ -13,7 +13,7 @@ to install. Unzip it and start Clouseau:
 
 | System | Start |
 |---|---|
-| Windows | `Clouseau\Clouseau.exe`. Unzip it somewhere you can write to, such as your Documents or `C:\Tools`, not `C:\Program Files`: Clouseau keeps its settings in a `data` folder next to it. |
+| Windows | `Clouseau\Clouseau.exe`. Unzip it anywhere; to keep your settings with it, see [Portable on Windows](#portable-on-windows). |
 | macOS | `Clouseau.app`. Move it to Applications if you like. |
 | Linux | `Clouseau/bin/Clouseau` |
 
@@ -53,16 +53,42 @@ xattr -dr com.apple.quarantine /Applications/Clouseau.app
 Nothing to allow. If your file manager doesn't start it, run `Clouseau/bin/Clouseau` from a
 terminal, or make it executable first with `chmod +x Clouseau/bin/Clouseau`.
 
+## Portable on Windows
+
+Clouseau keeps your settings, sessions, parsers and saved connections in a
+[data folder](settings.md#the-data-folder): `.clouseau` in your home folder
+(`C:\Users\<you>\.clouseau`). To keep them with the app instead, for example to run
+Clouseau from a USB stick or a shared tools folder, make it portable:
+
+1. Before you start Clouseau, create an empty folder named `data` inside the `Clouseau`
+   folder, next to `Clouseau.exe`.
+2. Start Clouseau. It finds the `data` folder and keeps everything there.
+
+**File → Settings… → Data Folder** shows which folder is in use.
+
+To make a copy you've already used portable, close Clouseau, create the `data` folder, and
+copy everything from `C:\Users\<you>\.clouseau` into it. To go back, close Clouseau, move the
+`data` folder's contents to `C:\Users\<you>\.clouseau`, and delete the `data` folder.
+
+Saved passwords are encrypted for your Windows account on that computer. Started on another
+computer, or by another account, a portable Clouseau keeps everything else, but asks for
+those passwords again.
+
 ## Upgrading
 
 Clouseau tells you when a new version is out (see [New versions](settings.md#new-versions)),
 but it doesn't update itself. To install a new version, close Clouseau first, then:
 
-- **Windows:** keep the old `Clouseau` folder's `data` folder (your settings, sessions and
-  parsers), delete the rest, and unzip the new version in its place, so the `data` folder
-  ends up next to the new `Clouseau.exe`.
+- **Windows:** delete the old `Clouseau` folder and unzip the new version. Your data is in
+  your home folder, so nothing is lost. If you use Clouseau
+  [portable](#portable-on-windows), keep the old `data` folder and put it next to the new
+  `Clouseau.exe`.
 - **macOS and Linux:** your data is in `~/.clouseau/`, outside the app, so just replace the
   old app with the new one.
+
+Upgrading on Windows from Clouseau 0.18 or earlier: those versions always kept their data in
+the `data` folder next to `Clouseau.exe`. Move that folder next to the new `Clouseau.exe` to
+keep using it portable, or copy its contents to `C:\Users\<you>\.clouseau`.
 
 A new download is a new app to your system, so you may have to allow it once more, as
 above.

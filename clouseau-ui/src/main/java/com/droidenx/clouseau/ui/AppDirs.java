@@ -5,20 +5,30 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Resolves the application data directory.
+ * Resolves the application data directory (DESIGN.md 7).
  *
  * <p>Priority:
  * <ol>
  *   <li>{@code -Dclouseau.data.dir=<path>} — explicit override; a leading {@code ~/} means the
  *       home folder (the macOS/Linux packages set {@code ~/.clouseau})</li>
- *   <li>Windows jpackage image (zip or per-user installer) — {@code <install>/data/}</li>
+ *   <li>Windows jpackage image (zip or per-user installer) — {@code <install>/data/} if that
+ *       folder exists (portable), otherwise {@code ~/.clouseau}. The folder is the switch: it
+ *       can't be a setting, because the settings live in the data folder.</li>
  *   <li>Anything else (dev / {@code gradlew run}, bare {@code java -jar}) — {@code ./data/}
  *       in the working directory</li>
  * </ol>
  */
 public final class AppDirs {
 
-    private static final Path DATA_DIR = resolve();
+    /** The folder that makes a Windows install portable, next to {@code Clouseau.exe}. */
+    static final String PORTABLE_FOLDER = "data";
+    /** The data folder in the home folder, when Clouseau isn't portable. */
+    static final String HOME_FOLDER = ".clouseau";
+
+    private static final String PROPERTY = System.getProperty("clouseau.data.dir");
+    private static final Path INSTALL_ROOT = findInstallRoot();
+    private static final Path DATA_DIR = resolve(PROPERTY, INSTALL_ROOT,
+            Path.of(System.getProperty("user.home")), Path.of("").toAbsolutePath());
 
     private AppDirs() {}
 
@@ -34,25 +44,42 @@ public final class AppDirs {
     /** Clouseau's own log, {@code clouseau.log} (see {@code default-log4j2.xml}). */
     public static Path logsDir() { return DATA_DIR.resolve("logs"); }
 
-    /** {@code true} when data lives next to the install (Windows jpackage image). */
-    public static boolean isPortable() { return findInstallRoot() != null; }
+    /**
+     * {@code true} when a {@code data} folder next to {@code Clouseau.exe} chooses between
+     * portable and the home folder: running from a Windows jpackage image, without
+     * {@code -Dclouseau.data.dir}, which would win over the folder.
+     */
+    public static boolean canBePortable() { return INSTALL_ROOT != null && PROPERTY == null; }
 
-    private static Path resolve() {
+    /** {@code true} when data lives next to the install (a Windows image with a {@code data} folder). */
+    public static boolean isPortable() {
+        return INSTALL_ROOT != null && DATA_DIR.equals(INSTALL_ROOT.resolve(PORTABLE_FOLDER));
+    }
+
+    /** The data folder of a Windows install that isn't portable: {@code ~/.clouseau}. */
+    public static Path homeDataDir() { return Path.of(System.getProperty("user.home"), HOME_FOLDER); }
+
+    /**
+     * The data folder for these facts: the {@code clouseau.data.dir} property (or null), the
+     * Windows install root (or null), the home folder and the working directory.
+     */
+    static Path resolve(String property, Path installRoot, Path home, Path workingDir) {
         // 1. Explicit system property override
-        String prop = System.getProperty("clouseau.data.dir");
-        if (prop != null) {
-            if (prop.equals("~") || prop.startsWith("~/") || prop.startsWith("~\\")) {
-                return Path.of(System.getProperty("user.home"), prop.substring(1).replaceFirst("^[/\\\\]", ""));
+        if (property != null) {
+            if (property.equals("~") || property.startsWith("~/") || property.startsWith("~\\")) {
+                return home.resolve(property.substring(1).replaceFirst("^[/\\\\]", ""));
             }
-            return Path.of(prop);
+            return Path.of(property);
         }
 
-        // 2. Windows jpackage image: store data next to the launcher
-        Path installRoot = findInstallRoot();
-        if (installRoot != null) return installRoot.resolve("data");
+        // 2. Windows jpackage image: portable if a data folder sits next to the launcher
+        if (installRoot != null) {
+            Path portable = installRoot.resolve(PORTABLE_FOLDER);
+            return Files.isDirectory(portable) ? portable : home.resolve(HOME_FOLDER);
+        }
 
         // 3. Dev / bare jar: data folder in the working directory
-        return Path.of("data").toAbsolutePath();
+        return workingDir.resolve("data");
     }
 
     /**
@@ -65,6 +92,7 @@ public final class AppDirs {
      *       clouseau.jar   (code source)
      *     runtime/
      *     Clouseau.exe
+     *     data/            (optional: makes the install portable)
      * </pre>
      */
     private static Path findInstallRoot() {

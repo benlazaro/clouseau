@@ -1011,8 +1011,12 @@ own from its line scan.
 All state lives in a single **data folder** resolved by `AppDirs`:
 
 1. `-Dclouseau.data.dir=<path>`, if set (the macOS and Linux packages set `~/.clouseau`).
-2. Otherwise, in the Windows portable image, `<install>/data/`.
+2. Otherwise, in the Windows image, `<install>/data/` if that folder exists (portable),
+   else `~/.clouseau` (D-31).
 3. Otherwise (development), `./data/` in the working directory.
+
+Settings → Data Folder shows the folder in use, read-only, with Open Folder; in the Windows
+image a hint says how to switch.
 
 | File | Contents |
 |---|---|
@@ -2748,6 +2752,29 @@ Rejected: a dedicated receiver dialog and tab kind (duplicates D-20's machinery)
 binding the wildcard by default (exposes the port and prompts the firewall for the common
 local case); accepting serialized events behind an allow-list (see above); TLS and per-sender
 columns (not needed for the local case; can come later as settings).
+
+### D-31 · On Windows, a `data` folder next to the app makes it portable · Adopted
+
+Until 0.18 the Windows zip always kept its data in `<install>/data/`, so an upgrade
+(unzipping the new version elsewhere) lost settings unless the user copied the folder
+across, and an install under `C:\Program Files` couldn't write at all. Now the Windows image
+uses `~/.clouseau`, as macOS and Linux do, unless a `data` folder exists next to
+`Clouseau.exe` (`AppDirs.resolve`). Existing installs already have that folder, so they stay
+portable and nothing moves without the user doing it.
+
+- **The folder is the switch, not a setting:** settings live in the data folder, so they
+  can't say where it is. Settings → Data Folder only shows the folder in use and, in the
+  Windows image, how to switch (create or empty the `data` folder, with Clouseau closed).
+- **Windows only.** A `data` folder inside `Clouseau.app` would break the macOS signature,
+  and the Linux image already gets `~/.clouseau` from its launcher option.
+- **Credentials don't travel.** `CredentialStore`'s key comes from `machine-id` plus the OS
+  user name and home folder, so a portable copy started elsewhere keeps everything but its
+  saved passwords. Deliberate: a lost USB stick shouldn't give out working passwords.
+
+Rejected for now: a Move action in Settings that copies the data at the next start (most
+users never switch, and a safe move needs a pending-move flag outside both folders, a
+restart and handling for a target that can't be written); `%LOCALAPPDATA%\Clouseau` (the
+Windows convention, but `~/.clouseau` is the same on every platform and in the guide).
 
 ## 10. Planned features
 

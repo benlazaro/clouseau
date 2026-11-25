@@ -42,10 +42,16 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
       connections with encrypted passwords, parsers, auto-highlights, a plugin) and a log with
       a `.clouseau` sidecar, then open them with the release candidate. Nothing lost, no
       `.bad` files.
-- [ ] **Windows portable upgrade:** the data lives in `<install>/data/`, and the guide says
-      to copy it across (`guide/settings.md`, New versions). Check that the instructions
-      actually work, and consider making the update notice say it too, since this is where
-      a user is most likely to lose their data.
+- [x] **Windows data folder** (D-31, 2026-11-24): `~/.clouseau` by default, portable only
+      when a `data` folder sits next to `Clouseau.exe`, so an upgrade no longer risks the
+      data. Settings → Data Folder shows it with a hint; `guide/installing.md` covers
+      portable use and upgrading from 0.18.
+- [ ] **Check D-31 in the real rc.1 Windows zip:** a fresh unzip uses `~/.clouseau`; an
+      0.18 install's `data` folder moved next to the new `Clouseau.exe` is picked up as
+      portable; the steps in the Settings hint work both ways.
+- [ ] **A saved password that can't be decrypted** (a portable copy on another computer or
+      account): check what the SSH Connections window shows (an empty password field, not
+      an error or a crash) and that saving re-encrypts it for the new machine.
 
 ## 3. Release plumbing and wording
 
