@@ -58,7 +58,9 @@ public final class UserParsersLoader {
 
         // 1. User file
         if (Files.exists(USER_FILE)) {
-            try (Reader r = Files.newBufferedReader(USER_FILE)) {
+            // A leading BOM (a file saved by Notepad) is skipped.
+            try (Reader r = new InputStreamReader(com.droidenx.clouseau.core.Utf8Bom.skip(Files.newInputStream(USER_FILE)),
+                    StandardCharsets.UTF_8)) {
                 parseArray(r, USER_FILE.toString()).forEach(p -> byName.putIfAbsent(p.getName(), p));
             } catch (IOException e) {
                 log.warn("Could not read {}", USER_FILE, e);

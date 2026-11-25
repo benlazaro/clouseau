@@ -33,15 +33,20 @@ with a warning): `session.json` and named sessions (`formatVersion` 1), the anno
 sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules.json`
 (`version` 1). These are fine as they are.
 
-- [ ] **`parsers.json`** is a bare JSON array with no version. A later format can still be
-      recognized (an object instead of an array), so this is acceptable; write that rule
-      into DESIGN.md 7 so it's a decision, not an accident.
-- [ ] **`settings.json`** is flat keys with no version. Same: confirm `AppPrefs` ignores
-      unknown keys and survives a missing or damaged file, and note it in DESIGN.md 7.
-- [ ] **Upgrade test:** take a data folder from v0.18.0-alpha (sessions, saved SSH
-      connections with encrypted passwords, parsers, auto-highlights, a plugin) and a log with
-      a `.clouseau` sidecar, then open them with the release candidate. Nothing lost, no
-      `.bad` files.
+- [x] **`parsers.json`** (2026-11-24): loading already skipped what it couldn't read, but the
+      Parser Editor saved over a file it couldn't fully read, losing it. It now copies such a
+      file to `parsers.json.bad` first, writes through a temporary file, and skips a BOM.
+      Rules in DESIGN.md 7 (4, 5).
+- [x] **`settings.json`** (2026-11-24): a damaged file threw from `AppPrefs`' static setup,
+      which could stop Clouseau starting, and was then overwritten. Now it's moved to
+      `settings.json.bad`; saves go through a temporary file; a value of the wrong type reads
+      as its default; unknown keys are kept. `AppPrefsFileTest`.
+- [x] **Upgrade test** (2026-11-24): a real data folder from before 0.18 (settings with
+      column layouts, source timezones and the pre-0.12 `ssh.favorites`, user parsers) plus a
+      current session (11 tabs), named sessions, auto-highlights and keystore, opened with a
+      0.19.0 Windows build. Every settings key kept, the session restored, parsers loaded, no
+      `.bad` files, no warnings. That folder had no saved SSH passwords; reading one saved
+      elsewhere is covered by `CredentialStoreTest`. Repeat once with the rc.1 zip.
 - [x] **Windows data folder** (D-31, 2026-11-24): `~/.clouseau` by default, portable only
       when a `data` folder sits next to `Clouseau.exe`, so an upgrade no longer risks the
       data. Settings → Data Folder shows it with a hint; `guide/installing.md` covers
@@ -49,18 +54,20 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
 - [ ] **Check D-31 in the real rc.1 Windows zip:** a fresh unzip uses `~/.clouseau`; an
       0.18 install's `data` folder moved next to the new `Clouseau.exe` is picked up as
       portable; the steps in the Settings hint work both ways.
-- [ ] **A saved password that can't be decrypted** (a portable copy on another computer or
-      account): check what the SSH Connections window shows (an empty password field, not
-      an error or a crash) and that saving re-encrypts it for the new machine.
+- [x] **A saved password that can't be decrypted** (2026-11-24): a keystore that couldn't be
+      opened left `CredentialStore` with no key, so it saved passwords **in plain text** and
+      showed `enc:…` as the password. Now the keystore is moved to `keystore.p12.bad` and a new
+      one made, an undecryptable password reads as not saved (an empty field), and with no
+      key nothing is saved. `CredentialStoreTest`.
 
 ## 3. Release plumbing and wording
 
 - [ ] README: "Releases are pre-releases while the plugin API settles" no longer holds.
       Replace it with: the app is stable at 1.0; the plugin API keeps its own 0.x version
       (D-27) and may still change, with notes per `api-v*` release.
-- [ ] Update check (UC-18, D-23): someone on 0.18.0-alpha is offered `1.0.0-rc.1` and then
-      `1.0.0`; someone on `1.0.0` isn't offered a later `-rc`. Cover both in `UpdateCheckTest`
-      if they aren't already.
+- [x] Update check (UC-18, D-23): someone on 0.18.0-alpha is offered `1.0.0-rc.1` and then
+      `1.0.0`; someone on `1.0.0` isn't offered a later `-rc`. Already true;
+      `UpdateCheckTest.theRoadToOnePointOh` covers it.
 - [ ] `release.yml`: `v1.0.0` (no suffix) is created as a normal release and becomes
       GitHub's Latest; check that the README's "Latest release" links then land on it.
 - [ ] `docs/releases/v1.0.0-rc.1.md` and `docs/releases/v1.0.0.md`, written for users: what

@@ -89,6 +89,31 @@ class UpdateCheckTest {
     }
 
     @Test
+    void theRoadToOnePointOh() {
+        // The alphas are offered the release candidates, which are pre-releases on GitHub.
+        String rc1 = list(release("edge", true, false), release("v1.0.0-rc.1", true, false),
+                release("v0.18.0-alpha", true, false));
+        assertThat(UpdateCheck.newest(rc1, "0.18.0-alpha")).map(Release::version).contains("1.0.0-rc.1");
+
+        String rc2 = list(release("v1.0.0-rc.2", true, false), release("v1.0.0-rc.1", true, false));
+        assertThat(UpdateCheck.newest(rc2, "1.0.0-rc.1")).map(Release::version).contains("1.0.0-rc.2");
+        assertThat(UpdateCheck.newest(rc2, "1.0.0-rc.2")).isEmpty();
+
+        // Everyone before 1.0 is offered 1.0.0 once it's out, not a candidate.
+        String final1 = list(release("edge", true, false), release("v1.0.0", false, false),
+                release("v1.0.0-rc.2", true, false), release("v0.18.0-alpha", true, false));
+        assertThat(UpdateCheck.newest(final1, "1.0.0-rc.2")).map(Release::version).contains("1.0.0");
+        assertThat(UpdateCheck.newest(final1, "0.18.0-alpha")).map(Release::version).contains("1.0.0");
+
+        // Someone on 1.0.0 isn't offered the next version's candidates, only its release.
+        String next = list(release("v1.1.0-rc.1", true, false), release("v1.0.1-rc.1", true, false),
+                release("v1.0.0", false, false));
+        assertThat(UpdateCheck.newest(next, "1.0.0")).isEmpty();
+        assertThat(UpdateCheck.newest(list(release("v1.1.0", false, false), release("v1.1.0-rc.1", true, false)), "1.0.0"))
+                .map(Release::version).contains("1.1.0");
+    }
+
+    @Test
     void malformedJsonEntriesAreSkipped() {
         String json = "[42, {\"tag_name\": null}, {\"name\": \"x\"}, " + release("v1.0.0", false, false) + "]";
         assertThat(UpdateCheck.newest(json, "0.9.0")).map(Release::version).contains("1.0.0");

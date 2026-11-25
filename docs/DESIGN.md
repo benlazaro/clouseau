@@ -1038,9 +1038,25 @@ image a hint says how to switch.
 
 1. Any new persistent file goes in the data folder, never in the user's home directory or
    the working directory.
-2. Passwords and tokens are stored only through `CredentialStore`, never in plain text.
+2. Passwords and tokens are stored only through `CredentialStore`, never in plain text. With
+   no key (a keystore that can't be made) a password isn't saved at all. A keystore this
+   computer and account can't open (a portable folder moved, D-31) is moved to
+   `keystore.p12.bad` and a new one made; passwords saved with the old one read as not saved
+   (`null`), so the user enters them again.
 3. File formats that leave the machine (annotations, review bundles) are **interchange
    formats**: other people's Clouseau versions read them, so keep them backward compatible.
+4. **Upgrades never lose data.** A file a version can't read is kept, not overwritten: an
+   unreadable `session.json`, `highlight-rules.json` or `settings.json` is moved to
+   `<name>.bad` when it's loaded, and the Parser Editor copies a `parsers.json` it couldn't
+   fully read to `parsers.json.bad` before saving over it. Unknown fields are ignored on read
+   and, in `settings.json`, kept on write. A value of the wrong type reads as missing.
+   `settings.json` and `parsers.json` are written through a temporary file moved into place
+   (`JsonFiles`), and read as UTF-8 with a leading BOM skipped.
+5. **Formats without a version field** (`settings.json`, `parsers.json`) are changed only
+   compatibly: `settings.json` is flat keys, so a new setting is a new key, and a key whose
+   meaning changes gets a new name (as `ssh.connections` replaced `ssh.favorites`).
+   `parsers.json` is an array of parser objects; a format that can't be one would be a JSON
+   object with a `version` field, which this version treats as unreadable and keeps.
 
 ### 7.1 Interchange formats
 

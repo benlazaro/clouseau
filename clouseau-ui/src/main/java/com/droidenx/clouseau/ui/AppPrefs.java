@@ -2,17 +2,12 @@ package com.droidenx.clouseau.ui;
 
 import com.droidenx.clouseau.core.SshSaved;
 import com.droidenx.clouseau.ui.theme.ThemeManager;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.io.Reader;
-import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
@@ -27,7 +22,6 @@ public final class AppPrefs {
 
     public static final Path PREFS_DIR  = AppDirs.dataDir();
     private static final Path PREFS_FILE = PREFS_DIR.resolve("settings.json");
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static final String KEY_TAB_CLOSE_CONFIRM            = "tab.close.confirm";
     private static final String KEY_HIGHLIGHT_CLEAR_ALL_CONFIRM  = "highlight.clear.all.confirm";
@@ -102,32 +96,61 @@ public final class AppPrefs {
     // ── I/O ──────────────────────────────────────────────────────────────────
 
     private static JsonObject load() {
-        if (Files.exists(PREFS_FILE)) {
-            try (Reader r = Files.newBufferedReader(PREFS_FILE)) {
-                JsonElement el = JsonParser.parseReader(r);
-                if (el.isJsonObject()) return el.getAsJsonObject();
-            } catch (IOException e) {
-                log.warn("Could not read settings file {}", PREFS_FILE, e);
-            }
+        return load(PREFS_FILE);
+    }
+
+    /**
+     * The settings in {@code file}, or none if it doesn't exist. A file that isn't a JSON object
+     * (damaged, or cut short) is moved to {@code settings.json.bad}, replacing an older one, so
+     * the next save doesn't overwrite what might still be recovered by hand (DESIGN.md 7).
+     */
+    static JsonObject load(Path file) {
+        if (!Files.exists(file)) return new JsonObject();
+        try {
+            JsonElement el = JsonFiles.read(file);
+            if (el.isJsonObject()) return el.getAsJsonObject();
+        } catch (IOException | RuntimeException e) {     // JsonParseException is unchecked
+            log.warn("Could not read settings file {}: {}", file, e.toString());
+        }
+        try {
+            log.warn("Moved the unreadable settings to {}; starting with default settings", JsonFiles.moveAside(file));
+        } catch (IOException e) {
+            log.warn("Could not move {} aside", file, e);
         }
         return new JsonObject();
     }
 
-    private static void save() {
+    private static synchronized void save() {
         try {
-            Files.createDirectories(PREFS_DIR);
-            try (Writer w = Files.newBufferedWriter(PREFS_FILE)) {
-                GSON.toJson(ROOT, w);
-            }
+            write(PREFS_FILE, ROOT);
         } catch (IOException e) {
             log.warn("Could not write settings file {}", PREFS_FILE, e);
         }
     }
 
+    /**
+     * Writes {@code settings} to {@code file} through a temporary file moved into place, so a
+     * crash or a full disk mid-write leaves the previous settings, never half a file.
+     */
+    static void write(Path file, JsonObject settings) throws IOException {
+        JsonFiles.write(file, settings);
+    }
+
     // ── Typed accessors ───────────────────────────────────────────────────────
+    // A value of the wrong type (written by a newer Clouseau, or edited by hand) reads as
+    // missing, so it gets its default rather than an exception (DESIGN.md 7).
 
     private static boolean getBool(String key, boolean def) {
-        return ROOT.has(key) ? ROOT.get(key).getAsBoolean() : def;
+        return bool(ROOT, key, def);
+    }
+
+    static boolean bool(JsonObject o, String key, boolean def) {
+        try {
+            JsonElement e = o.get(key);
+            return e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isBoolean() ? e.getAsBoolean() : def;
+        } catch (RuntimeException e) {
+            return def;
+        }
     }
 
     private static void putBool(String key, boolean value) {
@@ -136,7 +159,7 @@ public final class AppPrefs {
     }
 
     private static int getInt(String key, int def) {
-        return ROOT.has(key) ? ROOT.get(key).getAsInt() : def;
+        return jsonInt(ROOT, key, def);
     }
 
     private static void putInt(String key, int value) {
@@ -145,7 +168,7 @@ public final class AppPrefs {
     }
 
     private static String getString(String key, String def) {
-        return ROOT.has(key) ? ROOT.get(key).getAsString() : def;
+        return jsonString(ROOT, key, def);
     }
 
     private static void putString(String key, String value) {
@@ -154,11 +177,27 @@ public final class AppPrefs {
     }
 
     private static List<String> getStringList(String key) {
-        if (!ROOT.has(key)) return new ArrayList<>();
-        JsonArray arr = ROOT.get(key).getAsJsonArray();
-        List<String> list = new ArrayList<>(arr.size());
-        arr.forEach(e -> list.add(e.getAsString()));
+        return stringList(ROOT, key);
+    }
+
+    static List<String> stringList(JsonObject o, String key) {
+        List<String> list = new ArrayList<>();
+        for (JsonElement e : array(o, key)) {
+            if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) list.add(e.getAsString());
+        }
         return list;
+    }
+
+    /** The array under {@code key}, or an empty one if it's missing or isn't an array. */
+    static JsonArray array(JsonObject o, String key) {
+        JsonElement e = o.get(key);
+        return e != null && e.isJsonArray() ? e.getAsJsonArray() : new JsonArray();
+    }
+
+    /** The object under {@code key}, or null if it's missing or isn't an object. */
+    static JsonObject object(JsonObject o, String key) {
+        JsonElement e = o.get(key);
+        return e != null && e.isJsonObject() ? e.getAsJsonObject() : null;
     }
 
     private static void putStringList(String key, List<String> values) {
@@ -366,21 +405,19 @@ public final class AppPrefs {
     }
 
     public static java.util.List<ColumnLayout> getColumnLayouts() {
-        if (!ROOT.has(KEY_COLUMN_LAYOUTS)) return new ArrayList<>();
-        JsonArray arr = ROOT.get(KEY_COLUMN_LAYOUTS).getAsJsonArray();
-        java.util.List<ColumnLayout> list = new ArrayList<>(arr.size());
-        for (JsonElement el : arr) {
+        java.util.List<ColumnLayout> list = new ArrayList<>();
+        for (JsonElement el : array(ROOT, KEY_COLUMN_LAYOUTS)) {
+            if (!el.isJsonObject()) continue;
             JsonObject o = el.getAsJsonObject();
             java.util.List<ColumnLayout.ColumnEntry> entries = new ArrayList<>();
-            if (o.has("columns")) {
-                for (JsonElement ce : o.get("columns").getAsJsonArray()) {
-                    JsonObject co = ce.getAsJsonObject();
-                    entries.add(new ColumnLayout.ColumnEntry(
-                            jsonInt(co, "modelIndex", 0),
-                            !co.has("visible") || co.get("visible").getAsBoolean(),
-                            jsonInt(co, "width", 100),
-                            jsonString(co, "field", null)));
-                }
+            for (JsonElement ce : array(o, "columns")) {
+                if (!ce.isJsonObject()) continue;
+                JsonObject co = ce.getAsJsonObject();
+                entries.add(new ColumnLayout.ColumnEntry(
+                        jsonInt(co, "modelIndex", 0),
+                        bool(co, "visible", true),
+                        jsonInt(co, "width", 100),
+                        jsonString(co, "field", null)));
             }
             list.add(new ColumnLayout(jsonString(o, "name", ""), entries));
         }
@@ -458,12 +495,12 @@ public final class AppPrefs {
 
     /** Returns the saved source timezone for a specific log file, or {@code null} if none saved. */
     public static ZoneId getSourceTimezone(Path file) {
-        if (!ROOT.has(KEY_SOURCE_TIMEZONES)) return null;
-        JsonObject map = ROOT.get(KEY_SOURCE_TIMEZONES).getAsJsonObject();
-        String key = file.toAbsolutePath().toString();
-        if (!map.has(key)) return null;
+        JsonObject map = object(ROOT, KEY_SOURCE_TIMEZONES);
+        if (map == null) return null;
+        String id = jsonString(map, file.toAbsolutePath().toString(), null);
+        if (id == null) return null;
         try {
-            return ZoneId.of(map.get(key).getAsString());
+            return ZoneId.of(id);
         } catch (Exception e) {
             return null;
         }
@@ -471,16 +508,15 @@ public final class AppPrefs {
 
     public static void setSourceTimezone(Path file, ZoneId zone) {
         addRecentTimezone(zone);
-        if (!ROOT.has(KEY_SOURCE_TIMEZONES)) ROOT.add(KEY_SOURCE_TIMEZONES, new JsonObject());
-        ROOT.get(KEY_SOURCE_TIMEZONES).getAsJsonObject()
-                .addProperty(file.toAbsolutePath().toString(), zone.getId());
+        if (object(ROOT, KEY_SOURCE_TIMEZONES) == null) ROOT.add(KEY_SOURCE_TIMEZONES, new JsonObject());
+        object(ROOT, KEY_SOURCE_TIMEZONES).addProperty(file.toAbsolutePath().toString(), zone.getId());
         save();
     }
 
     public static void clearSourceTimezone(Path file) {
-        if (!ROOT.has(KEY_SOURCE_TIMEZONES)) return;
-        ROOT.get(KEY_SOURCE_TIMEZONES).getAsJsonObject()
-                .remove(file.toAbsolutePath().toString());
+        JsonObject map = object(ROOT, KEY_SOURCE_TIMEZONES);
+        if (map == null) return;
+        map.remove(file.toAbsolutePath().toString());
         save();
     }
 
@@ -518,7 +554,8 @@ public final class AppPrefs {
 
     /** The share of a tab's height the log table takes over the detail pane, 0.55 at first. */
     public static double getDetailSplitRatio() {
-        double r = ROOT.has(KEY_DETAIL_SPLIT) ? ROOT.get(KEY_DETAIL_SPLIT).getAsDouble() : DEFAULT_DETAIL_SPLIT;
+        JsonElement e = ROOT.get(KEY_DETAIL_SPLIT);
+        double r = e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isNumber() ? e.getAsDouble() : DEFAULT_DETAIL_SPLIT;
         return clampSplitRatio(r);
     }
 
@@ -645,14 +682,14 @@ public final class AppPrefs {
             return new ArrayList<>(converted);
         }
         List<SshSaved.Connection> list = new ArrayList<>();
-        for (JsonElement el : ROOT.get(KEY_SSH_CONNECTIONS).getAsJsonArray()) {
+        for (JsonElement el : array(ROOT, KEY_SSH_CONNECTIONS)) {
+            if (!el.isJsonObject()) continue;
             JsonObject o = el.getAsJsonObject();
             List<SshSaved.Log> logs = new ArrayList<>();
-            if (o.has("logs")) {
-                for (JsonElement le : o.getAsJsonArray("logs")) {
-                    JsonObject l = le.getAsJsonObject();
-                    logs.add(new SshSaved.Log(jsonString(l, "remotePath", ""), jsonString(l, "parserName", null)));
-                }
+            for (JsonElement le : array(o, "logs")) {
+                if (!le.isJsonObject()) continue;
+                JsonObject l = le.getAsJsonObject();
+                logs.add(new SshSaved.Log(jsonString(l, "remotePath", ""), jsonString(l, "parserName", null)));
             }
             list.add(new SshSaved.Connection(
                     jsonString(o, "name", null),
@@ -697,7 +734,8 @@ public final class AppPrefs {
     /** Saved logs as versions before 0.12 kept them: one entry each, with the whole sign-in. */
     private static List<SshSaved.OldFavorite> oldSshFavorites() {
         List<SshSaved.OldFavorite> list = new ArrayList<>();
-        for (JsonElement el : ROOT.get(KEY_SSH_FAVORITES).getAsJsonArray()) {
+        for (JsonElement el : array(ROOT, KEY_SSH_FAVORITES)) {
+            if (!el.isJsonObject()) continue;
             JsonObject o = el.getAsJsonObject();
             list.add(new SshSaved.OldFavorite(
                     jsonString(o, "host", ""),
@@ -716,8 +754,8 @@ public final class AppPrefs {
     /** Server names as versions before 0.12 kept them, by host. */
     private static java.util.Map<String, String> oldSshHostNames() {
         java.util.Map<String, String> names = new java.util.HashMap<>();
-        if (!ROOT.has("ssh.hostNames")) return names;
-        JsonObject o = ROOT.getAsJsonObject("ssh.hostNames");
+        JsonObject o = object(ROOT, "ssh.hostNames");
+        if (o == null) return names;
         for (String host : o.keySet()) {
             String name = jsonString(o, host, null);
             if (name != null && !name.isBlank()) names.put(host, name);
@@ -726,10 +764,9 @@ public final class AppPrefs {
     }
 
     public static List<PluginRepo> getPluginRepos() {
-        if (!ROOT.has(KEY_PLUGIN_REPOS)) return new ArrayList<>();
-        JsonArray arr = ROOT.get(KEY_PLUGIN_REPOS).getAsJsonArray();
-        List<PluginRepo> list = new ArrayList<>(arr.size());
-        for (JsonElement el : arr) {
+        List<PluginRepo> list = new ArrayList<>();
+        for (JsonElement el : array(ROOT, KEY_PLUGIN_REPOS)) {
+            if (!el.isJsonObject()) continue;
             JsonObject o = el.getAsJsonObject();
             list.add(new PluginRepo(
                     jsonString(o, "name",       ""),
@@ -768,13 +805,13 @@ public final class AppPrefs {
     public static java.util.Map<String, String> getSourceSettings(String providerId,
                                                                 java.util.Set<String> secretKeys) {
         java.util.Map<String, String> values = new java.util.HashMap<>();
-        if (!ROOT.has(KEY_SOURCE_SETTINGS)) return values;
-        JsonObject all = ROOT.getAsJsonObject(KEY_SOURCE_SETTINGS);
-        if (!all.has(providerId)) return values;
-        JsonObject o = all.getAsJsonObject(providerId);
+        JsonObject all = object(ROOT, KEY_SOURCE_SETTINGS);
+        JsonObject o = all == null ? null : object(all, providerId);
+        if (o == null) return values;
         for (String key : o.keySet()) {
             String stored = jsonString(o, key, null);
-            if (stored != null) values.put(key, secretKeys.contains(key) ? CredentialStore.decrypt(stored) : stored);
+            String value = stored != null && secretKeys.contains(key) ? CredentialStore.decrypt(stored) : stored;
+            if (value != null) values.put(key, value);   // a secret saved elsewhere reads as not saved
         }
         return values;
     }
@@ -785,20 +822,31 @@ public final class AppPrefs {
      */
     public static void saveSourceSettings(String providerId, java.util.Map<String, String> values,
                                           java.util.Set<String> secretKeys) {
-        JsonObject all = ROOT.has(KEY_SOURCE_SETTINGS) ? ROOT.getAsJsonObject(KEY_SOURCE_SETTINGS) : new JsonObject();
+        JsonObject all = object(ROOT, KEY_SOURCE_SETTINGS) != null ? object(ROOT, KEY_SOURCE_SETTINGS) : new JsonObject();
         JsonObject o = new JsonObject();
-        values.forEach((key, value) ->
-                o.addProperty(key, secretKeys.contains(key) ? CredentialStore.encrypt(value) : value));
+        values.forEach((key, value) -> {
+            String stored = secretKeys.contains(key) ? CredentialStore.encrypt(value) : value;
+            if (stored != null) o.addProperty(key, stored);
+        });
         all.add(providerId, o);
         ROOT.add(KEY_SOURCE_SETTINGS, all);
         save();
     }
 
-    private static String jsonString(JsonObject o, String key, String def) {
-        return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
+    /** The string under {@code key}, or {@code def} if it's missing or not a string (or number). */
+    static String jsonString(JsonObject o, String key, String def) {
+        JsonElement e = o.get(key);
+        return e != null && e.isJsonPrimitive() && !e.getAsJsonPrimitive().isBoolean() ? e.getAsString() : def;
     }
 
-    private static int jsonInt(JsonObject o, String key, int def) {
-        return o.has(key) ? o.get(key).getAsInt() : def;
+    /** The whole number under {@code key}, or {@code def} if it's missing or not one. */
+    static int jsonInt(JsonObject o, String key, int def) {
+        JsonElement e = o.get(key);
+        if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber()) return def;
+        try {
+            return e.getAsInt();
+        } catch (NumberFormatException ex) {    // 1.5, or too big for an int
+            return def;
+        }
     }
 }

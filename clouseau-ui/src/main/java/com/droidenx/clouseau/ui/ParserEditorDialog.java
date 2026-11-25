@@ -49,7 +49,6 @@ public final class ParserEditorDialog extends JDialog {
 
     private static final Path   USER_FILE        = AppPrefs.PREFS_DIR.resolve("parsers.json");
     private static final String DEFAULT_RESOURCE = "com/droidenx/clouseau/ui/default-parsers.json";
-    private static final Gson   GSON             = new GsonBuilder().setPrettyPrinting().create();
     /** How many lines of a file "Test with file…" reads. */
     private static final int    FILE_TEST_LINES  = 500;
 
@@ -61,6 +60,12 @@ public final class ParserEditorDialog extends JDialog {
     private final List<ParserDef> builtins = new ArrayList<>();
     /** Yours as loaded, to tell whether anything changed. */
     private List<ParserDef> loaded = List.of();
+    /**
+     * Whether parsers.json held something this editor couldn't read (damaged, a format or
+     * entry from a newer Clouseau): saving copies it to parsers.json.bad first, so what this
+     * version would drop isn't lost.
+     */
+    private boolean userFileNotFullyRead;
     /** The sidebar rows: a group title (String) or a parser. */
     private final DefaultListModel<Object> listModel = new DefaultListModel<>();
     private final ParserList parserList = new ParserList();
@@ -216,20 +221,25 @@ public final class ParserEditorDialog extends JDialog {
 
     private void loadDefs() {
         loadArray(readResource(), true, builtins);
-        loadArray(readUserFile(), false, mine);
+        JsonArray user = readUserFile();
+        int skipped = loadArray(user, false, mine);
+        userFileNotFullyRead = Files.exists(USER_FILE) && (user == null || skipped > 0);
     }
 
-    private static void loadArray(JsonArray arr, boolean builtin, List<ParserDef> into) {
-        if (arr == null) return;
+    /** Adds the parsers in {@code arr} to {@code into}; returns how many entries it couldn't read. */
+    private static int loadArray(JsonArray arr, boolean builtin, List<ParserDef> into) {
+        if (arr == null) return 0;
+        int skipped = 0;
         for (JsonElement el : arr) {
-            if (!el.isJsonObject()) continue;
+            if (!el.isJsonObject()) { skipped++; continue; }
             JsonObject o = el.getAsJsonObject();
             String name = str(o, "name"), pat = str(o, "pattern"), fmt = str(o, "timestampFormat");
-            if (name == null || pat == null || fmt == null) continue;
+            if (name == null || pat == null || fmt == null) { skipped++; continue; }
             String type   = firstNonNull(str(o, "type"),   TYPE_REGEX);
             String source = firstNonNull(str(o, "source"), "");
             into.add(new ParserDef(name, type, source, pat, fmt, builtin));
         }
+        return skipped;
     }
 
     private JsonArray readResource() {
@@ -242,8 +252,8 @@ public final class ParserEditorDialog extends JDialog {
 
     private static JsonArray readUserFile() {
         if (!Files.exists(USER_FILE)) return null;
-        try (Reader r = Files.newBufferedReader(USER_FILE)) {
-            JsonElement el = JsonParser.parseReader(r);
+        try {
+            JsonElement el = JsonFiles.read(USER_FILE);
             return el.isJsonArray() ? el.getAsJsonArray() : null;
         } catch (IOException | RuntimeException e) { return null; }
     }
@@ -1071,10 +1081,12 @@ public final class ParserEditorDialog extends JDialog {
             arr.add(obj);
         }
         try {
-            Files.createDirectories(USER_FILE.getParent());
-            try (Writer w = Files.newBufferedWriter(USER_FILE)) {
-                GSON.toJson(arr, w);
+            if (userFileNotFullyRead && Files.exists(USER_FILE)) {
+                log.warn("parsers.json held entries this version can't read; kept a copy as {}",
+                        JsonFiles.copyAside(USER_FILE));
+                userFileNotFullyRead = false;
             }
+            JsonFiles.write(USER_FILE, arr);
             if (onSave != null) onSave.run();
             dispose();
         } catch (IOException e) {
