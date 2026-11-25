@@ -87,8 +87,8 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
       Now every shortcut uses the shortcut key (`Keys.MENU`) except `Ctrl+Tab` and
       `Ctrl+PageUp/PageDown`, and on macOS "Ctrl" in the app's text reads "Cmd"
       (`Messages.get`, the shortcut list). Not yet tried on a Mac: do it with the rc.1 zip.
-- [ ] Clean up stale local branches (`claude/*`, `design-system-sync`, `row-menu-alignment`,
-      `toggle-off-border-contrast`); keep `shelf/command-source`.
+- [x] Clean up stale local branches (2026-11-25): the seven, all merged into `main`, are
+      deleted; `shelf/command-source` is kept.
 
 ## 4. Real users (between rc.1 and 1.0)
 
