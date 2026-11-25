@@ -1,7 +1,12 @@
 package com.droidenx.clouseau.ui;
 
 import java.io.IOException;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.function.LongConsumer;
 
@@ -11,13 +16,34 @@ import java.util.function.LongConsumer;
  */
 interface PluginRepository {
 
+    /** How long to wait for a repository to accept the connection. */
+    Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
+    /** How long to wait for one search request's answer; downloads have no limit. */
+    Duration SEARCH_TIMEOUT  = Duration.ofSeconds(60);
+
+    /** The HTTP client every repository uses: a connection that isn't accepted times out. */
+    static HttpClient httpClient() {
+        return HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    }
+
     record Asset(
             String groupId,
             String artifactId,
             String version,
             String downloadUrl,
-            long   sizeBytes      // -1 if unknown
-    ) {}
+            long   sizeBytes,     // -1 if unknown
+            Instant published     // when the repository got it; null if unknown
+    ) {
+        /** {@code text} as an ISO-8601 instant or offset date-time ({@code 2026-03-01T10:15:30.123+00:00}), or null. */
+        static Instant parseTime(String text) {
+            if (text == null || text.isBlank()) return null;
+            try {
+                return OffsetDateTime.parse(text.strip()).toInstant();
+            } catch (DateTimeParseException e) {
+                try { return Instant.parse(text.strip()); } catch (DateTimeParseException e2) { return null; }
+            }
+        }
+    }
 
     /** Human-readable label shown in the repository selector. */
     String getName();

@@ -29,7 +29,7 @@ final class MavenCentralPluginRepository implements PluginRepository {
     private static final String SEARCH_URL   = "https://search.maven.org/solrsearch/select";
     private static final String DOWNLOAD_BASE = "https://repo1.maven.org/maven2";
 
-    private final HttpClient http = HttpClient.newHttpClient();
+    private final HttpClient http = PluginRepository.httpClient();
 
     @Override
     public String getName() { return "Maven Central"; }
@@ -42,6 +42,7 @@ final class MavenCentralPluginRepository implements PluginRepository {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Accept", "application/json")
+                .timeout(SEARCH_TIMEOUT)
                 .GET()
                 .build();
 
@@ -65,7 +66,10 @@ final class MavenCentralPluginRepository implements PluginRepository {
                     : doc.get("v").getAsString();
             String path = groupId.replace('.', '/') + "/" + artifactId + "/" + version
                     + "/" + artifactId + "-" + version + ".jar";
-            result.add(new Asset(groupId, artifactId, version, DOWNLOAD_BASE + "/" + path, -1));
+            // "timestamp" is when Central got that version, in epoch milliseconds.
+            java.time.Instant published = doc.has("timestamp")
+                    ? java.time.Instant.ofEpochMilli(doc.get("timestamp").getAsLong()) : null;
+            result.add(new Asset(groupId, artifactId, version, DOWNLOAD_BASE + "/" + path, -1, published));
         }
         return result;
     }

@@ -33,6 +33,23 @@ final class BrowsePluginsPanel extends JPanel {
     private final ResultsModel  tableModel  = new ResultsModel();
     private final JTable        table       = new JTable(tableModel);
 
+    /** How long a search runs before the loader replaces the results, so quick ones don't flicker it. */
+    static final int LOADER_DELAY_MS = 250;
+    /** How long a search runs before the loader also counts the seconds. */
+    static final int ELAPSED_AFTER_MS = 3000;
+
+    private static final String CARD_RESULTS = "results", CARD_LOADING = "loading";
+    private final CardLayout   resultCards   = new CardLayout();
+    private final JPanel       resultArea    = new JPanel(resultCards);
+    private final JLabel       loadingLabel  = new JLabel(" ");
+    private final JLabel       elapsedLabel  = new JLabel(" ");
+    private final JProgressBar loadingBar    = new JProgressBar();
+    private final Timer        loaderDelay   = new Timer(LOADER_DELAY_MS, e -> resultCards.show(resultArea, CARD_LOADING));
+    private final Timer        elapsedTick   = new Timer(1000, e -> showElapsed());
+    /** The running search, or null; a cancelled or replaced search's results are dropped. */
+    private SwingWorker<List<PluginRepository.Asset>, Void> searchWorker;
+    private long searchStarted;
+
     /** @param onInstalled called on the EDT with the installed file */
     BrowsePluginsPanel(Path pluginsDir, Consumer<Path> onInstalled) {
         super(new MigLayout("fill, insets 16 16 12 16, wrap 1", "[grow]", "[]8[]8[grow]6[]"));
@@ -40,6 +57,13 @@ final class BrowsePluginsPanel extends JPanel {
         this.onInstalled = onInstalled;
         rebuildRepos();
         buildUI();
+    }
+
+    /** Closing the Plugin Manager stops a search that's still waiting. */
+    @Override
+    public void removeNotify() {
+        if (searchWorker != null) cancelSearch();
+        super.removeNotify();
     }
 
     /** The field Browse starts in. */
@@ -96,8 +120,15 @@ final class BrowsePluginsPanel extends JPanel {
         searchRow.add(helpBtn);
         add(searchRow, "growx");
 
-        searchBtn.addActionListener(e -> doSearch());
+        // While a search runs the button is Cancel; it keeps the wider label's width so it doesn't jump.
+        searchBtn.addActionListener(e -> { if (searchWorker != null) cancelSearch(); else doSearch(); });
         searchField.addActionListener(e -> doSearch());
+        searchBtn.setText(Messages.get("plugins.download.search.cancel"));
+        int cancelWidth = searchBtn.getPreferredSize().width;
+        searchBtn.setText(Messages.get("plugins.download.search"));
+        searchBtn.setPreferredSize(new Dimension(Math.max(cancelWidth, searchBtn.getPreferredSize().width),
+                searchBtn.getPreferredSize().height));
+        loaderDelay.setRepeats(false);
 
         // ── Results table ─────────────────────────────────────────────────────
         table.setRowHeight(26);
@@ -110,11 +141,16 @@ final class BrowsePluginsPanel extends JPanel {
                 .setHorizontalAlignment(SwingConstants.LEADING);
         DefaultTableCellRenderer right = new DefaultTableCellRenderer();
         right.setHorizontalAlignment(SwingConstants.TRAILING);
-        table.getColumnModel().getColumn(1).setMinWidth(90);
-        table.getColumnModel().getColumn(1).setMaxWidth(90);
-        table.getColumnModel().getColumn(2).setMinWidth(80);
-        table.getColumnModel().getColumn(2).setMaxWidth(80);
-        table.getColumnModel().getColumn(2).setCellRenderer(right);
+        // Every column can be dragged wider or narrower; Artifact takes what's left at first.
+        table.getTableHeader().setResizingAllowed(true);
+        table.getTableHeader().setReorderingAllowed(false);
+        int[] start = { 300, 110, 90, 80 };
+        int[] least = { 120,  50, 60, 50 };
+        for (int c = 0; c < start.length; c++) {
+            table.getColumnModel().getColumn(c).setMinWidth(least[c]);
+            table.getColumnModel().getColumn(c).setPreferredWidth(start[c]);
+        }
+        table.getColumnModel().getColumn(ResultsModel.COL_SIZE).setCellRenderer(right);
         table.getSelectionModel().addListSelectionListener(
                 e -> installBtn.setEnabled(table.getSelectedRow() >= 0));
         table.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -125,7 +161,23 @@ final class BrowsePluginsPanel extends JPanel {
 
         JScrollPane scroll = new JScrollPane(table);
         scroll.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
-        add(scroll, "grow");
+
+        // The loader that takes the results' place while a search waits on the repository.
+        loadingBar.setIndeterminate(true);
+        elapsedLabel.setFont(elapsedLabel.getFont().deriveFont(11f));
+        ClouseauColors.themedForeground(elapsedLabel, ClouseauColors::dimForeground);
+        JPanel loading = new JPanel(new MigLayout("insets 0, wrap 1, align center center, gapy 8", "[center]"));
+        loading.add(loadingLabel);
+        loading.add(loadingBar, "w 220!, h 4!");
+        loading.add(elapsedLabel);
+        JScrollPane loadingFrame = new JScrollPane(loading);
+        loadingFrame.putClientProperty("FlatLaf.style", ClouseauColors.NO_FOCUS_FRAME);
+        loading.setBackground(table.getBackground());
+        loadingFrame.getViewport().setBackground(table.getBackground());
+
+        resultArea.add(scroll, CARD_RESULTS);
+        resultArea.add(loadingFrame, CARD_LOADING);
+        add(resultArea, "grow");
 
         // ── Status, progress and Install ──────────────────────────────────────
         progressBar.setStringPainted(true);
@@ -182,18 +234,22 @@ final class BrowsePluginsPanel extends JPanel {
         String query = searchField.getText().trim();
         if (query.isBlank()) return;
 
-        searchBtn.setEnabled(false);
+        if (searchWorker != null) cancelSearch();
         tableModel.setResults(List.of());
+        status.setToolTipText(null);
         say(Messages.get("plugins.download.searching"), false);
+        startLoader(repo.getName());
 
-        new SwingWorker<List<PluginRepository.Asset>, Void>() {
+        searchWorker = new SwingWorker<List<PluginRepository.Asset>, Void>() {
             @Override
             protected List<PluginRepository.Asset> doInBackground() throws Exception {
                 return repo.search(query);
             }
             @Override
             protected void done() {
-                searchBtn.setEnabled(true);
+                if (searchWorker != this) return;      // cancelled, or a newer search replaced it
+                searchWorker = null;
+                stopLoader();
                 try {
                     tableModel.setResults(get());
                     if (tableModel.getRowCount() == 0) {
@@ -210,10 +266,51 @@ final class BrowsePluginsPanel extends JPanel {
                     }
                 } catch (InterruptedException | ExecutionException ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    say(Messages.get("plugins.download.search.error.title") + ": " + cause.getMessage(), true);
+                    say(Messages.get("plugins.download.search.error.title") + ": " + searchError(cause), true);
                 }
             }
-        }.execute();
+        };
+        searchWorker.execute();
+    }
+
+    /** Stops the running search; its results, if they still come, are dropped. */
+    private void cancelSearch() {
+        SwingWorker<?, ?> w = searchWorker;
+        searchWorker = null;
+        if (w != null) w.cancel(true);
+        stopLoader();
+        say(Messages.get("plugins.download.search.cancelled"), false);
+    }
+
+    private void startLoader(String repoName) {
+        searchStarted = System.currentTimeMillis();
+        loadingLabel.setText(java.text.MessageFormat.format(Messages.get("plugins.download.searching.repo"), repoName));
+        elapsedLabel.setText(" ");
+        searchBtn.setText(Messages.get("plugins.download.search.cancel"));
+        installBtn.setEnabled(false);
+        loaderDelay.restart();
+        elapsedTick.restart();
+    }
+
+    private void stopLoader() {
+        loaderDelay.stop();
+        elapsedTick.stop();
+        resultCards.show(resultArea, CARD_RESULTS);
+        searchBtn.setText(Messages.get("plugins.download.search"));
+        installBtn.setEnabled(table.getSelectedRow() >= 0);
+    }
+
+    private void showElapsed() {
+        long ms = System.currentTimeMillis() - searchStarted;
+        if (ms >= ELAPSED_AFTER_MS)
+            elapsedLabel.setText(java.text.MessageFormat.format(Messages.get("plugins.download.searching.elapsed"), ms / 1000));
+    }
+
+    /** What went wrong, in words: a timed-out request says so rather than showing an empty message. */
+    private static String searchError(Throwable cause) {
+        if (cause instanceof java.net.http.HttpTimeoutException || cause instanceof java.net.http.HttpConnectTimeoutException)
+            return Messages.get("plugins.download.search.timeout");
+        return cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
     }
 
     private void doInstall() {
@@ -274,11 +371,18 @@ final class BrowsePluginsPanel extends JPanel {
 
     private static final class ResultsModel extends AbstractTableModel {
 
+        static final int COL_ARTIFACT = 0, COL_VERSION = 1, COL_DATE = 2, COL_SIZE = 3;
+
         private static final String[] COLS = {
             Messages.get("plugins.download.col.artifact"),
             Messages.get("plugins.download.col.version"),
+            Messages.get("plugins.download.col.date"),
             Messages.get("plugins.download.col.size"),
         };
+
+        /** The day the repository got the artifact, in this computer's timezone. */
+        private static final java.time.format.DateTimeFormatter DAY =
+                java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.withZone(java.time.ZoneId.systemDefault());
 
         private List<PluginRepository.Asset> rows = new ArrayList<>();
 
@@ -297,10 +401,11 @@ final class BrowsePluginsPanel extends JPanel {
         public Object getValueAt(int row, int col) {
             PluginRepository.Asset a = rows.get(row);
             return switch (col) {
-                case 0 -> a.groupId().isBlank() ? a.artifactId()
-                                                : a.groupId() + ":" + a.artifactId();
-                case 1 -> a.version();
-                case 2 -> a.sizeBytes() > 0 ? formatBytes(a.sizeBytes()) : "—";
+                case COL_ARTIFACT -> a.groupId().isBlank() ? a.artifactId()
+                                                           : a.groupId() + ":" + a.artifactId();
+                case COL_VERSION  -> a.version();
+                case COL_DATE     -> a.published() != null ? DAY.format(a.published()) : "—";
+                case COL_SIZE     -> a.sizeBytes() > 0 ? formatBytes(a.sizeBytes()) : "—";
                 default -> null;
             };
         }

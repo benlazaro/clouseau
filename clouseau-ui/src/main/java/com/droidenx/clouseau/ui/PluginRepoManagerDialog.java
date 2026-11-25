@@ -229,8 +229,12 @@ final class PluginRepoManagerDialog extends JDialog {
         form.add(typeCombo);
         form.add(new JLabel(Messages.get("plugins.repos.edit.url")), indent);
         form.add(urlField);
+        // The hints break their lines themselves; "wmin pref" keeps the layout from wrapping them again.
+        form.add(ManagerDialogs.hint(Messages.get("plugins.repos.edit.url.hint")), "skip 1, gaptop 0, wmin pref");
         form.add(new JLabel(Messages.get("plugins.repos.edit.repository")), indent);
+        repoField.putClientProperty("JTextField.placeholderText", Messages.get("plugins.repos.edit.repository.placeholder"));
         form.add(repoField);
+        form.add(ManagerDialogs.hint(Messages.get("plugins.repos.edit.repository.hint")), "skip 1, gaptop 0, wmin pref");
         form.add(ManagerDialogs.sectionTitle(Messages.get("plugins.repos.edit.section.signin")),
                 "span 2, growx, gaptop 14, gapbottom 4");
         form.add(new JLabel(Messages.get("plugins.repos.edit.auth")), indent);

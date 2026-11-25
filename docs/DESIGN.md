@@ -611,6 +611,12 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   calls `loadAll()`.
 - The Plugin Manager (Installed and Browse tabs) can install JARs from Nexus or Maven
   Central repositories, then calls `refresh()`, which reloads plugins without a restart.
+  A Nexus repository is the server's base URL plus an optional repository name.
+  `NexusPluginRepository` runs two asset searches and merges them by download URL: the
+  keyword search (`q`, whole words) and `name=*text*` (part of a word), which a server may
+  refuse (a leading wildcard) without failing the search. It reads up to five pages of each,
+  keeps unclassified JARs only, and takes each result's date from `lastModified` (or
+  `blobCreated`); Maven Central's comes from `timestamp`.
   While it's open it also calls `refresh()` when `folderStamp()` (the folder's names, sizes
   and times) changes, so a JAR dropped in or removed shows up without a Refresh button.
 - `getPluginInfos()` lists the loaded plugins, then each JAR or ZIP in the folder that

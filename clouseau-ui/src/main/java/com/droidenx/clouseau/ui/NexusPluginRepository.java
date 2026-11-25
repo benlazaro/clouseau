@@ -17,20 +17,27 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.LongConsumer;
 
 /**
  * Searches and downloads plugin JARs from a Nexus Repository Manager 3 instance
- * via its REST API ({@code /service/rest/v1/search/assets}).
+ * via its REST API ({@code /service/rest/v1/search/assets}). The configured URL is the
+ * server's address ({@code https://nexus.example.com}), not a repository's.
  */
 @Slf4j
 final class NexusPluginRepository implements PluginRepository {
 
+    /** Pages (of 50 items) read per search at most, so a broad word can't page through a whole server. */
+    static final int MAX_PAGES = 5;
+
     private final AppPrefs.PluginRepo config;
-    private final HttpClient          http = HttpClient.newHttpClient();
+    private final HttpClient          http = PluginRepository.httpClient();
 
     NexusPluginRepository(AppPrefs.PluginRepo config) {
         this.config = config;
@@ -39,70 +46,114 @@ final class NexusPluginRepository implements PluginRepository {
     @Override
     public String getName() { return config.name(); }
 
+    /**
+     * Finds JARs whose coordinates contain {@code query}. Two searches, merged: Nexus's keyword
+     * search, which matches whole words of the group, name and version ({@code logfmt} finds
+     * {@code clouseau-logfmt-plugin}), then the name with wildcards around it, which also
+     * matches part of a word ({@code fmt}). A server that refuses the wildcard search (not every
+     * one allows a leading wildcard) still answers the keyword one.
+     */
     @Override
     public List<Asset> search(String query) throws IOException, InterruptedException {
-        String raw  = config.url().stripTrailing();
-        String base = raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
-        String repoParam = (config.repository() != null && !config.repository().isBlank())
-                ? "&repository=" + URLEncoder.encode(config.repository(), StandardCharsets.UTF_8)
-                : "";
-        String url = base + "/service/rest/v1/search/assets?name="
-                + URLEncoder.encode(query, StandardCharsets.UTF_8) + repoParam;
+        String q = query.strip();
+        Map<String, Asset> found = new LinkedHashMap<>();
+        collect("q", q, found, true);
+        if (!q.isEmpty() && q.chars().noneMatch(c -> c == '*' || c == '?' || Character.isWhitespace(c)))
+            collect("name", "*" + q + "*", found, false);
 
-        log.info("Nexus search: GET {}", url);
-
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("Accept", "application/json")
-                .header("Authorization", buildAuthHeader())
-                .GET()
-                .build();
-
-        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-        log.info("Nexus search response: HTTP {}", resp.statusCode());
-        if (resp.statusCode() != 200)
-            throw new IOException("Nexus search returned HTTP " + resp.statusCode()
-                    + " for " + config.name());
-
-        List<Asset> results = parseItems(resp.body());
+        List<Asset> results = new ArrayList<>(found.values());
         log.info("Nexus search returned {} JAR asset(s)", results.size());
-        if (results.isEmpty()) {
-            log.info("Nexus search response body: {}", resp.body());
-            if (hasAuthConfigured()) {
-                log.warn("Nexus returned 0 results but credentials are configured — "
-                        + "verify that your credentials are correct. Nexus silently falls back "
-                        + "to anonymous access when authentication fails.");
-            }
+        if (results.isEmpty() && hasAuthConfigured()) {
+            log.warn("Nexus returned 0 results but credentials are configured. If the plugin "
+                    + "should be there, verify the credentials: Nexus silently falls back to "
+                    + "anonymous access when authentication fails.");
         }
         return results;
     }
 
-    private List<Asset> parseItems(String body) {
-        JsonObject root  = JsonParser.parseString(body).getAsJsonObject();
-        JsonArray  items = root.getAsJsonArray("items");
-        log.info("Nexus response contains {} total item(s) before JAR filter", items.size());
+    /** Reads every page (up to {@link #MAX_PAGES}) of one search into {@code found}, keyed by download URL. */
+    private void collect(String param, String value, Map<String, Asset> found, boolean required)
+            throws IOException, InterruptedException {
+        String token = null;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            String url = searchUrl(config.url(), config.repository(), param, value, token);
+            log.info("Nexus search: GET {}", url);
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Accept", "application/json")
+                    .timeout(SEARCH_TIMEOUT)
+                    .header("Authorization", buildAuthHeader())
+                    .GET()
+                    .build();
+            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            log.info("Nexus search response: HTTP {}", resp.statusCode());
+            if (resp.statusCode() != 200) {
+                if (required)
+                    throw new IOException("Nexus search returned HTTP " + resp.statusCode()
+                            + " for " + config.name());
+                log.info("Nexus refused the {} search (HTTP {}); keeping the other results", param, resp.statusCode());
+                return;
+            }
+            JsonObject root = JsonParser.parseString(resp.body()).getAsJsonObject();
+            List<Asset> assets = parseItems(root);
+            if (assets.isEmpty() && page == 0) log.info("Nexus search response body: {}", resp.body());
+            for (Asset a : assets) found.putIfAbsent(a.downloadUrl(), a);
+            token = root.has("continuationToken") && !root.get("continuationToken").isJsonNull()
+                    ? root.get("continuationToken").getAsString() : null;
+            if (token == null || token.isBlank()) return;
+        }
+    }
+
+    /**
+     * The asset search URL. {@code base} is the server's address (trailing slashes are
+     * dropped); {@code repository}, when given, limits the search to that repository.
+     */
+    static String searchUrl(String base, String repository, String param, String value, String continuationToken) {
+        String b = base.strip();
+        while (b.endsWith("/")) b = b.substring(0, b.length() - 1);
+        StringBuilder url = new StringBuilder(b).append("/service/rest/v1/search/assets?")
+                .append(param).append('=').append(enc(value));
+        if (repository != null && !repository.isBlank()) url.append("&repository=").append(enc(repository.strip()));
+        if (continuationToken != null) url.append("&continuationToken=").append(enc(continuationToken));
+        return url.toString();
+    }
+
+    private static String enc(String s) { return URLEncoder.encode(s, StandardCharsets.UTF_8); }
+
+    /** The JARs in one page of results; sources, Javadoc and other classified JARs are left out. */
+    static List<Asset> parseItems(JsonObject root) {
+        JsonArray items = root.has("items") && root.get("items").isJsonArray()
+                ? root.getAsJsonArray("items") : new JsonArray();
+        log.debug("Nexus page has {} item(s) before the JAR filter", items.size());
         List<Asset> result = new ArrayList<>();
         for (JsonElement el : items) {
             JsonObject item = el.getAsJsonObject();
-            String path = item.has("path") ? item.get("path").getAsString() : "";
-            String contentType = item.has("contentType") ? item.get("contentType").getAsString() : "";
-            log.debug("Nexus item: path={} contentType={}", path, contentType);
-            if (!contentType.contains("java-archive") && !path.endsWith(".jar")) {
-                log.debug("Nexus item skipped (not a JAR): path={} contentType={}", path, contentType);
-                continue;
-            }
+            String path        = string(item, "path", "");
+            String contentType = string(item, "contentType", "");
+            if (!contentType.contains("java-archive") && !path.endsWith(".jar")) continue;
+            JsonObject m2 = item.has("maven2") && item.get("maven2").isJsonObject()
+                    ? item.getAsJsonObject("maven2") : null;
+            if (m2 != null && !string(m2, "classifier", "").isBlank()) continue;
 
-            String downloadUrl = item.get("downloadUrl").getAsString();
-            long   size        = item.has("fileSize") ? item.get("fileSize").getAsLong() : -1;
+            String downloadUrl = string(item, "downloadUrl", null);
+            if (downloadUrl == null) continue;
+            long   size        = item.has("fileSize") && !item.get("fileSize").isJsonNull()
+                    ? item.get("fileSize").getAsLong() : -1;
+            String groupId     = m2 != null ? string(m2, "groupId", "")      : "";
+            String artifactId  = m2 != null ? string(m2, "artifactId", path) : path;
+            String version     = m2 != null ? string(m2, "version", "")      : "";
+            // lastModified on Nexus 3.x; blobCreated as well on most versions.
+            Instant published  = Asset.parseTime(string(item, "lastModified", null));
+            if (published == null) published = Asset.parseTime(string(item, "blobCreated", null));
 
-            JsonObject m2        = item.has("maven2") ? item.getAsJsonObject("maven2") : null;
-            String     groupId    = m2 != null && m2.has("groupId")    ? m2.get("groupId").getAsString()    : "";
-            String     artifactId = m2 != null && m2.has("artifactId") ? m2.get("artifactId").getAsString() : path;
-            String     version    = m2 != null && m2.has("version")    ? m2.get("version").getAsString()    : "";
-
-            result.add(new Asset(groupId, artifactId, version, downloadUrl, size));
+            result.add(new Asset(groupId, artifactId, version, downloadUrl, size, published));
         }
         return result;
+    }
+
+    private static String string(JsonObject o, String key, String fallback) {
+        JsonElement e = o.get(key);
+        return e != null && e.isJsonPrimitive() ? e.getAsString() : fallback;
     }
 
     @Override

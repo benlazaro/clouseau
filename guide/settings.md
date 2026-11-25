@@ -139,16 +139,30 @@ syntax highlighters and [live sources](following.md#source-plugins).
 - A file in the `plugins` folder that couldn't be loaded shows as **Failed**, in red, with
   the reason, such as "Not a Clouseau plugin: its manifest has no Plugin-Id".
 - **Browse** searches a plugin repository (Nexus or Maven Central); double-click a result,
-  or select it and click **Install**. The new plugin is then selected in Installed.
-  **Manage…** next to the repository list adds a repository. For Nexus, choose an
-  authentication method: none, a username and password, or a Nexus user token.
+  or select it and click **Install**. The new plugin is then selected in Installed. Results
+  show each plugin's version, the date the repository got it, and its size; drag a column's
+  edge to make it wider. On Nexus, type any part of the group or artifact name: `fmt`
+  finds `clouseau-logfmt-plugin`. While a slow repository answers, the results area shows
+  that it's searching and for how long; **Cancel** (where Search was) stops it. A
+  repository that doesn't answer within a minute stops the search with a note saying so.
+- **Manage…** next to the repository list adds a Nexus repository (Maven Central is always
+  there):
+  - **URL** is the Nexus server's address, the part before `/repository/`. If you download
+    plugins from `https://nexus.example.com/repository/maven-releases/…`, enter
+    `https://nexus.example.com`. A server under a path keeps it:
+    `https://example.com/nexus`.
+  - **Repository** is optional. Leave it empty to search every repository on the server, or
+    enter one repository's name as Nexus lists it, such as `maven-releases`, to search only
+    that one.
+  - **Authentication**: none, a username and password, or a Nexus user token (its name
+    code and passcode).
 - **Open Plugins Folder** opens the `plugins` folder. A JAR you drop there, or remove,
   shows up in the list while it's open.
 
 New plugins are available without restarting; tabs you open afterwards use them.
 
 > Nexus answers wrong credentials as if you weren't signed in, so a search that finds
-> nothing may mean the password or token is wrong.
+> nothing may mean the password or token is wrong. Try a shorter part of the name first.
 
 ## Memory
 
