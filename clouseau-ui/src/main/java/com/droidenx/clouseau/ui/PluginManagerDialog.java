@@ -95,12 +95,15 @@ public final class PluginManagerDialog extends JDialog {
         installed.add(details, "growx, hmin 112");
 
         // ── Browse ────────────────────────────────────────────────────────────
-        browse = new BrowsePluginsPanel(pluginManager.getPluginsRoot(), this::installed);
+        browse = new BrowsePluginsPanel(pluginManager.getPluginsRoot(), this::install);
 
         tabs.addTab(Messages.get("plugins.tab.installed"), installed);
         tabs.addTab(Messages.get("plugins.tab.browse"), browse);
         tabs.addChangeListener(e -> {
-            if (tabs.getSelectedComponent() == browse) SwingUtilities.invokeLater(() -> browse.searchField().requestFocusInWindow());
+            if (tabs.getSelectedComponent() == browse) {
+                browse.shown();
+                SwingUtilities.invokeLater(() -> browse.searchField().requestFocusInWindow());
+            }
         });
 
         // ── Footer: the folder on the left, Close on the right ───────────────
@@ -165,6 +168,27 @@ public final class PluginManagerDialog extends JDialog {
         onRefresh.run();
         folderStamp = pluginManager.folderStamp();
         reload(select);
+    }
+
+    /**
+     * Browse downloaded a plugin: an update first removes the version it replaces (stopped and
+     * unloaded, so Windows lets go of the JAR; two versions loaded at once would clash), then the
+     * new JAR moves into the folder and the plugins reload, with it selected in Installed.
+     */
+    private Path install(Path downloaded, Path replaces) throws IOException {
+        Path root = pluginManager.getPluginsRoot();
+        if (replaces != null) {
+            PluginInfo old = pluginManager.getPluginInfos().stream()
+                    .filter(p -> samePath(p.file(), replaces)).findFirst().orElse(null);
+            if (old == null || !pluginManager.deletePlugin(old.id())) pluginManager.deleteUnloadedFile(replaces);
+            if (Files.exists(replaces))
+                throw new IOException(Messages.get("plugins.download.update.locked").formatted(replaces.getFileName()));
+        }
+        Files.createDirectories(root);
+        Path target = root.resolve(downloaded.getFileName().toString());
+        Files.move(downloaded, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        installed(target);
+        return target;
     }
 
     private void installed(Path file) {

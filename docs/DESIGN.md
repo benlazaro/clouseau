@@ -617,6 +617,20 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   refuse (a leading wildcard) without failing the search. It reads up to five pages of each,
   keeps unclassified JARs only, and takes each result's date from `lastModified` (or
   `blobCreated`); Maven Central's comes from `timestamp`.
+- Browse opens on `PluginRepository.listPlugins()`, the repository's Clouseau plugins
+  (D-32): for Maven Central, the entries of `plugins.json` (`PluginCatalog.CATALOG_URL`,
+  or `-Dclouseau.pluginCatalog`), each resolved at once to its `maven-metadata.xml`
+  version plus a `HEAD` on the JAR for size and date; for Nexus, the keyword search
+  `clouseau` plus `name=*-clouseau-plugin` and `name=clouseau-*-plugin`, filtered by
+  `PluginCatalog.isPluginName` and cut to the newest version of each. Each repository's
+  list is kept while the window is open. Typing filters it in the table (a `RowFilter` on
+  name, coordinates, description and kinds); Enter runs the old whole-repository
+  `search`. The Installed column comes from the plugins folder's file names
+  (`<artifact>-<version>.jar`, `PluginCatalog.installedVersions`).
+- An install downloads into a temporary folder, so the folder watcher never sees half a
+  JAR, and the Plugin Manager moves it in. An update first deletes the installed version
+  through PF4J (stopped and unloaded, which releases the JAR on Windows; two versions of
+  one ID would clash) and stops with a message if the old file is still there.
   While it's open it also calls `refresh()` when `folderStamp()` (the folder's names, sizes
   and times) changes, so a JAR dropped in or removed shows up without a Refresh button.
 - `getPluginInfos()` lists the loaded plugins, then each JAR or ZIP in the folder that
@@ -2829,6 +2843,37 @@ users never switch, and a safe move needs a pending-move flag outside both folde
 restart and handling for a target that can't be written); `%LOCALAPPDATA%\Clouseau` (the
 Windows convention, but `~/.clouseau` is the same on every platform and in the guide).
 
+### D-32 · Plugins are found by name on Nexus and by a list on Maven Central · Adopted
+
+Browse used to search the whole repository, so "logfmt" on Maven Central returned any Java
+library and finding a plugin meant knowing its coordinates (formerly G-15). Now it opens on
+the repository's Clouseau plugins.
+
+- **Naming convention, as Maven's:** `clouseau-<name>-plugin` is kept for this project's
+  plugins (group `com.droidenx.clouseau`); everyone else uses `<name>-clouseau-plugin` under
+  their own group. The artifact name is also the `Plugin-Id`, and the example plugin follows
+  it (`logfmt-clouseau-plugin`). `PluginCatalog` (core) holds the rule.
+- **Nexus by name.** Nexus's search is current and takes wildcards, so in-house plugins list
+  as soon as they're deployed, with nothing to register.
+- **Maven Central by a list.** Central's Solr search (`search.maven.org`) can't do it: its
+  index is far behind (in Nov 2026 it had PF4J at 3.13.0, from Nov 2024, and no
+  `clouseau-api` at all) and it refuses a leading wildcard, so `a:*-clouseau-plugin` fails.
+  The newer search on central.sonatype.com is an internal API behind Cloudflare, which
+  turns away non-browser clients. So the project keeps `plugins.json` in the repository,
+  authors add theirs by pull request (as Obsidian's community plugins are listed), and
+  Browse reads it from `raw.githubusercontent.com` and asks repo1 for each plugin's
+  `maven-metadata.xml`, which is always current, so a new release needs no new pull request.
+  The list also says what each plugin adds, which gives Browse its Adds column and lets
+  typing `source` find the sources.
+- **Installed is read from file names** (`<artifact>-<version>.jar`, how Browse saves them),
+  not from PF4J, because a plugin's ID needn't match its artifact; the convention asks that
+  it does.
+
+Rejected: checking each candidate's POM for a `clouseau-api` dependency (Gradle doesn't
+write `compileOnly` dependencies to the POM, so a plugin built like the example would
+fail it); a shared group for every plugin (authors publish under their own); reading every
+candidate JAR's manifest (a download per result).
+
 ## 10. Planned features
 
 Accepted in the use cases: none at the moment (UC-17, sessions, and UC-18, new-version
@@ -2876,12 +2921,5 @@ Remove an entry once it's fixed.
 G-9 (one tab class doing everything) was closed by D-21; `MainFrame` (about 1,600 lines)
 is now the biggest UI class.
 
-- **G-15 · Find Clouseau plugins, not any artifact.** Browse searches the whole repository,
-  so "logfmt" on Maven Central returns any Java library, and finding a plugin means knowing
-  its coordinates. Planned: a naming convention for published plugins (an artifact name
-  like `clouseau-*-plugin`, or a shared group), so Browse can list what's available when
-  it opens, filter as you type, and mark plugins you have, with **Update** when a newer
-  version exists. Needs the convention settled first, in `guide/developers.md`.
-  Once Browse knows each plugin's kind, it could offer a **Sources** filter, for someone
-  looking for a connection to Loki or CloudWatch (the File menu no longer has a Browse
-  Plugins… item; Tools → Plugins… is the one way in).
+G-15 (finding plugins, not any artifact) was closed by D-32. No other gaps are open.
+

@@ -148,4 +148,28 @@ class NexusPluginRepositoryTest {
         assertThat(NexusPluginRepository.searchUrl(" https://nexus.example.com// ", "", "q", "a b", null))
                 .isEqualTo("https://nexus.example.com/service/rest/v1/search/assets?q=a+b");
     }
+
+    @Test
+    void listsPluginsByNameNewestVersionOfEach() throws Exception {
+        keywordBody = "{\"items\":[" + item("logfmt-clouseau-plugin", "1.2.0", null, null) + ","
+                + item("logfmt-clouseau-plugin", "1.10.0", null, null) + ","
+                + item("clouseau-utils", "3.0", null, null) + ","
+                + item("logfmt-clouseau-plugin", "1.10.0", "sources", null) + "]}";
+        nameBody    = "{\"items\":[" + item("loki-clouseau-plugin", "0.1", null, null) + "]}";
+
+        List<PluginRepository.Asset> list = repo(null).listPlugins();
+
+        assertThat(queries).containsExactly("q=clouseau", "name=*-clouseau-plugin", "name=clouseau-*-plugin");
+        assertThat(list).extracting(a -> a.artifactId() + ":" + a.version())
+                .containsExactly("logfmt-clouseau-plugin:1.10.0", "loki-clouseau-plugin:0.1");
+    }
+
+    @Test
+    void listingKeepsTheKeywordResultsWhenTheServerRefusesWildcards() throws Exception {
+        keywordBody = "{\"items\":[" + item("logfmt-clouseau-plugin", "1.0", null, null) + "]}";
+        nameStatus  = 400;
+
+        assertThat(repo(null).listPlugins()).extracting(PluginRepository.Asset::artifactId)
+                .containsExactly("logfmt-clouseau-plugin");
+    }
 }

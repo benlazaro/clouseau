@@ -138,15 +138,30 @@ syntax highlighters and [live sources](following.md#source-plugins).
   trash can on the row under the mouse (or `Delete`) removes it.
 - A file in the `plugins` folder that couldn't be loaded shows as **Failed**, in red, with
   the reason, such as "Not a Clouseau plugin: its manifest has no Plugin-Id".
-- **Browse** searches a plugin repository (Nexus or Maven Central); double-click a result,
-  or select it and click **Install**. The new plugin is then selected in Installed. Results
-  show each plugin's version, the date the repository got it, and its size; click a column's
-  header to sort by it, again to reverse it, and a third time to go back to the
-  repository's order; Clouseau keeps the sort for later searches. Drag a column's edge to
-  make it wider. On Nexus, type any part of the group or artifact name: `fmt`
-  finds `clouseau-logfmt-plugin`. While a slow repository answers, the results area shows
-  that it's searching and for how long; **Cancel** (where Search was) stops it. A
-  repository that doesn't answer within a minute stops the search with a note saying so.
+- **Browse** opens on the Clouseau plugins in the selected repository: for Maven Central,
+  every plugin on Clouseau's plugin list, at its latest version; for a Nexus, every
+  artifact named like a plugin (`<name>-clouseau-plugin`). Hover over a plugin to see its
+  coordinates and description, and select it to read the description under the table.
+  **Adds** says what it brings (parser, source, and so on).
+  - Type to filter the plugins by name, description or what they add: `source` shows
+    every source plugin.
+  - Double-click a plugin, or select it and click **Install**. The new plugin is then
+    selected in Installed.
+  - **Installed** shows the version you have. When the repository has a newer one, it
+    says *update* next to it and the button says **Update**, which replaces your version
+    with the new one. A plugin you already have at the latest version says
+    **Installed**.
+  - For a plugin that isn't listed, type part of its name and press `Enter` (or click
+    **Search**) to search the whole repository. On Maven Central, `g:` and `a:` search
+    the group or the artifact name only (`a:logfmt-clouseau-plugin`); on Nexus, any part of
+    the group or artifact name works: `fmt` finds `logfmt-clouseau-plugin`. Clear the
+    field to go back to the plugins.
+  - Click a column's header to sort by it, again to reverse it, and a third time to go back
+    to the repository's order; Clouseau keeps the sort. Drag a column's edge to make it
+    wider.
+  - While a slow repository answers, the results area shows what it's waiting for and for
+    how long; **Cancel** (where Search was) stops it. A repository that doesn't answer
+    within a minute stops with a note saying so.
 - **Manage…** next to the repository list adds a Nexus repository (Maven Central is always
   there):
   - **URL** is the Nexus server's address, the part before `/repository/`. If you download

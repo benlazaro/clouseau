@@ -131,6 +131,9 @@ since those come from Clouseau's own build. It shows everything a plugin needs:
 
   Build for Java 21, which is what Clouseau runs on. Gradle won't resolve the API for an older
   target ("only compatible with JVM runtime version 21 or newer").
+- **Name:** call your plugin `<name>-clouseau-plugin`, such as `logfmt-clouseau-plugin`, and
+  use that as its artifact name, JAR name and `Plugin-Id`. See
+  [Naming and publishing](#naming-and-publishing).
 - **Manifest:** `Plugin-Id` and `Plugin-Version` (semantic version) in the JAR manifest.
   The Plugin Manager also shows `Plugin-Name` (otherwise the ID, made readable),
   `Plugin-Description`, `Plugin-Provider` and `Plugin-License` when you set them.
@@ -281,3 +284,46 @@ The example plugin's `DemoStreamSource` does this.
 A source is used once. **Reconnect** on the tab closes it and calls your provider's
 `create` again with the same values, so keep connection state in the source, not the
 provider.
+
+## Naming and publishing
+
+Name your plugin's artifact **`<name>-clouseau-plugin`**, under your own group:
+`io.example:logfmt-clouseau-plugin`. It's the same idea as Maven's own plugins, where
+`maven-<name>-plugin` belongs to Apache and everyone else uses `<name>-maven-plugin`:
+**`clouseau-<name>-plugin`** is kept for plugins the Clouseau project publishes
+(`com.droidenx.clouseau`). Use the artifact name as the `Plugin-Id` too, and keep the JAR
+named `<artifact>-<version>.jar` (Gradle and Maven do by default). That's how the Plugin
+Manager tells which version you have installed and offers **Update** when there's a newer one.
+
+**On Maven Central:** publish the JAR as you would any library, then add it to
+[`plugins.json`](https://github.com/benlazaro/clouseau/blob/main/plugins.json) with a pull
+request. Browse lists every plugin in that file when it opens, at the latest version Central
+has (it asks Central for each one, so a new release shows up without another pull request):
+
+```json
+{
+  "version": 1,
+  "plugins": [
+    {
+      "groupId": "io.example",
+      "artifactId": "logfmt-clouseau-plugin",
+      "name": "logfmt",
+      "description": "Reads logfmt lines: time=… level=info msg=\"…\" key=value.",
+      "provides": ["parser"],
+      "homepage": "https://github.com/example/logfmt-clouseau-plugin"
+    }
+  ]
+}
+```
+
+`groupId` and `artifactId` are required, and the artifact name must follow the convention.
+`provides` lists what it adds: `parser`, `formatter`, `highlighter` and `source`. Browse shows
+them in its **Adds** column, and typing `source` finds every source. The list is needed because
+Maven Central's search index falls far behind what's published, and can't search by the end of a name.
+
+To check an entry before you send it, start Clouseau with
+`-Dclouseau.pluginCatalog=C:/path/to/plugins.json` (a file or a URL), and Browse reads that
+list instead.
+
+**On a company Nexus:** deploy the plugin there with the conventional name, and Browse
+lists it for anyone who adds that Nexus under **Manage…**. No list is involved.

@@ -49,7 +49,7 @@ final class NexusPluginRepository implements PluginRepository {
     /**
      * Finds JARs whose coordinates contain {@code query}. Two searches, merged: Nexus's keyword
      * search, which matches whole words of the group, name and version ({@code logfmt} finds
-     * {@code clouseau-logfmt-plugin}), then the name with wildcards around it, which also
+     * {@code logfmt-clouseau-plugin}), then the name with wildcards around it, which also
      * matches part of a word ({@code fmt}). A server that refuses the wildcard search (not every
      * one allows a leading wildcard) still answers the keyword one.
      */
@@ -69,6 +69,35 @@ final class NexusPluginRepository implements PluginRepository {
                     + "anonymous access when authentication fails.");
         }
         return results;
+    }
+
+    /**
+     * The Clouseau plugins on the server, by name (G-15, D-32): artifacts named
+     * {@code <name>-clouseau-plugin} or {@code clouseau-<name>-plugin}, the latest version of
+     * each. Nexus's search is current and takes wildcards, so in-house plugins list as soon as
+     * they're deployed. The keyword search ({@code clouseau}) always runs; the two name searches
+     * add what it misses, on servers that allow a leading wildcard.
+     */
+    @Override
+    public List<Asset> listPlugins() throws IOException, InterruptedException {
+        Map<String, Asset> found = new LinkedHashMap<>();
+        collect("q", "clouseau", found, true);
+        collect("name", "*-clouseau-plugin", found, false);
+        collect("name", "clouseau-*-plugin", found, false);
+        List<Asset> latest = latestOfEach(found.values());
+        log.info("Nexus has {} Clouseau plugin(s)", latest.size());
+        return latest;
+    }
+
+    /** The conventionally named plugins among {@code assets}, newest version of each, in the order first seen. */
+    static List<Asset> latestOfEach(java.util.Collection<Asset> assets) {
+        Map<String, Asset> newest = new LinkedHashMap<>();
+        for (Asset a : assets) {
+            if (!com.droidenx.clouseau.core.PluginCatalog.isPluginName(a.artifactId())) continue;
+            newest.merge(a.groupId() + ":" + a.artifactId(), a,
+                    (was, now) -> BrowsePluginsPanel.compareVersions(now.version(), was.version()) > 0 ? now : was);
+        }
+        return new ArrayList<>(newest.values());
     }
 
     /** Reads every page (up to {@link #MAX_PAGES}) of one search into {@code found}, keyed by download URL. */

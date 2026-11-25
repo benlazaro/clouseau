@@ -9,7 +9,10 @@ plugins {
     java
 }
 
-val pluginId      = "clouseau-example-logfmt"
+// Name your plugin <name>-clouseau-plugin and use that as its artifact name, JAR name and Plugin-Id:
+// Browse finds plugins by that name, and the plugin list (plugins.json) takes only names that
+// follow it. clouseau-<name>-plugin is kept for plugins the Clouseau project publishes.
+val pluginId      = "logfmt-clouseau-plugin"
 val pluginVersion = "1.0.0"
 // The plugin API it's built for (ClouseauApi.VERSION of an api-v* release on Maven Central).
 val clouseauApi   = "0.3.0"

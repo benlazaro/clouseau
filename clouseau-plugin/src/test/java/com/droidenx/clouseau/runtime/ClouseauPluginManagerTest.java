@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ClouseauPluginManagerTest {
 
-    private static final String PLUGIN_ID = "clouseau-example-logfmt";
+    private static final String PLUGIN_ID = "logfmt-clouseau-plugin";
 
     @TempDir
     Path pluginsDir;

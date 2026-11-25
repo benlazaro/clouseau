@@ -35,7 +35,7 @@ class BrowsePluginsPanelTest {
 
     @Test
     void theSortIsSavedByColumnNameAndReadBack() {
-        var key = new javax.swing.RowSorter.SortKey(2, javax.swing.SortOrder.DESCENDING);
+        var key = new javax.swing.RowSorter.SortKey(4, javax.swing.SortOrder.DESCENDING);
 
         assertThat(BrowsePluginsPanel.sortText(List.of(key))).isEqualTo("date:descending");
         assertThat(BrowsePluginsPanel.parseSort("date:descending")).isEqualTo(key);
@@ -55,5 +55,30 @@ class BrowsePluginsPanelTest {
     @Test
     void equalVersionsAreEqual() {
         assertThat(BrowsePluginsPanel.compareVersions("1.0.0-SNAPSHOT", "1.0.0-SNAPSHOT")).isZero();
+    }
+
+    private static PluginRepository.Asset listed(String name, String description, com.droidenx.clouseau.core.PluginCatalog.Kind... kinds) {
+        var entry = new com.droidenx.clouseau.core.PluginCatalog.Entry("io.example", name + "-clouseau-plugin",
+                name, description, List.of(kinds), null);
+        return new PluginRepository.Asset("io.example", name + "-clouseau-plugin", "1.0", "u", -1, null, entry);
+    }
+
+    @Test
+    void theFilterMatchesEveryWordAnywhere() {
+        var loki = listed("Loki", "Follows a Grafana Loki stream.", com.droidenx.clouseau.core.PluginCatalog.Kind.SOURCE);
+
+        assertThat(BrowsePluginsPanel.matches(loki, "loki")).isTrue();
+        assertThat(BrowsePluginsPanel.matches(loki, "grafana stream")).isTrue();
+        assertThat(BrowsePluginsPanel.matches(loki, "SOURCE")).isTrue();       // what it adds
+        assertThat(BrowsePluginsPanel.matches(loki, "io.example")).isTrue();   // its coordinates
+        assertThat(BrowsePluginsPanel.matches(loki, "loki parser")).isFalse();
+        assertThat(BrowsePluginsPanel.matches(loki, "  ")).isTrue();
+    }
+
+    @Test
+    void aSearchResultMatchesByItsCoordinates() {
+        var found = new PluginRepository.Asset("com.acme", "acme-clouseau-plugin", "2.0", "u", -1, null);
+        assertThat(BrowsePluginsPanel.matches(found, "acme")).isTrue();
+        assertThat(BrowsePluginsPanel.matches(found, "source")).isFalse();
     }
 }

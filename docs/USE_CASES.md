@@ -406,8 +406,9 @@ the parser reopens the file with it.
 ship with.
 
 1. Plugin author implements an interface from `clouseau-api` and packages a JAR.
-2. User installs it by dropping the JAR in the plugins folder, or from a plugin repository
-   (Nexus or Maven Central) in the Plugin Manager.
+2. User installs it by dropping the JAR in the plugins folder, or from the Plugin Manager's
+   Browse tab, which opens on the Clouseau plugins in the selected repository (Nexus or Maven
+   Central) and offers Update when a newer version of an installed one is out.
 3. The new capability is available without restarting.
 4. For a log source, the user picks **Open <name>…** in the File menu, fills in the form
    Clouseau builds from the settings the plugin declares, and the lines stream into a new
@@ -419,7 +420,14 @@ releases that don't change that API.
 **Current behavior:** Parsers, formatters, syntax highlighters and log sources
 (`LogSourceProvider`) can all come from plugins. A source's settings are remembered per
 plugin, with passwords encrypted. Plugins can't add filters. The example plugin ships a
-logfmt parser and a demo live source. Browse finds a Nexus plugin by any part of its group or
+logfmt parser and a demo live source, and is named as plugins should be (`logfmt-clouseau-plugin`).
+Browse opens on the Clouseau plugins the repository has: for Maven Central, the plugins in the
+project's `plugins.json`, each at the latest version Central has; for Nexus, artifacts named
+`<name>-clouseau-plugin` (or `clouseau-<name>-plugin`, the project's own). Typing filters them by
+name, description or what they add (`source`); Enter searches the whole repository instead, and
+clearing the field goes back to the plugins. An Installed column shows the version in the plugins
+folder, and Install becomes Update when the repository has a newer one, which replaces it. The
+list is empty until someone publishes a plugin. Search finds a Nexus plugin by any part of its group or
 artifact name, and lists each result's version, date and size in resizable, sortable columns; the sort is remembered. A Nexus
 repository is the server's address plus an optional repository name; the form says so.
 
