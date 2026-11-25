@@ -76,8 +76,13 @@ sidecar (`version` 2), the review bundle (`formatVersion` 1/2), `highlight-rules
       releases list while there is no Latest. After tagging `v1.0.0`, confirm the links land on it.
 - [ ] `docs/releases/v1.0.0-rc.1.md` and `docs/releases/v1.0.0.md`, written for users: what
       1.0 means, the highlights since the first alpha, how to upgrade.
-- [ ] Guide pass: every page matches the current app (menu names such as *Open via SSH…*,
-      screenshots in `docs/screenshots/` current with the design system).
+- [x] Guide pass (2026-11-25): every menu path and bold UI name in the README and guide checked
+      against `messages.properties`; the shortcut table gained the copy shortcuts and `F3`; the
+      screenshots and the social preview retaken.
+- [ ] macOS shortcuts: menu commands use Cmd (the menu shortcut key), but Find, the copy
+      shortcuts, All Notes, tab switching and first/last row are bound to Ctrl, so
+      `guide/settings.md` ("`Ctrl` on every platform, including macOS") is wrong. Bind them all
+      to the menu shortcut key (keeping `Ctrl+Tab`), then say "Cmd for Ctrl on macOS".
 - [ ] Clean up stale local branches (`claude/*`, `design-system-sync`, `row-menu-alignment`,
       `toggle-off-border-contrast`); keep `shelf/command-source`.
 

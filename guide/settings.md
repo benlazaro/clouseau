@@ -103,13 +103,16 @@ window, and act on that window.
 | `Ctrl+W` | Close the tab |
 | `Ctrl+R` | Reload the file, or reconnect an SSH or source-plugin tab |
 | `Ctrl+,` | Settings |
+| `Ctrl+C` | Copy the selected row's message |
+| `Ctrl+Alt+C` | Copy its raw line |
+| `Ctrl+Shift+C` | Copy the whole entry |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab (also `Ctrl+PageDown` / `Ctrl+PageUp`) |
 | `Ctrl+1` … `Ctrl+8` | Go to tab 1 to 8 |
 | `Ctrl+9` | Go to the last tab |
 | `Ctrl+Home` / `Ctrl+End` | First / last row |
 | `Alt`+click a level | Show only that level / show all again |
 | `Ctrl+F` | Find |
-| `Enter` / `Shift+Enter` | Next / previous match |
+| `F3` / `Shift+F3`, or `Enter` / `Shift+Enter` in the find bar | Next / previous match |
 | `Escape` | Close the find bar |
 | `Ctrl+F` in the detail panel | Find in the entry |
 | `Ctrl+Shift+N` | All notes |

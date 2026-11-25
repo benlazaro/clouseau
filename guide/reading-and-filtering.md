@@ -43,8 +43,8 @@ are shown from how many lines, such as **57 rows · 108 lines**.
   merged view or a file shown as plain text.
 - The **Edit** menu has the copy commands, Find (`Ctrl+F`, then `F3` / `Shift+F3` for the
   next and previous match) and notes for the selected row. The **View** menu has Follow,
-  **Detail Pane** (Wrap Lines and text size, `Ctrl+=` / `Ctrl+-`), the tab's Time Zone and
-  Clear All Filters.
+  **Detail Pane** (Wrap Lines and text size, `Ctrl+=` / `Ctrl+-`), **Timezones…** and
+  **Clear All Filters**.
 
 ## The detail panel
 
