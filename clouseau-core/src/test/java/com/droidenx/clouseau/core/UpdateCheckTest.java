@@ -41,10 +41,10 @@ class UpdateCheckTest {
 
     @Test
     void developmentBuildsAreNotCompared() {
-        assertThat(UpdateCheck.isDevelopment("0.1.1-SNAPSHOT")).isTrue();
+        assertThat(UpdateCheck.isDevelopment("0.0.0-SNAPSHOT")).isTrue();
         assertThat(UpdateCheck.isDevelopment("dev")).isTrue();
         assertThat(UpdateCheck.isDevelopment("0.9.0-alpha")).isFalse();
-        assertThat(UpdateCheck.check("0.1.1-SNAPSHOT")).isInstanceOf(UpdateCheck.Result.DevelopmentBuild.class);
+        assertThat(UpdateCheck.check("0.0.0-SNAPSHOT")).isInstanceOf(UpdateCheck.Result.DevelopmentBuild.class);
     }
 
     @Test

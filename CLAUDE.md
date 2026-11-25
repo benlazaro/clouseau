@@ -113,6 +113,8 @@ the project's JDK) before running `./gradlew`.
   any running Clouseau before testing a new build.
 - Running from source stores data in `./data/` under the working directory; see
   `AppDirs` for the release locations.
+- A build without `-PappVersion` (the IDE, `gradlew run`, the Edge jar) is version
+  `0.0.0-SNAPSHOT`, so a development build is easy to spot; only releases get a real version.
 - `samples/sample.log` and `samples/gen_log.ps1` provide test logs.
 
 CI (`.github/workflows`) runs `./gradlew check` (the tests, the third-party notices and plugin API
