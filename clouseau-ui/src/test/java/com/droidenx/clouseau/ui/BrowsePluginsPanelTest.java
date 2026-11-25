@@ -34,6 +34,25 @@ class BrowsePluginsPanelTest {
     }
 
     @Test
+    void theSortIsSavedByColumnNameAndReadBack() {
+        var key = new javax.swing.RowSorter.SortKey(2, javax.swing.SortOrder.DESCENDING);
+
+        assertThat(BrowsePluginsPanel.sortText(List.of(key))).isEqualTo("date:descending");
+        assertThat(BrowsePluginsPanel.parseSort("date:descending")).isEqualTo(key);
+    }
+
+    @Test
+    void noSortOrAnUnknownOneReadsAsUnsorted() {
+        assertThat(BrowsePluginsPanel.sortText(List.of())).isNull();
+        assertThat(BrowsePluginsPanel.sortText(List.of(
+                new javax.swing.RowSorter.SortKey(1, javax.swing.SortOrder.UNSORTED)))).isNull();
+        assertThat(BrowsePluginsPanel.parseSort(null)).isNull();
+        assertThat(BrowsePluginsPanel.parseSort("downloads:descending")).isNull();
+        assertThat(BrowsePluginsPanel.parseSort("version:sideways")).isNull();
+        assertThat(BrowsePluginsPanel.parseSort("2")).isNull();
+    }
+
+    @Test
     void equalVersionsAreEqual() {
         assertThat(BrowsePluginsPanel.compareVersions("1.0.0-SNAPSHOT", "1.0.0-SNAPSHOT")).isZero();
     }

@@ -375,6 +375,17 @@ public final class AppPrefs {
         putString("window." + key + ".size", size.width + "," + size.height);
     }
 
+    /** The plugin search results' sort, as {@code column:order} (such as {@code date:descending}); null when unsorted. */
+    public static String getPluginSearchSort() { return getString("plugins.browse.sort", null); }
+
+    public static void setPluginSearchSort(String sort) {
+        if (sort == null) {
+            if (ROOT.remove("plugins.browse.sort") != null) save();
+        } else if (!sort.equals(getPluginSearchSort())) {
+            putString("plugins.browse.sort", sort);
+        }
+    }
+
     /** A manager dialog's size, by its id: {@link #getWindowSize}, for {@link ManagerDialogs#rememberSize}. */
     public static java.awt.Dimension getDialogSize(String id) { return getWindowSize(id); }
 

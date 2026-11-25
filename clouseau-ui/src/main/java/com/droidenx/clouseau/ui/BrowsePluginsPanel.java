@@ -4,6 +4,7 @@ import com.droidenx.clouseau.ui.theme.ClouseauColors;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
+import javax.swing.RowSorter.SortKey;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
@@ -167,6 +168,14 @@ final class BrowsePluginsPanel extends JPanel {
         sorter.setComparator(ResultsModel.COL_ARTIFACT, String.CASE_INSENSITIVE_ORDER);
         sorter.setComparator(ResultsModel.COL_VERSION, (a, b) -> compareVersions((String) a, (String) b));
         table.setRowSorter(sorter);
+        // The sort lasts between searches anyway (the sorter keeps it when the rows change);
+        // saving it keeps it after the Plugin Manager closes, and after a restart.
+        SortKey saved = parseSort(AppPrefs.getPluginSearchSort());
+        if (saved != null) sorter.setSortKeys(List.of(saved));
+        sorter.addRowSorterListener(e -> {
+            if (e.getType() == javax.swing.event.RowSorterEvent.Type.SORT_ORDER_CHANGED)
+                AppPrefs.setPluginSearchSort(sortText(sorter.getSortKeys()));
+        });
         table.getSelectionModel().addListSelectionListener(
                 e -> installBtn.setEnabled(table.getSelectedRow() >= 0));
         table.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -435,6 +444,31 @@ final class BrowsePluginsPanel extends JPanel {
                 default       -> String.class;
             };
         }
+    }
+
+    /** The columns' names in the saved sort, by index; saved by name so a new column can't shift them. */
+    private static final String[] SORT_NAMES = { "artifact", "version", "date", "size" };
+
+    /** The first sort key as {@code column:order}, such as {@code date:descending}; null when unsorted. */
+    static String sortText(List<? extends SortKey> keys) {
+        if (keys.isEmpty()) return null;
+        SortKey k = keys.get(0);
+        if (k.getColumn() < 0 || k.getColumn() >= SORT_NAMES.length || k.getSortOrder() == SortOrder.UNSORTED) return null;
+        return SORT_NAMES[k.getColumn()] + ":" + k.getSortOrder().name().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** The sort key {@link #sortText} wrote, or null for anything else (an old or hand-edited value). */
+    static SortKey parseSort(String text) {
+        if (text == null) return null;
+        String[] p = text.trim().split(":");
+        if (p.length != 2) return null;
+        int col = java.util.Arrays.asList(SORT_NAMES).indexOf(p[0]);
+        SortOrder order = switch (p[1]) {
+            case "ascending"  -> SortOrder.ASCENDING;
+            case "descending" -> SortOrder.DESCENDING;
+            default -> null;
+        };
+        return col >= 0 && order != null ? new SortKey(col, order) : null;
     }
 
     /**

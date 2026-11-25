@@ -141,7 +141,8 @@ syntax highlighters and [live sources](following.md#source-plugins).
 - **Browse** searches a plugin repository (Nexus or Maven Central); double-click a result,
   or select it and click **Install**. The new plugin is then selected in Installed. Results
   show each plugin's version, the date the repository got it, and its size; click a column's
-  header to sort by it (again to reverse), and drag its edge to make it wider. On Nexus, type any part of the group or artifact name: `fmt`
+  header to sort by it (again to reverse; Clouseau keeps that order for later searches), and
+  drag its edge to make it wider. On Nexus, type any part of the group or artifact name: `fmt`
   finds `clouseau-logfmt-plugin`. While a slow repository answers, the results area shows
   that it's searching and for how long; **Cancel** (where Search was) stops it. A
   repository that doesn't answer within a minute stops the search with a note saying so.

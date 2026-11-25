@@ -420,7 +420,7 @@ releases that don't change that API.
 (`LogSourceProvider`) can all come from plugins. A source's settings are remembered per
 plugin, with passwords encrypted. Plugins can't add filters. The example plugin ships a
 logfmt parser and a demo live source. Browse finds a Nexus plugin by any part of its group or
-artifact name, and lists each result's version, date and size in resizable, sortable columns. A Nexus
+artifact name, and lists each result's version, date and size in resizable, sortable columns; the sort is remembered. A Nexus
 repository is the server's address plus an optional repository name; the form says so.
 
 **Scope note:** Sources that read from log aggregators (Loki, CloudWatch, and similar)
