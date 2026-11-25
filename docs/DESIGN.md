@@ -2816,6 +2816,14 @@ up in practice; each needs a use case before it is built.
   runs of `FRAMEWORK_FRAME` lines. Folding hides text, so it needs its own decision on what
   find, copy and Open in IDE do with folded text, and on whether it's a formatter, a
   highlighter role or a new extension point plugins can use (an HL7 segment could fold too).
+  A likely shape for JSON (asked for 2026-11-25): a core class finds fold ranges in the
+  formatted message (a `{`/`[` ending a line to its match, skipping strings), which also
+  covers multi-line `toString()` output; `DetailPanel.render` draws a collapsed range as a
+  dim `{ … 12 keys }` rather than hiding text in the `JTextPane`, and remembers folds by
+  path (`$.payload.items`) so they survive a redraw and can carry to the next row; the
+  control is a gutter of ▾/▸ arrows as the scroll pane's row header, plus Collapse All /
+  Expand All in the context menu. Find searches the full text and opens the fold around a
+  match; Copy Message copies the full text.
 - **Same file twice:** open one file in two tabs with different filters (for example
   errors only next to everything). Needs an exception to "one tab per file" (UC-15).
 - **Synchronized selection:** selecting an entry in one tab moves other tabs to the same
