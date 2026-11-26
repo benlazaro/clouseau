@@ -1116,6 +1116,7 @@ image a hint says how to switch.
 | `settings.json` → `update.*` | The new-version check (D-23): `update.check` (on/off), `update.skipped` (a version the user skipped), `update.last.check` (epoch milliseconds). |
 | `settings.json` → `plugins.browse.sort` | The plugin search results' sort, `column:order` (`artifact`, `adds`, `version`, `installed`, `date` or `size`; `ascending` or `descending`); missing when unsorted. |
 | `settings.json` → `plugins.browse.widths` | The plugin search results' column widths after the user last dragged one, `column:width,…` by the same column names; a column it doesn't name keeps its usual width. |
+| `settings.json` → `plugins.browse.repository` | The repository Browse showed last, by name. Missing (or naming one since deleted or renamed), Browse opens on the Nexus repository added last, else Maven Central. A repository just added in Manage… is selected and saved here. |
 | `settings.json` → `plugins.origins` | Where each plugin Browse installed came from, by artifact name: `{"repository": "<name in Browse>", "groupId": "…"}` (D-33). |
 | `settings.json` → `plugins.update.notified` | The newest version of each plugin the plugin-update notice has named, by artifact name (D-33). |
 | `session.json` | The last session (D-19, written by `SessionManager`): windows, tabs, and each tab's sources, layout and filters. Never passwords. |

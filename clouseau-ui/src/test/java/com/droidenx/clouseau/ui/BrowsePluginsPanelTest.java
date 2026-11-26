@@ -71,6 +71,21 @@ class BrowsePluginsPanelTest {
     }
 
     @Test
+    void browseOpensOnTheRepositoryUsedLast() {
+        assertThat(BrowsePluginsPanel.pickRepository(List.of("Maven Central", "Work", "Lab"), "Maven Central"))
+                .isEqualTo("Maven Central");
+        assertThat(BrowsePluginsPanel.pickRepository(List.of("Maven Central", "Work", "Lab"), "Work")).isEqualTo("Work");
+    }
+
+    @Test
+    void withoutOneItOpensOnTheNexusAddedLast() {
+        // Never chosen, or deleted or renamed since.
+        assertThat(BrowsePluginsPanel.pickRepository(List.of("Maven Central", "Work", "Lab"), null)).isEqualTo("Lab");
+        assertThat(BrowsePluginsPanel.pickRepository(List.of("Maven Central", "Work"), "Old name")).isEqualTo("Work");
+        assertThat(BrowsePluginsPanel.pickRepository(List.of("Maven Central"), null)).isEqualTo("Maven Central");
+    }
+
+    @Test
     void equalVersionsAreEqual() {
         assertThat(BrowsePluginsPanel.compareVersions("1.0.0-SNAPSHOT", "1.0.0-SNAPSHOT")).isZero();
     }

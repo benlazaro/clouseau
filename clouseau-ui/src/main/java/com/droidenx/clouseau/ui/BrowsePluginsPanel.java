@@ -110,24 +110,45 @@ final class BrowsePluginsPanel extends JPanel {
         if (!showingList && tableModel.getRowCount() == 0 && searchWorker == null) showList();
     }
 
+    /**
+     * Fills the repository list (at the start, and after Manage…) and picks which one is
+     * selected ({@link #pickRepository}). A repository just added (or renamed) is selected and
+     * remembered, so it can be searched at once.
+     */
     private void rebuildRepos() {
         rebuildingRepos = true;
         try {
             PluginRepository selected = (PluginRepository) repoCombo.getSelectedItem();
+            List<String> before = new ArrayList<>();
+            for (int i = 0; i < repoModel.getSize(); i++) before.add(repoModel.getElementAt(i).getName());
             repoModel.removeAllElements();
             PluginRepository.configured().forEach(repoModel::addElement);
-            if (selected != null) {
-                for (int i = 0; i < repoModel.getSize(); i++) {
-                    if (repoModel.getElementAt(i).getName().equals(selected.getName())) {
-                        repoCombo.setSelectedIndex(i);
-                        break;
-                    }
-                }
-            }
+            List<String> names = new ArrayList<>();
+            for (int i = 0; i < repoModel.getSize(); i++) names.add(repoModel.getElementAt(i).getName());
+
+            String added = null;
+            if (!before.isEmpty())
+                for (String n : names) if (!before.contains(n)) added = n;     // the last new one
+            String pick = pickRepository(names, added != null ? added
+                    : selected != null ? selected.getName() : AppPrefs.getPluginBrowseRepository());
+            repoCombo.setSelectedIndex(names.indexOf(pick));
+            if (added != null) AppPrefs.setPluginBrowseRepository(added);
         } finally {
             rebuildingRepos = false;
         }
         listed.clear();      // a repository's address or sign-in may have changed
+    }
+
+    /**
+     * Which repository Browse shows, from {@code names} in the list's order (Maven Central,
+     * then each Nexus as added): {@code wanted} (the one used last) while it's there, else the
+     * Nexus added last, since someone who added their own server most likely means it, else
+     * the first. Null only for an empty list.
+     */
+    static String pickRepository(List<String> names, String wanted) {
+        if (names.isEmpty()) return null;
+        if (wanted != null && names.contains(wanted)) return wanted;
+        return names.get(names.size() - 1);
     }
 
     private void buildUI() {
@@ -140,7 +161,12 @@ final class BrowsePluginsPanel extends JPanel {
                 return this;
             }
         });
-        repoCombo.addActionListener(e -> { if (!rebuildingRepos && isShowing()) showList(); });
+        // The repository chosen is the one Browse opens on next time.
+        repoCombo.addActionListener(e -> {
+            if (rebuildingRepos) return;
+            if (repoCombo.getSelectedItem() instanceof PluginRepository r) AppPrefs.setPluginBrowseRepository(r.getName());
+            if (isShowing()) showList();
+        });
 
         JButton manageBtn = new JButton(Messages.get("plugins.download.manage.repos"));
         manageBtn.addActionListener(e -> {

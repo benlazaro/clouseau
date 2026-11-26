@@ -163,6 +163,9 @@ syntax highlighters and [live sources](following.md#source-plugins).
   artifact named like a plugin (`<name>-clouseau-plugin`). Hover over a plugin to see its
   coordinates and description, and select it to read the description under the table.
   **Adds** says what it brings (parser, source, and so on).
+  - Browse opens on the repository you used last. Until you choose one, it opens on the
+    Nexus repository you added last, if you have one. A repository you add is selected
+    so you can search it right away.
   - Type to filter the plugins by name, description or what they add: `source` shows
     every source plugin.
   - Double-click a plugin, or select it and click **Install**. The new plugin is then

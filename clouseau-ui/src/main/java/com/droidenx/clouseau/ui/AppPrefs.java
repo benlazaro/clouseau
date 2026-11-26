@@ -386,6 +386,13 @@ public final class AppPrefs {
         }
     }
 
+    /** The repository Browse showed last, by name; null before the first choice. */
+    public static String getPluginBrowseRepository() { return getString("plugins.browse.repository", null); }
+
+    public static void setPluginBrowseRepository(String name) {
+        if (name != null && !name.equals(getPluginBrowseRepository())) putString("plugins.browse.repository", name);
+    }
+
     /** The plugin search results' column widths, as {@code column:width,…}; null before the first drag. */
     public static String getPluginSearchWidths() { return getString("plugins.browse.widths", null); }
 
