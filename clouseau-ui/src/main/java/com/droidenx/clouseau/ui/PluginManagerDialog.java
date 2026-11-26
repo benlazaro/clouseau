@@ -561,6 +561,7 @@ public final class PluginManagerDialog extends JDialog {
      * dimmed after it, and what it adds on the right; its description (or why it failed) below.
      * A plugin that's off reads dimmed. One with a newer version shows it at the right, in green
      * and centered on the row, just before the update arrow the list paints left of the trash can.
+     * Without a description the name's line is centered on the row, which keeps its two-line height.
      */
     private static final class PluginRenderer extends ListRowPanel implements ListCellRenderer<PluginInfo> {
         private final java.util.function.Function<PluginInfo, PluginUpdates.Update> updateOf;
@@ -575,23 +576,42 @@ public final class PluginManagerDialog extends JDialog {
         PluginRenderer(java.util.function.Function<PluginInfo, PluginUpdates.Update> updateOf) {
             // 12px on the left: 8px inside the selection, which is inset 4px (List.selectionInsets).
             // On the right, room for the update arrow and the trash can, which the list paints.
-            super(new MigLayout("insets 7 12 7 " + (TRASH + UPDATE) + ", gapx 8, gapy 2, hidemode 3",
+            super(new MigLayout("insets 7 12 7 " + (TRASH + UPDATE) + ", gapx 8, gapy 2, hidemode 3, aligny center",
                     "[" + (BOX - 16) + "!][][grow][][]", "[][]"));
             this.updateOf = updateOf;
             box.setOpaque(false);
             box.setContentAreaFilled(false);
             failedMark.setFont(failedMark.getFont().deriveFont(Font.BOLD));
             name.setFont(name.getFont().deriveFont(Font.BOLD));
-            add(box, "spany 2, aligny top, gaptop 1");
-            add(failedMark, "spany 2, aligny top, gaptop 1, w 16!");
-            add(name);
-            add(version, "growx");   // the cell that stretches, keeping what it adds on the right
-            add(types, "wrap");
-            add(description, "span 3, growx, wmin 0");
-            // The new version, across both lines like the arrow and the trash can beside it. In a
-            // cell of its own, not the flow: hidden (no update), it would take the flow's wrap with it.
-            add(update, "cell 4 0 1 2, aligny center");
+            add(box);
+            add(failedMark);
+            add(name, "cell 1 0");
+            add(version, "cell 2 0, growx");   // the cell that stretches, keeping what it adds on the right
+            add(types, "cell 3 0");
+            add(description, "cell 1 1 3 1, growx, wmin 0");
+            add(update);
+            lines(true);
         }
+
+        /**
+         * Lays the row out on two lines (name, then description) or one. With two, the box sits on
+         * the name's line and the new version across both, centered like the arrow and the trash
+         * can; with one, all of it is on a single line centered on the row.
+         */
+        private void lines(boolean two) {
+            if (layoutTwoLines != null && layoutTwoLines == two) return;
+            layoutTwoLines = two;
+            MigLayout layout = (MigLayout) getLayout();
+            String start = two ? "cell 0 0 1 2, aligny top, gaptop 1" : "cell 0 0, aligny center";
+            layout.setComponentConstraints(box, start);
+            layout.setComponentConstraints(failedMark, start + ", w 16!");
+            layout.setComponentConstraints(update, two ? "cell 4 0 1 2, aligny center" : "cell 4 0, aligny center");
+            layout.setRowConstraints(two ? "[][]" : "[]");
+            description.setVisible(two);
+            invalidate();
+        }
+
+        private Boolean layoutTwoLines;
 
         @Override
         public Component getListCellRendererComponent(JList<? extends PluginInfo> list, PluginInfo p,
@@ -625,10 +645,25 @@ public final class PluginManagerDialog extends JDialog {
             } else {
                 types.setText(translateTypes(p.types()));
                 types.setForeground(dim);
-                description.setText(p.description().isEmpty() ? " " : p.description());
+                description.setText(p.description().isBlank() ? " " : p.description());
                 description.setForeground(dim);
             }
+            // No description: no blank second line under the name, so the name's line is centered
+            // on the row like the new version, the arrow and the trash can.
+            lines(!description.getText().isBlank());
             return this;
+        }
+
+        /** Two lines tall, with or without a description, so every row is as tall. */
+        @Override public Dimension getPreferredSize() {
+            Dimension d = super.getPreferredSize();
+            if (layoutTwoLines == null || layoutTwoLines) return d;
+            String text = description.getText();
+            description.setText(" ");
+            // The insets (7 + 7), the name's line, gapy 2 and the description's line.
+            int height = 14 + name.getPreferredSize().height + 2 + description.getPreferredSize().height;
+            description.setText(text);
+            return new Dimension(d.width, Math.max(d.height, height));
         }
 
         private static String translateTypes(String types) {
