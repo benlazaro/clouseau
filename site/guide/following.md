@@ -208,5 +208,5 @@ error names the plugin. Each shows a form for its settings; Clouseau checks requ
 fields, remembers the values, and stores passwords encrypted. Lines stream into a new tab,
 with the same limit, connection dot and **Reconnect** as SSH tabs.
 
-To find and install one, use **Tools → Plugins…** (see [Plugins](settings.md#plugins)), or
+To find and install one, use **Tools → Plugins…** (see [Plugins](plugins.md)), or
 see [For developers](developers.md) to write one.

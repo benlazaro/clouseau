@@ -59,7 +59,7 @@ Open logs of any size, merge the logs of several services into one timeline, fil
 - **Receive logs over the network** — listen on a TCP or UDP port and watch the lines an app, a device or a container sends: plain text, JSON lines or syslog, from this computer only unless you choose otherwise. Text only, never Java-serialized events. [More](https://benlazaro.github.io/clouseau/guide/following.html#receiving-logs-over-the-network)
 - **Columns and layouts** — hide, reorder and size columns, and save named layouts. [More](https://benlazaro.github.io/clouseau/guide/reading-and-filtering.html#columns)
 - **Themes** — Dark and Light built in, plus any FlatLaf theme you install, switched live. [More](https://benlazaro.github.io/clouseau/guide/settings.html#themes)
-- **Plugins** — add parsers, formatters, syntax highlighters or live log sources. Browse the published Clouseau plugins (or your company Nexus) and install or update one with a click, or drop in a JAR. [More](https://benlazaro.github.io/clouseau/guide/settings.html#plugins)
+- **Plugins** — add parsers, formatters, syntax highlighters or live log sources. Browse the published Clouseau plugins (or your company Nexus) and install or update one with a click, or drop in a JAR. [More](https://benlazaro.github.io/clouseau/guide/plugins.html)
 
 ---
 

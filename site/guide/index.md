@@ -19,6 +19,7 @@ Everything Clouseau does, one topic per page. New to Clouseau? Start with
 | [Notes and review bundles](annotations-and-review.md) | Annotating lines, and handing a log with your notes to a colleague |
 | [Following live logs](following.md) | Follow mode, log rotation, SSH, receiving logs over the network, and source plugins |
 | [Parsers](parsers.md) | The built-in formats (including JSON lines and syslog), the parser editor, and `parsers.json` |
+| [Plugins](plugins.md) | Finding, installing and updating plugins, and your company's Nexus |
 | [Themes and settings](settings.md) | Themes, every setting, keyboard shortcuts, memory and the data folder |
 {: .guide-cards }
 

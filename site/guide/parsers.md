@@ -232,5 +232,5 @@ other named group becomes an extra column with the group's name, underscores inc
 (`(?<request_id>…)` makes a **request_id** column). All groups are optional. Invalid entries are
 skipped, with a warning in Clouseau's own log.
 
-Parsers from [plugins](settings.md#plugins) come after yours and the built-in ones during
+Parsers from [plugins](plugins.md) come after yours and the built-in ones during
 auto-detection.
