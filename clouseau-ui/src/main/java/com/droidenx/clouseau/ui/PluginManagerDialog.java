@@ -285,16 +285,24 @@ public final class PluginManagerDialog extends JDialog {
     }
 
     /**
-     * Updates {@code p} from its details: downloads the new version from the repository the
-     * update came from, in the background, then swaps it in as Browse's Update does.
+     * Updates {@code p}, from its details' button or its row's arrow ({@code button} null):
+     * downloads the new version from the repository the update came from, in the background,
+     * then swaps it in as Browse's Update does. One update at a time.
      */
     private void runUpdate(PluginInfo p, PluginUpdates.Update u, JButton button) {
+        if (updating != null) return;
         PluginRepository repo = PluginRepository.configured().stream()
                 .filter(r -> r.getName().equals(u.repository())).findFirst().orElse(null);
         if (repo == null) return;
         updating = u.file();
-        button.setEnabled(false);
-        button.setText(Messages.get("plugins.update.running"));
+        if (button != null) {
+            button.setEnabled(false);
+            button.setText(Messages.get("plugins.update.running"));
+        } else {
+            showDetails(list.getSelectedValue());   // its details' Update button reads Updating… too
+        }
+        list.setCursor(null);
+        list.repaint();
         new SwingWorker<Path, Void>() {
             private Path tempDir;
             @Override protected Path doInBackground() throws Exception {
@@ -303,6 +311,7 @@ public final class PluginManagerDialog extends JDialog {
             }
             @Override protected void done() {
                 updating = null;
+                list.repaint();
                 try {
                     install(get(), u.file());
                 } catch (Exception ex) {
@@ -409,21 +418,27 @@ public final class PluginManagerDialog extends JDialog {
     /** Where the on/off box ends, from the row's left edge. */
     private static final int BOX = 34;
     /** The trash can's hit area, from the row's right edge. */
-    private static final int TRASH = 30;
+    static final int TRASH = 30;
+    /** The update arrow's hit area, left of the trash can's. */
+    static final int UPDATE = 24;
 
     /**
      * The installed plugins. A press on the box turns a plugin on or off; the trash can at the
-     * right of the row under the mouse deletes it. Neither press moves the selection.
+     * right of the row under the mouse deletes it; the green arrow left of it, on every row with
+     * an update, updates it. None of them moves the selection.
      */
     private final class PluginList extends JList<PluginInfo> {
         private int hoverRow = -1;
         private boolean overTrash;
+        private boolean overUpdate;
 
         PluginList(ListModel<PluginInfo> m) {
             super(m);
             java.awt.event.MouseAdapter hover = new java.awt.event.MouseAdapter() {
                 @Override public void mouseMoved(MouseEvent e)  { track(e.getPoint()); }
-                @Override public void mouseExited(MouseEvent e) { hoverRow = -1; overTrash = false; repaint(); }
+                @Override public void mouseExited(MouseEvent e) {
+                    hoverRow = -1; overTrash = false; overUpdate = false; setCursor(null); repaint();
+                }
             };
             addMouseListener(hover);
             addMouseMotionListener(hover);
@@ -436,12 +451,25 @@ public final class PluginManagerDialog extends JDialog {
             return r != null && r.contains(p) ? i : -1;
         }
 
+        /** The update {@code row}'s plugin has, or null. */
+        private PluginUpdates.Update updateAt(int row) {
+            return row >= 0 && row < getModel().getSize() ? updates.forFile(getModel().getElementAt(row).file()) : null;
+        }
+
+        /** Whether {@code x} is on the update arrow's spot (it's there only on a row with an update). */
+        private boolean onUpdateSpot(int x) {
+            return x >= getWidth() - TRASH - UPDATE && x < getWidth() - TRASH;
+        }
+
         private void track(Point p) {
             int row = rowAt(p);
             boolean trash = row >= 0 && p.x >= getWidth() - TRASH;
-            if (row != hoverRow || trash != overTrash) {
+            boolean update = onUpdateSpot(p.x) && updateAt(row) != null;
+            if (row != hoverRow || trash != overTrash || update != overUpdate) {
                 hoverRow = row;
                 overTrash = trash;
+                overUpdate = update;
+                setCursor(update && updating == null ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
                 repaint();
             }
         }
@@ -450,6 +478,13 @@ public final class PluginManagerDialog extends JDialog {
             if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e)) {
                 track(e.getPoint());
                 int row = rowAt(e.getPoint());
+                if (row >= 0 && overUpdate) {
+                    PluginInfo p = getModel().getElementAt(row);
+                    PluginUpdates.Update u = updateAt(row);
+                    e.consume();
+                    if (updating == null && u != null) SwingUtilities.invokeLater(() -> runUpdate(p, u, null));
+                    return;
+                }
                 if (row >= 0 && (overTrash || e.getX() < BOX)) {
                     PluginInfo p = getModel().getElementAt(row);
                     boolean trash = overTrash;
@@ -465,6 +500,12 @@ public final class PluginManagerDialog extends JDialog {
             int row = rowAt(e.getPoint());
             if (row < 0) return null;
             if (e.getX() >= getWidth() - TRASH) return Messages.get("plugins.row.delete.tooltip");
+            PluginUpdates.Update onArrow = onUpdateSpot(e.getX()) ? updateAt(row) : null;
+            if (onArrow != null) {
+                return updating != null && updating.equals(onArrow.file()) ? Messages.get("plugins.update.running")
+                        : java.text.MessageFormat.format(Messages.get("plugins.row.update.button.tooltip"),
+                                onArrow.latest().version(), onArrow.installed());
+            }
             PluginInfo p = getModel().getElementAt(row);
             if (e.getX() < BOX && !p.failed()) return Messages.get("plugins.row.toggle.tooltip");
             PluginUpdates.Update u = updates.forFile(p.file());
@@ -474,39 +515,56 @@ public final class PluginManagerDialog extends JDialog {
 
         @Override protected void paintComponent(Graphics g) {
             super.paintComponent(g);
-            if (hoverRow < 0 || hoverRow >= getModel().getSize()) return;
-            Rectangle r = getCellBounds(hoverRow, hoverRow);
-            if (r == null) return;
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            Color base = isSelectedIndex(hoverRow) ? getSelectionForeground() : ClouseauColors.dimForeground();
-            ToolIcons.paintTrash(g2, getWidth() - TRASH + 8, r.y + (r.height - 14) / 2,
-                    overTrash ? ClouseauColors.levelColor(LogEntry.LogLevel.ERROR) : base);
+            paintUpdateArrows(g2);
+            if (hoverRow >= 0 && hoverRow < getModel().getSize()) {
+                Rectangle r = getCellBounds(hoverRow, hoverRow);
+                if (r != null) {
+                    Color base = isSelectedIndex(hoverRow) ? getSelectionForeground() : ClouseauColors.dimForeground();
+                    ToolIcons.paintTrash(g2, getWidth() - TRASH + 8, r.y + (r.height - 14) / 2,
+                            overTrash ? ClouseauColors.levelColor(LogEntry.LogLevel.ERROR) : base);
+                }
+            }
             g2.dispose();
+        }
+
+        /**
+         * A green arrow on every visible row with an update, not only the row under the mouse, so
+         * updates are seen at a glance. Dimmed on the row being updated, and on the others while one is.
+         */
+        private void paintUpdateArrows(Graphics2D g2) {
+            int first = getFirstVisibleIndex(), last = getLastVisibleIndex();
+            if (first < 0) return;
+            for (int row = first; row <= last; row++) {
+                PluginUpdates.Update u = updateAt(row);
+                Rectangle r = getCellBounds(row, row);
+                if (u == null || r == null) continue;
+                Color c = updating != null ? ClouseauColors.dimForeground() : ClouseauColors.statusOk();
+                int x = getWidth() - TRASH - UPDATE + (UPDATE - 12) / 2 + 2, y = r.y + (r.height - 12) / 2;
+                if (overUpdate && row == hoverRow && updating == null) {
+                    // Under the mouse: a filled disc, so it reads as a button.
+                    g2.setColor(c);
+                    g2.fill(new java.awt.geom.Ellipse2D.Float(x, y, 12, 12));
+                    ToolIcons.paintUpdate(g2, x, y, isSelectedIndex(row) ? getSelectionBackground() : getBackground());
+                    g2.setColor(c);
+                    g2.draw(new java.awt.geom.Ellipse2D.Float(x + 0.5f, y + 0.5f, 11, 11));
+                } else {
+                    ToolIcons.paintUpdate(g2, x, y, c);
+                }
+            }
         }
     }
 
     /**
      * A plugin's row: the on/off box (or a Failed mark), its name in bold with the version
      * dimmed after it, and what it adds on the right; its description (or why it failed) below.
-     * A plugin that's off reads dimmed. One with a newer version has an update mark (an arrow
-     * and the new version, in the accent color) after its version.
+     * A plugin that's off reads dimmed. One with a newer version says so after its version
+     * ("→ 1.1.0", in green); the list paints its update arrow at the right, left of the trash can.
      */
     private static final class PluginRenderer extends ListRowPanel implements ListCellRenderer<PluginInfo> {
         private final java.util.function.Function<PluginInfo, PluginUpdates.Update> updateOf;
         private final JLabel update = new JLabel();
-        private Color updateColor;
-        /** The update mark's arrow, in {@link #updateColor}. */
-        private final Icon updateIcon = new Icon() {
-            @Override public int getIconWidth()  { return 12; }
-            @Override public int getIconHeight() { return 12; }
-            @Override public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                ToolIcons.paintUpdate(g2, x, y, updateColor);
-                g2.dispose();
-            }
-        };
         private final JCheckBox box = new JCheckBox();
         private final JLabel failedMark = new JLabel("!", SwingConstants.CENTER);
         private final JLabel name = new JLabel();
@@ -516,10 +574,10 @@ public final class PluginManagerDialog extends JDialog {
 
         PluginRenderer(java.util.function.Function<PluginInfo, PluginUpdates.Update> updateOf) {
             // 12px on the left: 8px inside the selection, which is inset 4px (List.selectionInsets).
-            super(new MigLayout("insets 7 12 7 " + TRASH + ", gapx 8, gapy 2, hidemode 3",
+            // On the right, room for the update arrow and the trash can, which the list paints.
+            super(new MigLayout("insets 7 12 7 " + (TRASH + UPDATE) + ", gapx 8, gapy 2, hidemode 3",
                     "[" + (BOX - 16) + "!][][][grow][]", "[][]"));
             this.updateOf = updateOf;
-            update.setIconTextGap(4);
             box.setOpaque(false);
             box.setContentAreaFilled(false);
             failedMark.setFont(failedMark.getFont().deriveFont(Font.BOLD));
@@ -553,12 +611,8 @@ public final class PluginManagerDialog extends JDialog {
             PluginUpdates.Update u = updateOf.apply(p);
             // Always there, empty when there's no update: it's the cell that stretches, which keeps
             // what the plugin adds (or Failed) on the right.
-            update.setIcon(u != null ? updateIcon : null);
-            update.setText(u != null ? u.latest().version() : "");
-            if (u != null) {
-                updateColor = selected ? list.getSelectionForeground() : ClouseauColors.accentBlue();
-                update.setForeground(updateColor);
-            }
+            update.setText(u != null ? java.text.MessageFormat.format(Messages.get("plugins.row.update.mark"), u.latest().version()) : "");
+            if (u != null) update.setForeground(selected ? list.getSelectionForeground() : ClouseauColors.statusOk());
             if (p.failed()) {
                 types.setText(Messages.get("plugins.state.failed"));
                 types.setForeground(error);

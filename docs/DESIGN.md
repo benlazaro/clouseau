@@ -988,6 +988,11 @@ connections, the parser editor's parsers) follows the same rules, so they read a
     Auto-Highlight** and **Duplicate** on the footer's left; a row's check box (left edge)
     turns it on or off without selecting it.
   - **Favorites:** the trash can only.
+  - **Plugin Manager, Installed:** the trash can, and on a plugin with an update (D-33) a
+    green update arrow beside it. The arrow is the one tool **shown on every such row, not
+    only under the mouse**, because it is also a status: it says an update is waiting before
+    anyone hovers. It's `Clouseau.status.ok` (dimmed while an update runs), filled under the
+    mouse; pressing it updates the plugin.
 - **Tool colors light up on hover, selected or not.** The tool under the mouse must always
   look different from the idle ones:
   - *Unselected row:* idle tools are `dimForeground`, the hovered one `foreground`.
@@ -2938,8 +2943,10 @@ UC-18 tells the user about a new Clouseau; plugins get the same, through the sam
   kept in memory: a restart checks again, which costs one request per installed plugin), and
   whenever the Plugin Manager opens. Development builds check too, unlike Clouseau's own
   check, because a plugin's versions don't depend on the build. Off with UC-18's setting.
-- **How it shows, quiet to loud.** The row in Installed (an arrow and the new version) with
-  **Update to …** in its details; a count on Tools → Plugins… and on the Installed tab; and one
+- **How it shows, quiet to loud.** The row in Installed: the new version after the installed
+  one, in green (`Clouseau.status.ok`), and a green update arrow left of the trash can's spot,
+  drawn on every row with an update, not only under the mouse, and clicking it updates the
+  plugin as **Update to …** in its details does (one update at a time); a count on Tools → Plugins… and on the Installed tab; and one
   notice for all plugins at once, shown only when a version is newer than the one the last
   notice named (`plugins.update.notified`), so Later means "until there's something new".
 - **Never applied by itself.** A plugin is code running in Clouseau, and a new version may

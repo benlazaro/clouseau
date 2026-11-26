@@ -106,7 +106,8 @@ final class PluginUpdates {
         }).toList());
     }
 
-    private void set(List<Update> updates) {
+    /** Replaces the updates and tells the listeners; package-private for tests. */
+    void set(List<Update> updates) {
         boolean changed = !updates.equals(current);
         current = List.copyOf(updates);
         if (changed) listeners.forEach(Runnable::run);
