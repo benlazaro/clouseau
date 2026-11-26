@@ -20,5 +20,6 @@ Everything Clouseau does, one topic per page. New to Clouseau? Start with
 | [Following live logs](following.md) | Follow mode, log rotation, SSH, receiving logs over the network, and source plugins |
 | [Parsers](parsers.md) | The built-in formats (including JSON lines and syslog), the parser editor, and `parsers.json` |
 | [Themes and settings](settings.md) | Themes, every setting, keyboard shortcuts, memory and the data folder |
+{: .guide-cards }
 
 Writing a plugin or building Clouseau yourself? See [For developers](developers.md).

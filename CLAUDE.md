@@ -31,7 +31,13 @@ site. A new feature, or a change to how one works, updates the guide page that c
 (and the README's Features list if it's a headline feature) in the same commit, written
 for users rather than developers. Screenshots live in `docs/screenshots/`; guide pages link
 them as `../docs/screenshots/<name>.png` so they work on the site and on GitHub. Help →
-Documentation opens the guide.
+Documentation opens the guide. The site's look follows the app: `_sass/color_schemes/clouseau.scss`
+(the Dark theme's grays and amber accent; change it with the theme file), `_sass/custom/` (Inter and
+JetBrains Mono, cards, screenshots). The home page is `index.html` with its own layout,
+`_layouts/home.html` (styles `assets/css/home.scss`, script `assets/js/home.js`), not the README:
+its tagline, "Why Clouseau", feature groups and Download notes follow the README's and the
+Installing page's, so a change to those updates the home page in the same commit, and a new
+guide page gets a card in its "Learn Clouseau" section.
 
 **Keep `llms.txt` current.** At the repository root, served at the site's root, it is the plugin
 contract on one page for coding assistants: the build file, each extension point and its rules,

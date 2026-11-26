@@ -1,0 +1,149 @@
+---
+---
+// The home page (_layouts/home.html), on its own: no Just the Docs here. Colors are the app's
+// Dark theme (ClouseauDarkLaf.properties), as in _sass/color_schemes/clouseau.scss.
+
+$bg: #1c1d20; $deep: #17181a; $card: #232427; $card-hover: #2a2c30; $line: #34363b;
+$border: #3f4247; $control: #6b7079; $heading: #e6ebf2; $text: #c9ced6; $dim: #8b919b;
+$amber: #e0a243; $amber-hover: #eab35c; $on-amber: #1a1206;
+$mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+
+$levels: (INFO: #3dbcf5, WARN: #ffad3b, ERROR: #ff6e6b);
+// The highlight fills and their edges, slots 0 to 7.
+$hl: #4b1d1b #442600 #332f00 #0d371a #003836 #0d2f4f #33244b #461e36;
+$hl-edge: #904d49 #865824 #6b661f #397247 #00726f #386695 #6b578f #874d6f;
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: $bg; color: $text;
+  font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased;
+}
+a { color: $amber; text-underline-offset: 3px; text-decoration-color: rgba(224, 162, 67, 0.4); }
+a:hover { color: $amber-hover; text-decoration-color: $amber; }
+code, kbd, pre { font-family: $mono; }
+code { color: #e6c38a; font-size: 0.9em; }
+kbd {
+  font-size: 0.8em; padding: 0.1em 0.45em; border: 1px solid #4a4d54; border-bottom-width: 2px;
+  border-radius: 4px; background: #2a2c30; color: $heading;
+}
+h1, h2, h3 { color: $heading; letter-spacing: -0.02em; }
+:focus-visible { outline: 2px solid $amber; outline-offset: 2px; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+.grow { flex-grow: 1; }
+
+// ── Buttons ──
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px;
+  border-radius: 8px; border: 1px solid $control; color: $heading; font-weight: 600;
+  text-decoration: none; background: none;
+  &:hover { background: $card-hover; color: $heading; }
+}
+.btn-primary {
+  background: $amber; border-color: $amber; color: $on-amber;
+  &:hover { background: $amber-hover; border-color: $amber-hover; color: $on-amber; }
+}
+.btn-big { min-height: 48px; padding: 0 24px; font-size: 17px; }
+
+// ── Top bar ──
+.top { background: $deep; border-bottom: 1px solid $line; }
+.top-nav { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; color: $heading; font-weight: 700; font-size: 17px; text-decoration: none; }
+.top-links { display: flex; gap: 20px; flex-grow: 1; flex-wrap: wrap; font-size: 14px; font-weight: 500; }
+.top-links a, .top-gh { color: $text; text-decoration: none; font-size: 14px; &:hover { color: $heading; } }
+
+// ── Hero ──
+.hero { display: flex; flex-wrap: wrap; gap: 48px; align-items: center; padding-top: 64px; padding-bottom: 40px; }
+.hero-text { flex: 1 1 380px; min-width: 0; }
+.hero h1 { margin: 0; font-size: clamp(2.4rem, 5vw, 3.25rem); line-height: 1.08; letter-spacing: -0.03em; }
+.lede { margin: 20px 0 28px; font-size: 18px; max-width: 30rem; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 0; }
+.meta { color: $dim; font-size: 13px; }
+.hero-text .meta { margin: 16px 0 0; }
+.pill {
+  margin: 0 0 16px; display: inline-flex; gap: 8px; align-items: center; font-size: 13px;
+  color: $dim; border: 1px solid $border; border-radius: 999px; padding: 4px 12px;
+  &[hidden] { display: none; }
+}
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; }
+
+// ── Screenshots: the app's own, one at a time, chosen with tabs ──
+.shots { flex: 1.5 1 560px; min-width: 0; margin: 0; }
+.shot-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.shot-tabs button {
+  font: 600 13px Inter, sans-serif; min-height: 36px; padding: 0 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid $border; background: none; color: $text;
+  &:hover { background: #2e3034; }
+  &[aria-selected="true"] { border-color: $amber; background: rgba(224, 162, 67, 0.14); color: $heading; }
+}
+.shot-frame { display: block; line-height: 0; }
+.shot-frame img {
+  width: 100%; height: auto; aspect-ratio: 2376 / 1485; border: 1px solid #45484e; border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3); background: $deep;
+}
+.shots figcaption { margin-top: 10px; font-size: 13px; color: $dim; min-height: 2.6em; }
+
+// ── Sections ──
+.block { padding-top: 24px; padding-bottom: 56px; }
+.block h2 { margin: 0 0 8px; font-size: 32px; }
+.block h2.eyebrow { font-size: 14px; font-weight: 600; color: $dim; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 20px; }
+.sub { margin: 0 0 24px; color: $dim; }
+.card {
+  background: $card; border: 1px solid $line; border-radius: 10px; padding: 22px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+a.card { display: block; text-decoration: none; color: $text; &:hover { border-color: rgba(224, 162, 67, 0.55); background: $card-hover; } }
+
+.steps, .starts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.steps li { display: flex; gap: 16px; padding: 20px; background: $card; border: 1px solid $line; border-radius: 10px; font-size: 14px; }
+.steps strong { color: $heading; font-size: 16px; }
+.num { flex: none; width: 36px; height: 36px; border-radius: 50%; background: $amber; color: $on-amber; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+.why { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.why h3 { margin: 14px 0 4px; font-size: 17px; }
+.why p { margin: 0; font-size: 14px; }
+.big { font: 700 30px/1.1 $mono; color: $heading; span { color: $amber; } }
+.merged { display: flex; flex-direction: column; gap: 4px; font: 12px $mono; }
+@each $name, $c in $levels { .lvl-#{$name} { color: $c; } }
+.m { padding: 3px 8px; border-radius: 4px; color: $text; b { font-weight: 700; } }
+.m5 { background: nth($hl, 6); } .m4 { background: nth($hl, 5); margin-left: 14px; } .m6 { background: nth($hl, 7); margin-left: 28px; }
+.handover { display: flex; align-items: center; gap: 10px; code { color: $heading; font-size: 13px; } }
+.live { display: flex; flex-direction: column; gap: 6px; font: 13px $mono; color: $heading; small { font-size: 12px; color: $dim; } .dot { margin-right: 8px; width: 10px; height: 10px; } }
+
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.group { background: $card; border: 1px solid $line; border-radius: 10px; padding: 20px; }
+.group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 15px; letter-spacing: 0; }
+.group .sw { width: 14px; height: 14px; border-radius: 3px; }
+@for $i from 1 through 8 { .sw-#{$i - 1} { background: nth($hl, $i); border-color: nth($hl-edge, $i); } }
+.group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.group a { color: $text; text-decoration: none; &:hover { color: $amber; text-decoration: underline; } }
+
+.guide-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 24px; > div { flex: 1 1 420px; min-width: 0; } .sub { margin: 0; } }
+.starts { margin-bottom: 16px; li { display: flex; } }
+.start { width: 100%; padding: 20px; border-top: 2px solid $amber; }
+.start, .page { strong { display: block; color: $heading; font-size: 17px; } span:last-child { display: block; font-size: 14px; color: #a9afb8; } }
+.eyebrow-sm { display: block; font-size: 12px; font-weight: 600; color: $amber; letter-spacing: 0.06em; text-transform: uppercase; }
+.pages { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.page { padding: 14px 16px; background: #1f2023; strong { font-size: 15px; } span:last-child { font-size: 13px; } }
+
+.dl { padding: 32px; background: $card; border: 1px solid $line; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 32px; align-items: center; }
+.dl-text, .dl-action { flex: 1 1 300px; min-width: 0; }
+.dl-action { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.os-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0; }
+.os-tabs button {
+  font: 600 14px Inter, sans-serif; min-height: 40px; padding: 0 16px; border-radius: 8px; cursor: pointer;
+  border: 1px solid $control; background: none; color: $text;
+  &:hover { background: #2e3034; }
+  &[aria-selected="true"] { border-color: $amber; background: rgba(224, 162, 67, 0.14); color: $heading; }
+}
+.os-note { margin: 0; font-size: 14px; strong { color: $heading; } }
+
+.foot { border-top: 1px solid $line; background: $deep; }
+.foot-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; padding-top: 32px; padding-bottom: 32px; font-size: 14px; color: $dim; }
+
+@media (max-width: 640px) {
+  .hero { padding-top: 40px; }
+  .block h2 { font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }

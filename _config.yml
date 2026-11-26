@@ -1,6 +1,7 @@
 # GitHub Pages site: https://benlazaro.github.io/clouseau/
-# Built by GitHub Pages (Jekyll) from the root of main. The home page is README.md and
-# the user guide is guide/*.md; everything else in the repository is excluded below.
+# Built by GitHub Pages (Jekyll) from the root of main. The home page is index.html (its
+# layout is _layouts/home.html) and the user guide is guide/*.md; everything else in the
+# repository is excluded below. README.md is the repository's page on GitHub, not the site's.
 
 title: Clouseau Log Viewer
 description: A modern, pluggable desktop log viewer for software engineers.
@@ -10,8 +11,15 @@ baseurl: /clouseau
 remote_theme: just-the-docs/just-the-docs@v0.12.0
 plugins:
   - jekyll-remote-theme
+  # Turns the guide's links between pages ([Installing](installing.md)) into .html links. GitHub
+  # Pages runs it by default; naming it makes a local build (jekyll serve, Docker) do the same.
+  - jekyll-relative-links
 
-color_scheme: dark
+relative_links:
+  enabled: true
+  collections: false
+
+color_scheme: clouseau
 search_enabled: true
 heading_anchors: true
 back_to_top: true
@@ -32,19 +40,10 @@ gh_edit_repository: "https://github.com/benlazaro/clouseau"
 gh_edit_branch: "main"
 gh_edit_view_mode: "tree"
 
-# README.md is the home page. Its settings live here, so the README itself has no front
-# matter (GitHub would show it as a table at the top of the repository page).
-defaults:
-  - scope:
-      path: "README.md"
-    values:
-      title: Home
-      nav_order: 1
-      permalink: /
-
-# Only the home page and the user guide are published. Developer documents (docs/*.md,
-# CLAUDE.md, CONTRIBUTING.md) stay readable on GitHub but aren't part of the site.
+# Only the home page and the user guide are published. The README and developer documents
+# (docs/*.md, CLAUDE.md, CONTRIBUTING.md) stay readable on GitHub but aren't part of the site.
 exclude:
+  - README.md
   - CLAUDE.md
   - CONTRIBUTING.md
   - "docs/*.md"          # design notes, the road to 1.0, launch drafts: never on the site

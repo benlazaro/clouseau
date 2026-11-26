@@ -1,0 +1,25 @@
+// Clouseau's own colors, from the app's Dark theme (ClouseauDarkLaf.properties): the amber
+// accent on its near-black grays. Keep them in step with the theme file.
+@import "./color_schemes/dark";
+
+$color-scheme: dark;
+
+$body-background-color: #1c1d20;
+$sidebar-color: #17181a;
+$body-heading-color: #e6ebf2;
+$body-text-color: #c9ced6;
+$link-color: #e0a243;
+$nav-child-link-color: #a9afb8;
+$border-color: #34363b;
+$feedback-color: #2a2c30;
+
+$base-button-color: #2a2c30;
+$btn-primary-color: #e0a243;
+
+$code-background-color: #141517;
+$code-linenumber-color: #6b7079;
+$table-background-color: #1f2023;
+
+$search-background-color: #232427;
+$search-foreground-color: #c9ced6;
+$search-result-preview-color: #8b919b;

@@ -1,0 +1,185 @@
+// Clouseau's look on top of Just the Docs, for the guide's pages: the amber accent, the app's
+// fonts, and screenshots, keys and tables that look like the app. The home page has its own
+// layout and styles (_layouts/home.html, assets/css/home.scss).
+
+$amber: #e0a243;
+$amber-dim: rgba(224, 162, 67, 0.14);
+$card: #232427;
+$card-hover: #2a2c30;
+$line: #34363b;
+$heading: #e6ebf2;
+$dim: #8b919b;
+
+body {
+  font-feature-settings: "cv11", "ss01";   // Inter's straight-sided figures, as in the app
+  -webkit-font-smoothing: antialiased;
+}
+
+// ── Sidebar and header ───────────────────────────────────────────────────────
+
+.site-title {
+  // "Clouseau Log Viewer" on one line beside the logo, lined up with the navigation below.
+  font-size: 1.05rem !important;
+  padding-left: 1.25rem !important;
+  padding-right: 1rem !important;
+  white-space: nowrap;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: $heading;
+
+  &::before {
+    content: "";
+    display: inline-block;
+    flex: none;
+    width: 1.6rem;
+    height: 1.6rem;
+    margin-right: 0.6rem;
+    background: url("../images/clouseau.svg") center / contain no-repeat;
+  }
+}
+
+.nav-list .nav-list-item .nav-list-link {
+  border-radius: 6px;
+  margin: 1px 0.5rem;
+  padding-left: 0.75rem;
+
+  &:hover { background-color: #232427; background-image: none; }
+
+  &.active {
+    color: $heading;
+    font-weight: 600;
+    background-color: $amber-dim;
+    background-image: none;
+    box-shadow: inset 3px 0 0 $amber;
+  }
+}
+
+.site-footer { color: $dim; }
+
+// ── Text ─────────────────────────────────────────────────────────────────────
+
+.main-content {
+  line-height: 1.65;
+
+  h1, h2, h3, h4 { color: $heading; letter-spacing: -0.015em; }
+
+  h1:first-of-type {
+    font-weight: 700;
+    padding-bottom: 0.6rem;
+    border-bottom: 2px solid $amber;
+    display: inline-block;
+  }
+
+  h2 {
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid $line;
+  }
+
+  a {
+    text-decoration-color: rgba(224, 162, 67, 0.35);
+    text-underline-offset: 3px;
+    &:hover { text-decoration-color: $amber; }
+  }
+
+  strong { color: $heading; }
+
+  hr { background-color: $line; height: 1px; margin: 2.5rem 0; }
+
+  // Screenshots: a window on the page.
+  p > img, figure > img, a > img:not([src*="shields.io"]):not([src*="badge"]) {
+    border: 1px solid $line;
+    border-radius: 10px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+  p > img[src*="shields.io"], p > img[src*="badge"], a > img[src*="shields.io"], a > img[src*="badge"] {
+    border: 0; box-shadow: none; border-radius: 0;
+  }
+
+  // A screenshot's caption: the italic line under it.
+  p > em:only-child { color: $dim; font-size: 0.9em; }
+
+  // Keys: Ctrl+F reads like a key on the keyboard.
+  kbd {
+    font-family: $mono-font-family;
+    font-size: 0.8em;
+    padding: 0.1em 0.45em;
+    border: 1px solid #45484e;
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: $card;
+    color: $heading;
+  }
+
+  code { border-radius: 5px; border-color: $line; }
+  :not(pre) > code { color: #e6c38a; }
+
+  blockquote {
+    border-left: 3px solid $amber;
+    background: $amber-dim;
+    border-radius: 0 8px 8px 0;
+    padding: 0.75rem 1rem;
+    color: $heading;
+    p:last-child { margin-bottom: 0; }
+  }
+
+  // A page's contents: a quiet card, not a list of underlined links.
+  #markdown-toc {
+    background: $card;
+    border: 1px solid $line;
+    border-radius: 10px;
+    padding: 0.9rem 1.25rem 0.9rem 2.6rem;
+    margin-bottom: 2rem;
+    font-size: 0.92em;
+    ul { margin-top: 0.15rem; }
+    li { margin: 0.15rem 0; }
+    a { color: $body-text-color; text-decoration: none; &:hover { color: $amber; } }
+  }
+
+  .table-wrapper {
+    border: 1px solid $line;
+    border-radius: 10px;
+    box-shadow: none;
+  }
+  th { color: $heading; font-weight: 600; background-color: $card; }
+  th, td { border-color: $line; }
+}
+
+// ── The guide's contents: cards instead of a table ───────────────────────────
+
+.main-content .table-wrapper:has(> .guide-cards) {
+  border: 0;
+  overflow: visible;
+}
+.main-content table.guide-cards {
+  display: block;
+  min-width: 0;
+  background: none;
+
+  thead { display: none; }
+  tbody {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1rem;
+  }
+  tr {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    padding: 1rem 1.15rem;
+    background: $card;
+    border: 1px solid $line;
+    border-radius: 10px;
+    transition: border-color 0.15s, background-color 0.15s;
+    &:hover { border-color: rgba(224, 162, 67, 0.55); background: $card-hover; }
+  }
+  td { display: block; border: 0; padding: 0; background: none; min-width: 0; }
+  td:first-child {
+    font-weight: 600;
+    font-size: 1.05em;
+    margin-bottom: 0.35rem;
+    // The whole card follows its link.
+    a { color: $heading; text-decoration: none; &::after { content: ""; position: absolute; inset: 0; } }
+  }
+  td:last-child { color: #a9afb8; font-size: 0.9em; }
+}

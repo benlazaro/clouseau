@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+{%- comment -%}
+  The home page: a landing page of its own, without the guide's sidebar. Its text follows the
+  README's top (tagline, "Why Clouseau", Features, Download): keep the two in step by hand.
+  The guide's pages keep Just the Docs' default layout. Styles: assets/css/home.scss; the screenshot
+  tabs, platform tabs and release lookup: assets/js/home.js (the page works without it).
+{%- endcomment -%}
+{%- assign g = '/guide/' | relative_url -%}
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ site.title }}: {{ site.description }}</title>
+  <meta name="description" content="{{ site.description }}">
+  <meta property="og:title" content="{{ site.title }}">
+  <meta property="og:description" content="{{ site.description }}">
+  <meta property="og:image" content="{{ '/docs/social-preview.png' | absolute_url }}">
+  <link rel="icon" type="image/svg+xml" href="{{ '/assets/images/clouseau.svg' | relative_url }}">
+  <link rel="preconnect" href="https://fonts.bunny.net">
+  <link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700|jetbrains-mono:400,500,700&display=swap">
+  <link rel="stylesheet" href="{{ '/assets/css/home.css' | relative_url }}">
+</head>
+<body>
+<header class="top">
+  <nav class="wrap top-nav" aria-label="Site">
+    <a class="brand" href="{{ '/' | relative_url }}"><img src="{{ '/assets/images/clouseau.svg' | relative_url }}" alt="" width="28" height="28">Clouseau</a>
+    <div class="top-links">
+      <a href="{{ g }}">User Guide</a>
+      <a href="{{ g }}settings.html#plugins">Plugins</a>
+      <a href="{{ g }}developers.html">For developers</a>
+    </div>
+    <a class="top-gh" href="https://github.com/benlazaro/clouseau">GitHub ↗</a>
+  </nav>
+</header>
+
+<main>
+<section class="wrap hero">
+  <div class="hero-text">
+    <p class="pill" id="release-pill" hidden><span class="dot"></span><span id="release-name"></span> is out · <a id="release-link" href="https://github.com/benlazaro/clouseau/releases">What's new</a></p>
+    <h1>Find the line that<br>broke production.</h1>
+    <p class="lede">Clouseau is a fast desktop log viewer. Open logs of any size, merge several services into one timeline, filter in milliseconds, and hand your notes to a colleague in one file.</p>
+    <p class="actions">
+      <a class="btn btn-primary" id="hero-download" href="#download">Download</a>
+      <a class="btn" href="#guide">Learn how to use it</a>
+    </p>
+    <p class="meta">Free and open source · Windows, macOS and Linux · MIT license</p>
+  </div>
+
+  <figure class="shots" id="shots">
+    <div class="shot-tabs" role="tablist" aria-label="Screenshots">
+      <button role="tab" aria-selected="true" aria-controls="shot-img" data-src="{{ '/docs/screenshots/main-view.png' | relative_url }}" data-alt="Clouseau showing a log with level colors, highlights and the detail panel" data-caption="Level colors, row highlights with the bar for jumping between them, and the detail panel pretty-printing a JSON payload.">Main view</button>
+      <button role="tab" aria-selected="false" aria-controls="shot-img" data-src="{{ '/docs/screenshots/merged-view.png' | relative_url }}" data-alt="Three services' logs merged into one timeline" data-caption="Three services' logs, in two formats, interleaved into one timeline. The Source column shows which file each line came from.">Merged view</button>
+      <button role="tab" aria-selected="false" aria-controls="shot-img" data-src="{{ '/docs/screenshots/logger-filter.png' | relative_url }}" data-alt="The Loggers filter open over a log" data-caption="The Loggers filter: tick the packages and classes to show. Level, logger and time filters take milliseconds, even on a million lines.">Filters</button>
+      <button role="tab" aria-selected="false" aria-controls="shot-img" data-src="{{ '/docs/screenshots/main-view-light.png' | relative_url }}" data-alt="Clouseau in the Light theme" data-caption="The Light theme. Switch any time with View → Theme.">Light theme</button>
+    </div>
+    <a class="shot-frame" id="shot-link" href="{{ '/docs/screenshots/main-view.png' | relative_url }}">
+      <img id="shot-img" src="{{ '/docs/screenshots/main-view.png' | relative_url }}" width="2376" height="1485"
+           alt="Clouseau showing a log with level colors, highlights and the detail panel">
+    </a>
+    <figcaption id="shot-caption">Level colors, row highlights with the bar for jumping between them, and the detail panel pretty-printing a JSON payload.</figcaption>
+  </figure>
+</section>
+
+<section class="wrap block">
+  <h2 class="eyebrow">Up and running in a minute</h2>
+  <ol class="steps">
+    <li><span class="num">1</span><div><strong>Download the zip</strong><br>It brings its own Java. Nothing to install.</div></li>
+    <li><span class="num">2</span><div><strong>Unzip and run it</strong><br>Your system warns you the first time. <a href="{{ g }}installing.html#the-first-time-you-start-it">Here's how to allow it.</a></div></li>
+    <li><span class="num">3</span><div><strong>Drop a log on the window</strong><br>Or <kbd>Ctrl+O</kbd>. The format is detected for you.</div></li>
+  </ol>
+</section>
+
+<section class="wrap block">
+  <h2>Why Clouseau</h2>
+  <p class="sub">Four things it's built to do well.</p>
+  <div class="why">
+    <div class="card">
+      <div class="big">1M lines<br><span>&lt; 50 MB</span></div>
+      <h3>Big files are fine</h3>
+      <p>A 125 MB log opens in under 50 MB of memory. Level, logger and time filters answer in milliseconds.</p>
+    </div>
+    <div class="card">
+      <div class="merged" aria-hidden="true">
+        <span class="m m5">api.log:41 <b class="lvl-INFO">INFO</b> POST /orders</span>
+        <span class="m m4">db.log:13 <b class="lvl-WARN">WARN</b> slow query</span>
+        <span class="m m6">pay.log:88 <b class="lvl-ERROR">ERROR</b> 502</span>
+      </div>
+      <h3>One timeline across services</h3>
+      <p>Merge logs in different formats and timezones, and follow a request from one to the next.</p>
+    </div>
+    <div class="card">
+      <div class="handover" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="1.6"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg><code>→ review.zip</code></div>
+      <h3>Findings you can hand over</h3>
+      <p>Note lines as you investigate, then send the log and your notes to a colleague as one file.</p>
+    </div>
+    <div class="card">
+      <div class="live" aria-hidden="true"><span><i class="dot"></i>Following · deploy@prod-01</span><small>file rotated · no lines lost</small></div>
+      <h3>Live logs, local or remote</h3>
+      <p>Follow a file like <code>tail -f</code>, or a server's log over SSH, straight through log rotation.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap block">
+  <h2>Everything it does</h2>
+  <div class="groups">
+    <div class="group"><h3><i class="sw sw-1"></i>Open anything</h3><ul>
+      <li><a href="{{ g }}opening-files.html#large-files">Any file size</a></li>
+      <li><a href="{{ g }}parsers.html">Log4j, Spring Boot, JSON lines, syslog</a></li>
+      <li><a href="{{ g }}opening-files.html#compressed-files">.gz and .zip</a></li>
+      <li><a href="{{ g }}opening-files.html#files-no-parser-recognizes">Plain text fallback</a></li></ul></div>
+    <div class="group"><h3><i class="sw sw-5"></i>Read and filter</h3><ul>
+      <li><a href="{{ g }}reading-and-filtering.html#filters">Level, logger, field and time filters</a></li>
+      <li><a href="{{ g }}reading-and-filtering.html#find">Find across every column</a></li>
+      <li><a href="{{ g }}reading-and-filtering.html#highlights">Highlights you can jump between</a></li>
+      <li><a href="{{ g }}reading-and-filtering.html#the-detail-panel">Detail panel with pretty JSON</a></li>
+      <li><a href="{{ g }}reading-and-filtering.html#jumping-to-the-code">Jump to the code in your IDE</a></li></ul></div>
+    <div class="group"><h3><i class="sw sw-4"></i>See the whole story</h3><ul>
+      <li><a href="{{ g }}merged-views.html">Merged views</a></li>
+      <li><a href="{{ g }}opening-files.html#several-windows">Several windows</a></li>
+      <li><a href="{{ g }}opening-files.html#named-sessions">Named sessions</a></li>
+      <li><a href="{{ g }}reading-and-filtering.html#columns">Columns and layouts</a></li></ul></div>
+    <div class="group"><h3><i class="sw sw-6"></i>Share findings</h3><ul>
+      <li><a href="{{ g }}annotations-and-review.html">Notes on any line</a></li>
+      <li><a href="{{ g }}annotations-and-review.html#exporting-for-review">Review bundles</a></li></ul></div>
+    <div class="group"><h3><i class="sw sw-3"></i>Watch it live</h3><ul>
+      <li><a href="{{ g }}following.html">Follow mode</a></li>
+      <li><a href="{{ g }}following.html#remote-logs-over-ssh">SSH</a></li>
+      <li><a href="{{ g }}following.html#receiving-logs-over-the-network">Receive over TCP or UDP</a></li></ul></div>
+    <div class="group"><h3><i class="sw sw-7"></i>Make it yours</h3><ul>
+      <li><a href="{{ g }}settings.html#themes">Dark and Light themes</a></li>
+      <li><a href="{{ g }}parsers.html">Your own parsers, no code</a></li>
+      <li><a href="{{ g }}settings.html#plugins">Plugins, one click to install</a></li></ul></div>
+  </div>
+</section>
+
+<section class="wrap block" id="guide">
+  <div class="guide-head">
+    <div>
+      <h2>Learn Clouseau</h2>
+      <p class="sub">The User Guide covers everything, one topic per page. New here? The first three pages get you reading logs in ten minutes.</p>
+    </div>
+    <a class="btn" href="{{ g }}">Open the User Guide →</a>
+  </div>
+  <ol class="starts">
+    <li><a class="card start" href="{{ g }}installing.html"><span class="eyebrow-sm">Start here · 1</span><strong>Installing</strong><span>Download, the first start on Windows and macOS, and upgrading</span></a></li>
+    <li><a class="card start" href="{{ g }}opening-files.html"><span class="eyebrow-sm">Start here · 2</span><strong>Opening files</strong><span>Open, drag and drop, recent files, .gz and .zip, tabs</span></a></li>
+    <li><a class="card start" href="{{ g }}reading-and-filtering.html"><span class="eyebrow-sm">Start here · 3</span><strong>Reading and filtering</strong><span>The table, the detail panel, filters, Find, highlights and columns</span></a></li>
+  </ol>
+  <div class="pages">
+    <a class="card page" href="{{ g }}merged-views.html"><strong>Merged views</strong><span>Several logs as one timeline; per-file timezone, parser and clock correction</span></a>
+    <a class="card page" href="{{ g }}annotations-and-review.html"><strong>Notes and review bundles</strong><span>Annotating lines, and handing a log with your notes to a colleague</span></a>
+    <a class="card page" href="{{ g }}following.html"><strong>Following live logs</strong><span>Follow mode, log rotation, SSH and receiving logs over the network</span></a>
+    <a class="card page" href="{{ g }}parsers.html"><strong>Parsers</strong><span>The built-in formats, the parser editor, and parsers.json</span></a>
+    <a class="card page" href="{{ g }}settings.html"><strong>Themes and settings</strong><span>Themes, every setting, keyboard shortcuts and the data folder</span></a>
+    <a class="card page" href="{{ g }}developers.html"><strong>For developers</strong><span>Writing a plugin, or building Clouseau yourself</span></a>
+  </div>
+</section>
+
+<section class="wrap block" id="download">
+  <div class="dl">
+    <div class="dl-text">
+      <h2>Download</h2>
+      <div class="os-tabs" role="tablist" aria-label="Platform">
+        <button role="tab" data-os="windows" aria-selected="true">Windows</button>
+        <button role="tab" data-os="macos" aria-selected="false">macOS</button>
+        <button role="tab" data-os="linux" aria-selected="false">Linux</button>
+        <button role="tab" data-os="edge" aria-selected="false">Edge</button>
+      </div>
+      <p class="os-note" data-os="windows">Unzip it anywhere and run <code>Clouseau\Clouseau.exe</code>. The first time, Windows says <strong>Windows protected your PC</strong>: click <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+      <p class="os-note" data-os="macos" hidden>Open <code>Clouseau.app</code>. The first time, click <strong>Done</strong> on macOS's warning, then <strong>Open Anyway</strong> in System Settings → Privacy &amp; Security.</p>
+      <p class="os-note" data-os="linux" hidden>Unzip it and run <code>Clouseau/bin/Clouseau</code>. It carries its own Java runtime.</p>
+      <p class="os-note" data-os="edge" hidden>The newest changes from <code>main</code>, as one jar. Run it with <code>java -jar clouseau-edge.jar</code> on Java 21 or later.</p>
+    </div>
+    <div class="dl-action">
+      <a class="btn btn-primary btn-big" id="dl-button" href="https://github.com/benlazaro/clouseau/releases">⬇ <span id="dl-file">Download for Windows</span></a>
+      <span class="meta">Each zip brings its own Java. Clouseau tells you when a new release is out. <a href="{{ g }}installing.html">Installing and upgrading</a></span>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-row">
+    <span class="grow">New here? <a href="{{ g }}installing.html">Installing</a> → <a href="{{ g }}opening-files.html">Opening files</a> → <a href="{{ g }}reading-and-filtering.html">Reading and filtering</a></span>
+    <span>Clouseau is MIT-licensed · <a href="https://github.com/benlazaro/clouseau/issues">Report an issue</a></span>
+  </div>
+</footer>
+<script src="{{ '/assets/js/home.js' | relative_url }}"></script>
+</body>
+</html>

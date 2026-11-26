@@ -17,3 +17,6 @@ data/
 
 # Scratch output from Claude sessions
 /Claude outputs/
+
+# Jekyll's Sass cache from a local build of the site (jekyll serve, Docker)
+.sass-cache/

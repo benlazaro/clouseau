@@ -1,0 +1,26 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="lens-clip">
+      <circle cx="90" cy="88" r="52"/>
+    </clipPath>
+  </defs>
+
+  <!-- HANDLE -->
+  <path d="M 113,122 L 168,165 Q 172,170 169,173 Q 166,176 161,172 L 108,130 Z"
+    fill="#BA7517" stroke="#1a0e00" stroke-width="15" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke fill"/>
+
+  <!-- LENS rings -->
+  <circle cx="90" cy="88" r="70" fill="#1a0e00"/>
+  <circle cx="90" cy="88" r="62" fill="#EF9F27"/>
+  <!-- Sclera — explicitly opaque white -->
+  <circle cx="90" cy="88" r="52" fill="#FFFFFF"/>
+
+  <g clip-path="url(#lens-clip)">
+    <circle cx="90" cy="94" r="28" fill="#1a0e00"/>
+    <circle cx="80" cy="84" r="8" fill="#FFFFFF"/>
+    <path d="M 38,88 L 38,30 L 142,30 L 142,88 Q 90,56 38,88 Z" fill="#F5C88A"/>
+    <path d="M 38,88 Q 90,56 142,88" fill="none" stroke="#1a0e00" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <circle cx="90" cy="88" r="70" fill="none" stroke="#1a0e00" stroke-width="6"/>
+</svg>
