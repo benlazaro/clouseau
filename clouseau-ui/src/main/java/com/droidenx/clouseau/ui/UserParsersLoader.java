@@ -138,7 +138,7 @@ public final class UserParsersLoader {
 
         Pattern compiled;
         try {
-            compiled = Pattern.compile(patternStr);
+            compiled = RegexLogParser.compile(patternStr);
         } catch (PatternSyntaxException e) {
             log.warn("{} entry [{}] ('{}') invalid regex: {} — skipping", source, index, name, e.getMessage());
             return null;

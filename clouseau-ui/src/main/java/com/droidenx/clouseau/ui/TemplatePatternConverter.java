@@ -53,9 +53,7 @@ public final class TemplatePatternConverter {
             String customField = m.group(3); // only populated for {field_name}
 
             if (customField != null) {
-                // Java's group names take letters and digits only.
-                if (!customField.chars().allMatch(Character::isLetterOrDigit))
-                    throw new PatternConversionException("parsereditor.error.template.field.name", customField);
+                // An underscore is fine: RegexLogParser.compile renames the group for Java.
                 // Allow empty values and spaces (e.g. [] brackets with no content)
                 sb.append("(?<").append(customField).append(">[^\\]]*)");
             } else if (keyword.startsWith("TIMESTAMP")) {
@@ -79,7 +77,7 @@ public final class TemplatePatternConverter {
         sb.append("$");
 
         try {
-            Pattern.compile(sb.toString());
+            com.droidenx.clouseau.core.RegexLogParser.compile(sb.toString());
         } catch (PatternSyntaxException e) {
             throw PatternConversionException.invalidRegex("template", e);
         }

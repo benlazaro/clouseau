@@ -4,13 +4,16 @@ import com.droidenx.clouseau.api.LogEntry;
 import com.droidenx.clouseau.api.LogEntry.LogLevel;
 import com.droidenx.clouseau.api.LogParser;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,10 +34,18 @@ import java.util.regex.Pattern;
  * and {@code ,123} variants. Use {@code "ISO_OFFSET_DATE_TIME"} to match the
  * built-in {@link DateTimeFormatter#ISO_OFFSET_DATE_TIME} (handles variable
  * fractional seconds and timezone offsets).
+ *
+ * <p>Group names may have underscores ({@code (?<request_id>…)}), as log fields often do,
+ * though Java's regex takes only letters and digits: compile a parser's regex with
+ * {@link #compile}, which renames such a group for Java, and the field keeps its own name.
  */
 public final class RegexLogParser implements LogParser {
 
     private static final Pattern GROUP_NAME_RE = Pattern.compile("\\(\\?<(\\w+)>");
+    /** A group name, or a back-reference to one, as written in a parser's regex. */
+    private static final Pattern NAME_IN_REGEX = Pattern.compile("(\\(\\?<|\\\\k<)([A-Za-z_][A-Za-z0-9_]*)>");
+    /** What a name Java can't take becomes: this, then the name's UTF-8 bytes in hex. */
+    private static final String RENAMED = "clouseauHex";
 
     private static final Set<String> STANDARD_FIELDS = Set.of(
             "timestamp", "level", "logger", "thread", "message");
@@ -42,7 +53,8 @@ public final class RegexLogParser implements LogParser {
     private final String            name;
     private final Pattern           pattern;
     private final DateTimeFormatter timestampFormatter;
-    private final Set<String>       namedGroups;
+    /** Each named group: the field's name → the group's name in the compiled pattern. */
+    private final Map<String, String> namedGroups;
     /** {@link #timestampFormatter} in the zone used last, so a file's lines don't each copy it. */
     private volatile Zoned          zoned;
 
@@ -61,7 +73,7 @@ public final class RegexLogParser implements LogParser {
     @Override
     public List<String> customFields() {
         List<String> result = new ArrayList<>();
-        for (String g : namedGroups) {
+        for (String g : namedGroups.keySet()) {
             if (!STANDARD_FIELDS.contains(g)) result.add(g);
         }
         return List.copyOf(result);
@@ -96,7 +108,7 @@ public final class RegexLogParser implements LogParser {
         String   message   = trim(group(m, "message"));
 
         Map<String, String> fields = new HashMap<>();
-        for (String groupName : namedGroups) {
+        for (String groupName : namedGroups.keySet()) {
             if (!STANDARD_FIELDS.contains(groupName)) {
                 String value = group(m, groupName);
                 if (value != null) fields.put(groupName, value);
@@ -115,9 +127,10 @@ public final class RegexLogParser implements LogParser {
     }
 
     private String group(Matcher m, String name) {
-        if (!namedGroups.contains(name)) return null;
+        String inPattern = namedGroups.get(name);
+        if (inPattern == null) return null;
         try {
-            return m.group(name);
+            return m.group(inPattern);
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -158,10 +171,42 @@ public final class RegexLogParser implements LogParser {
         return DateTimeFormatter.ofPattern(format.replace(',', '.'));
     }
 
-    private static Set<String> extractNamedGroups(Pattern p) {
-        Set<String> names = new LinkedHashSet<>();
+    private static Map<String, String> extractNamedGroups(Pattern p) {
+        Map<String, String> names = new LinkedHashMap<>();
         Matcher m = GROUP_NAME_RE.matcher(p.pattern());
-        while (m.find()) names.add(m.group(1));
-        return Set.copyOf(names);
+        while (m.find()) names.put(fieldName(m.group(1)), m.group(1));
+        return Collections.unmodifiableMap(names);
+    }
+
+    /**
+     * Compiles a parser's regex, renaming each group (and back-reference) whose name Java
+     * wouldn't take, such as {@code request_id}, so that it compiles; the parser gives the
+     * field its own name back. A regex without such names compiles as written.
+     *
+     * @throws java.util.regex.PatternSyntaxException if the regex is invalid
+     */
+    public static Pattern compile(String regex) {
+        Matcher m = NAME_IN_REGEX.matcher(regex);
+        StringBuilder sb = new StringBuilder();
+        while (m.find()) {
+            String name = m.group(2);
+            m.appendReplacement(sb, Matcher.quoteReplacement(m.group(1) + groupName(name) + ">"));
+        }
+        m.appendTail(sb);
+        return Pattern.compile(sb.toString());
+    }
+
+    /** The group name Java takes for a field: the field's own name when it can. */
+    static String groupName(String field) {
+        if (field.matches("[A-Za-z][A-Za-z0-9]*") && !field.startsWith(RENAMED)) return field;
+        return RENAMED + HexFormat.of().formatHex(field.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** The field a group stands for: {@link #groupName} undone. */
+    static String fieldName(String group) {
+        if (!group.startsWith(RENAMED)) return group;
+        String hex = group.substring(RENAMED.length());
+        if (hex.isEmpty() || hex.length() % 2 != 0 || !hex.matches("[0-9a-f]+")) return group;
+        return new String(HexFormat.of().parseHex(hex), StandardCharsets.UTF_8);
     }
 }

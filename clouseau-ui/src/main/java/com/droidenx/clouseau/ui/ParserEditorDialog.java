@@ -703,7 +703,7 @@ public final class ParserEditorDialog extends JDialog {
             if (def.pattern().isBlank()) pattern = Messages.get("parsereditor.error.regex.empty");
             else {
                 try {
-                    Pattern.compile(def.pattern());
+                    RegexLogParser.compile(def.pattern());
                 } catch (PatternSyntaxException e) {
                     pattern = MessageFormat.format(Messages.get("parsereditor.error.regex"),
                             e.getDescription(), e.getIndex() >= 0 ? e.getIndex() + 1 : 1);
@@ -790,7 +790,7 @@ public final class ParserEditorDialog extends JDialog {
         String format  = formatField.getText().strip();
         if (pattern.isBlank() || format.isBlank()) return null;
         try {
-            return new RegexLogParser("preview", Pattern.compile(pattern), format);
+            return new RegexLogParser("preview", RegexLogParser.compile(pattern), format);
         } catch (RuntimeException e) {
             return null;
         }

@@ -109,10 +109,25 @@ complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
 just as your plugin will, and its folder builds on its own: copy it out of the Clouseau
 repository, rename the plugin, and run `gradle jar` (Gradle 8 on JDK 17 or 21).
 
-**Writing it with a coding assistant?** Point it at
-[llms.txt](https://benlazaro.github.io/clouseau/llms.txt), one plain page with the build file,
-every extension point and its rules, and the check below, and have it run the
-[check](#checking-a-plugin) until nothing fails.
+**Writing it with a coding assistant?** Clouseau publishes
+[llms.txt](https://benlazaro.github.io/clouseau/llms.txt), one plain page with what an assistant
+needs: the build file, every extension point and its rules, and the [check](#checking-a-plugin).
+Give the assistant (Claude Code, Copilot, Cursor and the like) that page, a few sample lines,
+and a request such as:
+
+```
+Read https://benlazaro.github.io/clouseau/llms.txt and write a Clouseau plugin
+that parses the log lines below. Start from the example plugin it links to.
+Build the JAR, then run the plugin check on it with these lines as the sample,
+and fix what it reports until nothing fails.
+
+<your lines>
+```
+
+The check runs your parser the way Clouseau does and catches what's easy to miss, such as a
+parser that isn't thread-safe or times that move with the log's timezone. If a regex can
+describe your format, you don't need a plugin: the [parser editor](parsers.md#with-an-ai-assistant)
+takes a regex an assistant writes for you.
 
 The example shows everything a plugin needs:
 

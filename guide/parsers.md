@@ -164,6 +164,46 @@ Parser…** opens the editor with a new parser, the file's first line as the sam
 first lines already loaded for the file test, which updates as you edit. Saving a parser
 that recognizes the file switches the tab to the table.
 
+### With an AI assistant
+
+An AI assistant (ChatGPT, Claude, Copilot and the like) is good at the part that takes the
+longest by hand: a regular expression for an unusual format. You don't need a plugin for
+this; the result goes into the parser editor as a **Regex** parser.
+
+1. Copy 5 to 10 lines from your log, including the unusual ones: a line with an empty field,
+   a long message, each level that appears. **Remove anything private first** (names, emails,
+   tokens, IP addresses, customer data) if the assistant is an online service.
+2. Give the assistant this request, with your lines at the end:
+
+   ```
+   Write a log parser for Clouseau, a Java log viewer. I need two things:
+
+   1. A Java regular expression that matches one whole log line, with named
+      groups for what the line has: timestamp, level, logger, thread and message
+      (message is the rest of the line). Give any other value worth its own column
+      a named group too, named after the value (request_id, user, …).
+   2. A java.time DateTimeFormatter pattern that reads the timestamp group.
+      If the time has an offset like +01:00 or Z, ISO_OFFSET_DATE_TIME works.
+
+   Stack-trace lines don't need to match; Clouseau adds them to the entry above.
+   Here are sample lines:
+
+   <your lines>
+   ```
+
+3. In **Tools → Parser Editor…**, click **New Parser**, set **Write it as** to **Regex**,
+   and paste the regex and the timestamp format into their fields.
+4. Under **Test**, use **Browse…** to try it on your log. If a line that should match
+   doesn't, the editor shows the first one: give that line back to the assistant and ask it
+   to fix the regex, or press **Use as Sample** and adjust it yourself.
+
+You can also ask for a whole [`parsers.json`](#parsersjson) entry (with the backslashes
+doubled, as JSON needs them) and add it to the file by hand. The parser editor is the easier
+way, since it tests the parser as you go.
+
+To have an assistant write a full **plugin** instead, for a format no regex can describe,
+see [Writing a plugin](developers.md#writing-a-plugin).
+
 ## parsers.json
 
 Your parsers are saved in `parsers.json` in the [data folder](settings.md#the-data-folder).
@@ -188,7 +228,8 @@ parser replaces it.
 | `timestampFormat` | A `DateTimeFormatter` pattern for the `timestamp` group. `ISO_OFFSET_DATE_TIME` matches timestamps with an offset or `Z`, as Spring Boot writes them. A `,` before the milliseconds is read as `.`. |
 
 The groups `timestamp`, `level`, `logger`, `thread` and `message` fill those columns; any
-other named group becomes an extra column. All groups are optional. Invalid entries are
+other named group becomes an extra column with the group's name, underscores included
+(`(?<request_id>…)` makes a **request_id** column). All groups are optional. Invalid entries are
 skipped, with a warning in Clouseau's own log.
 
 Parsers from [plugins](settings.md#plugins) come after yours and the built-in ones during
