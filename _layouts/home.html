@@ -3,7 +3,7 @@
   The home page: a landing page of its own, without the guide's sidebar. Its text follows the
   README's top (tagline, "Why Clouseau", Features, Download): keep the two in step by hand.
   The guide's pages keep Just the Docs' default layout. Styles: assets/css/home.scss; the screenshot
-  tabs, platform tabs and release lookup: assets/js/home.js (the page works without it).
+  carousel, platform tabs and release lookup: assets/js/home.js (the page works without it).
 {%- endcomment -%}
 {%- assign g = '/guide/' | relative_url -%}
 <html lang="en">
@@ -46,19 +46,35 @@
     <p class="meta">Free and open source · Windows, macOS and Linux · MIT license</p>
   </div>
 
-  <figure class="shots" id="shots">
-    <div class="shot-tabs" role="tablist" aria-label="Screenshots">
-      <button role="tab" aria-selected="true" aria-controls="shot-img" data-src="{{ '/docs/screenshots/main-view.png' | relative_url }}" data-alt="Clouseau showing a log with level colors, highlights and the detail panel" data-caption="Level colors, row highlights with the bar for jumping between them, and the detail panel pretty-printing a JSON payload.">Main view</button>
-      <button role="tab" aria-selected="false" aria-controls="shot-img" data-src="{{ '/docs/screenshots/merged-view.png' | relative_url }}" data-alt="Three services' logs merged into one timeline" data-caption="Three services' logs, in two formats, interleaved into one timeline. The Source column shows which file each line came from.">Merged view</button>
-      <button role="tab" aria-selected="false" aria-controls="shot-img" data-src="{{ '/docs/screenshots/logger-filter.png' | relative_url }}" data-alt="The Loggers filter open over a log" data-caption="The Loggers filter: tick the packages and classes to show. Level, logger and time filters take milliseconds, even on a million lines.">Filters</button>
-      <button role="tab" aria-selected="false" aria-controls="shot-img" data-src="{{ '/docs/screenshots/main-view-light.png' | relative_url }}" data-alt="Clouseau in the Light theme" data-caption="The Light theme. Switch any time with View → Theme.">Light theme</button>
+  <section class="car" id="shots" aria-roledescription="carousel" aria-label="Screenshots">
+    <div class="car-viewport" id="car-viewport" tabindex="0">
+      <figure class="car-slide" role="group" aria-roledescription="slide" aria-label="1 of 5">
+        <a href="{{ '/docs/screenshots/main-view.png' | relative_url }}"><img src="{{ '/docs/screenshots/main-view.png' | relative_url }}" width="2376" height="1485" alt="Clouseau showing a log with level colors, highlights and the detail panel"></a>
+        <figcaption>Level colors, row highlights with the bar for jumping between them, and the detail panel pretty-printing a JSON payload.</figcaption>
+      </figure>
+      <figure class="car-slide" role="group" aria-roledescription="slide" aria-label="2 of 5">
+        <a href="{{ '/docs/screenshots/merged-view.png' | relative_url }}"><img src="{{ '/docs/screenshots/merged-view.png' | relative_url }}" width="2376" height="1485" alt="Three services' logs merged into one timeline"></a>
+        <figcaption>Three services' logs, in two formats, interleaved into one timeline. The Source column shows which file each line came from.</figcaption>
+      </figure>
+      <figure class="car-slide" role="group" aria-roledescription="slide" aria-label="3 of 5">
+        <a href="{{ '/docs/screenshots/logger-filter.png' | relative_url }}"><img src="{{ '/docs/screenshots/logger-filter.png' | relative_url }}" width="2376" height="1485" alt="The Loggers filter open over a log"></a>
+        <figcaption>The Loggers filter: tick the packages and classes to show. Level, logger and time filters take milliseconds, even on a million lines.</figcaption>
+      </figure>
+      <figure class="car-slide" role="group" aria-roledescription="slide" aria-label="4 of 5">
+        <a href="{{ '/docs/screenshots/plain-text.png' | relative_url }}"><img src="{{ '/docs/screenshots/plain-text.png' | relative_url }}" width="2376" height="1485" alt="A file shown as plain text"></a>
+        <figcaption>A file no parser recognizes opens as plain text, with an offer to create a parser for it.</figcaption>
+      </figure>
+      <figure class="car-slide" role="group" aria-roledescription="slide" aria-label="5 of 5">
+        <a href="{{ '/docs/screenshots/main-view-light.png' | relative_url }}"><img src="{{ '/docs/screenshots/main-view-light.png' | relative_url }}" width="2376" height="1485" alt="Clouseau in the Light theme"></a>
+        <figcaption>The Light theme. Switch any time with View → Theme.</figcaption>
+      </figure>
     </div>
-    <a class="shot-frame" id="shot-link" href="{{ '/docs/screenshots/main-view.png' | relative_url }}">
-      <img id="shot-img" src="{{ '/docs/screenshots/main-view.png' | relative_url }}" width="2376" height="1485"
-           alt="Clouseau showing a log with level colors, highlights and the detail panel">
-    </a>
-    <figcaption id="shot-caption">Level colors, row highlights with the bar for jumping between them, and the detail panel pretty-printing a JSON payload.</figcaption>
-  </figure>
+    <div class="car-controls">
+      <button class="car-arrow" id="car-prev" aria-label="Previous screenshot" hidden>‹</button>
+      <div class="car-dots" id="car-dots" hidden></div>
+      <button class="car-arrow" id="car-next" aria-label="Next screenshot" hidden>›</button>
+    </div>
+  </section>
 </section>
 
 <section class="wrap block">

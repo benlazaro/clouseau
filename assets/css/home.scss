@@ -68,21 +68,35 @@ h1, h2, h3 { color: $heading; letter-spacing: -0.02em; }
 }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; }
 
-// ── Screenshots: the app's own, one at a time, chosen with tabs ──
-.shots { flex: 1.5 1 560px; min-width: 0; margin: 0; }
-.shot-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.shot-tabs button {
-  font: 600 13px Inter, sans-serif; min-height: 36px; padding: 0 14px; border-radius: 8px; cursor: pointer;
-  border: 1px solid $border; background: none; color: $text;
-  &:hover { background: #2e3034; }
-  &[aria-selected="true"] { border-color: $amber; background: rgba(224, 162, 67, 0.14); color: $heading; }
+// ── Screenshots: the app's own, in a carousel. Without the script it's a row you can swipe. ──
+.car { flex: 1.5 1 560px; min-width: 0; }
+.car-viewport {
+  display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth;
+  scrollbar-width: none; border-radius: 10px; outline-offset: 4px;
+  &::-webkit-scrollbar { display: none; }
 }
-.shot-frame { display: block; line-height: 0; }
-.shot-frame img {
+.car-slide { flex: 0 0 100%; min-width: 0; margin: 0; scroll-snap-align: center; scroll-snap-stop: always; }
+.car-slide a { display: block; line-height: 0; }
+.car-slide img {
   width: 100%; height: auto; aspect-ratio: 2376 / 1485; border: 1px solid #45484e; border-radius: 10px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3); background: $deep;
+  background: $deep;
 }
-.shots figcaption { margin-top: 10px; font-size: 13px; color: $dim; min-height: 2.6em; }
+.car-slide figcaption { margin-top: 12px; font-size: 13px; color: $dim; min-height: 2.6em; padding: 0 2px; }
+.car-controls { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 4px; }
+.car-arrow {
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid $border; background: $card;
+  color: $heading; font: 500 22px/1 Inter, sans-serif; cursor: pointer; padding-bottom: 3px;
+  &:hover { background: #2e3034; border-color: $control; }
+  &[hidden] { display: none; }
+}
+.car-dots { display: flex; gap: 4px; &[hidden] { display: none; } }
+.car-dots button {
+  width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  &::before { content: ""; width: 8px; height: 8px; border-radius: 4px; background: #45484e; transition: width 0.2s, background-color 0.2s; }
+  &:hover::before { background: $control; }
+  &[aria-current="true"]::before { width: 20px; background: $amber; }
+}
 
 // ── Sections ──
 .block { padding-top: 24px; padding-bottom: 56px; }

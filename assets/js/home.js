@@ -1,5 +1,5 @@
-// The home page's screenshot tabs, platform tabs and release lookup. Without it the page
-// still works: the first screenshot shows, every platform's note is one tab, and Download goes to
+// The home page's screenshot carousel, platform tabs and release lookup. Without it the page
+// still works: the screenshots are a row you can swipe, every platform's note is one tab, and Download goes to
 // the releases page.
 (function () {
   'use strict';
@@ -7,21 +7,71 @@
   var RELEASES = 'https://github.com/' + REPO + '/releases';
   var EDGE = RELEASES + '/download/edge/clouseau-edge.jar';
 
-  // ── Screenshots: tabs switch the picture and its caption ──
-  var shots = document.getElementById('shots');
-  if (shots) {
-    var img = document.getElementById('shot-img');
-    var link = document.getElementById('shot-link');
-    var caption = document.getElementById('shot-caption');
-    var shotTabs = shots.querySelectorAll('[role="tab"]');
-    shotTabs.forEach(function (t) {
-      new Image().src = t.dataset.src;  // load the others now, so switching is instant
-      t.addEventListener('click', function () {
-        shotTabs.forEach(function (o) { o.setAttribute('aria-selected', String(o === t)); });
-        img.src = t.dataset.src; img.alt = t.dataset.alt; link.href = t.dataset.src;
-        caption.textContent = t.dataset.caption;
-      });
+  // ── Screenshots: a carousel over a row that scrolls by itself, so swiping and the keyboard
+  //    work natively. It moves on every few seconds until someone uses it, never under
+  //    reduced motion, and stops while the pointer or focus is on it or the tab is hidden. ──
+  var car = document.getElementById('shots');
+  if (car) {
+    var view = document.getElementById('car-viewport');
+    var slides = view.querySelectorAll('.car-slide');
+    var prev = document.getElementById('car-prev');
+    var next = document.getElementById('car-next');
+    var dotsBox = document.getElementById('car-dots');
+    var index = 0, aim = null, timer = null, stopped = false, paused = false;
+    var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (still) view.style.scrollBehavior = 'auto';
+
+    var dots = Array.prototype.map.call(slides, function (sl, i) {
+      var d = document.createElement('button');
+      d.type = 'button';
+      d.setAttribute('aria-label', 'Screenshot ' + (i + 1) + ': ' + sl.querySelector('img').alt);
+      d.addEventListener('click', function () { stop(); go(i); });
+      dotsBox.appendChild(d);
+      return d;
     });
+    var mark = function (i) {
+      index = i;
+      dots.forEach(function (d, k) { d.setAttribute('aria-current', String(k === i)); });
+    };
+    var go = function (i) {
+      i = (i + slides.length) % slides.length;
+      aim = i;                          // until the scroll gets there, ignore where it passes
+      view.scrollTo({ left: slides[i].offsetLeft - view.offsetLeft });
+      mark(i);
+    };
+    var stop = function () { stopped = true; clearInterval(timer); };
+    prev.addEventListener('click', function () { stop(); go(index - 1); });
+    next.addEventListener('click', function () { stop(); go(index + 1); });
+    view.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); stop(); go(index - 1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); stop(); go(index + 1); }
+    });
+    // A swipe or trackpad scroll: follow where it settles.
+    var settle = null;
+    view.addEventListener('scroll', function () {
+      clearTimeout(settle);
+      settle = setTimeout(function () {
+        var at = Math.round(view.scrollLeft / view.clientWidth);
+        if (aim !== null && at !== aim) return;
+        aim = null;
+        mark(at);
+      }, 80);
+    }, { passive: true });
+    ['pointerdown', 'wheel', 'touchstart'].forEach(function (t) {
+      view.addEventListener(t, function () { aim = null; stop(); }, { passive: true });
+    });
+    car.addEventListener('mouseenter', function () { paused = true; });
+    car.addEventListener('mouseleave', function () { paused = false; });
+    car.addEventListener('focusin', function () { paused = true; });
+    car.addEventListener('focusout', function () { paused = false; });
+
+    prev.hidden = next.hidden = dotsBox.hidden = false;
+    mark(0);
+    if (!still && slides.length > 1) {
+      timer = setInterval(function () {
+        if (!stopped && !paused && !document.hidden) go(index + 1);
+      }, 6000);
+    }
   }
 
   // ── Download: platform tabs, picked from the browser, and the latest release's files ──
