@@ -437,7 +437,8 @@ project's `plugins.json`, each at the latest version Central has; for Nexus, art
 `<name>-clouseau-plugin` (or `clouseau-<name>-plugin`, the project's own). Typing filters them by
 name, description or what they add (`source`); Enter searches the whole repository instead, and
 clearing the field goes back to the plugins. An Installed column shows the version in the plugins
-folder, and Install becomes Update when the repository has a newer one, which replaces it. The
+folder, and Install becomes Update when the repository has a newer one, which replaces it, or
+Downgrade on an older one (a Nexus search lists every version), which asks first. The
 list is empty until someone publishes a plugin. Search finds a Nexus plugin by any part of its group or
 artifact name, and lists each result's version, date and size in resizable, sortable columns; the sort and the widths are remembered. A Nexus
 repository is the server's address plus an optional repository name; the form says so.

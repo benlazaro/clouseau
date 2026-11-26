@@ -573,10 +573,12 @@ final class BrowsePluginsPanel extends JPanel {
     private void selectionChanged() {
         PluginRepository.Asset a = selected();
         String installed = a == null ? null : tableModel.installed(a);
-        boolean update = installed != null && compareVersions(installed, a.version()) < 0;
+        // Your version against the row's: a newer row updates, an older one downgrades.
+        int cmp = installed == null ? 0 : compareVersions(installed, a.version());
         installBtn.setText(Messages.get(installed == null ? "plugins.download.install"
-                : update ? "plugins.download.update" : "plugins.download.installed"));
-        installBtn.setEnabled(a != null && searchWorker == null && !progressBar.isVisible() && (installed == null || update));
+                : cmp < 0 ? "plugins.download.update"
+                : cmp > 0 ? "plugins.download.downgrade" : "plugins.download.installed"));
+        installBtn.setEnabled(a != null && searchWorker == null && !progressBar.isVisible() && (installed == null || cmp != 0));
         if (a != null && a.listing() != null && !a.listing().description().isEmpty()) {
             say(a.listing().description(), false);
             status.setToolTipText(null);
@@ -609,6 +611,14 @@ final class BrowsePluginsPanel extends JPanel {
         PluginRepository repo = (PluginRepository) repoCombo.getSelectedItem();
         String installed = tableModel.installed(asset);
         Path replaces = installed != null ? installedFile(asset, installed) : null;
+        // Going back to an older version is rarely meant by accident; ask first.
+        if (installed != null && compareVersions(installed, asset.version()) > 0
+                && !ManagerDialogs.confirm(SwingUtilities.getWindowAncestor(this),
+                        Messages.get("plugins.download.downgrade.title"),
+                        ConfirmText.of(MessageFormat.format(Messages.get("plugins.download.downgrade.question"),
+                                        asset.displayName(), installed, asset.version()),
+                                Messages.get("plugins.download.downgrade.note")),
+                        Messages.get("plugins.download.downgrade"))) return;
 
         installBtn.setEnabled(false);
         searchBtn.setEnabled(false);

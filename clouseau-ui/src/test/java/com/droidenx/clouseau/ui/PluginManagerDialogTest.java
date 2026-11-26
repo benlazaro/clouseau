@@ -13,6 +13,12 @@ class PluginManagerDialogTest {
     }
 
     @Test
+    void goingToAnOlderVersionSaysDowngraded() {
+        assertThat(PluginManagerDialog.installedToast("Loki", "1.1.0", false, true, "1.2.0"))
+                .isEqualTo("Downgraded Loki from 1.2.0 to 1.1.0");
+    }
+
+    @Test
     void anUpdateFromAnUnknownVersionSaysOnlyTheNewOne() {
         assertThat(PluginManagerDialog.installedToast("Loki", "1.2.0", false, true, null))
                 .isEqualTo("Updated Loki to 1.2.0");

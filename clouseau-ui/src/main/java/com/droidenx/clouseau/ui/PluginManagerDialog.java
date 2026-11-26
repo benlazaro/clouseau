@@ -230,10 +230,12 @@ public final class PluginManagerDialog extends JDialog {
         });
     }
 
-    /** "Updated Foo from 1.1.0 to 1.2.0", "Installed Foo 1.2.0", or that it didn't load. */
+    /** "Updated Foo from 1.1.0 to 1.2.0", "Downgraded Foo from 1.2.0 to 1.1.0", "Installed Foo 1.2.0", or that it didn't load. */
     static String installedToast(String name, String version, boolean failed, boolean update, String oldVersion) {
         if (failed) return java.text.MessageFormat.format(Messages.get("plugins.installed.toast.failed"), name);
         if (!update) return java.text.MessageFormat.format(Messages.get("plugins.installed.toast"), name, version);
+        if (oldVersion != null && BrowsePluginsPanel.compareVersions(oldVersion, version) > 0)
+            return java.text.MessageFormat.format(Messages.get("plugins.downgraded.toast"), name, version, oldVersion);
         return oldVersion == null || oldVersion.equals(version)
                 ? java.text.MessageFormat.format(Messages.get("plugins.updated.toast"), name, version)
                 : java.text.MessageFormat.format(Messages.get("plugins.updated.toast.from"), name, version, oldVersion);

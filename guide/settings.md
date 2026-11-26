@@ -172,8 +172,9 @@ syntax highlighters and [live sources](following.md#source-plugins).
     selected in Installed, with a note saying what was installed (or updated) and its version.
   - **Installed** shows the version you have. When the repository has a newer one, it
     says *update* next to it and the button says **Update**, which replaces your version
-    with the new one. A plugin you already have at the latest version says
-    **Installed**.
+    with the new one. On an older version than yours the button says **Downgrade**: it
+    asks first, then replaces your version with that one, to go back after an update that
+    broke something. The version you have says **Installed**.
   - For a plugin that isn't listed, type part of its name and press `Enter` (or click
     **Search**) to search the whole repository. On Maven Central, `g:` and `a:` search
     the group or the artifact name only (`a:logfmt-clouseau-plugin`); on Nexus, any part of
