@@ -31,9 +31,12 @@ site. A new feature, or a change to how one works, updates the guide page that c
 (and the README's Features list if it's a headline feature) in the same commit, written
 for users rather than developers. Screenshots live in `docs/screenshots/`; guide pages link
 them as `../docs/screenshots/<name>.png` so they work on the site and on GitHub. Help →
-Documentation opens the guide. The site's look follows the app: `_sass/color_schemes/clouseau.scss`
-(the Dark theme's grays and amber accent; change it with the theme file), `_sass/custom/` (Inter and
-JetBrains Mono, cards, screenshots). The home page is `index.html` with its own layout,
+Documentation opens the guide. The site's look follows the app, in Dark and Light:
+`_sass/color_schemes/clouseau.scss` and `clouseau-light.scss` (the themes' grays and amber; change
+them with the theme files), `_sass/custom/` (Inter and JetBrains Mono, cards, screenshots, with
+its Light values in `clouseau-light.scss`), and the home page's variables at the top of
+`assets/css/home.scss`. The site follows the visitor's system until they use the switch
+(`_includes/theme_init.html`, `theme_toggle.html`). The home page is `index.html` with its own layout,
 `_layouts/home.html` (styles `assets/css/home.scss`, script `assets/js/home.js`), not the README:
 its tagline, "Why Clouseau", feature groups and Download notes follow the README's and the
 Installing page's, so a change to those updates the home page in the same commit, and a new

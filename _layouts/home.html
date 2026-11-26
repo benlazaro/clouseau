@@ -18,7 +18,8 @@
   <link rel="icon" type="image/svg+xml" href="{{ '/assets/images/clouseau.svg' | relative_url }}">
   <link rel="preconnect" href="https://fonts.bunny.net">
   <link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700|jetbrains-mono:400,500,700&display=swap">
-  <link rel="stylesheet" href="{{ '/assets/css/home.css' | relative_url }}">
+  <link rel="stylesheet" href="{{ '/assets/css/home.css' | relative_url }}?v={{ site.time | date: '%s' }}">
+  {% include theme_init.html %}
 </head>
 <body>
 <header class="top">
@@ -30,6 +31,7 @@
       <a href="{{ g }}developers.html">For developers</a>
     </div>
     <a class="top-gh" href="https://github.com/benlazaro/clouseau">GitHub ↗</a>
+    {% include theme_toggle.html %}
   </nav>
 </header>
 
@@ -202,6 +204,6 @@
     <span>Clouseau is MIT-licensed · <a href="https://github.com/benlazaro/clouseau/issues">Report an issue</a></span>
   </div>
 </footer>
-<script src="{{ '/assets/js/home.js' | relative_url }}"></script>
+<script src="{{ '/assets/js/home.js' | relative_url }}?v={{ site.time | date: '%s' }}"></script>
 </body>
 </html>

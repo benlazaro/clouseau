@@ -7,19 +7,25 @@
   var RELEASES = 'https://github.com/' + REPO + '/releases';
   var EDGE = RELEASES + '/download/edge/clouseau-edge.jar';
 
-  // ── Screenshots: a carousel over a row that scrolls by itself, so swiping and the keyboard
-  //    work natively. It moves on every few seconds until someone uses it, never under
-  //    reduced motion, and stops while the pointer or focus is on it or the tab is hidden. ──
+  // ── Screenshots: the row of slides becomes a stack that crossfades from one to the next
+  //    (arrows, dots, ← →, or a swipe). It moves on every few seconds until someone uses it,
+  //    never under reduced motion, and stops while the pointer or focus is on it or the tab is hidden. ──
   var car = document.getElementById('shots');
   if (car) {
     var view = document.getElementById('car-viewport');
+    // In the Light theme, start with the Light screenshot.
+    var lightShot = view.querySelector('.car-slide img[src*="main-view-light"]');
+    if (window.clouseauTheme && clouseauTheme.get() === 'light' && lightShot) {
+      view.insertBefore(lightShot.closest('.car-slide'), view.firstElementChild);
+    }
     var slides = view.querySelectorAll('.car-slide');
+    Array.prototype.forEach.call(slides, function (sl, i) { sl.setAttribute('aria-label', (i + 1) + ' of ' + slides.length); });
     var prev = document.getElementById('car-prev');
     var next = document.getElementById('car-next');
     var dotsBox = document.getElementById('car-dots');
-    var index = 0, aim = null, timer = null, stopped = false, paused = false;
+    var index = 0;
     var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (still) view.style.scrollBehavior = 'auto';
+    view.classList.add('is-fading');      // a stack, not a row: see .car-viewport.is-fading
 
     var dots = Array.prototype.map.call(slides, function (sl, i) {
       var d = document.createElement('button');
@@ -29,49 +35,53 @@
       dotsBox.appendChild(d);
       return d;
     });
-    var mark = function (i) {
-      index = i;
-      dots.forEach(function (d, k) { d.setAttribute('aria-current', String(k === i)); });
-    };
     var go = function (i) {
       i = (i + slides.length) % slides.length;
-      aim = i;                          // until the scroll gets there, ignore where it passes
-      view.scrollTo({ left: slides[i].offsetLeft - view.offsetLeft });
-      mark(i);
+      index = i;
+      Array.prototype.forEach.call(slides, function (sl, k) { sl.classList.toggle('is-current', k === i); });
+      dots.forEach(function (d, k) { d.setAttribute('aria-current', String(k === i)); });
     };
-    var stop = function () { stopped = true; clearInterval(timer); };
+    var stop = function () { car.classList.remove('is-playing'); };
     prev.addEventListener('click', function () { stop(); go(index - 1); });
     next.addEventListener('click', function () { stop(); go(index + 1); });
     view.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowLeft') { e.preventDefault(); stop(); go(index - 1); }
       if (e.key === 'ArrowRight') { e.preventDefault(); stop(); go(index + 1); }
     });
-    // A swipe or trackpad scroll: follow where it settles.
-    var settle = null;
-    view.addEventListener('scroll', function () {
-      clearTimeout(settle);
-      settle = setTimeout(function () {
-        var at = Math.round(view.scrollLeft / view.clientWidth);
-        if (aim !== null && at !== aim) return;
-        aim = null;
-        mark(at);
-      }, 80);
+    // A swipe: a mostly sideways drag of 40px or more steps one screenshot that way.
+    var startX = null, startY = null;
+    view.addEventListener('touchstart', function (e) {
+      stop();
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
     }, { passive: true });
-    ['pointerdown', 'wheel', 'touchstart'].forEach(function (t) {
-      view.addEventListener(t, function () { aim = null; stop(); }, { passive: true });
+    view.addEventListener('touchend', function (e) {
+      if (startX === null) return;
+      var dx = e.changedTouches[0].clientX - startX, dy = e.changedTouches[0].clientY - startY;
+      startX = null;
+      if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) go(index + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+    view.addEventListener('pointerdown', stop, { passive: true });
+    // Paused (the fill on the current dot holds) while the pointer or focus is on the
+    // carousel or the tab is hidden.
+    var hovered = false, focused = false;
+    var pause = function () { car.classList.toggle('is-paused', hovered || focused || document.hidden); };
+    car.addEventListener('mouseenter', function () { hovered = true; pause(); });
+    car.addEventListener('mouseleave', function () { hovered = false; pause(); });
+    car.addEventListener('focusin', function () { focused = true; pause(); });
+    car.addEventListener('focusout', function () { focused = false; pause(); });
+    document.addEventListener('visibilitychange', pause);
+
+    // Autoplay: the current dot fills over DWELL (the car-progress animation); when it's full,
+    // the next screenshot fades in. Once someone uses the carousel it stays where they put it.
+    var DWELL = 6;                      // seconds
+    car.style.setProperty('--dwell', DWELL + 's');
+    dotsBox.addEventListener('animationend', function (e) {
+      if (e.animationName === 'car-progress' && car.classList.contains('is-playing')) go(index + 1);
     });
-    car.addEventListener('mouseenter', function () { paused = true; });
-    car.addEventListener('mouseleave', function () { paused = false; });
-    car.addEventListener('focusin', function () { paused = true; });
-    car.addEventListener('focusout', function () { paused = false; });
 
     prev.hidden = next.hidden = dotsBox.hidden = false;
-    mark(0);
-    if (!still && slides.length > 1) {
-      timer = setInterval(function () {
-        if (!stopped && !paused && !document.hidden) go(index + 1);
-      }, 6000);
-    }
+    go(0);
+    if (!still && slides.length > 1) car.classList.add('is-playing');
   }
 
   // ── Download: platform tabs, picked from the browser, and the latest release's files ──

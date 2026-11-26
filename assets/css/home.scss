@@ -1,17 +1,43 @@
 ---
 ---
-// The home page (_layouts/home.html), on its own: no Just the Docs here. Colors are the app's
-// Dark theme (ClouseauDarkLaf.properties), as in _sass/color_schemes/clouseau.scss.
+// The home page (_layouts/home.html), on its own: no Just the Docs here.
 
-$bg: #1c1d20; $deep: #17181a; $card: #232427; $card-hover: #2a2c30; $line: #34363b;
-$border: #3f4247; $control: #6b7079; $heading: #e6ebf2; $text: #c9ced6; $dim: #8b919b;
-$amber: #e0a243; $amber-hover: #eab35c; $on-amber: #1a1206;
+// Every color is a CSS variable, so the page switches theme without reloading: Dark from the
+// app's Dark theme, Light from its Light theme (ClouseauLightLaf.properties), where amber drawn
+// as text or a line takes the app's deeper shades so it shows on white. html[data-theme] is set
+// by _includes/theme_init.html.
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1d20; --deep: #17181a; --card: #232427; --card-hover: #2a2c30; --card-alt: #1f2023;
+  --line: #34363b; --border: #3f4247; --control: #6b7079; --control-soft: #45484e; --hover: #2e3034;
+  --heading: #e6ebf2; --text: #c9ced6; --dim: #8b919b; --card-text: #a9afb8;
+  --accent: #e0a243; --accent-hover: #eab35c; --on-accent: #1a1206; --accent-text: #e0a243;
+  --accent-line: #e0a243; --accent-dim: rgba(224, 162, 67, 0.14); --accent-under: rgba(224, 162, 67, 0.4);
+  --code: #e6c38a; --kbd-bg: #2a2c30; --kbd-border: #4a4d54; --ok: #4caf50;
+  --info: #3dbcf5; --warn: #ffad3b; --error: #ff6e6b; --pencil: #f5a623;
+  --shot-border: #45484e; --shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  --hl-0: #4b1d1b; --hl-1: #442600; --hl-2: #332f00; --hl-3: #0d371a; --hl-4: #003836; --hl-5: #0d2f4f; --hl-6: #33244b; --hl-7: #461e36;
+  --hle-0: #904d49; --hle-1: #865824; --hle-2: #6b661f; --hle-3: #397247; --hle-4: #00726f; --hle-5: #386695; --hle-6: #6b578f; --hle-7: #874d6f;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff; --deep: #f7f8fa; --card: #f7f8fa; --card-hover: #ebedf2; --card-alt: #fbfbfc;
+  --line: #e3e5ea; --border: #d0d3da; --control: #8a9099; --control-soft: #c9ccd3; --hover: #ebedf2;
+  --heading: #0f1216; --text: #1f2329; --dim: #5c636d; --card-text: #4a515b;
+  --accent: #e0a243; --accent-hover: #d4952f; --on-accent: #1a1206; --accent-text: #8f5600;
+  --accent-line: #c47a0f; --accent-dim: rgba(224, 162, 67, 0.18); --accent-under: rgba(143, 86, 0, 0.35);
+  --code: #8f5600; --kbd-bg: #ffffff; --kbd-border: #c9ccd3; --ok: #226826;
+  --info: #0a62a6; --warn: #8c4f00; --error: #bb2424; --pencil: #a86200;
+  --shot-border: #d0d3da; --shadow: 0 16px 40px rgba(16, 24, 40, 0.14);
+  --hl-0: #ffe0dc; --hl-1: #ffe7cb; --hl-2: #efedcb; --hl-3: #d7f4dc; --hl-4: #caf5f2; --hl-5: #d5eeff; --hl-6: #efe5ff; --hl-7: #ffe0f2;
+  --hle-0: #e09e96; --hle-1: #d1a978; --hle-2: #b9b478; --hle-3: #8cc097; --hle-4: #71c2bd; --hle-5: #80b9de; --hle-6: #bba5db; --hle-7: #d59dbf;
+}
+
+$bg: var(--bg); $deep: var(--deep); $card: var(--card); $card-hover: var(--card-hover); $line: var(--line);
+$border: var(--border); $control: var(--control); $heading: var(--heading); $text: var(--text); $dim: var(--dim);
+$amber: var(--accent); $amber-hover: var(--accent-hover); $on-amber: var(--on-accent);
+$amber-text: var(--accent-text); $amber-line: var(--accent-line);
 $mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
-
-$levels: (INFO: #3dbcf5, WARN: #ffad3b, ERROR: #ff6e6b);
-// The highlight fills and their edges, slots 0 to 7.
-$hl: #4b1d1b #442600 #332f00 #0d371a #003836 #0d2f4f #33244b #461e36;
-$hl-edge: #904d49 #865824 #6b661f #397247 #00726f #386695 #6b578f #874d6f;
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -20,16 +46,16 @@ body {
   font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased;
 }
-a { color: $amber; text-underline-offset: 3px; text-decoration-color: rgba(224, 162, 67, 0.4); }
-a:hover { color: $amber-hover; text-decoration-color: $amber; }
+a { color: $amber-text; text-underline-offset: 3px; text-decoration-color: var(--accent-under); }
+a:hover { color: $amber-text; text-decoration-color: $amber-line; }
 code, kbd, pre { font-family: $mono; }
-code { color: #e6c38a; font-size: 0.9em; }
+code { color: var(--code); font-size: 0.9em; }
 kbd {
-  font-size: 0.8em; padding: 0.1em 0.45em; border: 1px solid #4a4d54; border-bottom-width: 2px;
-  border-radius: 4px; background: #2a2c30; color: $heading;
+  font-size: 0.8em; padding: 0.1em 0.45em; border: 1px solid var(--kbd-border); border-bottom-width: 2px;
+  border-radius: 4px; background: var(--kbd-bg); color: $heading;
 }
 h1, h2, h3 { color: $heading; letter-spacing: -0.02em; }
-:focus-visible { outline: 2px solid $amber; outline-offset: 2px; }
+:focus-visible { outline: 2px solid $amber-line; outline-offset: 2px; }
 .wrap { max-width: 1200px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
 .grow { flex-grow: 1; }
 
@@ -53,6 +79,14 @@ h1, h2, h3 { color: $heading; letter-spacing: -0.02em; }
 .top-links { display: flex; gap: 20px; flex-grow: 1; flex-wrap: wrap; font-size: 14px; font-weight: 500; }
 .top-links a, .top-gh { color: $text; text-decoration: none; font-size: 14px; &:hover { color: $heading; } }
 
+// The theme switch (_includes/theme_toggle.html)
+.theme-toggle {
+  width: 36px; height: 36px; border-radius: 8px; border: 1px solid $border; background: none;
+  color: $text; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  &:hover { background: var(--hover); color: $heading; }
+}
+[data-theme="light"] .theme-toggle .i-sun, [data-theme="dark"] .theme-toggle .i-moon { display: none; }
+
 // ── Hero ──
 .hero { display: flex; flex-wrap: wrap; gap: 48px; align-items: center; padding-top: 64px; padding-bottom: 40px; }
 .hero-text { flex: 1 1 380px; min-width: 0; }
@@ -66,7 +100,7 @@ h1, h2, h3 { color: $heading; letter-spacing: -0.02em; }
   color: $dim; border: 1px solid $border; border-radius: 999px; padding: 4px 12px;
   &[hidden] { display: none; }
 }
-.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 
 // ── Screenshots: the app's own, in a carousel. Without the script it's a row you can swipe. ──
 .car { flex: 1.5 1 560px; min-width: 0; }
@@ -76,27 +110,51 @@ h1, h2, h3 { color: $heading; letter-spacing: -0.02em; }
   &::-webkit-scrollbar { display: none; }
 }
 .car-slide { flex: 0 0 100%; min-width: 0; margin: 0; scroll-snap-align: center; scroll-snap-stop: always; }
+// How long one screenshot takes to fade into the next.
+$car-fade: 0.8s;
+
+// With the script: every slide in one grid cell, the current one faded in over the others.
+// Hidden slides are also visibility: hidden, so they leave the tab order and screen readers.
+.car-viewport.is-fading {
+  display: grid; overflow: visible; scroll-snap-type: none;
+  .car-slide {
+    grid-area: 1 / 1; opacity: 0; visibility: hidden;
+    transition: opacity $car-fade ease, visibility 0s linear $car-fade;
+  }
+  .car-slide.is-current { opacity: 1; visibility: visible; transition: opacity $car-fade ease, visibility 0s; }
+  @media (prefers-reduced-motion: reduce) { .car-slide, .car-slide.is-current { transition: none; } }
+}
 .car-slide a { display: block; line-height: 0; }
 .car-slide img {
-  width: 100%; height: auto; aspect-ratio: 2376 / 1485; border: 1px solid #45484e; border-radius: 10px;
-  background: $deep;
+  width: 100%; height: auto; aspect-ratio: 2376 / 1485; border: 1px solid var(--shot-border); border-radius: 10px;
+  background: $deep; box-shadow: var(--shadow);
 }
 .car-slide figcaption { margin-top: 12px; font-size: 13px; color: $dim; min-height: 2.6em; padding: 0 2px; }
 .car-controls { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 4px; }
 .car-arrow {
   width: 40px; height: 40px; border-radius: 50%; border: 1px solid $border; background: $card;
   color: $heading; font: 500 22px/1 Inter, sans-serif; cursor: pointer; padding-bottom: 3px;
-  &:hover { background: #2e3034; border-color: $control; }
+  &:hover { background: var(--hover); border-color: $control; }
   &[hidden] { display: none; }
 }
 .car-dots { display: flex; gap: 4px; &[hidden] { display: none; } }
 .car-dots button {
   width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  &::before { content: ""; width: 8px; height: 8px; border-radius: 4px; background: #45484e; transition: width 0.2s, background-color 0.2s; }
+  &::before { content: ""; width: 8px; height: 8px; border-radius: 4px; background: var(--control-soft); transition: width 0.2s, background-color 0.2s; }
   &:hover::before { background: $control; }
-  &[aria-current="true"]::before { width: 20px; background: $amber; }
+  &[aria-current="true"]::before {
+    width: 20px;
+    background: linear-gradient($amber-line, $amber-line) 0 0 / 100% 100% no-repeat, var(--control-soft);
+  }
 }
+// While it plays by itself, the current dot fills with amber over --dwell, and the next
+// screenshot comes in when it's full (assets/js/home.js listens for the end); hovering holds it.
+.car.is-playing .car-dots button[aria-current="true"]::before {
+  animation: car-progress var(--dwell, 6s) linear forwards;
+}
+.car.is-playing.is-paused .car-dots button[aria-current="true"]::before { animation-play-state: paused; }
+@keyframes car-progress { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
 
 // ── Sections ──
 .block { padding-top: 24px; padding-bottom: 56px; }
@@ -107,7 +165,7 @@ h1, h2, h3 { color: $heading; letter-spacing: -0.02em; }
   background: $card; border: 1px solid $line; border-radius: 10px; padding: 22px;
   transition: border-color 0.15s, background-color 0.15s;
 }
-a.card { display: block; text-decoration: none; color: $text; &:hover { border-color: rgba(224, 162, 67, 0.55); background: $card-hover; } }
+a.card { display: block; text-decoration: none; color: $text; &:hover { border-color: $amber-line; background: $card-hover; } }
 
 .steps, .starts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 .steps li { display: flex; gap: 16px; padding: 20px; background: $card; border: 1px solid $line; border-radius: 10px; font-size: 14px; }
@@ -117,29 +175,29 @@ a.card { display: block; text-decoration: none; color: $text; &:hover { border-c
 .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 .why h3 { margin: 14px 0 4px; font-size: 17px; }
 .why p { margin: 0; font-size: 14px; }
-.big { font: 700 30px/1.1 $mono; color: $heading; span { color: $amber; } }
+.big { font: 700 30px/1.1 $mono; color: $heading; span { color: $amber-text; } }
 .merged { display: flex; flex-direction: column; gap: 4px; font: 12px $mono; }
-@each $name, $c in $levels { .lvl-#{$name} { color: $c; } }
+.lvl-INFO { color: var(--info); } .lvl-WARN { color: var(--warn); } .lvl-ERROR { color: var(--error); }
 .m { padding: 3px 8px; border-radius: 4px; color: $text; b { font-weight: 700; } }
-.m5 { background: nth($hl, 6); } .m4 { background: nth($hl, 5); margin-left: 14px; } .m6 { background: nth($hl, 7); margin-left: 28px; }
+.m5 { background: var(--hl-5); } .m4 { background: var(--hl-4); margin-left: 14px; } .m6 { background: var(--hl-6); margin-left: 28px; }
 .handover { display: flex; align-items: center; gap: 10px; code { color: $heading; font-size: 13px; } }
 .live { display: flex; flex-direction: column; gap: 6px; font: 13px $mono; color: $heading; small { font-size: 12px; color: $dim; } .dot { margin-right: 8px; width: 10px; height: 10px; } }
 
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
 .group { background: $card; border: 1px solid $line; border-radius: 10px; padding: 20px; }
 .group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 15px; letter-spacing: 0; }
-.group .sw { width: 14px; height: 14px; border-radius: 3px; }
-@for $i from 1 through 8 { .sw-#{$i - 1} { background: nth($hl, $i); border-color: nth($hl-edge, $i); } }
+.group .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid; }
+@for $i from 0 through 7 { .sw-#{$i} { background: var(--hl-#{$i}); border-color: var(--hle-#{$i}); } }
 .group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
-.group a { color: $text; text-decoration: none; &:hover { color: $amber; text-decoration: underline; } }
+.group a { color: $text; text-decoration: none; &:hover { color: $amber-text; text-decoration: underline; } }
 
 .guide-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 24px; > div { flex: 1 1 420px; min-width: 0; } .sub { margin: 0; } }
 .starts { margin-bottom: 16px; li { display: flex; } }
-.start { width: 100%; padding: 20px; border-top: 2px solid $amber; }
-.start, .page { strong { display: block; color: $heading; font-size: 17px; } span:last-child { display: block; font-size: 14px; color: #a9afb8; } }
-.eyebrow-sm { display: block; font-size: 12px; font-weight: 600; color: $amber; letter-spacing: 0.06em; text-transform: uppercase; }
+.start { width: 100%; padding: 20px; border-top: 2px solid $amber-line; }
+.start, .page { strong { display: block; color: $heading; font-size: 17px; } span:last-child { display: block; font-size: 14px; color: var(--card-text); } }
+.eyebrow-sm { display: block; font-size: 12px; font-weight: 600; color: $amber-text; letter-spacing: 0.06em; text-transform: uppercase; }
 .pages { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
-.page { padding: 14px 16px; background: #1f2023; strong { font-size: 15px; } span:last-child { font-size: 13px; } }
+.page { padding: 14px 16px; background: var(--card-alt); strong { font-size: 15px; } span:last-child { font-size: 13px; } }
 
 .dl { padding: 32px; background: $card; border: 1px solid $line; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 32px; align-items: center; }
 .dl-text, .dl-action { flex: 1 1 300px; min-width: 0; }
@@ -148,8 +206,8 @@ a.card { display: block; text-decoration: none; color: $text; &:hover { border-c
 .os-tabs button {
   font: 600 14px Inter, sans-serif; min-height: 40px; padding: 0 16px; border-radius: 8px; cursor: pointer;
   border: 1px solid $control; background: none; color: $text;
-  &:hover { background: #2e3034; }
-  &[aria-selected="true"] { border-color: $amber; background: rgba(224, 162, 67, 0.14); color: $heading; }
+  &:hover { background: var(--hover); }
+  &[aria-selected="true"] { border-color: $amber-line; background: var(--accent-dim); color: $heading; }
 }
 .os-note { margin: 0; font-size: 14px; strong { color: $heading; } }
 

@@ -1,0 +1,41 @@
+// Clouseau's Light colors, from the app's Light theme (ClouseauLightLaf.properties), on top of
+// Just the Docs' light scheme. Amber drawn as text or a line takes the app's deeper shades so it
+// shows on white; the amber fill stays. Built as assets/css/just-the-docs-clouseau-light.css and
+// chosen by _includes/theme_init.html. Keep it in step with the theme file.
+$color-scheme: light;
+
+$body-background-color: #ffffff;
+$sidebar-color: #f7f8fa;
+$body-heading-color: #0f1216;
+$body-text-color: #1f2329;
+$link-color: #8f5600;
+$nav-child-link-color: #5c636d;
+$border-color: #e3e5ea;
+$feedback-color: #ebedf2;
+
+$base-button-color: #f7f8fa;
+$btn-primary-color: #e0a243;
+
+$code-background-color: #f7f8fa;
+$code-linenumber-color: #646b75;
+$table-background-color: #ffffff;
+
+$search-background-color: #ffffff;
+$search-foreground-color: #1f2329;
+$search-result-preview-color: #5c636d;
+
+// The guide's own touches (_sass/custom/custom.scss); the Dark values are its defaults.
+$cl-accent-line: #c47a0f;
+$cl-accent-dim: rgba(224, 162, 67, 0.18);
+$cl-accent-under: rgba(143, 86, 0, 0.35);
+$cl-card: #f7f8fa;
+$cl-card-hover: #ebedf2;
+$cl-line: #e3e5ea;
+$cl-heading: #0f1216;
+$cl-dim: #5c636d;
+$cl-card-text: #4a515b;
+$cl-kbd-border: #c9ccd3;
+$cl-kbd-fill: #ffffff;
+$cl-code: #8f5600;
+$cl-hover: #ebedf2;
+$cl-shot-shadow: 0 12px 32px rgba(16, 24, 40, 0.14);

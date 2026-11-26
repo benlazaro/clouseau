@@ -2,13 +2,29 @@
 // fonts, and screenshots, keys and tables that look like the app. The home page has its own
 // layout and styles (_layouts/home.html, assets/css/home.scss).
 
-$amber: #e0a243;
-$amber-dim: rgba(224, 162, 67, 0.14);
-$card: #232427;
-$card-hover: #2a2c30;
-$line: #34363b;
-$heading: #e6ebf2;
-$dim: #8b919b;
+// Colors: the Dark values here, and the Light ones set first by clouseau-light.scss.
+$cl-accent-line: #e0a243 !default;                 // amber drawn as a line or as text
+$cl-accent-dim: rgba(224, 162, 67, 0.14) !default;
+$cl-accent-under: rgba(224, 162, 67, 0.35) !default;
+$cl-card: #232427 !default;
+$cl-card-hover: #2a2c30 !default;
+$cl-line: #34363b !default;
+$cl-heading: #e6ebf2 !default;
+$cl-dim: #8b919b !default;
+$cl-card-text: #a9afb8 !default;
+$cl-kbd-border: #45484e !default;
+$cl-kbd-fill: #232427 !default;
+$cl-code: #e6c38a !default;
+$cl-hover: #232427 !default;
+$cl-shot-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3) !default;
+
+$amber: #e0a243;                                   // the fill: the default button
+$amber-dim: $cl-accent-dim;
+$card: $cl-card;
+$card-hover: $cl-card-hover;
+$line: $cl-line;
+$heading: $cl-heading;
+$dim: $cl-dim;
 
 body {
   font-feature-settings: "cv11", "ss01";   // Inter's straight-sided figures, as in the app
@@ -43,14 +59,14 @@ body {
   margin: 1px 0.5rem;
   padding-left: 0.75rem;
 
-  &:hover { background-color: #232427; background-image: none; }
+  &:hover { background-color: $cl-hover; background-image: none; }
 
   &.active {
     color: $heading;
     font-weight: 600;
     background-color: $amber-dim;
     background-image: none;
-    box-shadow: inset 3px 0 0 $amber;
+    box-shadow: inset 3px 0 0 $cl-accent-line;
   }
 }
 
@@ -66,7 +82,7 @@ body {
   h1:first-of-type {
     font-weight: 700;
     padding-bottom: 0.6rem;
-    border-bottom: 2px solid $amber;
+    border-bottom: 2px solid $cl-accent-line;
     display: inline-block;
   }
 
@@ -77,9 +93,9 @@ body {
   }
 
   a {
-    text-decoration-color: rgba(224, 162, 67, 0.35);
+    text-decoration-color: $cl-accent-under;
     text-underline-offset: 3px;
-    &:hover { text-decoration-color: $amber; }
+    &:hover { text-decoration-color: $cl-accent-line; }
   }
 
   strong { color: $heading; }
@@ -90,7 +106,7 @@ body {
   p > img, figure > img, a > img:not([src*="shields.io"]):not([src*="badge"]) {
     border: 1px solid $line;
     border-radius: 10px;
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: $cl-shot-shadow;
   }
   p > img[src*="shields.io"], p > img[src*="badge"], a > img[src*="shields.io"], a > img[src*="badge"] {
     border: 0; box-shadow: none; border-radius: 0;
@@ -104,18 +120,18 @@ body {
     font-family: $mono-font-family;
     font-size: 0.8em;
     padding: 0.1em 0.45em;
-    border: 1px solid #45484e;
+    border: 1px solid $cl-kbd-border;
     border-bottom-width: 2px;
     border-radius: 5px;
-    background: $card;
+    background: $cl-kbd-fill;
     color: $heading;
   }
 
   code { border-radius: 5px; border-color: $line; }
-  :not(pre) > code { color: #e6c38a; }
+  :not(pre) > code { color: $cl-code; }
 
   blockquote {
-    border-left: 3px solid $amber;
+    border-left: 3px solid $cl-accent-line;
     background: $amber-dim;
     border-radius: 0 8px 8px 0;
     padding: 0.75rem 1rem;
@@ -133,7 +149,7 @@ body {
     font-size: 0.92em;
     ul { margin-top: 0.15rem; }
     li { margin: 0.15rem 0; }
-    a { color: $body-text-color; text-decoration: none; &:hover { color: $amber; } }
+    a { color: $body-text-color; text-decoration: none; &:hover { color: $link-color; } }
   }
 
   .table-wrapper {
@@ -171,7 +187,7 @@ body {
     border: 1px solid $line;
     border-radius: 10px;
     transition: border-color 0.15s, background-color 0.15s;
-    &:hover { border-color: rgba(224, 162, 67, 0.55); background: $card-hover; }
+    &:hover { border-color: $cl-accent-line; background: $card-hover; }
   }
   td { display: block; border: 0; padding: 0; background: none; min-width: 0; }
   td:first-child {
@@ -181,5 +197,27 @@ body {
     // The whole card follows its link.
     a { color: $heading; text-decoration: none; &::after { content: ""; position: absolute; inset: 0; } }
   }
-  td:last-child { color: #a9afb8; font-size: 0.9em; }
+  td:last-child { color: $cl-card-text; font-size: 0.9em; }
 }
+
+// ── The theme switch (_includes/theme_toggle.html), after Download and GitHub ──
+
+.main-header .aux-nav { margin-left: auto; }
+.theme-toggle {
+  order: 3;
+  align-self: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-right: 1rem;
+  border-radius: 8px;
+  border: 1px solid $border-color;
+  background: none;
+  color: $body-text-color;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  &:hover { background: $cl-hover; color: $cl-heading; }
+}
+[data-theme="light"] .theme-toggle .i-sun, [data-theme="dark"] .theme-toggle .i-moon { display: none; }
