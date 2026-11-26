@@ -49,7 +49,8 @@ renders a virtual table of millions of rows without trouble, and works the same 
 macOS and Linux. Each zip bundles its own Java runtime, so there's nothing to install.
 Parsers, formatters and live sources are plugins (PF4J), with the API published on Maven
 Central. The app finds plugins on Maven Central or your company's Nexus, and tells you when
-one you have has an update.
+one you have has an update. A headless `--check-plugin` runs a plugin against a sample log
+before you ship it.
 
 The builds aren't signed with a paid certificate yet, so Windows and macOS warn you the
 first time. The install guide shows how to get past that:
@@ -107,7 +108,10 @@ https://benlazaro.github.io/clouseau/
   its own version, and CI runs japicmp against the last release, so a plugin built for an
   older API keeps loading. The Plugin Manager lists the plugins on Maven Central or a Nexus
   (named `<name>-clouseau-plugin`) and checks once a day for updates, which you install
-  yourself.
+  yourself. `--check-plugin your.jar sample.log` loads a plugin headless and runs it on a
+  sample: a parser that isn't thread-safe, or that shifts times that carry an offset, fails
+  the check. There's also an `llms.txt` with the whole contract, if you'd rather have an
+  assistant write the plugin.
 - UI: Swing with FlatLaf, MigLayout and RSyntaxTextArea; Inter and JetBrains Mono are
   bundled. Built with Gradle on Java 21, packaged with jlink.
 
