@@ -13,6 +13,8 @@ class PluginManagerDialogTest {
     @Test
     void aPluginWithAnUpdateHasAGreenArrowLeftOfTheTrashCan(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
             throws Exception {
+        // It opens the dialog, which a headless JVM (CI) can't.
+        org.junit.jupiter.api.Assumptions.assumeFalse(java.awt.GraphicsEnvironment.isHeadless(), "needs a display");
         java.nio.file.Path plugins = java.nio.file.Files.createDirectories(dir.resolve("plugins"));
         java.nio.file.Path jar = java.nio.file.Path.of(System.getProperty("clouseau.examplePlugin.jar"));
         java.nio.file.Path installed = java.nio.file.Files.copy(jar, plugins.resolve(jar.getFileName()));
