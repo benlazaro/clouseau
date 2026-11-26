@@ -162,7 +162,7 @@ syntax highlighters and [live sources](following.md#source-plugins).
   every plugin on Clouseau's plugin list, at its latest version; for a Nexus, every
   artifact named like a plugin (`<name>-clouseau-plugin`). Hover over a plugin to see its
   coordinates and description, and select it to read the description under the table.
-  **Adds** says what it brings (parser, source, and so on).
+  **Adds** says what it brings (parser, source, and so on), and **Latest** its newest version.
   - Browse opens on the repository you used last. Until you choose one, it opens on the
     Nexus repository you added last, if you have one. A repository you add is selected
     so you can search it right away.
@@ -180,8 +180,9 @@ syntax highlighters and [live sources](following.md#source-plugins).
     `<name>-clouseau-plugin` or `clouseau-<name>-plugin`), not other libraries that match. On Maven Central, `g:` and `a:` search
     the group or the artifact name only (`a:logfmt-clouseau-plugin`); on Nexus, any part of
     the group or artifact name works: `fmt` finds `logfmt-clouseau-plugin` (some servers
-    allow only the start of a name: `logfmt`). A Nexus search lists every version of each
-    plugin it finds; Maven Central shows the latest. Clear the field to go back to the plugins.
+    allow only the start of a name: `logfmt`). The column then says **Version**: a Nexus
+    search lists every version of each plugin it finds, one per row, so you can pick an older
+    one; Maven Central shows the latest. Clear the field to go back to the plugins.
   - Click a column's header to sort by it, again to reverse it, and a third time to go back
     to the repository's order; Clouseau keeps the sort. Drag a column's edge to make it
     wider; Clouseau keeps the widths too.

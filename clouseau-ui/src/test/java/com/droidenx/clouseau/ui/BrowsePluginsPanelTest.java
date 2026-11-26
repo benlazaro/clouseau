@@ -15,6 +15,29 @@ class BrowsePluginsPanelTest {
         return list;
     }
 
+    private static PluginRepository.Asset version(String artifact, String version) {
+        return new PluginRepository.Asset("com.acme", artifact, version, "u", -1, null);
+    }
+
+    @Test
+    void aSearchCountsPluginsAndSaysWhenItListsSeveralVersionsOfOne() {
+        assertThat(BrowsePluginsPanel.foundText(List.of(version("a-clouseau-plugin", "1.0"))))
+                .startsWith("1 plugin found in the whole repository.");
+        assertThat(BrowsePluginsPanel.foundText(List.of(version("a-clouseau-plugin", "1.0"), version("b-clouseau-plugin", "2.0"))))
+                .startsWith("2 plugins found in the whole repository.");
+        assertThat(BrowsePluginsPanel.foundText(List.of(version("a-clouseau-plugin", "1.0"), version("a-clouseau-plugin", "1.1"),
+                version("b-clouseau-plugin", "2.0"))))
+                .startsWith("3 versions of 2 plugins found in the whole repository.");
+    }
+
+    @Test
+    void theListSaysItShowsTheLatestVersions() {
+        assertThat(java.text.MessageFormat.format(Messages.get("plugins.download.listed"), 1))
+                .startsWith("1 plugin available, showing its latest version. Type to filter");
+        assertThat(java.text.MessageFormat.format(Messages.get("plugins.download.listed"), 3))
+                .startsWith("3 plugins available, showing the latest version of each. Type to filter");
+    }
+
     @Test
     void semanticVersionsSortByTheirNumbers() {
         assertThat(sorted("1.10.0", "1.9.0", "1.2", "0.3.0"))

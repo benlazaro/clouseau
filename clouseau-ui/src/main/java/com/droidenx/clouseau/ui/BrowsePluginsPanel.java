@@ -484,6 +484,11 @@ final class BrowsePluginsPanel extends JPanel {
     private void showRows(List<PluginRepository.Asset> rows, boolean list) {
         showingList = list;
         tableModel.setResults(rows);
+        // The list has each plugin's latest version, a search every version (on Nexus): the
+        // header says which, so more rows for one plugin after a search don't look like a bug.
+        table.getColumnModel().getColumn(ResultsModel.COL_VERSION).setHeaderValue(
+                Messages.get(list ? "plugins.download.col.latest" : "plugins.download.col.version"));
+        table.getTableHeader().repaint();
         if (list) applyFilter();
         else sorter.setRowFilter(null);
         selectionChanged();
@@ -514,9 +519,20 @@ final class BrowsePluginsPanel extends JPanel {
             if (authWarning) status.setToolTipText(
                     Messages.get("plugins.download.search.no.results.auth.hint").replace("\n", " "));
         } else {
-            say(MessageFormat.format(Messages.get("plugins.download.found"), tableModel.getRowCount()), false);
+            say(foundText(tableModel.rows), false);
             status.setToolTipText(null);
         }
+    }
+
+    /**
+     * What a search found: "3 plugins found…", or "12 versions of 3 plugins found…" when a
+     * search lists several versions of one plugin (a Nexus search lists every version).
+     */
+    static String foundText(List<PluginRepository.Asset> rows) {
+        long plugins = rows.stream().map(a -> a.groupId() + ":" + a.artifactId()).distinct().count();
+        return rows.size() > plugins
+                ? MessageFormat.format(Messages.get("plugins.download.found.versions"), rows.size(), plugins)
+                : MessageFormat.format(Messages.get("plugins.download.found"), plugins);
     }
 
     /** Stops the running list or search; its results, if they still come, are dropped. */
