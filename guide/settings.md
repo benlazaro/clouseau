@@ -101,8 +101,8 @@ stays open, and each time you open the Plugin Manager. When one has a newer vers
   versions again, only about newer ones.
 - **Tools → Plugins…** says how many updates there are, and so does the Plugin Manager's
   **Installed** tab.
-- In **Installed**, the plugin's row shows the new version after its own (*1.0.0 → 1.1.0*)
-  and a green arrow on the right, beside where the trash can appears. Click the arrow, or
+- In **Installed**, the plugin's row shows the new version and a green arrow on the right,
+  beside where the trash can appears. Click the arrow, or
   select the plugin and click **Update to …** in its details. The new version replaces the
   old one, and a note over the list says which plugin was updated and from which version to
   which.

@@ -33,9 +33,15 @@ class PluginManagerDialogTest {
             var tooltip = new java.util.concurrent.atomic.AtomicReference<String>();
             var arrow = new java.util.concurrent.atomic.AtomicReference<java.awt.Rectangle>();
             javax.swing.SwingUtilities.invokeAndWait(() -> {
+                // Without an update the row still has its two lines (the hidden version once took
+                // the layout's wrap with it, putting the description on the name's line).
+                dialog.get().pack();
+                int withoutUpdate = rowHeight(list(dialog.get()));
+
                 updates.set(java.util.List.of(new PluginUpdates.Update(asset, "1.0.0", installed, "Test")));
                 dialog.get().pack();
                 javax.swing.JList<?> list = list(dialog.get());
+                assertThat(withoutUpdate).as("a row is as tall with or without an update").isEqualTo(rowHeight(list));
                 assertThat(list.getModel().getSize()).isEqualTo(1);
                 java.awt.Rectangle row = list.getCellBounds(0, 0);
                 arrow.set(new java.awt.Rectangle(list.getWidth() - PluginManagerDialog.TRASH - PluginManagerDialog.UPDATE,
@@ -57,6 +63,14 @@ class PluginManagerDialogTest {
             javax.swing.SwingUtilities.invokeAndWait(() -> dialog.get().dispose());
             pluginManager.stopAll();
         }
+    }
+
+    /** The first row's height as its renderer lays it out now (the list caches heights). */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static int rowHeight(javax.swing.JList list) {
+        java.awt.Component c = list.getCellRenderer().getListCellRendererComponent(
+                list, list.getModel().getElementAt(0), 0, false, false);
+        return c.getPreferredSize().height;
     }
 
     private static javax.swing.JList<?> list(PluginManagerDialog dialog) {

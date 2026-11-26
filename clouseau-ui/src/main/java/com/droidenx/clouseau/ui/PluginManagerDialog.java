@@ -559,8 +559,8 @@ public final class PluginManagerDialog extends JDialog {
     /**
      * A plugin's row: the on/off box (or a Failed mark), its name in bold with the version
      * dimmed after it, and what it adds on the right; its description (or why it failed) below.
-     * A plugin that's off reads dimmed. One with a newer version says so after its version
-     * ("→ 1.1.0", in green); the list paints its update arrow at the right, left of the trash can.
+     * A plugin that's off reads dimmed. One with a newer version shows it at the right, in green
+     * and centered on the row, just before the update arrow the list paints left of the trash can.
      */
     private static final class PluginRenderer extends ListRowPanel implements ListCellRenderer<PluginInfo> {
         private final java.util.function.Function<PluginInfo, PluginUpdates.Update> updateOf;
@@ -576,7 +576,7 @@ public final class PluginManagerDialog extends JDialog {
             // 12px on the left: 8px inside the selection, which is inset 4px (List.selectionInsets).
             // On the right, room for the update arrow and the trash can, which the list paints.
             super(new MigLayout("insets 7 12 7 " + (TRASH + UPDATE) + ", gapx 8, gapy 2, hidemode 3",
-                    "[" + (BOX - 16) + "!][][][grow][]", "[][]"));
+                    "[" + (BOX - 16) + "!][][grow][][]", "[][]"));
             this.updateOf = updateOf;
             box.setOpaque(false);
             box.setContentAreaFilled(false);
@@ -585,10 +585,12 @@ public final class PluginManagerDialog extends JDialog {
             add(box, "spany 2, aligny top, gaptop 1");
             add(failedMark, "spany 2, aligny top, gaptop 1, w 16!");
             add(name);
-            add(version);
-            add(update, "growx");
+            add(version, "growx");   // the cell that stretches, keeping what it adds on the right
             add(types, "wrap");
-            add(description, "span 4, growx, wmin 0");
+            add(description, "span 3, growx, wmin 0");
+            // The new version, across both lines like the arrow and the trash can beside it. In a
+            // cell of its own, not the flow: hidden (no update), it would take the flow's wrap with it.
+            add(update, "cell 4 0 1 2, aligny center");
         }
 
         @Override
@@ -609,10 +611,12 @@ public final class PluginManagerDialog extends JDialog {
             version.setText(p.version());
             version.setForeground(dim);
             PluginUpdates.Update u = updateOf.apply(p);
-            // Always there, empty when there's no update: it's the cell that stretches, which keeps
-            // what the plugin adds (or Failed) on the right.
-            update.setText(u != null ? java.text.MessageFormat.format(Messages.get("plugins.row.update.mark"), u.latest().version()) : "");
-            if (u != null) update.setForeground(selected ? list.getSelectionForeground() : ClouseauColors.statusOk());
+            // Green on a selected row too, as the arrow is: it reads on the neutral selection of both themes.
+            update.setVisible(u != null);
+            if (u != null) {
+                update.setText(u.latest().version());
+                update.setForeground(ClouseauColors.statusOk());
+            }
             if (p.failed()) {
                 types.setText(Messages.get("plugins.state.failed"));
                 types.setForeground(error);

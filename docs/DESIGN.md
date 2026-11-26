@@ -2943,9 +2943,9 @@ UC-18 tells the user about a new Clouseau; plugins get the same, through the sam
   kept in memory: a restart checks again, which costs one request per installed plugin), and
   whenever the Plugin Manager opens. Development builds check too, unlike Clouseau's own
   check, because a plugin's versions don't depend on the build. Off with UC-18's setting.
-- **How it shows, quiet to loud.** The row in Installed: the new version after the installed
-  one, in green (`Clouseau.status.ok`), and a green update arrow left of the trash can's spot,
-  drawn on every row with an update, not only under the mouse, and clicking it updates the
+- **How it shows, quiet to loud.** The row in Installed: the new version and a green update
+  arrow (`Clouseau.status.ok`, on a selected row too) left of the trash can's spot, centered on
+  the row as the trash can is, drawn on every row with an update, not only under the mouse; clicking the arrow updates the
   plugin as **Update to …** in its details does (one update at a time); a count on Tools → Plugins… and on the Installed tab; and one
   notice for all plugins at once, shown only when a version is newer than the one the last
   notice named (`plugins.update.notified`), so Later means "until there's something new".
