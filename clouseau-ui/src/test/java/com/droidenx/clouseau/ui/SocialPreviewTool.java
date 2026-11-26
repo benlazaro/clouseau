@@ -16,8 +16,8 @@ import java.io.InputStream;
  * Not part of the app. Run it with {@code ./gradlew :clouseau-ui:socialPreview}; it draws
  * off-screen, so it doesn't need the screen to itself.
  *
- * <p>Arguments: the screenshot to show ({@code docs/screenshots/main-view.png}) and the PNG to
- * write ({@code docs/social-preview.png}). The icon and the Inter fonts come from the
+ * <p>Arguments: the screenshot to show ({@code site/screenshots/main-view.png}) and the PNG to
+ * write ({@code site/assets/images/social-preview.png}). The icon and the Inter fonts come from the
  * classpath, as the app loads them. Upload the result in the repository's Settings → General
  * → Social preview.
  */

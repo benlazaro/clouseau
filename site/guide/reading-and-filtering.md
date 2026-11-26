@@ -10,7 +10,7 @@ nav_order: 2
 1. TOC
 {:toc}
 
-![Main view](../docs/screenshots/main-view.png)
+![Main view](../screenshots/main-view.png)
 
 ## The table
 
@@ -216,7 +216,7 @@ fold and unfold), `Space` ticks or unticks the row you're on, and `Esc` closes t
     so `id = 10\b` matches `id = 10` but not `id = 100`. Characters such as `(`, `[`, `.`
     and `*` have special meanings; put a `\` before one to match it as it is.
 
-![Logger filter](../docs/screenshots/logger-filter.png)
+![Logger filter](../screenshots/logger-filter.png)
 
 Level, logger, field and time filters take milliseconds even on a million lines. A text
 filter reads the text of the remaining rows in the background, and you can keep working.

@@ -157,7 +157,7 @@ ending in `Z`) whenever the source timezone wasn't the system's.
   `ClouseauPluginManagerTest` loads the example plugin built against the released API and
   parses lines with it, and `PluginCheckCommandTest` runs `--check-plugin` (D-35) on it.
 - The contract a plugin author (or a coding assistant) needs is written three times, kept
-  in step: the API's Javadoc, `guide/developers.md`, and `llms.txt` at the repository root,
+  in step: the API's Javadoc, `site/guide/developers.md`, and `site/llms.txt`,
   one plain page served at the site's root. An API change updates all three. The example
   plugin's folder builds on its own (its own `settings.gradle.kts`, repositories and
   versions), so it can be copied out as a template.

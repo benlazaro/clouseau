@@ -37,7 +37,7 @@ Each file opens in its own tab. Opening a file that's already open switches to i
 
 **File → Open File…** (`Ctrl+O`) opens it.
 
-![Open file dialog](../docs/screenshots/open-dialog.png)
+![Open file dialog](../screenshots/open-dialog.png)
 
 - **Favorites** on the left, each with its full path under its name: click one to go there.
   The ★ in the toolbar, after New Folder, adds the folder you're in; it's filled when that
@@ -91,7 +91,7 @@ loaded (low memory)". See [Memory](settings.md#memory) to raise the limit.
 
 ## Files no parser recognizes
 
-![A file shown as plain text](../docs/screenshots/plain-text.png)
+![A file shown as plain text](../screenshots/plain-text.png)
 
 If no parser recognizes the first 50 lines of a file, it opens anyway, as read-only plain
 text: every line with its line number, Find (`Ctrl+F`), copy, new lines as the file grows, and **Follow** to keep the last line in view (as in [Following live logs](following.md)).

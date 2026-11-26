@@ -15,7 +15,7 @@ Open logs of any size, merge the logs of several services into one timeline, fil
 
 **[⬇ Download](#download)** · **[User Guide](https://benlazaro.github.io/clouseau/guide/)** · **[For developers](https://benlazaro.github.io/clouseau/guide/developers.html)**
 
-![Main view](docs/screenshots/main-view.png)
+![Main view](site/screenshots/main-view.png)
 
 *Level colors, row highlights with the bar for jumping between them, and the detail panel pretty-printing a JSON payload.*
 
@@ -30,11 +30,11 @@ Open logs of any size, merge the logs of several services into one timeline, fil
 
 ## Screenshots
 
-![Merged view](docs/screenshots/merged-view.png)
+![Merged view](site/screenshots/merged-view.png)
 
 *Three services' logs, in two formats, interleaved into one timeline. The **Source** column shows which file each line came from.*
 
-![Main view in the Light theme](docs/screenshots/main-view-light.png)
+![Main view in the Light theme](site/screenshots/main-view-light.png)
 
 *The Light theme. Switch any time with **View → Theme**.*
 

@@ -43,11 +43,11 @@ To retake this guide's screenshots after a UI change, close any running Clouseau
 `./gradlew :clouseau-ui:screenshots`. It opens each scene from the logs in `samples/` (with
 its own empty data folder, so your settings aren't touched), saves them to
 `build/screenshots/`, and takes over the screen for about a minute. Check them, then copy
-them into `docs/screenshots/`.
+them into `site/screenshots/`.
 
 The repository's social preview (the picture shown when the repo is linked) is drawn from
 the main view screenshot: run `./gradlew :clouseau-ui:socialPreview` to redraw
-`docs/social-preview.png`, then upload it under the repository's **Settings → General →
+`site/assets/images/social-preview.png`, then upload it under the repository's **Settings → General →
 Social preview**. It draws off-screen, so it doesn't need the screen to itself.
 
 To check how Clouseau copes with big logs, run `./gradlew :clouseau-ui:bigLogs`. In about

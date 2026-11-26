@@ -102,7 +102,7 @@ and a trash can (`Delete`) that removes one of yours, and right-clicking a row o
 Duplicate, Move Up, Move Down and Delete. Built-in parsers can't be changed: duplicate one to
 make your own from it.
 
-![Parser editor](../docs/screenshots/parser-editor.png)
+![Parser editor](../screenshots/parser-editor.png)
 
 Each parser has a **Name**, which no other parser may use. **Write it as** picks how you
 describe the line:

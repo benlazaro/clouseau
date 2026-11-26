@@ -1,7 +1,7 @@
 # Launch posts for 1.0.0-rc.2
 
 Drafts. Post once the rc.2 release is up with all three zips. Attach or link
-`docs/screenshots/main-view.png` (and `merged-view.png` where images are allowed).
+`site/screenshots/main-view.png` (and `merged-view.png` where images are allowed).
 
 Release link: https://github.com/benlazaro/clouseau/releases/tag/v1.0.0-rc.2
 

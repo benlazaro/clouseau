@@ -23,29 +23,30 @@ DESIGN.md. Fixing a gap removes or narrows its G-entry. Do this in the same comm
 as the code.
 
 **Keep the GitHub Pages site current too.** The site (https://benlazaro.github.io/clouseau/)
-is built by GitHub Pages (Jekyll, Just the Docs theme, from the root of `main`) on every
-push to `main`; `_config.yml` sets it up. Its home page is `README.md` and its user guide is
-`guide/*.md`, one page per topic (`guide/developers.md` is for plugin authors and
-contributors). Everything else, including `docs/*.md` and this file, is excluded from the
-site. A new feature, or a change to how one works, updates the guide page that covers it
-(and the README's Features list if it's a headline feature) in the same commit, written
-for users rather than developers. Screenshots live in `docs/screenshots/`; guide pages link
-them as `../docs/screenshots/<name>.png` so they work on the site and on GitHub. Help →
-Documentation opens the guide. The site's look follows the app, in Dark and Light:
-`_sass/color_schemes/clouseau.scss` and `clouseau-light.scss` (the themes' grays and amber; change
-them with the theme files), `_sass/custom/` (Inter and JetBrains Mono, cards, screenshots, with
-its Light values in `clouseau-light.scss`), and the home page's variables at the top of
-`assets/css/home.scss`. The site follows the visitor's system until they switch away from its theme, and again once they switch back
-(`_includes/theme_init.html`, `theme_toggle.html`). The home page is `index.html` with its own layout,
-`_layouts/home.html` (styles `assets/css/home.scss`, script `assets/js/home.js`), not the README:
+is everything in `site/`, built with Jekyll (Just the Docs theme) and published by the Pages
+workflow (`.github/workflows/pages.yml`) on every push to `main`; `site/_config.yml` sets it up.
+Its user guide is `site/guide/*.md`, one page per topic (`developers.md` is for plugin authors and
+contributors). Nothing outside `site/` is published: `README.md` is the repository's page on
+GitHub, and `docs/` and this file are for developers. A new feature, or a change to how one works,
+updates the guide page that covers it (and the README's Features list if it's a headline feature)
+in the same commit, written for users rather than developers. Screenshots live in
+`site/screenshots/`; guide pages link them as `../screenshots/<name>.png` so they work on the site
+and on GitHub. Help → Documentation opens the guide. The site's look follows the app, in Dark and
+Light: `site/_sass/color_schemes/clouseau.scss` and `clouseau-light.scss` (the themes' grays and
+amber; change them with the theme files), `site/_sass/custom/` (Inter and JetBrains Mono, cards,
+screenshots, with its Light values in `clouseau-light.scss`), and the home page's variables at the
+top of `site/assets/css/home.scss`. The site follows the visitor's system until they switch away
+from its theme, and again once they switch back (`site/_includes/theme_init.html`,
+`theme_toggle.html`). The home page is `site/index.html` with its own layout,
+`site/_layouts/home.html` (styles `assets/css/home.scss`, script `assets/js/home.js`), not the README:
 its tagline, "Why Clouseau", feature groups and Download notes follow the README's and the
 Installing page's, so a change to those updates the home page in the same commit, and a new
 guide page gets a card in its "Learn Clouseau" section.
 
-**Keep `llms.txt` current.** At the repository root, served at the site's root, it is the plugin
+**Keep `llms.txt` current.** In `site/`, served at the site's root, it is the plugin
 contract on one page for coding assistants: the build file, each extension point and its rules,
 and `--check-plugin`. A change to the plugin API, its rules (threads, failures, timezones), the
-example plugin's build or the check updates it, `guide/developers.md` and the Javadoc together.
+example plugin's build or the check updates it, `site/guide/developers.md` and the Javadoc together.
 
 ## Modules
 

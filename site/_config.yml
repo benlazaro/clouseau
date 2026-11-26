@@ -1,7 +1,8 @@
 # GitHub Pages site: https://benlazaro.github.io/clouseau/
-# Built by GitHub Pages (Jekyll) from the root of main. The home page is index.html (its
-# layout is _layouts/home.html) and the user guide is guide/*.md; everything else in the
-# repository is excluded below. README.md is the repository's page on GitHub, not the site's.
+# Everything the site publishes is in this folder, site/. The Pages workflow
+# (.github/workflows/pages.yml) builds it with Jekyll on every push to main. The home page is
+# index.html (its layout is _layouts/home.html), the user guide is guide/*.md, and the
+# screenshots are in screenshots/. README.md, at the repository's root, is its page on GitHub.
 
 title: Clouseau Log Viewer
 description: A modern, pluggable desktop log viewer for software engineers.
@@ -38,31 +39,10 @@ gh_edit_link: true
 gh_edit_link_text: "Edit this page on GitHub"
 gh_edit_repository: "https://github.com/benlazaro/clouseau"
 gh_edit_branch: "main"
+gh_edit_source: site
 gh_edit_view_mode: "tree"
 
-# Only the home page and the user guide are published. The README and developer documents
-# (docs/*.md, CLAUDE.md, CONTRIBUTING.md) stay readable on GitHub but aren't part of the site.
 exclude:
-  - README.md
-  - CLAUDE.md
-  - CONTRIBUTING.md
-  - "docs/*.md"          # design notes, the road to 1.0, launch drafts: never on the site
-  - docs/releases/
-  - plugins.json
-  - build/
-  - gradle/
-  - packaging/
-  - samples/
-  - data/
-  - clouseau-api/
-  - clouseau-core/
-  - clouseau-plugin/
-  - clouseau-ui/
-  - clouseau-example-plugin/
-  - gradlew
-  - gradlew.bat
-  - "*.gradle.kts"
-  - gradle.properties
   - Gemfile
   - Gemfile.lock
   - vendor/

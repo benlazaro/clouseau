@@ -14,7 +14,7 @@ request or incident across the logs of several services or servers.
 1. TOC
 {:toc}
 
-![Merged view of three services](../docs/screenshots/merged-view.png)
+![Merged view of three services](../screenshots/merged-view.png)
 
 ## Opening a merged view
 

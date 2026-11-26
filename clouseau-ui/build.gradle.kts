@@ -499,7 +499,7 @@ tasks.test {
 }
 
 
-// Dev-only: recreates the user guide's screenshots (docs/screenshots) into build/screenshots,
+// Dev-only: recreates the user guide's screenshots (site/screenshots) into build/screenshots,
 // with a throwaway data folder. The logs (samples/sample.log as app.log, and samples/screens)
 // are copied to build/screens first, so the status bar shows a neutral path. Takes over the
 // screen while it runs; close any running Clouseau first. The tool lives in the test sources
@@ -524,16 +524,16 @@ tasks.register<JavaExec>("screenshots") {
     }
 }
 
-// Dev-only: draws the repository's social preview (docs/social-preview.png, 1280x640) from the
+// Dev-only: draws the repository's social preview (site/assets/images/social-preview.png, 1280x640) from the
 // main view screenshot, off-screen. Upload it in the repo's Settings → General → Social preview.
 tasks.register<JavaExec>("socialPreview") {
     group = "documentation"
-    description = "Draws docs/social-preview.png from docs/screenshots/main-view.png."
-    val docsDir = rootProject.layout.projectDirectory.dir("docs").asFile
+    description = "Draws site/assets/images/social-preview.png from site/screenshots/main-view.png."
+    val siteDir = rootProject.layout.projectDirectory.dir("site").asFile
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("com.droidenx.clouseau.ui.SocialPreviewTool")
-    args(docsDir.resolve("screenshots/main-view.png").absolutePath,
-            docsDir.resolve("social-preview.png").absolutePath)
+    args(siteDir.resolve("screenshots/main-view.png").absolutePath,
+            siteDir.resolve("assets/images/social-preview.png").absolutePath)
     jvmArgs("-Djava.awt.headless=true")
 }
 
