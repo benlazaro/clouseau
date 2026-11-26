@@ -33,6 +33,11 @@ for users rather than developers. Screenshots live in `docs/screenshots/`; guide
 them as `../docs/screenshots/<name>.png` so they work on the site and on GitHub. Help →
 Documentation opens the guide.
 
+**Keep `llms.txt` current.** At the repository root, served at the site's root, it is the plugin
+contract on one page for coding assistants: the build file, each extension point and its rules,
+and `--check-plugin`. A change to the plugin API, its rules (threads, failures, timezones), the
+example plugin's build or the check updates it, `guide/developers.md` and the Javadoc together.
+
 ## Modules
 
 ```
@@ -49,7 +54,7 @@ clouseau-core     ← UI-independent engine: RegexLogParser, LineParser, LogRead
                     ToStringFormatter, ToStringHighlighter, Folds, TextMatches, CompactTime,
                     SourceRefs, JetBrainsIde, JetBrainsProjects, SourceFolders, Foreground,
                     HighlightRule, HighlightRules, HighlightRuleStore, JsonLinesParser, SyslogParser,
-                    NetworkLogSource, PluginCatalog
+                    NetworkLogSource, PluginCatalog, PluginCheck
 clouseau-plugin   ← ClouseauPluginManager (PF4J wrapper); Java package ...clouseau.runtime
 clouseau-ui       ← the Swing application
 clouseau-example-plugin ← example third-party plugin (logfmt LogParser, demo LogSourceProvider); not shipped
@@ -191,6 +196,10 @@ release only.
   `<name>-clouseau-plugin` (`clouseau-<name>-plugin` is the project's own); Nexus lists them by name, Maven
   Central from `plugins.json` at the repository root (entries added by pull request), each at the version
   in its `maven-metadata.xml`. `-Dclouseau.pluginCatalog=<file or URL>` reads another list.
+- `PluginCheck` (core), `PluginCheckCommand` (ui) — D-35: `--check-plugin <jar> [<sample.log>]`, handled first in
+  `ClouseauApp.main`, headless: loads the JAR through `ClouseauPluginManager` from a folder of its own and reports
+  on its manifest and each extension run on the sample (`OK`/`WARN`/`FAIL`/`NOTE`, exit code 1 on a failure).
+  Add a check when the API gains a rule a plugin can break without noticing.
 - `PluginUpdates` (ui) — D-33: which installed plugins have a newer version, from the repository Browse
   installed each from (`plugins.origins` in the settings). Checked at startup, daily (`UpdateNotifier`) and when
   the Plugin Manager opens; shown on Installed rows, on Tools → Plugins… and in one notice. Never applied by itself.

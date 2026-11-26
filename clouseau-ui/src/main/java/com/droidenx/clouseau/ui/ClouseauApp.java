@@ -9,7 +9,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LoggerContext;
 
 import javax.swing.*;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -18,6 +22,15 @@ import java.util.List;
 public final class ClouseauApp {
 
     public static void main(String[] args) {
+        // D-35: check a plugin and exit, with no window, before the single-instance check, so it
+        // also runs while Clouseau is open.
+        if (PluginCheckCommand.handles(args)) {
+            System.setProperty("java.awt.headless", "true");
+            configureLogging();
+            PrintStream out = new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8);
+            System.exit(PluginCheckCommand.run(args, out));
+        }
+
         // Configure Log4j2 from <data dir>/log4j2.xml (the bundled copy is named default-log4j2.xml
         // so Log4j2 does not auto-load it and create a log file before the data dir is known)
         configureLogging();

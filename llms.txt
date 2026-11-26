@@ -1,0 +1,252 @@
+# Clouseau plugin API
+
+> Clouseau is a desktop log viewer (Java 21, Swing). Plugins add log parsers, message formatters,
+> syntax highlighters and live log sources. This page has everything needed to write one: the
+> build file, the four extension points and their rules, and the command that checks a plugin
+> without opening the app. It covers plugin API 0.3.0 (`com.droidenx.clouseau:clouseau-api` on
+> Maven Central).
+
+Source: https://github.com/benlazaro/clouseau. The API's Javadoc: https://javadoc.io/doc/com.droidenx.clouseau/clouseau-api.
+A complete example plugin (a logfmt parser and a demo live source, with tests):
+https://github.com/benlazaro/clouseau/tree/main/clouseau-example-plugin. Its folder builds on its
+own when copied.
+
+Before writing a parser, check that you need one: a format a regular expression can describe
+needs no plugin. The user creates it in Clouseau's parser editor (Tools > Parser Editor...). Plugins are
+for formats a regex can't express, and for formatters, highlighters and sources.
+
+## Build
+
+A Gradle project (Gradle 8, run on JDK 17 or 21). `settings.gradle.kts`:
+
+```kotlin
+rootProject.name = "acme-clouseau-plugin"
+```
+
+`build.gradle.kts`:
+
+```kotlin
+plugins { java }
+
+val pluginId      = "acme-clouseau-plugin"   // must be <name>-clouseau-plugin
+val pluginVersion = "1.0.0"
+val clouseauApi   = "0.3.0"
+
+repositories { mavenCentral() }
+java { toolchain { languageVersion.set(JavaLanguageVersion.of(21)) } }
+
+dependencies {
+    // compileOnly: Clouseau provides both at runtime. Never bundle them (no fat/shadow JAR):
+    // a JAR with its own copy of the API classes has extensions Clouseau doesn't recognize.
+    compileOnly("com.droidenx.clouseau:clouseau-api:$clouseauApi")
+    compileOnly("org.pf4j:pf4j:3.16.1")
+    // Writes META-INF/extensions.idx from @Extension classes; without it no extension is found.
+    annotationProcessor("org.pf4j:pf4j:3.16.1")
+
+    testImplementation("com.droidenx.clouseau:clouseau-api:$clouseauApi")
+    testImplementation("org.pf4j:pf4j:3.16.1")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test { useJUnitPlatform() }
+
+tasks.jar {
+    archiveBaseName.set(pluginId)            // the JAR must be named <Plugin-Id>-<Plugin-Version>.jar
+    archiveVersion.set(pluginVersion)
+    manifest {
+        attributes(
+            "Plugin-Id"          to pluginId,
+            "Plugin-Version"     to pluginVersion,
+            "Plugin-Requires"    to ">=$clouseauApi",
+            "Plugin-Name"        to "Acme",               // optional, shown in the Plugin Manager
+            "Plugin-Description" to "Reads Acme logs",    // optional
+            "Plugin-Provider"    to "Your name",          // optional
+            "Plugin-License"     to "MIT",                // optional
+        )
+    }
+}
+```
+
+`gradle jar` builds `build/libs/acme-clouseau-plugin-1.0.0.jar`. To install it, copy it into the
+`plugins` folder of Clouseau's data folder (Tools > Plugins... has a button that opens it). New
+tabs use it right away; no restart.
+
+Every extension class is `public`, has a public no-argument constructor, implements one of the
+interfaces below, and is annotated `@org.pf4j.Extension`. One JAR may hold any number of them.
+
+## Check it
+
+```
+java -jar clouseau-edge.jar --check-plugin build/libs/acme-clouseau-plugin-1.0.0.jar sample.log
+```
+
+`clouseau-edge.jar` is https://github.com/benlazaro/clouseau/releases/download/edge/clouseau-edge.jar
+(Java 21). The check opens no window and runs while Clouseau is open. It loads the JAR as Clouseau
+does and checks the manifest and the extension index, and whether the JAR bundles the API. Then it
+runs each parser on the sample's lines: what it reads, entries without times or levels, whether it
+throws or returns null, how timezones are handled, whether it's thread-safe, and which lines a
+built-in parser takes first. It runs formatters and highlighters on the sample's messages, and
+checks a source's settings. Each line of the report starts with OK, WARN, FAIL or NOTE, and the
+report ends with `Result: N problems, M warnings`. The exit code is 0 when nothing failed and 1
+when something did. Fix every FAIL and run it again. Give it a sample log of the format the plugin
+is for, with a few lines of other formats, continuation lines (stack traces) and edge cases in it.
+
+## LogEntry (what a parser returns)
+
+An immutable class. Build it with `LogEntry.builder(rawLine)`, setting only what the format has:
+
+```java
+LogEntry.builder(rawLine)            // rawLine: the line as in the log, without its terminator
+        .timestamp(instant)          // java.time.Instant; null if the line has none
+        .level(LogEntry.LogLevel.WARN)  // TRACE DEBUG INFO WARN ERROR FATAL UNKNOWN; null = UNKNOWN
+        .logger("com.acme.Orders")
+        .thread("main")
+        .message("order created")    // the text after the line's header; null = rawLine
+        .field("order", "ORD-42")    // any other value; each field name becomes a table column
+        .build();
+```
+
+`entry.toBuilder()` gives a builder with an entry's values. Never use the constructor.
+
+## LogParser: a log format
+
+```java
+@Extension
+public class AcmeParser implements LogParser {
+    public String getName() { return "Acme"; }               // unique among all parsers
+    public boolean canParse(String rawLine) { ... }          // is this line in my format?
+    public LogEntry parse(String rawLine) { return parse(rawLine, ZoneId.systemDefault()); }
+    public LogEntry parse(String rawLine, ZoneId writtenIn) { ... }   // Clouseau calls this one
+    public List<String> customFields() { return List.of("order", "user"); }  // optional
+}
+```
+
+- `canParse` runs on every line of every file during auto-detection: look at the line's start or
+  a few characters, never parse it fully, and never throw.
+- Auto-detection tries the built-in parsers and the user's own first, then plugin parsers, and
+  takes the first whose `canParse` says yes and whose `parse` returns an entry. So a plugin can't
+  take over lines a built-in format already reads; a user can still choose any parser for a tab.
+- A line no parser reads becomes a continuation line of the entry before it (stack traces,
+  wrapped text). So `canParse` must say no to continuation lines.
+- Timezones: `writtenIn` is the timezone the log was written in (the user can change it). Read a
+  timestamp with no offset as wall time in `writtenIn`. A timestamp with an offset or zone (`Z`,
+  `+02:00`, `[Europe/Paris]`) keeps its own. `DateTimeFormatter.withZone(writtenIn)` does both:
+  an offset in the text wins over it. Implement `parse(rawLine, writtenIn)`, and have the
+  one-argument `parse` call it with `ZoneId.systemDefault()`. Only implement `parse(rawLine)`
+  alone if the format's times never have an offset: the default `parse(rawLine, writtenIn)` then
+  moves its result from the system's timezone to `writtenIn`, which shifts times that have one.
+- Threads: one instance serves every tab, called from several background threads at once (never
+  the Swing thread). Keep it stateless: no mutable fields, `DateTimeFormatter` (thread-safe), not
+  `SimpleDateFormat`; compiled `Pattern`s are fine, shared `Matcher`s aren't.
+- Failures: if `canParse` or `parse` throws, or `parse` returns null, the line shows as unparsed.
+  Return null rather than a half-filled entry when a line turns out not to be yours.
+- `customFields()` lists the field names in the order their table columns should have. Fields an
+  entry has that aren't listed still get columns, added once rows with them are read.
+
+## LogFormatter: rewrite a message for the detail panel
+
+```java
+@Extension
+public class HexFormatter implements LogFormatter {
+    public String getName() { return "Hex"; }           // the detail panel's toggle button
+    public boolean canFormat(String input) { ... }      // quick look, not a parse
+    public String format(String input) { ... }          // never null; return input if unsure
+}
+```
+
+- It only changes what the detail panel shows for the selected entry (pretty-print, decode,
+  unescape). The table, filters, find and copy keep the message as logged.
+- Input: the entry's message, with any continuation lines appended after `\n`. Every formatter
+  whose `canFormat` accepts the text so far runs in turn, each on the previous one's output: the
+  built-in JSON and toString() formatters first, then plugin formatters.
+- It runs on the Swing event thread: keep it fast (well under a few milliseconds for a typical
+  message), no I/O, no state.
+- If it throws or returns null, it's skipped for that message.
+- Don't use the built-in names "JSON", "toString" or "Stack Trace". A formatter and a highlighter
+  with the same name share one toggle button; give a formatter's highlighter its name.
+
+## LogSyntaxHighlighter: color parts of a message
+
+```java
+@Extension
+public class KeyValueHighlighter implements LogSyntaxHighlighter {
+    private static final Pattern PAIR = Pattern.compile("(\\w+)(=)(\\S+)");
+
+    public String getName() { return "Key=Value"; }
+    public boolean canHighlight(String text) { return PAIR.matcher(text).find(); }
+    public List<Span> highlight(String text) {
+        List<Span> spans = new ArrayList<>();
+        Matcher m = PAIR.matcher(text);
+        while (m.find()) {
+            spans.add(new Span(m.start(1), m.end(1), Role.KEY));
+            spans.add(new Span(m.start(2), m.end(2), Role.OPERATOR));
+            spans.add(new Span(m.start(3), m.end(3), Role.STRING));
+        }
+        return spans;
+    }
+}
+```
+
+- It gets the text after the formatters ran. `Span(start, end, role)` is a half-open character
+  range `[start, end)` of that text; spans may come in any order; never return null (return
+  `List.of()`).
+- It names what text is, never a color: the theme colors each `Role`. Roles: `KEY` (the name in a
+  name/value pair), `STRING`, `NUMBER`, `LITERAL` (true, false, null, enum constants), `KEYWORD`
+  (a word that gives the structure: a segment name, a tag, a command), `OPERATOR` (a separator
+  with meaning: `=`, `->`, HL7's `^ ~ &`), `PUNCTUATION` (brackets, braces, commas, delimiters),
+  `MUTED` (text that matters less: raw bytes, padding, comments), `ACCENT` (something to notice
+  among muted text), `ERROR` (an invalid value).
+- Mark only what it recognizes. Every highlighter that accepts a message colors it, layered;
+  where spans overlap the narrower wins.
+- Runs on the Swing event thread: fast, no I/O, no state. If it throws, the message shows uncolored.
+
+## LogSourceProvider and LogSource: live lines from somewhere
+
+```java
+@Extension
+public class QueueSourceProvider implements LogSourceProvider {
+    public String getName() { return "Acme queue"; }   // File menu: "Open Acme queue..."
+    public List<SourceSetting> settings() {
+        return List.of(
+                SourceSetting.text("host", "Host"),
+                SourceSetting.number("port", "Port").withDefault("5672"),
+                SourceSetting.password("token", "Access token").optional(),
+                SourceSetting.choice("from", "Start at", List.of("now", "beginning")).withDefault("now"));
+    }
+    // On the Swing thread: check the values and build the source; no I/O here.
+    // Throw IllegalArgumentException with a message for the user if a value is wrong.
+    public LogSource create(Map<String, String> values) { return new QueueSource(values.get("host"), ...); }
+}
+
+public class QueueSource implements ConnectingLogSource {
+    public String getName() { return "acme: orders"; }    // the tab's status bar
+    public void open(Consumer<String> lines, Runnable onConnected) throws Exception {
+        connectAndSignIn();             // throw if it fails: Clouseau shows the message
+        onConnected.run();              // at most once, from this thread: the tab's dot turns green
+        while (!closed) lines.accept(nextLine());   // block; return when the stream ends or close() is called
+    }
+    public void close() { closed = true; /* and unblock open() */ }
+}
+```
+
+- Clouseau draws the form from `settings()`, checks required fields and numbers, and remembers the
+  values (passwords encrypted). Optional values left empty are absent from the map.
+- `open` runs on a background thread and blocks, passing each raw line, without its terminator,
+  in order. `close` comes from another thread, maybe more than once, maybe before `open` connected.
+- A plain `LogSource` (one-argument `open(Consumer<String>)`) works too; its dot turns green at the
+  first line.
+- A source is used once: Reconnect calls `create` again with the same values. Keep connection
+  state in the source, not the provider (one provider instance is shared).
+
+## Publishing
+
+Name the artifact `<name>-clouseau-plugin` under your own group (`io.example:acme-clouseau-plugin`);
+`clouseau-<name>-plugin` is reserved for the Clouseau project's own. Publish it to Maven Central,
+then add it to https://github.com/benlazaro/clouseau/blob/main/plugins.json with a pull request so
+the Plugin Manager's Browse tab lists it. On a company Nexus, the name alone is enough.
+
+## More
+
+- User guide for plugin authors: https://benlazaro.github.io/clouseau/guide/developers.html
+- Each API release's notes (what changed): https://github.com/benlazaro/clouseau/releases (tags `api-v...`)

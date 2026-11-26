@@ -106,9 +106,15 @@ you don't need a plugin: create it in the [parser editor](parsers.md) instead.
 The quickest start is to copy **[`clouseau-example-plugin`](https://github.com/benlazaro/clouseau/tree/main/clouseau-example-plugin)**, a
 complete plugin that parses [logfmt](https://brandur.org/logfmt) lines
 (`time=… level=info msg="…" key=value`). It builds against the released API from Maven Central,
-just as your plugin will. When you copy it out of the Clouseau repository, add
-`repositories { mavenCentral() }` and replace `rootProject.extra["pf4jVersion"]` with `3.16.1`,
-since those come from Clouseau's own build. It shows everything a plugin needs:
+just as your plugin will, and its folder builds on its own: copy it out of the Clouseau
+repository, rename the plugin, and run `gradle jar` (Gradle 8 on JDK 17 or 21).
+
+**Writing it with a coding assistant?** Point it at
+[llms.txt](https://benlazaro.github.io/clouseau/llms.txt), one plain page with the build file,
+every extension point and its rules, and the check below, and have it run the
+[check](#checking-a-plugin) until nothing fails.
+
+The example shows everything a plugin needs:
 
 - **Dependencies:** `clouseau-api` and PF4J as `compileOnly` (the app provides both, so don't
   bundle them in your JAR), plus PF4J as an `annotationProcessor`, which writes
@@ -184,11 +190,42 @@ A few rules for parsers:
 Build the JAR with `./gradlew :clouseau-example-plugin:jar` (it lands in
 `clouseau-example-plugin/build/libs/`), drop it in the `plugins` folder of the
 [data folder](settings.md#the-data-folder), or restart. The Plugin Manager picks it up while it's open. New tabs
-use it right away.
+use it right away. [Check it](#checking-a-plugin) with a sample log first, to see what Clouseau will make of it.
 
 Plugin parsers come after the built-in and `parsers.json` parsers during auto-detection,
 and a plugin parser can't reuse a name that's already taken. Exceptions thrown by a plugin
 parser are logged and the line is shown as UNKNOWN, so a bug can't stop a file loading.
+
+### Formatters
+
+A `LogFormatter` changes how the selected entry's message reads in the detail panel:
+pretty-printing a payload, decoding hex, unescaping a string. The table, filters, find and
+copied lines keep the message as it was logged.
+
+```java
+@Extension
+public class HexFormatter implements LogFormatter {
+    @Override public String getName() { return "Hex"; }
+
+    // Called for every selected entry: a quick look, not a parse.
+    @Override public boolean canFormat(String text) { return text.startsWith("0x"); }
+
+    // Never null: return the text unchanged if it isn't what you expected.
+    @Override public String format(String text) { /* decode it */ }
+}
+```
+
+- **What it gets.** The message, with any continuation lines after a `\n`. Formatters run in
+  turn: each one whose `canFormat` accepts the text so far gets it and passes its result on, so
+  yours may get another formatter's output. The built-in JSON and `toString()` formatters come
+  first.
+- **Threads.** Formatters run on the Swing event thread, so the window waits while yours works.
+  Keep it fast and stateless, and do no I/O.
+- **Failures.** If `canFormat` or `format` throws, or `format` returns `null`, your formatter is
+  skipped for that message, and the first failure is logged.
+- **Its button.** Each format gets a button in the detail panel's header that turns it off. A
+  formatter and a highlighter with the same name share one, so give the highlighter that colors
+  your formatter's output the same name.
 
 ### Highlighters
 
@@ -284,6 +321,45 @@ The example plugin's `DemoStreamSource` does this.
 A source is used once. **Reconnect** on the tab closes it and calls your provider's
 `create` again with the same values, so keep connection state in the source, not the
 provider.
+
+### Checking a plugin
+
+Clouseau can check a plugin without opening a window. It loads the JAR the way it loads one from
+the plugins folder, and runs the plugin's extensions on a sample log:
+
+```
+java -jar clouseau-edge.jar --check-plugin build/libs/acme-clouseau-plugin-1.0.0.jar sample.log
+```
+
+Use the [Edge build](https://github.com/benlazaro/clouseau/releases/download/edge/clouseau-edge.jar)
+(Java 21). The check runs even while Clouseau is open. It reports on:
+
+- **The JAR:** the manifest (`Plugin-Id` and its name, `Plugin-Version`, `Plugin-Requires`), the
+  JAR's file name, `META-INF/extensions.idx`, and whether the JAR bundles the API or PF4J (it
+  mustn't). Then whether Clouseau loads it, and which extensions it finds.
+- **Each parser,** on the sample's lines: how many it reads and how fast `canParse` is, lines it
+  throws on or returns `null` for, entries without times or levels, and fields
+  `customFields()` doesn't list. It also checks that times with an offset keep it whatever the
+  log's timezone, and that parsing from 8 threads at once gives the same entries. Then it shows
+  which lines a built-in parser takes first during auto-detection, and the first entries.
+- **Each formatter and highlighter,** on the sample's messages: what they accept, exceptions,
+  `null` results, spans past the end of the text, slow calls, and an example of each.
+- **Each source:** its settings (unique keys, labels). It never connects: try that in Clouseau.
+
+Every line starts with `OK`, `WARN`, `FAIL` or `NOTE`, and the report ends with
+`Result: 1 problem, 2 warnings`. The exit code is 0 when nothing failed and 1 when something did,
+so you can run it in a build or in CI. The sample is read up to 5,000 lines (plain, `.gz` or
+`.zip`); without one, only the JAR and the names are checked.
+
+```
+Parser "logfmt (example plugin)"
+  OK    Reads 3 of 4 lines; canParse takes 1.14 microseconds a line.
+  NOTE  1 line that no parser reads shows as continuation lines of the entry before them (right for stack traces and wrapped text), such as:
+          at com.example.Pay.charge(Pay.java:10)
+  OK    Times with an offset keep it, whatever the log's timezone.
+  OK    Thread-safe: 8 threads parsing at once get the same entries.
+  OK    Auto-detection gives it all 3 lines it reads.
+```
 
 ## Naming and publishing
 

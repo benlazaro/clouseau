@@ -684,16 +684,20 @@ final class DetailPanel extends JPanel {
 
     // ── Rendering ─────────────────────────────────────────────────────────────
 
-    /** Apply all formatters that can handle this input and aren't switched off, in sequence. */
+    /**
+     * Apply all formatters that can handle this input and aren't switched off, in sequence. One
+     * that throws or returns null is skipped, and the text goes on as it was (LogFormatter's contract).
+     */
     private String applyFormatters(String input) {
         String result = input;
         for (LogFormatter formatter : formatters) {
-            if (formatter.canFormat(result) && !disabledFormats.contains(formatter.getName())) {
-                try {
-                    result = formatter.format(result);
-                } catch (Exception e) {
-                    log.warn("Formatter {} failed", formatter.getName(), e);
-                }
+            if (disabledFormats.contains(nameOf(formatter)) || !canFormat(formatter, result)) continue;
+            try {
+                String formatted = formatter.format(result);
+                if (formatted != null) result = formatted;
+                else warnOnce(formatter, new IllegalStateException("format returned null"));
+            } catch (Exception | LinkageError e) {
+                warnOnce(formatter, e);
             }
         }
         return result;
@@ -863,7 +867,7 @@ final class DetailPanel extends JPanel {
         // A format's toggle shows only when this message is in that format, so the header stays
         // quiet on plain text and says at a glance that a line carries JSON.
         java.util.Set<String> applicable = new HashSet<>();
-        for (LogFormatter f : formatters) if (f.canFormat(rawMsg)) applicable.add(f.getName());
+        for (LogFormatter f : formatters) if (canFormat(f, rawMsg)) applicable.add(nameOf(f));
         for (LogSyntaxHighlighter h : syntaxHighlighters) if (canHighlight(h, rawMsg)) applicable.add(h.getName());
 
         String messageText = applyFormatters(rawMsg);
@@ -1120,6 +1124,34 @@ final class DetailPanel extends JPanel {
         } catch (Exception | LinkageError e) {
             warnOnce(h, e);
             return false;
+        }
+    }
+
+    /** Formatters that have failed once, logged once for the same reason. */
+    private final java.util.Set<String> failedFormatters = new HashSet<>();
+
+    /** {@code f.canFormat(text)}, false if it throws (a plugin's bug must not reach the crash dialog). */
+    private boolean canFormat(LogFormatter f, String text) {
+        try {
+            return f.canFormat(text);
+        } catch (Exception | LinkageError e) {
+            warnOnce(f, e);
+            return false;
+        }
+    }
+
+    private void warnOnce(LogFormatter f, Throwable e) {
+        if (failedFormatters.add(f.getClass().getName())) {
+            log.warn("Formatter {} failed; is it built for an older Clouseau API than {}?",
+                    nameOf(f), com.droidenx.clouseau.api.ClouseauApi.VERSION, e);
+        }
+    }
+
+    private static String nameOf(LogFormatter f) {
+        try {
+            return f.getName();
+        } catch (Exception | LinkageError e) {
+            return f.getClass().getName();
         }
     }
 

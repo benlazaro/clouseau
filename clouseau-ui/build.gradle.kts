@@ -461,6 +461,8 @@ runtime {
     }
 }
 
+val examplePlugin: Configuration by configurations.creating { isTransitive = false }
+
 dependencies {
     implementation(project(":clouseau-core"))
     implementation(project(":clouseau-plugin"))
@@ -480,6 +482,20 @@ dependencies {
     // because LogParser extends ExtensionPoint
     compileOnly("org.pf4j:pf4j:${rootProject.extra["pf4jVersion"]}")
     testCompileOnly("org.pf4j:pf4j:${rootProject.extra["pf4jVersion"]}")   // tests that hold a LogSourceProvider
+    examplePlugin(project(":clouseau-example-plugin"))
+}
+
+// PluginCheckCommandTest checks the example plugin's JAR as --check-plugin would. Passed in as a
+// file, not put on the test classpath, so its classes come only from the plugin class loader.
+// A provider object, not a doFirst lambda, so the configuration cache can store the task.
+class ExamplePluginJarArg(
+    @get:InputFiles @get:PathSensitive(PathSensitivity.NONE) val jar: FileCollection
+) : CommandLineArgumentProvider {
+    override fun asArguments() = listOf("-Dclouseau.examplePlugin.jar=${jar.singleFile.absolutePath}")
+}
+
+tasks.test {
+    jvmArgumentProviders.add(ExamplePluginJarArg(examplePlugin))
 }
 
 

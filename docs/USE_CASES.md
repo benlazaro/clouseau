@@ -431,7 +431,11 @@ releases that don't change that API.
 **Current behavior:** Parsers, formatters, syntax highlighters and log sources
 (`LogSourceProvider`) can all come from plugins. A source's settings are remembered per
 plugin, with passwords encrypted. Plugins can't add filters. The example plugin ships a
-logfmt parser and a demo live source, and is named as plugins should be (`logfmt-clouseau-plugin`).
+logfmt parser and a demo live source, is named as plugins should be (`logfmt-clouseau-plugin`),
+and its folder builds on its own, so it can be copied as a template. `--check-plugin <jar>
+[<sample.log>]` checks a plugin without a window (D-35): its JAR, whether it loads, and each
+extension on the sample, as `OK`/`WARN`/`FAIL`/`NOTE` lines and an exit code; `llms.txt` (at
+the site's root) is the whole contract on one page for coding assistants.
 Browse opens on the Clouseau plugins the repository has: for Maven Central, the plugins in the
 project's `plugins.json`, each at the latest version Central has; for Nexus, artifacts named
 `<name>-clouseau-plugin` (or `clouseau-<name>-plugin`, the project's own). Typing filters them by

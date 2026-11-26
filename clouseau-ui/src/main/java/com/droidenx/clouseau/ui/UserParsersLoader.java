@@ -68,22 +68,13 @@ public final class UserParsersLoader {
         }
 
         // 2. Bundled defaults, after the user's; one the user replaced is left out
-        try (InputStream is = UserParsersLoader.class.getClassLoader().getResourceAsStream(DEFAULT_RESOURCE)) {
-            if (is != null) {
-                parseArray(new InputStreamReader(is, StandardCharsets.UTF_8), "default-parsers.json")
-                        .forEach(p -> {
-                            if (byName.containsKey(p.getName())) {
-                                log.info("User parser '{}' overrides bundled default", p.getName());
-                            } else {
-                                byName.put(p.getName(), p);
-                            }
-                        });
+        loadBundled().forEach(p -> {
+            if (byName.containsKey(p.getName())) {
+                log.info("User parser '{}' overrides bundled default", p.getName());
             } else {
-                log.warn("Bundled default-parsers.json not found on classpath");
+                byName.put(p.getName(), p);
             }
-        } catch (IOException e) {
-            log.warn("Could not read bundled default-parsers.json", e);
-        }
+        });
 
         List<LogParser> result = new ArrayList<>(byName.values());
 
@@ -94,6 +85,17 @@ public final class UserParsersLoader {
                     result.stream().map(LogParser::getName).toList());
         }
         return List.copyOf(result);
+    }
+
+    /** The parsers bundled with Clouseau, without the user's (the plugin check uses these alone). */
+    static List<LogParser> loadBundled() {
+        try (InputStream is = UserParsersLoader.class.getClassLoader().getResourceAsStream(DEFAULT_RESOURCE)) {
+            if (is != null) return parseArray(new InputStreamReader(is, StandardCharsets.UTF_8), "default-parsers.json");
+            log.warn("Bundled default-parsers.json not found on classpath");
+        } catch (IOException e) {
+            log.warn("Could not read bundled default-parsers.json", e);
+        }
+        return List.of();
     }
 
     private static List<LogParser> parseArray(Reader reader, String source) {

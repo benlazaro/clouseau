@@ -155,7 +155,12 @@ ending in `Z`) whenever the source timezone wasn't the system's.
   release. The baseline jar is fetched by its Maven Central path under a made-up group:
   under its real coordinates Gradle resolves it to the project itself. As a second check,
   `ClouseauPluginManagerTest` loads the example plugin built against the released API and
-  parses lines with it.
+  parses lines with it, and `PluginCheckCommandTest` runs `--check-plugin` (D-35) on it.
+- The contract a plugin author (or a coding assistant) needs is written three times, kept
+  in step: the API's Javadoc, `guide/developers.md`, and `llms.txt` at the repository root,
+  one plain page served at the site's root. An API change updates all three. The example
+  plugin's folder builds on its own (its own `settings.gradle.kts`, repositories and
+  versions), so it can be copied out as a template.
 - `LogFormatter` and `LogSyntaxHighlighter` work on message text, so one implementation
   works for any log format.
 - `LogSyntaxHighlighter.highlight` returns `Span`s that name a `Role`, never a color (D-26).
@@ -469,7 +474,9 @@ When a row is selected, the detail panel shows the entry and its continuation li
 and `SyntaxLayers` (core) layers them: where spans overlap, the narrower wins, and among
 equal widths the earlier highlighter. Each role's color is the theme's
 `Clouseau.syntax.<role>` key (D-26). A highlighter that throws, or was built for an older
-API, is skipped and logged once. The detail toolbar can turn individual formatters and
+API, is skipped and logged once; so is a formatter that throws (in `canFormat` or `format`)
+or returns null, and the text goes on unchanged. Formatters run on the EDT, one after another,
+each on the previous one's output. The detail toolbar can turn individual formatters and
 highlighters on or off.
 
 The built-in **Stack Trace** highlighter (`StackTraceHighlighter`, core) reads the message
@@ -2973,6 +2980,41 @@ looking for. Section 6.5 describes the behavior; the choices behind it:
 Rejected: collapsing big messages by default (a log line is read once, and hiding part of it
 by default would hide what someone came to see); a fold for every multi-line bracket in any
 text (stack frames' `(Foo.java:42)` and prose would get chevrons).
+
+### D-35 · A plugin is checked by the app itself, headless, against a sample log · Adopted
+
+Writing a plugin meant building the JAR, dropping it in the plugins folder and looking at
+the window, and the mistakes that matter most don't show there: a parser that isn't
+thread-safe gives wrong rows only under load, one that moves times with an offset is off by
+hours only for some users, a fat JAR's extensions are silently not found. A coding
+assistant can't look at the window at all, and works best in a loop of build, check, fix.
+
+- **`--check-plugin <jar> [<sample>]`, in the app.** Handled first in `ClouseauApp.main`,
+  headless, before the single-instance check, so it runs alongside an open Clouseau and
+  shows no window. `PluginCheckCommand` (ui) copies the JAR to a folder of its own and loads
+  it through `ClouseauPluginManager`, so loading is exactly the app's (PF4J, the API version
+  check, the plugin class loader); `PluginCheck` (core) checks the JAR and runs the
+  extensions. The app rather than a test library for plugin authors: it needs no new
+  published artifact, and what it checks is the real loading, not a copy of it.
+- **What it checks** is the contract the API's Javadoc states, each rule one that a plugin
+  can break without noticing: the manifest, the JAR's name, `extensions.idx`, bundled API or
+  PF4J classes; for a parser, what it reads of the sample, exceptions and nulls, entries
+  without times or levels, `parse(line, writtenIn)` (a time with an offset must not move
+  between two zones; a zoneless one should), the same entries from 8 threads at once, the
+  lines auto-detection gives a built-in first, and `canParse`'s speed; for a formatter or
+  highlighter, exceptions, nulls, spans past the text, and calls slow for the EDT; for a
+  source, its settings. A source is never created or opened: that may connect somewhere.
+- **Against the bundled parsers only,** not the user's `parsers.json`, so two people get the
+  same report for the same JAR.
+- **Plain text,** each line `OK`, `WARN`, `FAIL` or `NOTE`, ending `Result: N problems, M
+  warnings`; exit code 0 when nothing failed, 1 when something did, 2 for bad arguments. A
+  person and an assistant read it alike, and a build can fail on it. Extensions are called
+  unguarded, so every failure is reported rather than logged.
+- **Windows launcher.** The release's `Clouseau.exe` is a GUI launcher with no console, so
+  the check is documented with the Edge JAR (`java -jar clouseau-edge.jar --check-plugin …`).
+
+Rejected: a `clouseau-plugin-test` library for plugin tests (another artifact to publish and
+version, and it would test a copy of the loading); checking with the user's own parsers.
 
 ## 10. Planned features
 
