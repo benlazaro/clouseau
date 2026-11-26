@@ -47,8 +47,7 @@ defaults:
 exclude:
   - CLAUDE.md
   - CONTRIBUTING.md
-  - docs/DESIGN.md
-  - docs/USE_CASES.md
+  - "docs/*.md"          # design notes, the road to 1.0, launch drafts: never on the site
   - docs/releases/
   - plugins.json
   - build/
