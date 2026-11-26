@@ -266,6 +266,12 @@ final class HighlightRulesDialog extends JDialog {
             };
         }
 
+        /**
+         * As wide as the sidebar: a long rule is cut short with …, never scrolled sideways, which
+         * would put the row tools (painted at the list's right edge) out of sight.
+         */
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+
         @Override protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             if (hoverRow < 0 || hoverRow >= getModel().getSize()) return;
