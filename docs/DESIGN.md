@@ -638,8 +638,11 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   Central repositories, then calls `refresh()`, which reloads plugins without a restart.
   A Nexus repository is the server's base URL plus an optional repository name.
   `NexusPluginRepository` runs two asset searches and merges them by download URL: the
-  keyword search (`q`, whole words) and `name=*text*` (part of a word), which a server may
-  refuse (a leading wildcard) without failing the search. It reads up to five pages of each,
+  keyword search (`q`, whole words) and `name=*text*` (part of a word). A server may refuse
+  that leading wildcard (HTTP 400) without failing the search; then it asks `name=text*`
+  (names that start with it). Then, for each `group:artifact` found (up to 20), it asks the
+  exact `name=<artifact>`, which every server allows, and adds that group's versions: a
+  keyword search can return only some versions of a plugin. It reads up to five pages of each,
   keeps unclassified JARs only, and takes each result's date from `lastModified` (or
   `blobCreated`); Maven Central's comes from `timestamp`.
 - Browse opens on `PluginRepository.listPlugins()`, the repository's Clouseau plugins
@@ -647,7 +650,8 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   or `-Dclouseau.pluginCatalog`), each resolved at once to its `maven-metadata.xml`
   version plus a `HEAD` on the JAR for size and date; for Nexus, the keyword search
   `clouseau` plus `name=*-clouseau-plugin` and `name=clouseau-*-plugin`, filtered by
-  `PluginCatalog.isPluginName` and cut to the newest version of each. Each repository's
+  `PluginCatalog.isPluginName`, completed by the exact-name search above, and cut to the
+  newest version of each. Each repository's
   list is kept while the window is open. Typing filters it in the table (a `RowFilter` on
   name, coordinates, description and kinds); Enter runs the old whole-repository
   `search`. The Installed column comes from the plugins folder's file names

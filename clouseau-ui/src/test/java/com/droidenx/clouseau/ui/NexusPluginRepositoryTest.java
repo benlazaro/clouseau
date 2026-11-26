@@ -25,10 +25,14 @@ class NexusPluginRepositoryTest {
     private String base;
     private final List<String> queries = new CopyOnWriteArrayList<>();
 
-    /** What the fake server answers: the keyword search, then the wildcard name search. */
+    /** What the fake server answers: the keyword search, then the name searches. */
     private volatile String keywordBody = "{\"items\":[]}";
     private volatile String nameBody    = "{\"items\":[]}";
     private volatile int    nameStatus  = 200;
+    /** Answers for particular name searches, by the name asked for; others get {@link #nameBody}. */
+    private final java.util.Map<String, String> namedBodies = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Answers a name starting with {@code *} with HTTP 400, as some servers do. */
+    private volatile boolean refuseLeadingWildcard;
 
     @BeforeEach
     void start() throws IOException {
@@ -37,8 +41,9 @@ class NexusPluginRepositoryTest {
             String query = URLDecoder.decode(ex.getRequestURI().getRawQuery(), StandardCharsets.UTF_8);
             queries.add(query);
             boolean keyword = query.startsWith("q=");
-            int status = keyword ? 200 : nameStatus;
-            byte[] body = (keyword ? keywordBody : nameBody).getBytes(StandardCharsets.UTF_8);
+            String name = keyword ? null : query.substring("name=".length()).replaceFirst("&.*", "");
+            int status = keyword ? 200 : refuseLeadingWildcard && name.startsWith("*") ? 400 : nameStatus;
+            byte[] body = (keyword ? keywordBody : namedBodies.getOrDefault(name, nameBody)).getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(status, body.length);
             try (OutputStream out = ex.getResponseBody()) { out.write(body); }
         });
@@ -73,7 +78,8 @@ class NexusPluginRepositoryTest {
 
         List<PluginRepository.Asset> found = repo(null).search("fmt");
 
-        assertThat(queries).containsExactly("q=fmt", "name=*fmt*");
+        // Then every version of each artifact found, by its exact name.
+        assertThat(queries).containsExactly("q=fmt", "name=*fmt*", "name=clouseau-logfmt-plugin", "name=logfmt-extras");
         assertThat(found).extracting(PluginRepository.Asset::artifactId)
                 .containsExactly("clouseau-logfmt-plugin", "logfmt-extras");
         assertThat(found.get(0).published()).isEqualTo(Instant.parse("2026-03-01T10:15:30.123Z"));
@@ -86,6 +92,36 @@ class NexusPluginRepositoryTest {
         nameStatus  = 400;
 
         assertThat(repo(null).search("logfmt")).hasSize(1);
+    }
+
+    @Test
+    void aServerThatRefusesALeadingWildcardIsAskedForNamesThatStartWithTheText() throws Exception {
+        refuseLeadingWildcard = true;
+        namedBodies.put("drivers-*", "{\"items\":[" + item("drivers-clouseau-plugin", "1.0.0", null, null) + "]}");
+
+        List<PluginRepository.Asset> found = repo(null).search("drivers-");
+
+        assertThat(queries).startsWith("q=drivers-", "name=*drivers-*", "name=drivers-*");
+        assertThat(found).extracting(PluginRepository.Asset::artifactId).containsExactly("drivers-clouseau-plugin");
+    }
+
+    @Test
+    void everyVersionOfWhatASearchFindsIsListed() throws Exception {
+        // The keyword search returned only the newest; the exact name search has them all,
+        // and one of another group by the same name, which is left out.
+        refuseLeadingWildcard = true;
+        keywordBody = "{\"items\":[" + item("drivers-clouseau-plugin", "1.3.0", null, null) + "]}";
+        String other = item("drivers-clouseau-plugin", "9.0", null, null).replace("com.example", "org.other");
+        namedBodies.put("drivers-clouseau-plugin", "{\"items\":["
+                + item("drivers-clouseau-plugin", "1.0.0", null, null) + ","
+                + item("drivers-clouseau-plugin", "1.1.0", null, null) + ","
+                + item("drivers-clouseau-plugin", "1.2.0", null, null) + ","
+                + item("drivers-clouseau-plugin", "1.3.0", null, null) + "," + other + "]}");
+
+        List<PluginRepository.Asset> found = repo(null).search("drivers-");
+
+        assertThat(found).extracting(PluginRepository.Asset::version)
+                .containsExactlyInAnyOrder("1.0.0", "1.1.0", "1.2.0", "1.3.0");
     }
 
     @Test
@@ -159,7 +195,8 @@ class NexusPluginRepositoryTest {
 
         List<PluginRepository.Asset> list = repo(null).listPlugins();
 
-        assertThat(queries).containsExactly("q=clouseau", "name=*-clouseau-plugin", "name=clouseau-*-plugin");
+        assertThat(queries).containsExactly("q=clouseau", "name=*-clouseau-plugin", "name=clouseau-*-plugin",
+                "name=logfmt-clouseau-plugin", "name=clouseau-utils", "name=loki-clouseau-plugin");
         assertThat(list).extracting(a -> a.artifactId() + ":" + a.version())
                 .containsExactly("logfmt-clouseau-plugin:1.10.0", "loki-clouseau-plugin:0.1");
     }

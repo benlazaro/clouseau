@@ -35,6 +35,8 @@ final class NexusPluginRepository implements PluginRepository {
 
     /** Pages (of 50 items) read per search at most, so a broad word can't page through a whole server. */
     static final int MAX_PAGES = 5;
+    /** How many artifacts a search lists every version of, one request each. */
+    static final int MAX_EXPANDED = 20;
 
     private final AppPrefs.PluginRepo config;
     private final HttpClient          http = PluginRepository.httpClient();
@@ -58,8 +60,11 @@ final class NexusPluginRepository implements PluginRepository {
         String q = query.strip();
         Map<String, Asset> found = new LinkedHashMap<>();
         collect("q", q, found, true);
-        if (!q.isEmpty() && q.chars().noneMatch(c -> c == '*' || c == '?' || Character.isWhitespace(c)))
-            collect("name", "*" + q + "*", found, false);
+        // A server that refuses a leading wildcard still takes a trailing one: names that start with it.
+        if (!q.isEmpty() && q.chars().noneMatch(c -> c == '*' || c == '?' || Character.isWhitespace(c))
+                && !collect("name", "*" + q + "*", found, false))
+            collect("name", q + "*", found, false);
+        addEveryVersion(found);
 
         List<Asset> results = new ArrayList<>(found.values());
         log.info("Nexus search returned {} JAR asset(s)", results.size());
@@ -84,6 +89,7 @@ final class NexusPluginRepository implements PluginRepository {
         collect("q", "clouseau", found, true);
         collect("name", "*-clouseau-plugin", found, false);
         collect("name", "clouseau-*-plugin", found, false);
+        addEveryVersion(found);       // the keyword search may not have returned the newest
         List<Asset> latest = latestOfEach(found.values());
         log.info("Nexus has {} Clouseau plugin(s)", latest.size());
         return latest;
@@ -116,8 +122,35 @@ final class NexusPluginRepository implements PluginRepository {
         return new ArrayList<>(newest.values());
     }
 
-    /** Reads every page (up to {@link #MAX_PAGES}) of one search into {@code found}, keyed by download URL. */
-    private void collect(String param, String value, Map<String, Asset> found, boolean required)
+    /**
+     * Adds every version of each artifact in {@code found} (up to {@link #MAX_EXPANDED} of them),
+     * by an exact name search, which every server allows. A keyword search can return only some
+     * versions of a plugin (on one server, {@code drivers-} found only the newest), and a server
+     * that refuses leading wildcards has no other way to give the rest. Kept to the same group.
+     */
+    private void addEveryVersion(Map<String, Asset> found) throws IOException, InterruptedException {
+        java.util.Set<String> artifacts = new java.util.LinkedHashSet<>();
+        for (Asset a : found.values()) artifacts.add(a.groupId() + ":" + a.artifactId());
+        int asked = 0;
+        for (String key : artifacts) {
+            if (asked++ == MAX_EXPANDED) {
+                log.info("Nexus search found {} artifacts; listing every version of the first {}", artifacts.size(), MAX_EXPANDED);
+                break;
+            }
+            String groupId = key.substring(0, key.indexOf(':')), artifactId = key.substring(key.indexOf(':') + 1);
+            Map<String, Asset> versions = new LinkedHashMap<>();
+            collect("name", artifactId, versions, false);
+            versions.values().stream()
+                    .filter(a -> a.groupId().equals(groupId) && a.artifactId().equals(artifactId))
+                    .forEach(a -> found.putIfAbsent(a.downloadUrl(), a));
+        }
+    }
+
+    /**
+     * Reads every page (up to {@link #MAX_PAGES}) of one search into {@code found}, keyed by
+     * download URL. False if the server refused it (only when it isn't {@code required}).
+     */
+    private boolean collect(String param, String value, Map<String, Asset> found, boolean required)
             throws IOException, InterruptedException {
         String token = null;
         for (int page = 0; page < MAX_PAGES; page++) {
@@ -137,7 +170,7 @@ final class NexusPluginRepository implements PluginRepository {
                     throw new IOException("Nexus search returned HTTP " + resp.statusCode()
                             + " for " + config.name());
                 log.info("Nexus refused the {} search (HTTP {}); keeping the other results", param, resp.statusCode());
-                return;
+                return false;
             }
             JsonObject root = JsonParser.parseString(resp.body()).getAsJsonObject();
             List<Asset> assets = parseItems(root);
@@ -145,8 +178,9 @@ final class NexusPluginRepository implements PluginRepository {
             for (Asset a : assets) found.putIfAbsent(a.downloadUrl(), a);
             token = root.has("continuationToken") && !root.get("continuationToken").isJsonNull()
                     ? root.get("continuationToken").getAsString() : null;
-            if (token == null || token.isBlank()) return;
+            if (token == null || token.isBlank()) return true;
         }
+        return true;
     }
 
     /**

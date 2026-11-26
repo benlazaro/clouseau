@@ -174,8 +174,9 @@ syntax highlighters and [live sources](following.md#source-plugins).
   - For a plugin that isn't listed, type part of its name and press `Enter` (or click
     **Search**) to search the whole repository. On Maven Central, `g:` and `a:` search
     the group or the artifact name only (`a:logfmt-clouseau-plugin`); on Nexus, any part of
-    the group or artifact name works: `fmt` finds `logfmt-clouseau-plugin`. Clear the
-    field to go back to the plugins.
+    the group or artifact name works: `fmt` finds `logfmt-clouseau-plugin` (some servers
+    allow only the start of a name: `logfmt`). A Nexus search lists every version of each
+    plugin it finds; Maven Central shows the latest. Clear the field to go back to the plugins.
   - Click a column's header to sort by it, again to reverse it, and a third time to go back
     to the repository's order; Clouseau keeps the sort. Drag a column's edge to make it
     wider; Clouseau keeps the widths too.
