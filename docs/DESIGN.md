@@ -1811,8 +1811,9 @@ A parser the reviewer doesn't have falls back to the tab's choice (auto-detectio
 the open dialog chose one); the timezone and
 offset come from the bundle, so the timeline matches.
 
-**Not covered:** merging sources from different machines over SSH; saving a merged view's file set
-as a reusable "workspace".
+**Not covered:** merging sources from different machines over SSH. To reopen a merged view's
+file set later, save it in a named session (UC-17, D-19), which keeps each file's parser,
+timezone and offset.
 
 **Order of work** (each step ships and is tested on its own):
 
