@@ -1,6 +1,7 @@
 {%- comment -%}
   Dark or Light, before the page draws: the visitor's choice (saved by the switch in
   theme_toggle.html), else their system's setting, which it then follows until they choose.
+  Switching back to the system's theme forgets the choice, so the site follows the system again.
   Sets html[data-theme] (the home page's colors) and, on the guide's pages, swaps Just the
   Docs' stylesheet for the Light one built from _sass/color_schemes/clouseau-light.scss.
 {%- endcomment -%}
@@ -32,7 +33,14 @@
   };
   window.clouseauTheme = {
     get: function () { return document.documentElement.getAttribute('data-theme'); },
-    set: function (theme) { try { localStorage.setItem(KEY, theme); } catch (e) {} apply(theme); }
+    // Choosing the system's own theme forgets the choice, so the site follows the system again.
+    set: function (theme) {
+      var systemTheme = system && system.matches ? 'light' : 'dark';
+      try {
+        if (theme === systemTheme) localStorage.removeItem(KEY); else localStorage.setItem(KEY, theme);
+      } catch (e) {}
+      apply(theme);
+    }
   };
   apply(saved() || (system && system.matches ? 'light' : 'dark'));
   if (system && system.addEventListener) {

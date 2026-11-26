@@ -35,7 +35,7 @@ Documentation opens the guide. The site's look follows the app, in Dark and Ligh
 `_sass/color_schemes/clouseau.scss` and `clouseau-light.scss` (the themes' grays and amber; change
 them with the theme files), `_sass/custom/` (Inter and JetBrains Mono, cards, screenshots, with
 its Light values in `clouseau-light.scss`), and the home page's variables at the top of
-`assets/css/home.scss`. The site follows the visitor's system until they use the switch
+`assets/css/home.scss`. The site follows the visitor's system until they switch away from its theme, and again once they switch back
 (`_includes/theme_init.html`, `theme_toggle.html`). The home page is `index.html` with its own layout,
 `_layouts/home.html` (styles `assets/css/home.scss`, script `assets/js/home.js`), not the README:
 its tagline, "Why Clouseau", feature groups and Download notes follow the README's and the
