@@ -176,7 +176,8 @@ syntax highlighters and [live sources](following.md#source-plugins).
     asks first, then replaces your version with that one, to go back after an update that
     broke something. The version you have says **Installed**.
   - For a plugin that isn't listed, type part of its name and press `Enter` (or click
-    **Search**) to search the whole repository. On Maven Central, `g:` and `a:` search
+    **Search**) to search the whole repository. Only plugins show up (artifacts named
+    `<name>-clouseau-plugin` or `clouseau-<name>-plugin`), not other libraries that match. On Maven Central, `g:` and `a:` search
     the group or the artifact name only (`a:logfmt-clouseau-plugin`); on Nexus, any part of
     the group or artifact name works: `fmt` finds `logfmt-clouseau-plugin` (some servers
     allow only the start of a name: `logfmt`). A Nexus search lists every version of each

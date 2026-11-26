@@ -653,8 +653,10 @@ first 16 hex characters of the SHA-256 of the line's `rawLine`.
   `PluginCatalog.isPluginName`, completed by the exact-name search above, and cut to the
   newest version of each. Each repository's
   list is kept while the window is open. Typing filters it in the table (a `RowFilter` on
-  name, coordinates, description and kinds); Enter runs the old whole-repository
-  `search`. The Installed column comes from the plugins folder's file names
+  name, coordinates, description and kinds); Enter runs the whole-repository
+  `search`, whose results are filtered by `PluginCatalog.isPluginName` too (Nexus before it
+  asks for every version; Maven Central asks Solr for 200 rows, since most matches aren't
+  plugins). The Installed column comes from the plugins folder's file names
   (`<artifact>-<version>.jar`, `PluginCatalog.installedVersions`).
 - An install downloads into a temporary folder, so the folder watcher never sees half a
   JAR, and the Plugin Manager moves it in. An update first deletes the installed version

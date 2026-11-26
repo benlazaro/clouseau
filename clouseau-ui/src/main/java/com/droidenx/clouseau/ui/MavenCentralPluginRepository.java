@@ -62,10 +62,15 @@ final class MavenCentralPluginRepository implements PluginRepository {
     @Override
     public String getName() { return "Maven Central"; }
 
+    /**
+     * Searches Central's index for {@code query}, keeping only plugins (artifacts named by the
+     * convention, D-32): any other library that matches is left out. Asks for more rows than it
+     * usually shows, since most matches aren't plugins.
+     */
     @Override
     public List<Asset> search(String query) throws IOException, InterruptedException {
         String url = searchUrl + "?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8)
-                + "&rows=20&wt=json";
+                + "&rows=200&wt=json";
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -81,6 +86,7 @@ final class MavenCentralPluginRepository implements PluginRepository {
         return parseResponse(resp.body());
     }
 
+    /** The plugins in one Solr response; other artifacts are left out. */
     private List<Asset> parseResponse(String body) {
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
         JsonArray  docs = root.getAsJsonObject("response").getAsJsonArray("docs");
@@ -89,6 +95,7 @@ final class MavenCentralPluginRepository implements PluginRepository {
             JsonObject doc = el.getAsJsonObject();
             String groupId    = doc.get("g").getAsString();
             String artifactId = doc.get("a").getAsString();
+            if (!com.droidenx.clouseau.core.PluginCatalog.isPluginName(artifactId)) continue;
             String version    = doc.has("latestVersion")
                     ? doc.get("latestVersion").getAsString()
                     : doc.get("v").getAsString();

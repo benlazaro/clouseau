@@ -74,16 +74,29 @@ class NexusPluginRepositoryTest {
     void searchesByKeywordAndByPartOfTheName() throws Exception {
         keywordBody = "{\"items\":[" + item("clouseau-logfmt-plugin", "1.0", null, "2026-03-01T10:15:30.123+00:00") + "]}";
         nameBody    = "{\"items\":[" + item("clouseau-logfmt-plugin", "1.0", null, null) + ","
-                                     + item("logfmt-extras", "2.1", null, null) + "]}";
+                                     + item("logfmt-clouseau-plugin", "2.1", null, null) + "]}";
 
         List<PluginRepository.Asset> found = repo(null).search("fmt");
 
         // Then every version of each artifact found, by its exact name.
-        assertThat(queries).containsExactly("q=fmt", "name=*fmt*", "name=clouseau-logfmt-plugin", "name=logfmt-extras");
+        assertThat(queries).containsExactly("q=fmt", "name=*fmt*", "name=clouseau-logfmt-plugin", "name=logfmt-clouseau-plugin");
         assertThat(found).extracting(PluginRepository.Asset::artifactId)
-                .containsExactly("clouseau-logfmt-plugin", "logfmt-extras");
+                .containsExactly("clouseau-logfmt-plugin", "logfmt-clouseau-plugin");
         assertThat(found.get(0).published()).isEqualTo(Instant.parse("2026-03-01T10:15:30.123Z"));
         assertThat(found.get(1).published()).isNull();
+    }
+
+    @Test
+    void aSearchFindsOnlyPlugins() throws Exception {
+        keywordBody = "{\"items\":[" + item("logfmt-clouseau-plugin", "1.0", null, null) + ","
+                                     + item("logfmt-core", "3.0", null, null) + ","
+                                     + item("clouseau-api", "0.4.0", null, null) + "]}";
+
+        List<PluginRepository.Asset> found = repo(null).search("logfmt");
+
+        assertThat(found).extracting(PluginRepository.Asset::artifactId).containsExactly("logfmt-clouseau-plugin");
+        // Nor is every version asked for of what isn't a plugin.
+        assertThat(queries).doesNotContain("name=logfmt-core", "name=clouseau-api");
     }
 
     @Test
@@ -157,15 +170,15 @@ class NexusPluginRepositoryTest {
             queries.add(query);
             String body = !query.startsWith("q=") ? "{\"items\":[]}"
                     : query.contains("continuationToken=p2")
-                    ? "{\"items\":[" + item("second", "1.0", null, null) + "],\"continuationToken\":null}"
-                    : "{\"items\":[" + item("first", "1.0", null, null) + "],\"continuationToken\":\"p2\"}";
+                    ? "{\"items\":[" + item("second-clouseau-plugin", "1.0", null, null) + "],\"continuationToken\":null}"
+                    : "{\"items\":[" + item("first-clouseau-plugin", "1.0", null, null) + "],\"continuationToken\":\"p2\"}";
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(200, bytes.length);
             try (OutputStream out = ex.getResponseBody()) { out.write(bytes); }
         });
 
         assertThat(repo(null).search("plugin")).extracting(PluginRepository.Asset::artifactId)
-                .containsExactly("first", "second");
+                .containsExactly("first-clouseau-plugin", "second-clouseau-plugin");
     }
 
     @Test

@@ -69,6 +69,20 @@ class MavenCentralPluginRepositoryTest {
     }
 
     @Test
+    void aSearchFindsOnlyPlugins() throws Exception {
+        files.put("/search", """
+                {"response": {"docs": [
+                  {"g": "io.example", "a": "logfmt-clouseau-plugin", "latestVersion": "1.2.0", "timestamp": 1762164930000},
+                  {"g": "org.logfmt", "a": "logfmt", "latestVersion": "0.9"},
+                  {"g": "com.droidenx.clouseau", "a": "clouseau-api", "latestVersion": "0.4.0"}
+                ]}}
+                """);
+
+        assertThat(repo().search("logfmt")).extracting(PluginRepository.Asset::artifactId)
+                .containsExactly("logfmt-clouseau-plugin");
+    }
+
+    @Test
     void listsEachPluginAtItsLatestVersion() throws Exception {
         files.put("/plugins.json", """
                 {"plugins": [

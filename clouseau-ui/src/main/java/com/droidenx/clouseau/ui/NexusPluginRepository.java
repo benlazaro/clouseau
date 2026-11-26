@@ -49,7 +49,8 @@ final class NexusPluginRepository implements PluginRepository {
     public String getName() { return config.name(); }
 
     /**
-     * Finds JARs whose coordinates contain {@code query}. Two searches, merged: Nexus's keyword
+     * Finds plugins (artifacts named by the convention, D-32) whose coordinates contain
+     * {@code query}; other JARs on the server are left out. Two searches, merged: Nexus's keyword
      * search, which matches whole words of the group, name and version ({@code logfmt} finds
      * {@code logfmt-clouseau-plugin}), then the name with wildcards around it, which also
      * matches part of a word ({@code fmt}). A server that refuses the wildcard search (not every
@@ -64,6 +65,7 @@ final class NexusPluginRepository implements PluginRepository {
         if (!q.isEmpty() && q.chars().noneMatch(c -> c == '*' || c == '?' || Character.isWhitespace(c))
                 && !collect("name", "*" + q + "*", found, false))
             collect("name", q + "*", found, false);
+        onlyPlugins(found);
         addEveryVersion(found);
 
         List<Asset> results = new ArrayList<>(found.values());
@@ -109,6 +111,11 @@ final class NexusPluginRepository implements PluginRepository {
             if (newest == null || BrowsePluginsPanel.compareVersions(a.version(), newest.version()) > 0) newest = a;
         }
         return newest;
+    }
+
+    /** Drops what isn't named as a plugin, before {@link #addEveryVersion} asks about each artifact. */
+    static void onlyPlugins(Map<String, Asset> found) {
+        found.values().removeIf(a -> !com.droidenx.clouseau.core.PluginCatalog.isPluginName(a.artifactId()));
     }
 
     /** The conventionally named plugins among {@code assets}, newest version of each, in the order first seen. */
